@@ -4,9 +4,16 @@ import { NewsletterSource } from '../types';
 import { PostgrestError } from '@supabase/supabase-js';
 
 // Define the type for the variables passed to the mutation
-interface AddNewsletterSourceVars {
+interface NewsletterSourceVars {
   name: string;
   domain: string;
+  id?: string;
+}
+
+interface AddNewsletterSourceVars extends Omit<NewsletterSourceVars, 'id'> {}
+
+interface UpdateNewsletterSourceVars extends NewsletterSourceVars {
+  id: string;
 }
 
 // Function to fetch newsletter sources
@@ -31,6 +38,13 @@ const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
 };
 
 // Function to add a newsletter source
+const cleanDomain = (domain: string): string => {
+  let cleaned = domain.toLowerCase().trim();
+  cleaned = cleaned.replace(/^https?:\/\//, '');
+  cleaned = cleaned.replace(/^www\./, '');
+  return cleaned.replace(/\/$/, '');
+};
+
 const addNewsletterSourceFn = async ({ name, domain }: AddNewsletterSourceVars): Promise<NewsletterSource> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) {
@@ -38,10 +52,7 @@ const addNewsletterSourceFn = async ({ name, domain }: AddNewsletterSourceVars):
   }
   const user = userData.user;
 
-  let cleanedDomain = domain.toLowerCase().trim();
-  cleanedDomain = cleanedDomain.replace(/^https?:\/\//, '');
-  cleanedDomain = cleanedDomain.replace(/^www\./, '');
-  cleanedDomain = cleanedDomain.replace(/\/$/, '');
+  const cleanedDomain = cleanDomain(domain);
 
   if (!name.trim() || !cleanedDomain) {
     throw new Error('Newsletter name and domain cannot be empty.');
@@ -63,6 +74,60 @@ const addNewsletterSourceFn = async ({ name, domain }: AddNewsletterSourceVars):
   return data;
 };
 
+// Function to update a newsletter source
+const updateNewsletterSourceFn = async ({ id, name, domain }: UpdateNewsletterSourceVars): Promise<NewsletterSource> => {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData?.user) {
+    throw userError || new Error('User not found for updating source');
+  }
+
+  const cleanedDomain = cleanDomain(domain);
+
+  if (!name.trim() || !cleanedDomain) {
+    throw new Error('Newsletter name and domain cannot be empty.');
+  }
+
+  const { data, error } = await supabase
+    .from('newsletter_sources')
+    .update({ 
+      name: name.trim(), 
+      domain: cleanedDomain,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', id)
+    .eq('user_id', userData.user.id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating newsletter source:', error);
+    throw error;
+  }
+  if (!data) {
+    throw new Error('Failed to update newsletter source, no data returned.');
+  }
+  return data;
+};
+
+// Function to delete a newsletter source
+const deleteNewsletterSourceFn = async (id: string): Promise<void> => {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData?.user) {
+    throw userError || new Error('User not found for deleting source');
+  }
+
+  const { error } = await supabase
+    .from('newsletter_sources')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userData.user.id);
+
+  if (error) {
+    console.error('Error deleting newsletter source:', error);
+    throw error;
+  }
+};
+
 export function useNewsletterSources() {
   const queryClient = useQueryClient();
 
@@ -72,35 +137,77 @@ export function useNewsletterSources() {
     isError: isErrorSources,
     error: errorSources
   } = useQuery<NewsletterSource[], PostgrestError | Error, NewsletterSource[], string[]>({
-    queryKey: ['newsletterSources'], // Query key for caching
+    queryKey: ['newsletterSources'],
     queryFn: fetchNewsletterSourcesFn,
   });
 
+  const invalidateSources = () => {
+    queryClient.invalidateQueries({ queryKey: ['newsletterSources'] });
+  };
+
+  // Add mutation
   const {
     mutate: addNewsletterSource,
-    isPending: isAddingSource, // Corrected from isLoading to isPending for mutations
+    isPending: isAddingSource,
     isError: isErrorAddingSource,
     error: errorAddingSource,
-    isSuccess: isSuccessAddingSource, // Optionally track success state
+    isSuccess: isSuccessAddingSource,
   } = useMutation<NewsletterSource, PostgrestError | Error, AddNewsletterSourceVars>({
     mutationFn: addNewsletterSourceFn,
-    onSuccess: () => {
-      // When a new source is added, invalidate the newsletterSources query to refetch
-      queryClient.invalidateQueries({ queryKey: ['newsletterSources'] });
-    },
-    // onError can be handled here or by the component calling addNewsletterSource
+    onSuccess: invalidateSources,
+  });
+
+  // Update mutation
+  const {
+    mutate: updateNewsletterSource,
+    isPending: isUpdatingSource,
+    isError: isErrorUpdatingSource,
+    error: errorUpdatingSource,
+    isSuccess: isSuccessUpdatingSource,
+  } = useMutation<NewsletterSource, PostgrestError | Error, UpdateNewsletterSourceVars>({
+    mutationFn: updateNewsletterSourceFn,
+    onSuccess: invalidateSources,
+  });
+
+  // Delete mutation
+  const {
+    mutate: deleteNewsletterSource,
+    isPending: isDeletingSource,
+    isError: isErrorDeletingSource,
+    error: errorDeletingSource,
+    isSuccess: isSuccessDeletingSource,
+  } = useMutation<void, PostgrestError | Error, string>({
+    mutationFn: deleteNewsletterSourceFn,
+    onSuccess: invalidateSources,
   });
 
   return {
-    newsletterSources: newsletterSources || [], // Provide a default empty array
+    // Sources data
+    newsletterSources: newsletterSources || [],
     isLoadingSources,
     isErrorSources,
     errorSources,
-    addNewsletterSource, // This is the mutate function
+    
+    // Add source
+    addNewsletterSource,
     isAddingSource,
     isErrorAddingSource,
     errorAddingSource,
-    isSuccessAddingSource, // Expose success state if needed by UI
+    isSuccessAddingSource,
+    
+    // Update source
+    updateNewsletterSource,
+    isUpdatingSource,
+    isErrorUpdatingSource,
+    errorUpdatingSource,
+    isSuccessUpdatingSource,
+    
+    // Delete source
+    deleteNewsletterSource,
+    isDeletingSource,
+    isErrorDeletingSource,
+    errorDeletingSource,
+    isSuccessDeletingSource,
   };
 }
 

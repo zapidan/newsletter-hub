@@ -1,7 +1,8 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useCallback } from 'react';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
 import { NewsletterSource } from '../types';
-import { PlusCircle, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
+import { PlusCircle, AlertTriangle, Loader2, ArrowLeft, Trash2, Edit, X, Check } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const NewslettersPage: React.FC = () => {
   const {
@@ -9,42 +10,103 @@ const NewslettersPage: React.FC = () => {
     isLoadingSources,
     isErrorSources,
     errorSources,
-    addNewsletterSource, // This is the mutate function
+    addNewsletterSource,
+    deleteNewsletterSource,
+    isDeletingSource,
+    updateNewsletterSource,
+    isUpdatingSource,
+    isSuccessUpdatingSource,
     isAddingSource,
     isErrorAddingSource,
     errorAddingSource,
     isSuccessAddingSource,
   } = useNewsletterSources();
 
-  const [newName, setNewName] = useState('');
-  const [newDomain, setNewDomain] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    domain: ''
+  });
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Clear form on successful submission
-  React.useEffect(() => {
-    if (isSuccessAddingSource) {
-      setNewName('');
-      setNewDomain('');
-    }
-  }, [isSuccessAddingSource]);
-
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    // Client-side validation can still be useful for immediate feedback
-    // or rely on the mutation's error handling as addNewsletterSourceFn throws an error for empty fields.
-    if (!newName.trim() || !newDomain.trim()) {
-        // Forcing an error to be shown by the mutation's error state, 
-        // or you could set a local form error state here for non-mutation related errors.
-        addNewsletterSource({ name: newName, domain: newDomain }); // This will likely fail and set errorAddingSource
-        return;
-    }
-    addNewsletterSource({ name: newName, domain: newDomain });
+  // Handle form field changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
-  // TODO: Implement delete functionality if needed
-  // const handleDelete = async (sourceId: string) => {
-  //   console.log('Delete source:', sourceId);
-  //   // Call a delete function from the hook if implemented
-  // };
+  // Clear form
+  const resetForm = useCallback(() => {
+    setFormData({ name: '', domain: '' });
+    setEditingId(null);
+  }, []);
+
+  // Handle edit
+  const handleEdit = (source: NewsletterSource) => {
+    setFormData({
+      name: source.name,
+      domain: source.domain
+    });
+    setEditingId(source.id);
+  };
+
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    resetForm();
+  };
+
+  // Handle delete with confirmation
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this source? This action cannot be undone.')) {
+      try {
+        await deleteNewsletterSource(id);
+        toast.success('Source deleted successfully');
+      } catch (error) {
+        toast.error('Failed to delete source');
+      }
+    }
+  };
+
+  // Reset form on successful add/update
+  React.useEffect(() => {
+    if (isSuccessAddingSource || isSuccessUpdatingSource) {
+      resetForm();
+      const message = isSuccessAddingSource ? 'Source added successfully' : 'Source updated successfully';
+      toast.success(message);
+    }
+  }, [isSuccessAddingSource, isSuccessUpdatingSource, resetForm]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    // Client-side validation
+    if (!formData.name.trim() || !formData.domain.trim()) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    try {
+      if (editingId) {
+        await updateNewsletterSource({ 
+          id: editingId, 
+          name: formData.name, 
+          domain: formData.domain 
+        });
+      } else {
+        await addNewsletterSource({ 
+          name: formData.name, 
+          domain: formData.domain 
+        });
+      }
+    } catch (error) {
+      // Error handling is done by the mutation
+      console.error('Error saving source:', error);
+    }
+  };
+
+
 
   return (
     <div className="max-w-4xl w-full mx-auto p-6">
@@ -74,11 +136,12 @@ const NewslettersPage: React.FC = () => {
             <input
               type="text"
               id="newsletterName"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
               placeholder="e.g., Tech Weekly Digest"
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-              disabled={isAddingSource} // Use isAddingSource from the hook
+              disabled={isAddingSource || isUpdatingSource}
             />
           </div>
           <div>
@@ -88,11 +151,12 @@ const NewslettersPage: React.FC = () => {
             <input
               type="text"
               id="emailDomain"
-              value={newDomain}
-              onChange={(e) => setNewDomain(e.target.value)}
+              name="domain"
+              value={formData.domain}
+              onChange={handleInputChange}
               placeholder="e.g., example.com (not an email address)"
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
-              disabled={isAddingSource} // Use isAddingSource from the hook
+              disabled={isAddingSource || isUpdatingSource}
             />
              <p className="mt-1 text-xs text-gray-500">Enter the main domain, like 'newsletter.com', not 'contact@newsletter.com'.</p>
           </div>
@@ -105,18 +169,33 @@ const NewslettersPage: React.FC = () => {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isAddingSource || isLoadingSources} // Use states from the hook
-            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-          >
-            {isAddingSource ? (
-              <Loader2 size={20} className="animate-spin mr-2" />
-            ) : (
-              <PlusCircle size={20} className="mr-2" />
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={isAddingSource || isUpdatingSource || isLoadingSources}
+              className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            >
+              {(isAddingSource || isUpdatingSource) ? (
+                <Loader2 size={20} className="animate-spin mr-2" />
+              ) : editingId ? (
+                <Check size={20} className="mr-2" />
+              ) : (
+                <PlusCircle size={20} className="mr-2" />
+              )}
+              {editingId ? 'Update Source' : 'Add Source'}
+            </button>
+            
+            {editingId && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                <X size={20} className="mr-2" />
+                Cancel
+              </button>
             )}
-            Add Source
-          </button>
+          </div>
         </form>
       </section>
 
@@ -153,9 +232,9 @@ const NewslettersPage: React.FC = () => {
                   <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                     Domain
                   </th>
-                  {/* <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                     Actions
-                  </th> */}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200 bg-white">
@@ -173,16 +252,30 @@ const NewslettersPage: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button 
-                        onClick={() => handleDelete(source.id)}
-                        className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                        // disabled // Enable when delete is implemented
-                        title="Delete Source (coming soon)"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </td> */}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleEdit(source)}
+                          className="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          disabled={isDeletingSource || isUpdatingSource}
+                          title="Edit Source"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(source.id)}
+                          className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                          disabled={isDeletingSource || isUpdatingSource}
+                          title="Delete Source"
+                        >
+                          {isDeletingSource ? (
+                            <Loader2 size={18} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={18} />
+                          )}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
