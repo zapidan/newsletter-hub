@@ -81,36 +81,35 @@ const Sidebar = () => {
         className={`fixed md:static inset-y-0 left-0 z-20 w-64 bg-white border-r border-neutral-200 flex flex-col`}
       >
         <div className="p-4 border-b border-neutral-200">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 mb-4">
             <div className="bg-primary-500 rounded-md p-1.5">
               <Inbox className="text-white" size={18} />
             </div>
-            <div className="p-6 pt-4">
-              <h2 className="text-xl font-bold text-neutral-800 mb-2">Newsletter Hub</h2>
-              {emailLoading ? (
-                <div className="text-sm text-gray-500 animate-pulse">Loading your email...</div>
-              ) : emailAlias ? (
-                <div className="mt-2 text-sm bg-gray-100 dark:bg-gray-700 rounded-md p-2 flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
-                    <span className="font-mono text-xs break-all">{emailAlias}</span>
-                  </div>
-                  <button 
-                    onClick={copyToClipboard}
-                    className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors"
-                    title={copied ? 'Copied!' : 'Copy to clipboard'}
-                    disabled={copied}
-                  >
-                    {copied ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-              ) : null}
-            </div>
+            <h2 className="text-xl font-bold text-neutral-800">Newsletter Hub</h2>
           </div>
+          
+          {emailLoading ? (
+            <div className="text-sm text-gray-500 animate-pulse py-2">Loading your email...</div>
+          ) : emailAlias ? (
+            <div className="w-full text-sm bg-gray-100 dark:bg-gray-700 rounded-md p-2 flex items-center justify-between">
+              <div className="flex items-center flex-1 min-w-0">
+                <Mail className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
+                <span className="font-mono text-xs break-all">{emailAlias}</span>
+              </div>
+              <button 
+                onClick={copyToClipboard}
+                className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors flex-shrink-0"
+                title={copied ? 'Copied!' : 'Copy to clipboard'}
+                disabled={copied}
+              >
+                {copied ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          ) : null}
         </div>
         
         <nav className="flex-1 p-4 space-y-1">
