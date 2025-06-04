@@ -8,9 +8,10 @@ interface QueueItemProps {
   item: ReadingQueueItem;
   onRemove: (e: React.MouseEvent, newsletterId: string) => void;
   onClick: (newsletter: any) => void;
+  isManualSort: boolean;
 }
 
-export const QueueItem = ({ item, onRemove, onClick }: QueueItemProps) => {
+export const QueueItem = ({ item, onRemove, onClick, isManualSort }: QueueItemProps) => {
   const {
     attributes,
     listeners,
@@ -36,18 +37,21 @@ export const QueueItem = ({ item, onRemove, onClick }: QueueItemProps) => {
       className="flex items-center p-4 hover:bg-neutral-50 transition-colors"
       onClick={() => onClick(item.newsletter)}
     >
-      <div 
-        className="flex-shrink-0 mr-3 cursor-grab active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="h-5 w-5 flex items-center justify-center text-neutral-400 hover:text-neutral-600">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
-          </svg>
+      {isManualSort && (
+        <div 
+          className="flex-shrink-0 mr-3 cursor-grab active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="h-5 w-5 flex items-center justify-center text-neutral-400 hover:text-neutral-600">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+            </svg>
+          </div>
         </div>
-      </div>
+      )}
+      {!isManualSort && <div className="w-2" />} {/* Spacer when drag handle is hidden */}
       
       <div className="flex-shrink-0 mr-4">
         {item.newsletter.image_url ? (

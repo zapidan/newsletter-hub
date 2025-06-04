@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReadingQueue } from '../hooks/useReadingQueue';
 import { Newsletter } from '../types';
 import LoadingScreen from '../components/common/LoadingScreen';
-import { ArrowLeft, Bookmark as BookmarkIcon } from 'lucide-react';
+import { ArrowLeft, Bookmark as BookmarkIcon, ArrowUp, ArrowDown } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { QueueItem } from '../components/reading-queue/QueueItem';
@@ -17,12 +17,50 @@ const ReadingQueuePage = () => {
     reorderQueue
   } = useReadingQueue();
   const navigate = useNavigate();
-  const [items, setItems] = useState(readingQueue);
+  const [sortByDate, setSortByDate] = useState(false);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Update local state when readingQueue changes
+  // Sort items based on sort mode
+  const sortedItems = useMemo(() => {
+    const sortableItems = [...(readingQueue || [])];
+
+    sortableItems.sort((a, b) => {
+      if (!sortByDate) {
+        // In manual sort mode, sort by position
+        return a.position - b.position;
+      } else {
+        // In date sort mode, sort by received date
+        const dateA = new Date(a.newsletter.received_at);
+        const dateB = new Date(b.newsletter.received_at);
+        return sortDirection === 'desc' 
+          ? dateB.getTime() - dateA.getTime()
+          : dateA.getTime() - dateB.getTime();
+      }
+    });
+
+    return sortableItems;
+  }, [readingQueue, sortByDate, sortDirection]);
+
+  const toggleSortMode = () => {
+    if (sortByDate) {
+      // If currently sorting by date, switch back to manual sort
+      setSortByDate(false);
+    } else {
+      // If currently in manual sort, switch to date sort (newest first by default)
+      setSortByDate(true);
+      setSortDirection('desc');
+    }
+  };
+
+  const toggleSortDirection = () => {
+    setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
+  // Keep local state in sync with sorted items
+  const [items, setItems] = useState(sortedItems);
   useEffect(() => {
-    setItems(readingQueue);
-  }, [readingQueue]);
+    setItems(sortedItems);
+  }, [sortedItems]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -127,7 +165,34 @@ const ReadingQueuePage = () => {
             Back to Inbox
           </button>
         </div>
-        <h1 className="text-3xl font-bold text-neutral-800">Reading Queue</h1>
+        <div className="flex items-center justify-between w-full">
+          <h1 className="text-3xl font-bold text-neutral-800">Reading Queue</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleSortMode}
+              className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md ${
+                sortByDate 
+                  ? 'bg-blue-100 text-blue-700' 
+                  : 'bg-neutral-100 text-neutral-700'
+              }`}
+            >
+              {sortByDate ? (
+                <span>Sort by Date</span>
+              ) : (
+                <span>Manual Order</span>
+              )}
+            </button>
+            {sortByDate && (
+              <button
+                onClick={toggleSortDirection}
+                className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-600"
+                title={sortDirection === 'desc' ? 'Newest first' : 'Oldest first'}
+              >
+                {sortDirection === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -156,6 +221,7 @@ const ReadingQueuePage = () => {
                     item={item}
                     onRemove={handleRemoveFromQueue}
                     onClick={handleNewsletterClick}
+                    isManualSort={!sortByDate}
                   />
                 ))}
               </div>
