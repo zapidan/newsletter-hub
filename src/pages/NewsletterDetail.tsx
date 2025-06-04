@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTags } from '../hooks/useTags';
 import { useNewsletters } from '../hooks/useNewsletters';
+import { useReadingQueue } from '../hooks/useReadingQueue';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../services/supabaseClient';
 import LoadingScreen from '../components/common/LoadingScreen';
@@ -12,8 +13,9 @@ const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { updateNewsletterTags } = useTags();
-  const { markAsRead, markAsUnread } = useNewsletters();
-  const [isUpdatingRead, setIsUpdatingRead] = useState(false);
+  const { markAsRead } = useNewsletters();
+  const { toggleInQueue, readingQueue } = useReadingQueue();
+  const [isBookmarking, setIsBookmarking] = useState(false);
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,28 +84,20 @@ const NewsletterDetail = () => {
     }
   }, [user?.id]);
   
-  // Handle toggling read status
-  const handleToggleRead = useCallback(async () => {
+  // Handle toggling bookmark status
+  const handleToggleBookmark = useCallback(async () => {
     if (!id || !newsletter) return;
     
-    setIsUpdatingRead(true);
+    setIsBookmarking(true);
     try {
-      if (newsletter.is_read) {
-        // If already read, mark as unread
-        await markAsUnread(id);
-        setNewsletter(prev => prev ? { ...prev, is_read: false } : null);
-      } else {
-        // If unread, mark as read
-        await markAsRead(id);
-        setNewsletter(prev => prev ? { ...prev, is_read: true } : null);
-      }
+      await toggleInQueue(id, readingQueue.some(item => item.newsletter_id === id));
     } catch (err) {
-      console.error('Error toggling read status:', err);
-      setError('Failed to update read status');
+      console.error('Error toggling bookmark status:', err);
+      setError('Failed to update bookmark status');
     } finally {
-      setIsUpdatingRead(false);
+      setIsBookmarking(false);
     }
-  }, [id, newsletter, markAsRead, markAsUnread]);
+  }, [id, newsletter, toggleInQueue, readingQueue]);
 
   // Load newsletter data
   useEffect(() => {
@@ -197,7 +191,8 @@ const NewsletterDetail = () => {
     );
   }
   
-  const { title, content, summary, is_read } = newsletter;
+  const { title, content, summary } = newsletter;
+  const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
   
   return (
     <div className="max-w-6xl w-full mx-auto px-4 py-8">
@@ -208,27 +203,28 @@ const NewsletterDetail = () => {
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <div className="flex justify-between items-start mb-4">
               <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
-              <div className="flex items-center gap-3">
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  is_read ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {is_read ? 'Read' : 'Unread'}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleToggleRead}
-                  disabled={isUpdatingRead}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium ${
-                    is_read 
-                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' 
-                      : 'bg-green-600 text-white hover:bg-green-700'
-                  } disabled:opacity-50`}
-                >
-                  {isUpdatingRead 
-                    ? (is_read ? 'Marking as Unread...' : 'Marking as Read...') 
-                    : (is_read ? 'Mark as Unread' : 'Mark as Read')}
-                </button>
-              </div>
+              <button
+              type="button"
+              onClick={handleToggleBookmark}
+              disabled={isBookmarking}
+              className={`p-2 rounded-full ${isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'} transition-colors`}
+              title={isInQueue ? 'Remove from reading queue' : 'Add to reading queue'}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill={isInQueue ? 'currentColor' : 'none'}
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                />
+              </svg>
+            </button>
             </div>
 
             {/* Tags Section */}

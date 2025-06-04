@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Inbox, 
@@ -11,7 +11,8 @@ import {
   Copy,
   Check,
   Tag,
-  Newspaper // Added Newspaper icon
+  Newspaper,
+  Bookmark
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
@@ -19,7 +20,6 @@ import { useEmailAlias } from '../../hooks/useEmailAlias';
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const location = useLocation();
   const { user } = useAuth();
   const { emailAlias, loading: emailLoading } = useEmailAlias();
   
@@ -40,10 +40,11 @@ const Sidebar = () => {
 
   const navLinks = [
     { to: '/inbox', icon: <Inbox size={20} />, label: 'Inbox' },
+    { to: '/reading-queue', icon: <Bookmark size={20} />, label: 'Reading Queue' },
     { to: '/search', icon: <Search size={20} />, label: 'Search' },
     { to: '/trending', icon: <TrendingUp size={20} />, label: 'Trending Topics' },
     { to: '/tags', icon: <Tag size={20} />, label: 'Tags' },
-    { to: '/newsletters', icon: <Newspaper size={20} />, label: 'Newsletter Sources' }, // Added new link
+    { to: '/newsletters', icon: <Newspaper size={20} />, label: 'Newsletter Sources' },
     { to: '/settings', icon: <Settings size={20} />, label: 'Settings' },
   ];
 

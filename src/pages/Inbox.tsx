@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNewsletters } from '../hooks/useNewsletters';
+import { useReadingQueue } from '../hooks/useReadingQueue';
 import { useTags } from '../hooks/useTags';
 import TagSelector from '../components/TagSelector';
 import LoadingScreen from '../components/common/LoadingScreen';
@@ -11,6 +12,7 @@ import type { Newsletter, Tag } from '../types';
 const Inbox: React.FC = () => {
   const { updateNewsletterTags } = useTags();
   const [tagEditId, setTagEditId] = useState<string | null>(null);
+  const { toggleInQueue, readingQueue } = useReadingQueue();
 
   // Router and URL state
   const [searchParams, setSearchParams] = useSearchParams();
@@ -397,6 +399,31 @@ const Inbox: React.FC = () => {
                   title="Edit tags"
                 >
                   <TagIcon size={18} className="text-gray-500 hover:text-primary-600" />
+                </button>
+                <button
+                  type="button"
+                  className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
+                    await toggleInQueue(newsletter.id, isInQueue);
+                  }}
+                  title={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'Remove from reading queue' : 'Add to reading queue'}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'currentColor' : 'none'}
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                    />
+                  </svg>
                 </button>
               </div>
               {/* Newsletter summary, tags, and date below the flex row */}

@@ -56,6 +56,16 @@ export interface NewsletterSource {
   updated_at: string;
 }
 
+export interface ReadingQueueItem {
+  id: string;
+  user_id: string;
+  newsletter_id: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+  newsletter: Newsletter;
+}
+
 export interface NewsletterUpdate {
   title?: string;
   sender?: string;

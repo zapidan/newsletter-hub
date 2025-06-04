@@ -9,7 +9,8 @@ import TrendingTopics from './pages/TrendingTopics';
 import Settings from './pages/Settings';
 import NewsletterDetail from './pages/NewsletterDetail';
 import TagsPage from './pages/TagsPage';
-import NewslettersPage from './pages/NewslettersPage'; // Added import
+import NewslettersPage from './pages/NewslettersPage';
+import ReadingQueuePage from './pages/ReadingQueuePage';
 import LoadingScreen from './components/common/LoadingScreen';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -44,7 +45,8 @@ function App() {
         <Route path="search" element={<Search />} />
         <Route path="trending" element={<TrendingTopics />} />
         <Route path="tags" element={<TagsPage />} />
-        <Route path="newsletters" element={<NewslettersPage />} /> {/* Added route */}
+        <Route path="newsletters" element={<NewslettersPage />} />
+        <Route path="reading-queue" element={<ReadingQueuePage />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
