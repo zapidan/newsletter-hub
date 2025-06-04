@@ -447,7 +447,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching newsletter:', error);
+
       return null;
     }
   }, [user, queryClient, tagId, markAsReadMutation]); // Added markAsReadMutation to dependencies

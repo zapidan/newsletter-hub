@@ -188,8 +188,7 @@ export const useReadingQueue = () => {
     mutationFn: async (updates: { id: string; position: number }[]): Promise<boolean> => {
       if (!user) throw new Error('User not authenticated');
       
-      console.log('Updating positions:', updates);
-      
+
       try {
         // Use a transaction to update all positions at once
         const { error } = await supabase.rpc('reorder_reading_queue', {
@@ -201,11 +200,9 @@ export const useReadingQueue = () => {
         
         if (error) throw error;
         
-        console.log('All positions updated successfully');
-        return true;
+return true;
       } catch (error) {
-        console.error('Error updating positions:', error);
-        throw error;
+throw error;
       }
     },
     onMutate: async (updates) => {
@@ -240,8 +237,7 @@ export const useReadingQueue = () => {
       return { previousQueue };
     },
     onError: (error, _variables, context) => {
-      console.error('Error reordering queue:', error);
-      // Rollback on error
+// Rollback on error
       if (context?.previousQueue) {
         queryClient.setQueryData(['readingQueue', user?.id], context.previousQueue);
       }

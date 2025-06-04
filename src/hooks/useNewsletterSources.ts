@@ -100,7 +100,7 @@ const addNewsletterSourceFn = async ({ name, domain }: AddNewsletterSourceVars):
     .single();
 
   if (error) {
-    console.error('Error adding newsletter source:', error);
+
     throw error;
   }
   if (!data) {
@@ -135,7 +135,7 @@ const updateNewsletterSourceFn = async ({ id, name, domain }: UpdateNewsletterSo
     .single();
 
   if (error) {
-    console.error('Error updating newsletter source:', error);
+
     throw error;
   }
   if (!data) {
@@ -158,7 +158,7 @@ const deleteNewsletterSourceFn = async (id: string): Promise<void> => {
     .eq('user_id', userData.user.id);
 
   if (error) {
-    console.error('Error deleting newsletter source:', error);
+
     throw error;
   }
 };

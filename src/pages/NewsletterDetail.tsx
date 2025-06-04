@@ -95,7 +95,7 @@ const NewsletterDetail = () => {
       
       return transformedData;
     } catch (err) {
-      console.error('Error fetching newsletter:', err);
+
       setError('Failed to load newsletter. Please try again.');
       return null;
     }
@@ -120,7 +120,7 @@ const NewsletterDetail = () => {
       // Then make the API call
       await toggleLike(id);
     } catch (err) {
-      console.error('Error toggling like:', err);
+
       setError('Failed to update like status');
       // Revert the optimistic update on error
       setNewsletter(prev => prev ? {
@@ -146,7 +146,7 @@ const NewsletterDetail = () => {
         is_bookmarked: !prev.is_bookmarked
       } : null);
     } catch (err) {
-      console.error('Error toggling bookmark:', err);
+
       setError('Failed to update bookmark status');
     } finally {
       setIsBookmarking(false);
@@ -171,7 +171,7 @@ const NewsletterDetail = () => {
           setError('Newsletter not found');
         }
       } catch (err) {
-        console.error('Error loading newsletter:', err);
+
         setError('Failed to load newsletter');
       } finally {
         setLoading(false);
@@ -280,7 +280,7 @@ const NewsletterDetail = () => {
                         if (updated) setNewsletter(updated);
                       }
                     } catch (err) {
-                      console.error('Error updating tags:', err);
+
                       setError('Failed to update tags');
                     }
                   }}
@@ -290,7 +290,7 @@ const NewsletterDetail = () => {
                       const updated = await fetchNewsletter(id);
                       if (updated) setNewsletter(updated);
                     } catch (err) {
-                      console.error('Error refreshing after tag delete:', err);
+
                       setError('Failed to refresh newsletter');
                     }
                   }}

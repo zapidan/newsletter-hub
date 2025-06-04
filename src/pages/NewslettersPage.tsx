@@ -102,7 +102,7 @@ const NewslettersPage: React.FC = () => {
       }
     } catch (error) {
       // Error handling is done by the mutation
-      console.error('Error saving source:', error);
+
     }
   };
 

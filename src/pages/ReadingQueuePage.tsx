@@ -78,19 +78,15 @@ const ReadingQueuePage = () => {
     
     if (!over || active.id === over.id) return;
     
-    console.log('Drag end - active:', active.id, 'over:', over.id);
     
     // Get the current items from state
     setItems((currentItems) => {
-      console.log('Current items before reorder:', currentItems.map(i => i.id));
       
       const oldIndex = currentItems.findIndex(item => item.id === active.id);
       const newIndex = currentItems.findIndex(item => item.id === over.id);
       
-      console.log('Moving item from index', oldIndex, 'to', newIndex);
       
       if (oldIndex === -1 || newIndex === -1) {
-        console.log('Could not find items for reorder');
         return currentItems;
       }
       
@@ -105,13 +101,6 @@ const ReadingQueuePage = () => {
         position: index + 1 // 1-based position
       }));
       
-      console.log('New items order:', updatedItems.map((item, i) => ({
-        id: item.id,
-        title: item.newsletter.title,
-        oldPosition: item.position,
-        newPosition: i + 1
-      })));
-      
       // Update positions in the database
       const updates = updatedItems.map(item => ({
         id: item.id,
@@ -119,7 +108,6 @@ const ReadingQueuePage = () => {
         updated_at: new Date().toISOString()
       }));
       
-      console.log('Sending updates to database:', updates);
       
       // Update the database in the background
       reorderQueue(updates).catch(error => {
