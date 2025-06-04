@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useReadingQueue } from '../hooks/useReadingQueue';
 import { Newsletter } from '../types';
 import LoadingScreen from '../components/common/LoadingScreen';
-import { Mail, Bookmark as BookmarkIcon } from 'lucide-react';
+import { Mail, Bookmark as BookmarkIcon, ArrowLeft } from 'lucide-react';
 
 const ReadingQueuePage = () => {
   const { 
@@ -36,7 +36,16 @@ const ReadingQueuePage = () => {
 
   return (
     <div className="p-6 bg-neutral-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="inline-flex">
+          <button
+            onClick={() => navigate(-1)}
+            className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Inbox
+          </button>
+        </div>
         <h1 className="text-3xl font-bold text-neutral-800">Reading Queue</h1>
       </div>
 

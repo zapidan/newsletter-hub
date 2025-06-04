@@ -8,7 +8,7 @@ import { supabase } from '../services/supabaseClient';
 import LoadingScreen from '../components/common/LoadingScreen';
 import TagSelector from '../components/TagSelector';
 import type { Tag, Newsletter } from '../types';
-import { BookmarkIcon, Heart } from 'lucide-react';
+import { BookmarkIcon, Heart, ArrowLeft } from 'lucide-react';
 
 const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -175,10 +175,11 @@ const NewsletterDetail = () => {
     return (
       <div className="p-4">
         <p className={error ? 'text-red-500' : ''}>{error || 'Newsletter not found'}</p>
-        <button 
+        <button
           onClick={() => navigate('/inbox')}
-          className="mt-2 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+          className="mt-2 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
         >
+          <ArrowLeft className="h-4 w-4" />
           Back to Inbox
         </button>
       </div>
@@ -210,6 +211,13 @@ const NewsletterDetail = () => {
 
   return (
     <div className="max-w-6xl w-full mx-auto px-4 py-8">
+      <button
+        onClick={() => navigate(-1)}
+        className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Inbox
+      </button>
       {/* Main content and sidebar layout */}
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Main content */}

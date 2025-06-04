@@ -199,75 +199,91 @@ const Inbox: React.FC = () => {
   // Render UI
   return (
     <div className="p-6 bg-neutral-50 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
-        <div className="flex items-center gap-2">
-          {isSelecting ? (
-            <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
-              <span className="text-sm text-gray-700">{selectedIds.size} selected</span>
+      <div className="flex flex-col space-y-4 mb-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <button
-                onClick={toggleSelectAll}
-                className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
-              >
-                {selectedIds.size === filteredNewsletters.length ? 'Deselect All' : 'Select All'}
-              </button>
-              <button 
-                onClick={handleBulkMarkAsRead}
-                disabled={selectedIds.size === 0}
-                className="px-3 py-1 bg-green-100 text-gray-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
-              >
-                Mark as Read
-              </button>
-              <button 
-                onClick={handleBulkMarkAsUnread}
-                disabled={selectedIds.size === 0}
-                className="px-3 py-1 bg-blue-100 text-gray-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
-              >
-                Mark as Unread
-              </button>
-              <button 
-                onClick={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
-                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 onClick={() => setFilter('all')}
+                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
+                  filter === 'all' 
+                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                }`}
               >
                 All
               </button>
               <button
                 onClick={() => setFilter('unread')}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === 'unread' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
+                  filter === 'unread' 
+                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                }`}
               >
                 Unread
               </button>
               <button
                 onClick={() => setFilter('liked')}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === 'liked' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
+                  filter === 'liked' 
+                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                }`}
               >
                 Liked
               </button>
+            </div>
+            <RefreshCwIcon 
+              className="h-5 w-5 text-neutral-500 hover:text-primary-600 cursor-pointer ml-2" 
+              onClick={(e) => {
+                e.stopPropagation();
+                refetchNewsletters();
+              }}
+            />
+            {isSelecting ? (
+              <button 
+                onClick={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors ml-2"
+              >
+                Cancel
+              </button>
+            ) : (
               <button
                 onClick={() => setIsSelecting(true)}
-                className="text-sm text-primary-600 hover:text-primary-700 px-3 py-1 hover:bg-primary-50 rounded"
+                className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors ml-2"
               >
                 Select
               </button>
-              <RefreshCwIcon 
-                className="h-5 w-5 text-neutral-500 hover:text-primary-600 cursor-pointer" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  refetchNewsletters();
-                }}
-              />
-            </div>
-          )}
+            )}
+          </div>
         </div>
+        {isSelecting && (
+          <div className="flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg">
+            <span className="text-sm text-gray-700">{selectedIds.size} selected</span>
+            <button
+              onClick={toggleSelectAll}
+              className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
+            >
+              {selectedIds.size === filteredNewsletters.length ? 'Deselect All' : 'Select All'}
+            </button>
+            <button 
+              onClick={handleBulkMarkAsRead}
+              disabled={selectedIds.size === 0}
+              className="px-3 py-1 bg-green-100 text-gray-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
+            >
+              Mark as Read
+            </button>
+            <button 
+              onClick={handleBulkMarkAsUnread}
+              disabled={selectedIds.size === 0}
+              className="px-3 py-1 bg-blue-100 text-gray-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
+            >
+              Mark as Unread
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tag filter badge (only if filtering by tag) */}
