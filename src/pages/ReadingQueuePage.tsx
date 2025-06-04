@@ -26,7 +26,7 @@ const ReadingQueuePage = () => {
   }
 
   const handleNewsletterClick = (newsletter: Newsletter) => {
-    navigate(`/inbox/${newsletter.id}`);
+    navigate(`/inbox/${newsletter.id}`, { state: { from: '/reading-queue' } });
   };
 
   const handleRemoveFromQueue = async (e: React.MouseEvent, newsletterId: string) => {
@@ -39,7 +39,7 @@ const ReadingQueuePage = () => {
       <div className="flex flex-col gap-4 mb-6">
         <div className="inline-flex">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/inbox')}
             className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
           >
             <ArrowLeft className="h-4 w-4" />

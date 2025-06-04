@@ -22,7 +22,7 @@ const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const isFromReadingQueue = location.state?.from === '/reading-queue';
+  const isFromReadingQueue = location.state?.from === '/reading-queue' || location.pathname.includes('reading-queue');
   const { updateNewsletterTags } = useTags();
   const { markAsRead, toggleLike, getNewsletter } = useNewsletters();
   const { toggleInQueue, readingQueue } = useReadingQueue();
@@ -189,7 +189,7 @@ const NewsletterDetail = () => {
     return (
       <div className="max-w-6xl w-full mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(isFromReadingQueue ? '/reading-queue' : '/inbox')}
           className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -204,7 +204,7 @@ const NewsletterDetail = () => {
     return (
       <div className="max-w-6xl w-full mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(isFromReadingQueue ? '/reading-queue' : '/inbox')}
           className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -220,7 +220,7 @@ const NewsletterDetail = () => {
   return (
     <div className="max-w-6xl w-full mx-auto px-4 py-8">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate(isFromReadingQueue ? '/reading-queue' : '/inbox')}
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
       >
         <ArrowLeft className="h-4 w-4" />
