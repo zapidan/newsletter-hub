@@ -52,7 +52,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const fetchNewslettersFn = async (currentTagId?: string): Promise<Newsletter[]> => {
+  const fetchNewslettersFn = async (tagIds?: string | string[]): Promise<Newsletter[]> => {
     if (!user) throw new Error('User not authenticated');
 
     let query = supabase
@@ -67,17 +67,37 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
       )
       .eq('user_id', user.id);
 
-    if (currentTagId) {
-      const { data: newsletterTagRows, error: tagError } = await supabase
-        .from('newsletter_tags')
-        .select('newsletter_id')
-        .eq('tag_id', currentTagId);
-      if (tagError) throw tagError;
-      const ids = (newsletterTagRows || []).map((row) => row.newsletter_id);
-      if (ids.length > 0) {
-        query = query.in('id', ids);
-      } else {
-        return []; // No newsletters for this tag
+    if (tagIds) {
+      const tagIdsArray = Array.isArray(tagIds) ? tagIds : [tagIds];
+      
+      // For each tag, find newsletters that have that tag
+      const newsletterIdsByTag = await Promise.all(
+        tagIdsArray.map(async (tagId) => {
+          const { data: newsletterTagRows, error: tagError } = await supabase
+            .from('newsletter_tags')
+            .select('newsletter_id')
+            .eq('tag_id', tagId);
+          if (tagError) throw tagError;
+          return (newsletterTagRows || []).map(row => row.newsletter_id);
+        })
+      );
+      
+      // Find the intersection of all newsletter IDs (newsletters that have ALL tags)
+      if (newsletterIdsByTag.length > 0) {
+        // Start with the first set of IDs
+        let commonIds = new Set(newsletterIdsByTag[0]);
+        
+        // Intersect with each subsequent set
+        for (let i = 1; i < newsletterIdsByTag.length; i++) {
+          const currentSet = new Set(newsletterIdsByTag[i]);
+          commonIds = new Set([...commonIds].filter(id => currentSet.has(id)));
+        }
+        
+        if (commonIds.size > 0) {
+          query = query.in('id', Array.from(commonIds));
+        } else {
+          return []; // No newsletters match all tags
+        }
       }
     }
 
@@ -87,9 +107,12 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     return transformNewsletterData(data);
   };
 
+  // Convert comma-separated tagIds to array if needed
+  const normalizedTagId = tagId?.includes(',') ? tagId.split(',').filter(Boolean) : tagId;
+  
   const queryResult = useQuery<Newsletter[], Error>({
-    queryKey: ['newsletters', user?.id, tagId],
-    queryFn: () => fetchNewslettersFn(tagId),
+    queryKey: ['newsletters', user?.id, normalizedTagId],
+    queryFn: () => fetchNewslettersFn(normalizedTagId),
     enabled: !!user,
   });
 

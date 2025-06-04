@@ -62,30 +62,79 @@ const Inbox: React.FC = () => {
     }
   }, [toggleLike]);
 
-  // Get tag from URL
-  const currentTag = useMemo(() => {
-    if (!tagId || !newsletters) return null;
+  // Get tags from URL
+  const selectedTagIds = useMemo(() => {
+    return tagId ? tagId.split(',') : [];
+  }, [tagId]);
+
+  const allTags = useMemo(() => {
+    if (!newsletters) return new Map<string, Tag>();
     // Get all unique tags from all newsletters
-    const allTags = new Map<string, Tag>();
+    const tags = new Map<string, Tag>();
     newsletters.forEach(newsletter => {
       (newsletter.tags || []).forEach((tag: Tag) => {
-        if (tag && tag.id && !allTags.has(tag.id)) {
-          allTags.set(tag.id, tag);
+        if (tag?.id && !tags.has(tag.id)) {
+          tags.set(tag.id, tag);
         }
       });
     });
-    return tagId ? allTags.get(tagId) || null : null;
-  }, [tagId, newsletters]);
+    return tags;
+  }, [newsletters]);
 
-  // Handle tag click
+  // Get selected tag objects
+  const selectedTags = useMemo(() => {
+    return selectedTagIds
+      .map(id => allTags.get(id))
+      .filter((tag): tag is Tag => tag !== undefined);
+  }, [selectedTagIds, allTags]);
+
+  // Handle tag click - toggle tag in filter
   const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSearchParams({ tag: tag.id });
+    setSearchParams(prev => {
+      const currentTags = new Set(prev.get('tag')?.split(',').filter(Boolean) || []);
+      
+      if (currentTags.has(tag.id)) {
+        currentTags.delete(tag.id);
+      } else {
+        currentTags.add(tag.id);
+      }
+      
+      const newParams = new URLSearchParams(prev);
+      if (currentTags.size > 0) {
+        newParams.set('tag', Array.from(currentTags).join(','));
+      } else {
+        newParams.delete('tag');
+      }
+      
+      return newParams;
+    });
   }, [setSearchParams]);
 
-  // Clear tag filter
+  // Clear all tag filters
   const clearTagFilter = useCallback(() => {
-    setSearchParams({});
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      newParams.delete('tag');
+      return newParams;
+    });
+  }, [setSearchParams]);
+  
+  // Remove a specific tag from filters
+  const removeTagFromFilter = useCallback((tagId: string) => {
+    setSearchParams(prev => {
+      const currentTags = new Set(prev.get('tag')?.split(',').filter(Boolean) || []);
+      currentTags.delete(tagId);
+      
+      const newParams = new URLSearchParams(prev);
+      if (currentTags.size > 0) {
+        newParams.set('tag', Array.from(currentTags).join(','));
+      } else {
+        newParams.delete('tag');
+      }
+      
+      return newParams;
+    });
   }, [setSearchParams]);
 
   // Filter newsletters based on current filter and tag
@@ -100,16 +149,18 @@ const Inbox: React.FC = () => {
       result = result.filter(n => n.is_liked);
     }
     
-    if (currentTag) {
+    if (selectedTagIds.length > 0) {
       result = result.filter(newsletter => 
-        (newsletter.tags || []).some((tag: Tag) => tag?.id === currentTag.id)
+        selectedTagIds.every(tagId => 
+          (newsletter.tags || []).some((tag: Tag) => tag?.id === tagId)
+        )
       );
     }
     
     return result.sort((a, b) => 
       new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
     );
-  }, [newsletters, filter, currentTag]);
+  }, [newsletters, filter, selectedTagIds]);
 
   // Toggle selection of a single newsletter
   const toggleSelect = useCallback((id: string) => {
@@ -286,29 +337,41 @@ const Inbox: React.FC = () => {
         )}
       </div>
 
-      {/* Tag filter badge (only if filtering by tag) */}
-      {currentTag && (
+      {/* Selected tags filter */}
+      {selectedTags.length > 0 && (
         <div className="px-6 pt-6">
-          <div className="inline-flex items-center bg-gray-100 rounded-full px-3 py-1 text-sm">
-            <span 
-              className="inline-flex items-center rounded-full text-xs font-medium pr-1"
-              style={{ backgroundColor: `${currentTag.color}20`, color: currentTag.color }}
-            >
-              {currentTag.name}
-              <button
-                onClick={clearTagFilter}
-                className="ml-1 text-gray-400 hover:text-gray-600"
-                title="Clear tag filter"
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedTags.map(tag => (
+              <span 
+                key={tag.id}
+                className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
               >
-                <X size={14} />
-              </button>
-            </span>
+                {tag.name}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeTagFromFilter(tag.id);
+                  }}
+                  className="ml-1 text-gray-400 hover:text-gray-600"
+                  title="Remove tag filter"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={clearTagFilter}
+              className="text-xs text-blue-600 hover:text-blue-800 hover:underline ml-2"
+            >
+              Clear all
+            </button>
           </div>
         </div>
       )}
       
       {/* Main content */}
-      <div className={`${currentTag ? 'pt-2' : 'pt-6'} px-6 pb-6 overflow-auto`}>
+      <div className={`${selectedTags.length > 0 ? 'pt-2' : 'pt-6'} px-6 pb-6 overflow-auto`}>
         {filteredNewsletters.map((newsletter: Newsletter) => (
           <div
             key={newsletter.id}
