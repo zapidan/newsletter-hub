@@ -1,7 +1,7 @@
 import React, { useState, FormEvent } from 'react';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
 import { NewsletterSource } from '../types';
-import { PlusCircle, AlertTriangle, Loader2 } from 'lucide-react'; // Assuming you use lucide-react
+import { PlusCircle, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
 
 const NewslettersPage: React.FC = () => {
   const {
@@ -47,7 +47,15 @@ const NewslettersPage: React.FC = () => {
   // };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="max-w-4xl w-full mx-auto p-6">
+      <button
+        onClick={() => window.history.back()}
+        className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-6"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Inbox
+      </button>
+      
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-primary-900">Manage Newsletter Sources</h1>
         <p className="text-gray-600 mt-1">
@@ -135,26 +143,36 @@ const NewslettersPage: React.FC = () => {
         )}
         {/* Display the list if data is available */}
         {!isLoadingSources && !isErrorSources && newsletterSources.length > 0 && (
-          <div className="overflow-x-auto bg-white border border-gray-200 rounded-xl shadow-sm">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="overflow-hidden bg-white border border-neutral-200 rounded-lg shadow-sm">
+            <table className="min-w-full divide-y divide-neutral-200">
+              <thead className="bg-neutral-50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                     Name
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                     Domain
                   </th>
-                  {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {/* <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                     Actions
                   </th> */}
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-neutral-200 bg-white">
                 {newsletterSources.map((source: NewsletterSource) => (
-                  <tr key={source.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{source.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.domain}</td>
+                  <tr key={source.id} className="hover:bg-neutral-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">
+                      <div className="flex items-center">
+                        <span className="truncate max-w-[200px]">{source.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-600">
+                      <div className="flex items-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {source.domain}
+                        </span>
+                      </div>
+                    </td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button 
                         onClick={() => handleDelete(source.id)}

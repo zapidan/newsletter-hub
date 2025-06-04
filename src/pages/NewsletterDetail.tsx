@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTags } from '../hooks/useTags';
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useReadingQueue } from '../hooks/useReadingQueue';
@@ -8,20 +8,29 @@ import { supabase } from '../services/supabaseClient';
 import LoadingScreen from '../components/common/LoadingScreen';
 import TagSelector from '../components/TagSelector';
 import type { Tag, Newsletter } from '../types';
-import { BookmarkIcon, Heart, ArrowLeft } from 'lucide-react';
+import { Bookmark as BookmarkIcon, Heart, ArrowLeft } from 'lucide-react';
+
+interface NewsletterWithTags extends Omit<Newsletter, 'is_liked' | 'is_bookmarked' | 'like_count'> {
+  tags?: Tag[];
+  is_liked?: boolean;
+  is_bookmarked?: boolean;
+  like_count?: number;
+  newsletter_tags?: Array<{ tag: Tag }>;
+}
 
 const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isFromReadingQueue = location.state?.from === '/reading-queue';
   const { updateNewsletterTags } = useTags();
   const { markAsRead, toggleLike, getNewsletter } = useNewsletters();
   const { toggleInQueue, readingQueue } = useReadingQueue();
   const [isBookmarking, setIsBookmarking] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
-  const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
+  const [newsletter, setNewsletter] = useState<NewsletterWithTags | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const initialLoadRef = useRef(true);
   const { user } = useAuth();
   
   // Memoize the transformed tags to prevent unnecessary re-renders
@@ -40,8 +49,8 @@ const NewsletterDetail = () => {
     return readingQueue.some(item => item.newsletter_id === newsletter.id);
   }, [newsletter?.id, readingQueue]);
   
-  // Define fetchNewsletter before it's used in other callbacks
-  const fetchNewsletter = useCallback(async (newsletterId: string): Promise<Newsletter | null> => {
+  // Fetch newsletter data
+  const fetchNewsletter = useCallback(async (newsletterId: string): Promise<NewsletterWithTags | null> => {
     if (!newsletterId || !user?.id) return null;
     
     try {
@@ -56,12 +65,12 @@ const NewsletterDetail = () => {
         .eq('id', newsletterId)
         .eq('user_id', user.id)
         .single();
-
+      
       if (error) throw error;
       if (!data) return null;
 
       // Transform the data to match Newsletter type
-      const transformedData: Newsletter = {
+      const transformedData: NewsletterWithTags = {
         ...data,
         id: data.id,
         user_id: data.user_id,
@@ -88,126 +97,125 @@ const NewsletterDetail = () => {
     } catch (err) {
       console.error('Error fetching newsletter:', err);
       setError('Failed to load newsletter. Please try again.');
-      throw err;
+      return null;
     }
   }, [user?.id]);
-  
-  // Handle toggling bookmark status
-  const handleToggleBookmark = useCallback(async () => {
-    if (!id || !newsletter) return;
+
+  const handleToggleLike = useCallback(async () => {
+    if (!id || !user?.id || !newsletter) return;
     
-    setIsBookmarking(true);
     try {
-      await toggleInQueue(id, readingQueue.some(item => item.newsletter_id === id));
+      setIsLiking(true);
+      // Optimistically update the UI
+      setNewsletter(prev => {
+        if (!prev) return null;
+        const newLikedState = !prev.is_liked;
+        return {
+          ...prev,
+          is_liked: newLikedState,
+          like_count: (prev.like_count || 0) + (newLikedState ? 1 : -1)
+        };
+      });
+      
+      // Then make the API call
+      await toggleLike(id);
     } catch (err) {
-      console.error('Error toggling bookmark status:', err);
+      console.error('Error toggling like:', err);
+      setError('Failed to update like status');
+      // Revert the optimistic update on error
+      setNewsletter(prev => prev ? {
+        ...prev,
+        is_liked: prev.is_liked,
+        like_count: (prev.like_count || 0) + (prev.is_liked ? -1 : 1)
+      } : null);
+    } finally {
+      setIsLiking(false);
+    }
+  }, [id, toggleLike, user?.id, newsletter]);
+
+  const handleToggleBookmark = useCallback(async () => {
+    if (!id || !user?.id) return;
+    
+    try {
+      setIsBookmarking(true);
+      const currentStatus = !!newsletter?.is_bookmarked;
+      await toggleInQueue(id, currentStatus);
+      
+      setNewsletter(prev => prev ? {
+        ...prev,
+        is_bookmarked: !prev.is_bookmarked
+      } : null);
+    } catch (err) {
+      console.error('Error toggling bookmark:', err);
       setError('Failed to update bookmark status');
     } finally {
       setIsBookmarking(false);
     }
-  }, [id, newsletter, toggleInQueue, readingQueue]);
+  }, [id, toggleInQueue, user?.id]);
 
-  // Load newsletter data
   useEffect(() => {
-    let isMounted = true;
-    let shouldMarkAsRead = false;
-    
     const loadData = async () => {
       if (!id) return;
       
       try {
         setLoading(true);
-        setError(null);
+        const data = await fetchNewsletter(id);
         
-        const newsletterData = await fetchNewsletter(id);
-        
-        if (!isMounted) return;
-        
-        if (!newsletterData) {
-          setError('Newsletter not found');
-          return;
-        }
-        
-        setNewsletter(newsletterData);
-        
-        // Mark as read if not already read
-        if (!newsletterData.is_read) {
-          shouldMarkAsRead = true;
-          await markAsRead(id);
-          if (isMounted) {
-            setNewsletter(prev => prev ? { ...prev, is_read: true } : null);
+        if (data) {
+          setNewsletter(data);
+          
+          if (!data.is_read) {
+            await markAsRead(id);
           }
+        } else {
+          setError('Newsletter not found');
         }
       } catch (err) {
         console.error('Error loading newsletter:', err);
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load newsletter');
-        }
+        setError('Failed to load newsletter');
       } finally {
-        if (isMounted) {
-          setLoading(false);
-          initialLoadRef.current = false;
-        }
+        setLoading(false);
       }
     };
     
-    // Only load data on initial mount or when ID changes
-    if (initialLoadRef.current) {
-      loadData();
-    }
-    
-    // Cleanup function
-    return () => {
-      isMounted = false;
-      // Reset initialLoadRef only if we haven't completed the mark as read operation
-      if (!shouldMarkAsRead) {
-        initialLoadRef.current = true;
-      }
-    };
+    loadData();
   }, [id, fetchNewsletter, markAsRead]);
-  
-  // Mark as read/unread handler
+
   if (loading) {
     return <LoadingScreen />;
   }
 
-  if (error || !newsletter) {
+  if (error) {
     return (
-      <div className="p-4">
-        <p className={error ? 'text-red-500' : ''}>{error || 'Newsletter not found'}</p>
+      <div className="max-w-6xl w-full mx-auto px-4 py-8">
         <button
-          onClick={() => navigate('/inbox')}
-          className="mt-2 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
+          onClick={() => navigate(-1)}
+          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Inbox
+          {isFromReadingQueue ? 'Back to Reading Queue' : 'Back to Inbox'}
         </button>
+        <p className="text-red-500">{error}</p>
       </div>
     );
   }
-  
-  const { title, content, summary } = newsletter;
 
-  // Handle toggle like with optimistic updates
-  const handleToggleLike = async () => {
-    if (!newsletter?.id || isLiking) return;
-    
-    setIsLiking(true);
-    try {
-      // Optimistically update the UI
-      const updatedNewsletter = await getNewsletter(newsletter.id);
-      if (updatedNewsletter) {
-        setNewsletter(updatedNewsletter);
-      }
-      
-      // Toggle the like in the database
-      await toggleLike(newsletter.id);
-    } catch (error) {
-      console.error('Error toggling like:', error);
-    } finally {
-      setIsLiking(false);
-    }
-  };
+  if (!newsletter) {
+    return (
+      <div className="max-w-6xl w-full mx-auto px-4 py-8">
+        <button
+          onClick={() => navigate(-1)}
+          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {isFromReadingQueue ? 'Back to Reading Queue' : 'Back to Inbox'}
+        </button>
+        <p className="text-red-500">Newsletter not found</p>
+      </div>
+    );
+  }
+
+  const { title, summary, content } = newsletter;
 
   return (
     <div className="max-w-6xl w-full mx-auto px-4 py-8">
@@ -216,21 +224,20 @@ const NewsletterDetail = () => {
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to Inbox
+        {isFromReadingQueue ? 'Back to Reading Queue' : 'Back to Inbox'}
       </button>
-      {/* Main content and sidebar layout */}
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Main content */}
-        <div className="flex-1 min-w-0">
+
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1">
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <div className="flex justify-between items-start mb-4">
-              <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
-              <div className="flex items-center gap-2">
+            <div className="flex justify-between items-start mb-6">
+              <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+              <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={handleToggleLike}
                   disabled={isLiking}
-                  className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${newsletter?.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
+                  className="p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-400 hover:text-red-500"
                   title={newsletter?.is_liked ? 'Unlike' : 'Like'}
                 >
                   <Heart 
@@ -244,7 +251,9 @@ const NewsletterDetail = () => {
                   type="button"
                   onClick={handleToggleBookmark}
                   disabled={isBookmarking}
-                  className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
+                  className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${
+                    isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'
+                  }`}
                   title={isInQueue ? 'Remove from reading queue' : 'Add to reading queue'}
                 >
                   <BookmarkIcon 
@@ -293,7 +302,6 @@ const NewsletterDetail = () => {
             <div className="mt-6 space-y-6">
               {summary && (
                 <div className="prose max-w-none">
-                  {/* <h3 className="text-lg font-medium text-blue-800 mb-2">Summary</h3> */}
                   <div 
                     className="prose-lg text-gray-700"
                     style={{ fontStyle: 'italic' }}
@@ -304,9 +312,8 @@ const NewsletterDetail = () => {
                 </div>
               )}
               
-              <div className="prose max-w-none">
-                {/* <h3 className="text-lg font-medium text-gray-900 mb-4">Full Content</h3> */}
-                {content ? (
+              {content && (
+                <div className="prose max-w-none">
                   <div 
                     className="prose-lg text-gray-700"
                     dangerouslySetInnerHTML={{ 
@@ -315,10 +322,8 @@ const NewsletterDetail = () => {
                         .replace(/<h2[^>]*>.*<\/h2>/i, '')
                     }} 
                   />
-                ) : (
-                  <p className="text-gray-500 italic">No content available</p>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -337,20 +342,18 @@ const NewsletterDetail = () => {
             <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 1, name: 'Tech News', count: 5 },
-                { id: 2, name: 'AI', count: 8 },
-                { id: 3, name: 'Product', count: 3 },
-                { id: 4, name: 'Industry', count: 6 }
-              ].map(topic => (
+                { id: '1', name: 'Tech News', count: 5 },
+                { id: '2', name: 'AI', count: 8 },
+                { id: '3', name: 'Product', count: 3 },
+                { id: '4', name: 'Industry', count: 6 }
+              ].map((topic) => (
                 <button
                   key={topic.id}
                   onClick={() => navigate(`/inbox?topic=${topic.name.toLowerCase()}`)}
-                  className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors"
+                  className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full flex items-center gap-1.5"
                 >
-                  {topic.name}
-                  <span className="ml-1.5 bg-gray-200 text-gray-600 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold">
-                    {topic.count}
-                  </span>
+                  <span>{topic.name}</span>
+                  <span className="text-xs text-gray-500">{topic.count}</span>
                 </button>
               ))}
             </div>
