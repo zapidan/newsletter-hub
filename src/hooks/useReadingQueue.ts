@@ -23,7 +23,7 @@ export const useReadingQueue = () => {
     isLoading,
     error,
     refetch,
-  } = useQuery<ReadingQueueItem[], Error>({
+  } = useQuery<ReadingQueueItem[]>({
     queryKey: ['readingQueue', user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -31,7 +31,12 @@ export const useReadingQueue = () => {
       const { data, error } = await supabase
         .from('reading_queue')
         .select(`
-          *,
+          id,
+          position,
+          user_id,
+          newsletter_id,
+          created_at,
+          updated_at,
           newsletter:newsletters (
             *,
             newsletter_tags (
@@ -46,19 +51,59 @@ export const useReadingQueue = () => {
       if (!data) return [];
 
       // Transform the data to match the ReadingQueueItem type
-      return data.map(item => ({
-        ...item,
-        newsletter: {
-          ...item.newsletter,
-          tags: ((item.newsletter as any)?.newsletter_tags || []).map((nt: any) => ({
+      return data.map(item => {
+        // Safely cast the newsletter object
+        const newsletter = item.newsletter as unknown as {
+          id: string;
+          title: string;
+          sender: string;
+          content: string;
+          summary: string;
+          image_url: string | null;
+          received_at: string;
+          created_at: string;
+          updated_at: string;
+          user_id: string;
+          is_read: boolean;
+          is_archived?: boolean;
+          is_liked: boolean;
+          newsletter_tags: Array<{ tag: { id: string; name: string; color: string } }>;
+        };
+        
+        // Create the newsletter object with only the fields defined in the Newsletter type
+        const newsletterItem: Newsletter = {
+          id: newsletter.id,
+          title: newsletter.title,
+          sender: newsletter.sender,
+          content: newsletter.content,
+          summary: newsletter.summary,
+          image_url: newsletter.image_url || '',
+          received_at: newsletter.received_at,
+          is_read: newsletter.is_read,
+          is_liked: newsletter.is_liked,
+          user_id: newsletter.user_id,
+          tags: (newsletter.newsletter_tags || []).map(nt => ({
             id: nt.tag.id,
             name: nt.tag.name,
             color: nt.tag.color,
             user_id: user.id,
             created_at: new Date().toISOString(),
           }))
-        }
-      }));
+        };
+        
+        // Create the queue item with the properly typed newsletter
+        const queueItem: ReadingQueueItem = {
+          id: item.id,
+          position: item.position,
+          user_id: item.user_id,
+          newsletter_id: item.newsletter_id,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+          newsletter: newsletterItem
+        };
+        
+        return queueItem;
+      });
     },
     enabled: !!user,
   });
@@ -67,6 +112,16 @@ export const useReadingQueue = () => {
   const addToQueue = useMutation({
     mutationFn: async (newsletterId: string): Promise<boolean> => {
       if (!user) throw new Error('User not authenticated');
+      
+      // Check if already in queue
+      const { data: existing } = await supabase
+        .from('reading_queue')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('newsletter_id', newsletterId)
+        .single();
+      
+      if (existing) return true; // Already in queue
       
       // Get current max position
       const { data: maxPosData } = await supabase
@@ -123,26 +178,76 @@ export const useReadingQueue = () => {
     }
   };
 
-  // Reorder queue
-  const reorderQueue = useMutation({
+  // Define the type for the mutation context
+  type ReorderContext = {
+    previousQueue?: ReadingQueueItem[];
+  };
+
+  // Reorder queue items
+  const reorderQueue = useMutation<boolean, Error, { id: string; position: number }[], ReorderContext>({
     mutationFn: async (updates: { id: string; position: number }[]): Promise<boolean> => {
       if (!user) throw new Error('User not authenticated');
       
-      const { error } = await supabase
-        .from('reading_queue')
-        .upsert(
-          updates.map(({ id, position }) => ({
-            id,
-            position,
-            updated_at: new Date().toISOString(),
-          })),
-          { onConflict: 'id' }
-        );
+      console.log('Updating positions:', updates);
       
-      if (error) throw error;
-      return true;
+      try {
+        // Use a transaction to update all positions at once
+        const { error } = await supabase.rpc('reorder_reading_queue', {
+          updates: updates.map(update => ({
+            id: update.id,
+            position: update.position
+          }))
+        });
+        
+        if (error) throw error;
+        
+        console.log('All positions updated successfully');
+        return true;
+      } catch (error) {
+        console.error('Error updating positions:', error);
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onMutate: async (updates) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['readingQueue', user?.id] });
+      
+      // Snapshot the previous value
+      const previousQueue = queryClient.getQueryData<ReadingQueueItem[]>(['readingQueue', user?.id]);
+      
+      // Optimistically update to the new value
+      if (previousQueue) {
+        const updatedQueue = [...previousQueue];
+        
+        // Apply all position updates
+        updates.forEach(({ id, position }) => {
+          const itemIndex = updatedQueue.findIndex(item => item.id === id);
+          if (itemIndex > -1) {
+            updatedQueue[itemIndex] = {
+              ...updatedQueue[itemIndex],
+              position
+            };
+          }
+        });
+        
+        // Sort by new positions
+        updatedQueue.sort((a, b) => a.position - b.position);
+        
+        // Update the query data
+        queryClient.setQueryData(['readingQueue', user?.id], updatedQueue);
+      }
+      
+      return { previousQueue };
+    },
+    onError: (error, _variables, context) => {
+      console.error('Error reordering queue:', error);
+      // Rollback on error
+      if (context?.previousQueue) {
+        queryClient.setQueryData(['readingQueue', user?.id], context.previousQueue);
+      }
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure sync with server
       queryClient.invalidateQueries({ queryKey: ['readingQueue', user?.id] });
     }
   });
