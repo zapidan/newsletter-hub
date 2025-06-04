@@ -312,7 +312,11 @@ const Inbox: React.FC = () => {
         {filteredNewsletters.map((newsletter: Newsletter) => (
           <div
             key={newsletter.id}
-            className={`bg-white rounded-lg p-4 mb-2 flex items-start cursor-pointer hover:bg-neutral-50 transition-colors border border-neutral-200 ${isSelecting && selectedIds.has(newsletter.id) ? 'ring-2 ring-primary-400' : ''}`}
+            className={`rounded-lg p-4 mb-2 flex items-start cursor-pointer transition-all duration-200 ${
+              !newsletter.is_read 
+                ? 'bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200' 
+                : 'bg-white border border-neutral-200 hover:bg-neutral-50'
+            } ${isSelecting && selectedIds.has(newsletter.id) ? 'ring-2 ring-primary-400' : ''}`}
             onClick={() => navigate(`/inbox/${newsletter.id}`)}
           >
             {isSelecting && (
@@ -340,7 +344,11 @@ const Inbox: React.FC = () => {
                       <div className="text-sm text-gray-500 truncate">{newsletter.sender}</div>
                     </div>
                     <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                      <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${newsletter.is_read ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                        newsletter.is_read 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-blue-400 text-white font-bold shadow-sm'
+                      }`}>
                         {newsletter.is_read ? 'Read' : 'Unread'}
                       </span>
                       <button
