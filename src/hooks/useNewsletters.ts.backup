@@ -254,7 +254,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
       
       return { previousNewsletters };
     },
-    onError: (_err: Error, _id: string, context: { previousNewsletters?: Newsletter[] } | undefined) => {
+    onError: (_err: Error, id: string, context: { previousNewsletters?: Newsletter[] } | undefined) => {
       // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(queryKey, context.previousNewsletters);
@@ -293,7 +293,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
       
       return { previousNewsletters };
     },
-    onError: (_err: Error, _id: string, context: { previousNewsletters?: Newsletter[] } | undefined) => {
+    onError: (_err: Error, id: string, context: { previousNewsletters?: Newsletter[] } | undefined) => {
       // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(queryKey, context.previousNewsletters);
@@ -333,7 +333,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
       
       return { previousNewsletters };
     },
-    onError: (_err: Error, _ids: string[], context: { previousNewsletters?: Newsletter[] } | undefined) => {
+    onError: (_err: Error, ids: string[], context: { previousNewsletters?: Newsletter[] } | undefined) => {
       // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(queryKey, context.previousNewsletters);
@@ -373,7 +373,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
       
       return { previousNewsletters };
     },
-    onError: (_err: Error, _ids: string[], context: { previousNewsletters?: Newsletter[] } | undefined) => {
+    onError: (_err: Error, ids: string[], context: { previousNewsletters?: Newsletter[] } | undefined) => {
       // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(queryKey, context.previousNewsletters);

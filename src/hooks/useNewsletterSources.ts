@@ -1,7 +1,26 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  useQuery, 
+  useMutation, 
+  useQueryClient, 
+  keepPreviousData,
+  QueryClient
+} from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { NewsletterSource } from '../types';
 import { PostgrestError } from '@supabase/supabase-js';
+
+// Cache time constants (in milliseconds)
+const STALE_TIME = 5 * 60 * 1000; // 5 minutes
+const CACHE_TIME = 30 * 60 * 1000; // 30 minutes
+
+// Query keys
+const queryKeys = {
+  all: ['newsletterSources'],
+  lists: () => [...queryKeys.all, 'list'],
+  detail: (id: string) => [...queryKeys.all, 'detail', id],
+  userSources: (userId: string) => [...queryKeys.all, 'user', userId],
+};
 
 // Define the type for the variables passed to the mutation
 interface NewsletterSourceVars {
@@ -28,13 +47,29 @@ const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
     .from('newsletter_sources')
     .select('*')
     .eq('user_id', user.id)
-    .order('name', { ascending: true });
+    .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Error fetching newsletter sources:', error);
-    throw error;
-  }
+  if (error) throw error;
+  
   return data || [];
+};
+
+// Function to prefetch a single source
+const prefetchSource = async (queryClient: QueryClient, id: string): Promise<void> => {
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.detail(id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('newsletter_sources')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    staleTime: STALE_TIME,
+  });
 };
 
 // Function to add a newsletter source
@@ -128,86 +163,203 @@ const deleteNewsletterSourceFn = async (id: string): Promise<void> => {
   }
 };
 
+// Optimistic update types
+type SourceContext = {
+  previousSources?: NewsletterSource[];
+};
+
 export function useNewsletterSources() {
   const queryClient = useQueryClient();
+  const { data: userData } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: () => supabase.auth.getUser(),
+    select: (response) => response.data.user,
+    staleTime: STALE_TIME,
+  });
+
+  const queryKey = queryKeys.userSources(userData?.id || 'default');
 
   const { 
-    data: newsletterSources,
+    data: newsletterSources = [],
     isLoading: isLoadingSources,
     isError: isErrorSources,
-    error: errorSources
-  } = useQuery<NewsletterSource[], PostgrestError | Error, NewsletterSource[], string[]>({
-    queryKey: ['newsletterSources'],
+    error: errorSources,
+    isFetching: isFetchingSources,
+    isStale: isStaleSources,
+    refetch: refetchSources,
+  } = useQuery<NewsletterSource[], Error>({
+    queryKey,
     queryFn: fetchNewsletterSourcesFn,
+    enabled: !!userData,
+    staleTime: STALE_TIME,
+    gcTime: CACHE_TIME,
+    placeholderData: keepPreviousData,
   });
 
-  const invalidateSources = () => {
-    queryClient.invalidateQueries({ queryKey: ['newsletterSources'] });
-  };
+  // Invalidate and refetch
+  const invalidateSources = useCallback(() => {
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.userSources(userData?.id || '') }),
+    ]);
+  }, [queryClient, userData?.id]);
+  
+  // Prefetch a single source
+  const prefetchSourceById = useCallback(async (id: string) => {
+    await prefetchSource(queryClient, id);
+  }, [queryClient]);
 
-  // Add mutation
-  const {
-    mutate: addNewsletterSource,
-    isPending: isAddingSource,
-    isError: isErrorAddingSource,
-    error: errorAddingSource,
-    isSuccess: isSuccessAddingSource,
-  } = useMutation<NewsletterSource, PostgrestError | Error, AddNewsletterSourceVars>({
+  // Add mutation with optimistic updates
+  const addMutation = useMutation<NewsletterSource, PostgrestError | Error, AddNewsletterSourceVars, SourceContext>({
     mutationFn: addNewsletterSourceFn,
-    onSuccess: invalidateSources,
+    onMutate: async (newSource) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+      
+      // Snapshot the previous value
+      const previousSources = queryClient.getQueryData<NewsletterSource[]>(queryKey) || [];
+      
+      // Optimistically update to the new value
+      queryClient.setQueryData(queryKey, (old: NewsletterSource[] = []) => [
+        { ...newSource, id: 'temp-id', created_at: new Date().toISOString() },
+        ...old
+      ]);
+      
+      return { previousSources };
+    },
+    onError: (_err, _newSource, context) => {
+      // Rollback on error
+      if (context?.previousSources) {
+        queryClient.setQueryData(queryKey, context.previousSources);
+      }
+    },
+    onSettled: () => {
+      // Invalidate and refetch
+      invalidateSources();
+    },
   });
 
-  // Update mutation
-  const {
-    mutate: updateNewsletterSource,
-    isPending: isUpdatingSource,
-    isError: isErrorUpdatingSource,
-    error: errorUpdatingSource,
-    isSuccess: isSuccessUpdatingSource,
-  } = useMutation<NewsletterSource, PostgrestError | Error, UpdateNewsletterSourceVars>({
+  // Update mutation with optimistic updates
+  const updateMutation = useMutation<NewsletterSource, PostgrestError | Error, UpdateNewsletterSourceVars, SourceContext>({
     mutationFn: updateNewsletterSourceFn,
-    onSuccess: invalidateSources,
+    onMutate: async (updatedSource) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+      
+      // Snapshot the previous value
+      const previousSources = queryClient.getQueryData<NewsletterSource[]>(queryKey) || [];
+      
+      // Optimistically update to the new value
+      queryClient.setQueryData(queryKey, (old: NewsletterSource[] = []) =>
+        old.map(source => 
+          source.id === updatedSource.id 
+            ? { ...source, ...updatedSource, updated_at: new Date().toISOString() }
+            : source
+        )
+      );
+      
+      return { previousSources };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback on error
+      if (context?.previousSources) {
+        queryClient.setQueryData(queryKey, context.previousSources);
+      }
+    },
+    onSettled: () => {
+      // Invalidate and refetch
+      invalidateSources();
+    },
   });
 
-  // Delete mutation
-  const {
-    mutate: deleteNewsletterSource,
-    isPending: isDeletingSource,
-    isError: isErrorDeletingSource,
-    error: errorDeletingSource,
-    isSuccess: isSuccessDeletingSource,
-  } = useMutation<void, PostgrestError | Error, string>({
+  // Delete mutation with optimistic updates
+  const deleteMutation = useMutation<void, PostgrestError | Error, string, SourceContext>({
     mutationFn: deleteNewsletterSourceFn,
-    onSuccess: invalidateSources,
+    onMutate: async (id) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+      
+      // Snapshot the previous value
+      const previousSources = queryClient.getQueryData<NewsletterSource[]>(queryKey) || [];
+      
+      // Optimistically remove the source
+      queryClient.setQueryData(queryKey, (old: NewsletterSource[] = []) =>
+        old.filter(source => source.id !== id)
+      );
+      
+      return { previousSources };
+    },
+    onError: (_err, _id, context) => {
+      // Rollback on error
+      if (context?.previousSources) {
+        queryClient.setQueryData(queryKey, context.previousSources);
+      }
+    },
+    onSettled: () => {
+      // Invalidate and refetch
+      invalidateSources();
+    },
   });
+
+  // Optimize cache updates
+  const updateCache = useCallback((updatedSource: NewsletterSource) => {
+    queryClient.setQueryData<NewsletterSource[]>(queryKey, (old = []) => {
+      const index = old.findIndex(s => s.id === updatedSource.id);
+      if (index >= 0) {
+        const newData = [...old];
+        newData[index] = updatedSource;
+        return newData;
+      }
+      return [updatedSource, ...old];
+    });
+  }, [queryClient, queryKey]);
+
+  // Optimize cache removal
+  const removeFromCache = useCallback((id: string) => {
+    queryClient.setQueryData<NewsletterSource[]>(queryKey, (old = []) => 
+      old.filter(source => source.id !== id)
+    );
+  }, [queryClient, queryKey]);
 
   return {
     // Sources data
-    newsletterSources: newsletterSources || [],
+    newsletterSources,
     isLoadingSources,
     isErrorSources,
     errorSources,
+    isFetchingSources,
+    isStaleSources,
+    refetchSources,
     
     // Add source
-    addNewsletterSource,
-    isAddingSource,
-    isErrorAddingSource,
-    errorAddingSource,
-    isSuccessAddingSource,
+    addNewsletterSource: addMutation.mutate,
+    addNewsletterSourceAsync: addMutation.mutateAsync,
+    isAddingSource: addMutation.isPending,
+    isErrorAddingSource: addMutation.isError,
+    errorAddingSource: addMutation.error,
+    isSuccessAddingSource: addMutation.isSuccess,
     
     // Update source
-    updateNewsletterSource,
-    isUpdatingSource,
-    isErrorUpdatingSource,
-    errorUpdatingSource,
-    isSuccessUpdatingSource,
+    updateNewsletterSource: updateMutation.mutate,
+    updateNewsletterSourceAsync: updateMutation.mutateAsync,
+    isUpdatingSource: updateMutation.isPending,
+    isErrorUpdatingSource: updateMutation.isError,
+    errorUpdatingSource: updateMutation.error,
+    isSuccessUpdatingSource: updateMutation.isSuccess,
     
     // Delete source
-    deleteNewsletterSource,
-    isDeletingSource,
-    isErrorDeletingSource,
-    errorDeletingSource,
-    isSuccessDeletingSource,
-  };
+    deleteNewsletterSource: deleteMutation.mutate,
+    deleteNewsletterSourceAsync: deleteMutation.mutateAsync,
+    isDeletingSource: deleteMutation.isPending,
+    isErrorDeletingSource: deleteMutation.isError,
+    errorDeletingSource: deleteMutation.error,
+    isSuccessDeletingSource: deleteMutation.isSuccess,
+    
+    // Cache utilities
+    invalidateSources,
+    prefetchSource: prefetchSourceById,
+    updateCache,
+    removeFromCache,
+  } as const;
 }
-
