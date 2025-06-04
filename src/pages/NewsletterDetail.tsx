@@ -8,15 +8,16 @@ import { supabase } from '../services/supabaseClient';
 import LoadingScreen from '../components/common/LoadingScreen';
 import TagSelector from '../components/TagSelector';
 import type { Tag, Newsletter } from '../types';
-import { BookmarkIcon } from 'lucide-react';
+import { BookmarkIcon, Heart } from 'lucide-react';
 
 const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { updateNewsletterTags } = useTags();
-  const { markAsRead } = useNewsletters();
+  const { markAsRead, toggleLike, getNewsletter } = useNewsletters();
   const { toggleInQueue, readingQueue } = useReadingQueue();
   const [isBookmarking, setIsBookmarking] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,12 @@ const NewsletterDetail = () => {
       return t as Tag;
     });
   }, [newsletter?.tags]);
+  
+  // Memoize isInQueue calculation
+  const isInQueue = useMemo(() => {
+    if (!newsletter?.id || !readingQueue) return false;
+    return readingQueue.some(item => item.newsletter_id === newsletter.id);
+  }, [newsletter?.id, readingQueue]);
   
   // Define fetchNewsletter before it's used in other callbacks
   const fetchNewsletter = useCallback(async (newsletterId: string): Promise<Newsletter | null> => {
@@ -163,25 +170,11 @@ const NewsletterDetail = () => {
   if (loading) {
     return <LoadingScreen />;
   }
-  
-  if (error) {
-    return (
-      <div className="p-4 text-red-600">
-        <p>{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="mt-2 px-4 py-2 bg-gray-100 rounded hover:bg-gray-200"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-  
-  if (!newsletter) {
+
+  if (error || !newsletter) {
     return (
       <div className="p-4">
-        <p>Newsletter not found</p>
+        <p className={error ? 'text-red-500' : ''}>{error || 'Newsletter not found'}</p>
         <button 
           onClick={() => navigate('/inbox')}
           className="mt-2 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
@@ -193,8 +186,28 @@ const NewsletterDetail = () => {
   }
   
   const { title, content, summary } = newsletter;
-  const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
-  
+
+  // Handle toggle like with optimistic updates
+  const handleToggleLike = async () => {
+    if (!newsletter?.id || isLiking) return;
+    
+    setIsLiking(true);
+    try {
+      // Optimistically update the UI
+      const updatedNewsletter = await getNewsletter(newsletter.id);
+      if (updatedNewsletter) {
+        setNewsletter(updatedNewsletter);
+      }
+      
+      // Toggle the like in the database
+      await toggleLike(newsletter.id);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    } finally {
+      setIsLiking(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl w-full mx-auto px-4 py-8">
       {/* Main content and sidebar layout */}
@@ -204,20 +217,36 @@ const NewsletterDetail = () => {
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <div className="flex justify-between items-start mb-4">
               <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
-              <button
-                type="button"
-                onClick={handleToggleBookmark}
-                disabled={isBookmarking}
-                className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
-                title={isInQueue ? 'Remove from reading queue' : 'Add to reading queue'}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleToggleLike}
+                  disabled={isLiking}
+                  className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${newsletter?.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
+                  title={newsletter?.is_liked ? 'Unlike' : 'Like'}
                 >
-                <BookmarkIcon 
-                  className="h-6 w-6"
-                  fill={isInQueue ? '#9CA3AF' : 'none'}
-                  stroke="#9CA3AF"
-                  strokeWidth={1.5}
-                />
-              </button>
+                  <Heart 
+                    className="h-6 w-6"
+                    fill={newsletter?.is_liked ? '#EF4444' : 'none'}
+                    stroke={newsletter?.is_liked ? '#EF4444' : '#9CA3AF'}
+                    strokeWidth={1.5}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleBookmark}
+                  disabled={isBookmarking}
+                  className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
+                  title={isInQueue ? 'Remove from reading queue' : 'Add to reading queue'}
+                >
+                  <BookmarkIcon 
+                    className="h-6 w-6"
+                    fill={isInQueue ? '#9CA3AF' : 'none'}
+                    stroke="#9CA3AF"
+                    strokeWidth={1.5}
+                  />
+                </button>
+              </div>
             </div>
 
             {/* Tags Section */}

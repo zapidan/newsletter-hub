@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient, UseMutateAsyncFunction, QueryObserverResult, RefetchOptions } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from './useAuth';
-import { Newsletter as NewsletterType, NewsletterUpdate } from '../types';
+import { Newsletter as NewsletterType, NewsletterUpdate, Tag } from '../types';
 
 export type Newsletter = NewsletterType;
 
@@ -18,6 +18,9 @@ interface UseNewslettersReturn {
   markAsUnread: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
   isMarkingAsUnread: boolean;
   errorMarkingAsUnread: Error | null;
+  toggleLike: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
+  isTogglingLike: boolean;
+  errorTogglingLike: Error | null;
   bulkMarkAsRead: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
   isBulkMarkingAsRead: boolean;
   errorBulkMarkingAsRead: Error | null;
@@ -96,6 +99,80 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
   const errorNewsletters: Error | null = queryResult.error;
   const refetchNewsletters = queryResult.refetch;
 
+  // Mutation for toggling like
+  const { 
+    mutateAsync: toggleLike, 
+    isPending: isTogglingLike, 
+    error: errorTogglingLike 
+  } = useMutation({
+    mutationFn: async (id: string) => {
+      if (!user?.id) return false;
+      
+      // First get the current like status
+      const { data: currentNewsletter } = await supabase
+        .from('newsletters')
+        .select('is_liked')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (!currentNewsletter) throw new Error('Newsletter not found');
+      
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ 
+          is_liked: !currentNewsletter.is_liked
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      return !currentNewsletter.is_liked;
+    },
+    onMutate: async (id: string) => {
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({
+        queryKey: ['newsletters', user?.id, tagId]
+      });
+      
+      // Snapshot the previous value
+      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(['newsletters', user?.id, tagId]);
+      
+      // Optimistically update to the new value
+      if (previousNewsletters) {
+        queryClient.setQueryData<Newsletter[]>(
+          ['newsletters', user?.id, tagId],
+          previousNewsletters.map(newsletter =>
+            newsletter.id === id 
+              ? { 
+                  ...newsletter, 
+                  is_liked: !newsletter.is_liked
+                } 
+              : newsletter
+          )
+        );
+      }
+      
+      return { previousNewsletters };
+    },
+    // If the mutation fails, use the context returned from onMutate to roll back
+    onError: (_err: Error, _id: string, context: { previousNewsletters?: Newsletter[] } | undefined) => {
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(['newsletters', user?.id, tagId], context.previousNewsletters);
+      }
+    },
+    // Always refetch after error or success:
+    onSettled: () => {
+      // Invalidate both the main query and any individual newsletter queries
+      queryClient.invalidateQueries({
+        queryKey: ['newsletters', user?.id, tagId]
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['newsletters', user?.id]
+      });
+    },
+  });
+
   // Mutation for marking a newsletter as read
   const markAsReadMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[] }>({
     mutationFn: async (id: string) => {
@@ -111,23 +188,6 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsletters', user?.id, tagId] });
     },
-    // Example of optimistic update (optional)
-    // onMutate: async (id) => {
-    //   await queryClient.cancelQueries({ queryKey: ['newsletters', user?.id, tagId] });
-    //   const previousNewsletters = queryClient.getQueryData<Newsletter[]>(['newsletters', user?.id, tagId]);
-    //   queryClient.setQueryData<Newsletter[]>(['newsletters', user?.id, tagId], (old) => 
-    //     old?.map(n => n.id === id ? { ...n, is_read: true } : n) || []
-    //   );
-    //   return { previousNewsletters };
-    // },
-    // onError: (err, id, context) => {
-    //   if (context?.previousNewsletters) {
-    //     queryClient.setQueryData(['newsletters', user?.id, tagId], context.previousNewsletters);
-    //   }
-    // },
-    // onSettled: () => {
-    //   queryClient.invalidateQueries({ queryKey: ['newsletters', user?.id, tagId] });
-    // },
   });
 
   // Mutation for marking a newsletter as unread
@@ -239,6 +299,10 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     markAsUnread: markAsUnreadMutation.mutateAsync,
     isMarkingAsUnread: markAsUnreadMutation.isPending, // Changed from isLoading to isPending
     errorMarkingAsUnread: markAsUnreadMutation.error,
+
+    toggleLike,
+    isTogglingLike,
+    errorTogglingLike,
 
     bulkMarkAsRead: bulkMarkAsReadMutation.mutateAsync,
     isBulkMarkingAsRead: bulkMarkAsReadMutation.isPending, // Changed from isLoading to isPending

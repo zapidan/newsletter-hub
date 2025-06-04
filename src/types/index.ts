@@ -28,6 +28,7 @@ export interface Newsletter {
   image_url: string;
   received_at: string;
   is_read: boolean;
+  is_liked: boolean;
   user_id: string;
   tags?: Tag[];
 }

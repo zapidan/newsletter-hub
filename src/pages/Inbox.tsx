@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon } from 'lucide-react';
+import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon, Heart } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useReadingQueue } from '../hooks/useReadingQueue';
@@ -20,8 +20,8 @@ const Inbox: React.FC = () => {
   const navigate = useNavigate();
   
   // Local state
-  const [filter, setFilter] = useState<'all' | 'unread'>(
-    (searchParams.get('filter') as 'all' | 'unread') || 'all'
+  const [filter, setFilter] = useState<'all' | 'unread' | 'liked'>(
+    (searchParams.get('filter') as 'all' | 'unread' | 'liked') || 'all'
   );
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -34,8 +34,18 @@ const Inbox: React.FC = () => {
     errorNewsletters, 
     bulkMarkAsRead,
     bulkMarkAsUnread,
+    toggleLike,
     refetchNewsletters,
   } = useNewsletters(tagId || undefined);
+  
+  // Handle toggle like
+  const handleToggleLike = useCallback(async (newsletterId: string) => {
+    try {
+      await toggleLike(newsletterId);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  }, [toggleLike]);
 
   // Memoized filtered newsletters
   const filteredNewsletters = useMemo(() => {
@@ -45,8 +55,11 @@ const Inbox: React.FC = () => {
       if (tagId && !newsletter.tags?.some((tag: Tag) => tag.id === tagId)) {
         return false;
       }
-      // Apply read/unread filter
+      // Apply read/unread/liked filters
       if (filter === 'unread' && newsletter.is_read) {
+        return false;
+      }
+      if (filter === 'liked' && !newsletter.is_liked) {
         return false;
       }
       return true;
@@ -104,12 +117,16 @@ const Inbox: React.FC = () => {
     }
   }, [filteredNewsletters, selectedIds.size]);
 
-  // Bulk actions
+  // Handle bulk mark as read
   const handleBulkMarkAsRead = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    await bulkMarkAsRead(Array.from(selectedIds));
-    setSelectedIds(new Set());
-    setIsSelecting(false);
+    try {
+      await bulkMarkAsRead(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setIsSelecting(false);
+    } catch (error) {
+      console.error('Error marking as read:', error);
+    }
   }, [selectedIds, bulkMarkAsRead]);
 
   const handleBulkMarkAsUnread = useCallback(async () => {
@@ -168,7 +185,7 @@ const Inbox: React.FC = () => {
     <div className="p-6 bg-neutral-50 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           {isSelecting ? (
             <>
               <button 
@@ -195,24 +212,22 @@ const Inbox: React.FC = () => {
           ) : (
             <div className="flex items-center gap-2">
               <button
-                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  filter === 'all' 
-                    ? 'bg-primary-50 text-primary-700' 
-                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                }`}
+                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 onClick={() => setFilter('all')}
               >
                 All
               </button>
               <button
-                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  filter === 'unread' 
-                    ? 'bg-primary-50 text-primary-700' 
-                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                }`}
                 onClick={() => setFilter('unread')}
+                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === 'unread' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
               >
                 Unread
+              </button>
+              <button
+                onClick={() => setFilter('liked')}
+                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === 'liked' ? 'bg-red-100 text-red-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                Liked
               </button>
               <button
                 onClick={() => setIsSelecting(true)}
@@ -391,6 +406,23 @@ const Inbox: React.FC = () => {
                 >
                   {newsletter.is_read ? 'Mark as Unread' : 'Mark as Read'}
                 </button>
+                {/* Like button */}
+                <button
+                  type="button"
+                  className={`p-1.5 transition-colors ${newsletter.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleLike(newsletter.id);
+                  }}
+                  title={newsletter.is_liked ? 'Unlike' : 'Like'}
+                >
+                  <Heart 
+                    className="h-4 w-4"
+                    fill={newsletter.is_liked ? '#EF4444' : 'none'}
+                    stroke={newsletter.is_liked ? '#EF4444' : '#9CA3AF'}
+                    strokeWidth={1.5}
+                  />
+                </button>
                 {/* Tag edit icon */}
                 <button
                   type="button"
@@ -411,11 +443,11 @@ const Inbox: React.FC = () => {
                   title={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'Remove from reading queue' : 'Add to reading queue'}
                 >
                   <BookmarkIcon 
-                  className="h-5 w-5"
-                  fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? '#9CA3AF' : 'none'}
-                  stroke="#9CA3AF"
-                  strokeWidth={1.5}
-                />
+                    className="h-5 w-5"
+                    fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? '#9CA3AF' : 'none'}
+                    stroke="#9CA3AF"
+                    strokeWidth={1.5}
+                  />
                 </button>
               </div>
               {/* Newsletter summary, tags, and date below the flex row */}
