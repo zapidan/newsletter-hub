@@ -17,6 +17,7 @@ import {
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useEmailAlias } from '../../hooks/useEmailAlias';
+import { useUnreadCount } from '../../hooks/useUnreadCount';
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,6 +25,7 @@ const Sidebar = () => {
   const { emailAlias, loading: emailLoading } = useEmailAlias();
   
   const [copied, setCopied] = useState(false);
+  const { unreadCount, isLoading: isLoadingUnreadCount } = useUnreadCount();
 
   const copyToClipboard = async () => {
     if (!emailAlias) return;
@@ -123,9 +125,9 @@ const Sidebar = () => {
             >
               {link.icon}
               <span>{link.label}</span>
-              {link.to === '/inbox' && (
+              {link.to === '/inbox' && unreadCount > 0 && (
                 <span className="ml-auto bg-primary-100 text-primary-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  12
+                  {unreadCount}
                 </span>
               )}
             </NavLink>

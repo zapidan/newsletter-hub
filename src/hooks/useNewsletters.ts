@@ -187,6 +187,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsletters', user?.id, tagId] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
     },
   });
 
@@ -204,6 +205,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsletters', user?.id, tagId] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
     },
   });
 
@@ -222,6 +224,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsletters', user?.id, tagId] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
     },
   });
 
@@ -240,6 +243,7 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['newsletters', user?.id, tagId] });
+      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
     },
   });
 
