@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Tag as TagIcon, X, Edit2, Trash2, Check } from 'lucide-react';
+import { Plus, Tag as TagIcon, X, Edit2, Trash2, Check, ArrowLeft } from 'lucide-react';
 import { useTags } from '../hooks/useTags';
 import type { Tag, TagCreate, TagWithCount } from '../types';
 import LoadingScreen from '../components/common/LoadingScreen';
@@ -159,8 +159,9 @@ const TagsPage: React.FC = () => {
         </div>
         <button
           onClick={() => navigate('/')}
-          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md"
+          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
         >
+          <ArrowLeft className="h-4 w-4" />
           Back to Inbox
         </button>
       </div>

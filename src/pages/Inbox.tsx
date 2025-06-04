@@ -312,7 +312,7 @@ const Inbox: React.FC = () => {
         {filteredNewsletters.map((newsletter: Newsletter) => (
           <div
             key={newsletter.id}
-            className={`bg-white shadow rounded-lg p-4 mb-4 flex items-start cursor-pointer hover:bg-gray-50 transition ${isSelecting && selectedIds.has(newsletter.id) ? 'ring-2 ring-primary-400' : ''}`}
+            className={`bg-white rounded-lg p-4 mb-2 flex items-start cursor-pointer hover:bg-neutral-50 transition-colors border border-neutral-200 ${isSelecting && selectedIds.has(newsletter.id) ? 'ring-2 ring-primary-400' : ''}`}
             onClick={() => navigate(`/inbox/${newsletter.id}`)}
           >
             {isSelecting && (
