@@ -7,6 +7,7 @@ type TagSelectorProps = {
   selectedTags: Tag[];
   onTagsChange: (tags: Tag[]) => void;
   onTagDeleted?: (deletedTag: Tag) => void;
+  onTagClick?: (tag: Tag, e: React.MouseEvent) => void;
   className?: string;
 };
 
@@ -21,7 +22,13 @@ const colors = [
   '#f97316', // orange-500
 ];
 
-export default function TagSelector({ selectedTags, onTagsChange, onTagDeleted, className = '' }: TagSelectorProps) {
+export default function TagSelector({ 
+  selectedTags, 
+  onTagsChange, 
+  onTagDeleted, 
+  onTagClick,
+  className = '' 
+}: TagSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState(colors[0]);
@@ -113,24 +120,22 @@ export default function TagSelector({ selectedTags, onTagsChange, onTagDeleted, 
   return (
     <div className={`relative ${className}`}>
       <div className="flex flex-wrap gap-2">
-        {selectedTags.map(tag => (
-          <div 
+        {selectedTags.map((tag) => (
+          <div
             key={tag.id}
-            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-            style={{ 
-              backgroundColor: `${tag.color}20`, 
-              color: tag.color,
-              border: `1px solid ${tag.color}40`
-            }}
+            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 mb-2 ${onTagClick ? 'cursor-pointer hover:opacity-80' : ''}`}
+            style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+            onClick={onTagClick ? (e) => onTagClick(tag, e) : undefined}
           >
             {tag.name}
-            <button 
+            <button
               type="button"
-              className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-white/20"
               onClick={(e) => {
                 e.stopPropagation();
                 handleRemoveTag(tag.id);
               }}
+              className="ml-1 text-gray-400 hover:text-gray-600"
+              title="Remove tag"
             >
               <X size={12} />
             </button>
