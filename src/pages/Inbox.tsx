@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon } from 'lucide-react';
+import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useReadingQueue } from '../hooks/useReadingQueue';
@@ -410,20 +410,12 @@ const Inbox: React.FC = () => {
                   }}
                   title={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'Remove from reading queue' : 'Add to reading queue'}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'currentColor' : 'none'}
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                    />
-                  </svg>
+                  <BookmarkIcon 
+                  className="h-5 w-5"
+                  fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? '#9CA3AF' : 'none'}
+                  stroke="#9CA3AF"
+                  strokeWidth={1.5}
+                />
                 </button>
               </div>
               {/* Newsletter summary, tags, and date below the flex row */}

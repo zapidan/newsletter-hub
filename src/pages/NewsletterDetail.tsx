@@ -8,6 +8,7 @@ import { supabase } from '../services/supabaseClient';
 import LoadingScreen from '../components/common/LoadingScreen';
 import TagSelector from '../components/TagSelector';
 import type { Tag, Newsletter } from '../types';
+import { BookmarkIcon } from 'lucide-react';
 
 const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -204,27 +205,19 @@ const NewsletterDetail = () => {
             <div className="flex justify-between items-start mb-4">
               <h1 className="text-3xl font-bold text-gray-900">{title}</h1>
               <button
-              type="button"
-              onClick={handleToggleBookmark}
-              disabled={isBookmarking}
-              className={`p-2 rounded-full ${isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'} transition-colors`}
-              title={isInQueue ? 'Remove from reading queue' : 'Add to reading queue'}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6"
-                fill={isInQueue ? 'currentColor' : 'none'}
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                type="button"
+                onClick={handleToggleBookmark}
+                disabled={isBookmarking}
+                className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
+                title={isInQueue ? 'Remove from reading queue' : 'Add to reading queue'}
+                >
+                <BookmarkIcon 
+                  className="h-6 w-6"
+                  fill={isInQueue ? '#9CA3AF' : 'none'}
+                  stroke="#9CA3AF"
+                  strokeWidth={1.5}
                 />
-              </svg>
-            </button>
+              </button>
             </div>
 
             {/* Tags Section */}
