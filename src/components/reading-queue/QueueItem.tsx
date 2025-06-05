@@ -72,7 +72,7 @@ export const QueueItem = ({ item, onRemove, onClick, isManualSort }: QueueItemPr
           {item.newsletter.title}
         </h3>
         <p className="text-sm text-neutral-500 truncate">
-          {item.newsletter.sender}
+          {item.newsletter.source?.name || 'Unknown Source'}
         </p>
         {item.newsletter.tags && item.newsletter.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">

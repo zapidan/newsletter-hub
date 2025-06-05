@@ -9,12 +9,22 @@ import { supabase } from '../services/supabaseClient';
 interface Newsletter {
   id: string;
   title: string;
-  sender: string;
   content: string;
   summary: string;
   received_at: string;
   is_read: boolean;
   image_url?: string;
+  user_id: string;
+  is_liked: boolean;
+  newsletter_source_id?: string | null;
+  source?: {
+    id: string;
+    name: string;
+    domain: string;
+    user_id: string;
+    created_at: string;
+    updated_at: string;
+  };
   tags?: Array<{ id: string; name: string; color: string }>;
   newsletter_tags?: Array<{ tag: { id: string; name: string; color: string } }>;
 }
@@ -53,20 +63,38 @@ const TagsPage: React.FC = () => {
         continue;
       }
       
-      // Fetch newsletters by those IDs, with tags joined
+      // Fetch newsletters by those IDs, with source and tags joined
       const { data: newsletters, error: newsError } = await supabase
         .from('newsletters')
-        .select(`*, newsletter_tags ( tag:tags (id, name, color) )`)
+        .select(`
+          *,
+          newsletter_source_id,
+          source:newsletter_sources(
+            id,
+            name,
+            domain,
+            user_id,
+            created_at,
+            updated_at
+          ),
+          newsletter_tags (
+            tag:tags (
+              id,
+              name,
+              color
+            )
+          )
+        `)
         .in('id', newsletterIds);
       
       if (newsError) {
         console.error('Error fetching newsletters:', newsError);
         newslettersByTag[tag.id] = [];
       } else {
-        // Transform tags as in Inbox
+        // Transform the data to match the expected format
         newslettersByTag[tag.id] = (newsletters || []).map(item => ({
           ...item,
-          tags: item.newsletter_tags?.map((nt: any) => ({
+          tags: (item.newsletter_tags || []).map((nt: any) => ({
             id: nt.tag.id,
             name: nt.tag.name,
             color: nt.tag.color

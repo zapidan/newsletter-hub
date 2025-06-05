@@ -157,9 +157,12 @@ const Inbox: React.FC = () => {
       );
     }
     
-    return result.sort((a, b) => 
-      new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
-    );
+    return result.sort((a, b) => {
+  const dateDiff = new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
+  if (dateDiff !== 0) return dateDiff;
+  // Secondary sort by id for stability
+  return a.id.localeCompare(b.id);
+});
   }, [newsletters, filter, selectedTagIds]);
 
   // Toggle selection of a single newsletter
@@ -404,7 +407,12 @@ const Inbox: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-base truncate">{newsletter.title}</div>
-                      <div className="text-sm text-gray-500 truncate">{newsletter.sender}</div>
+                      <div className="text-sm text-gray-500 truncate">
+                        {newsletter.source?.name || 'Unknown Source'}
+                        {newsletter.source?.domain && (
+                          <span className="text-gray-400 ml-2">• {newsletter.source.domain}</span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 ml-2 flex-shrink-0">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
@@ -497,6 +505,11 @@ const Inbox: React.FC = () => {
                     onTagsChange={async (newTags) => {
                       const ok = await updateNewsletterTags(newsletter.id, newTags);
                       if (ok) {
+                        setVisibleTags(prev => {
+                          const newSet = new Set(prev);
+                          newSet.delete(newsletter.id);
+                          return newSet;
+                        });
                         refetchNewsletters();
                       }
                     }}

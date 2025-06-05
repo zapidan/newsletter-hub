@@ -21,29 +21,62 @@ const Search = () => {
     {
       id: '1',
       title: 'The Future of AI in Content Processing',
-      sender: 'Tech Insights Weekly',
       received_at: new Date().toISOString(),
       is_read: true,
       content: 'Content about AI and machine learning advancements...',
       summary: 'This newsletter discusses the latest trends in AI for content processing and summarization.',
+      image_url: '',
+      user_id: '1',
+      is_liked: false,
+      source: {
+        id: '1',
+        name: 'Tech Insights Weekly',
+        domain: 'techinsights.com',
+        user_id: '1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      newsletter_source_id: '1',
     },
     {
       id: '2',
       title: 'How Semantic Search is Changing the Game',
-      sender: 'Search Technology Today',
       received_at: new Date(Date.now() - 86400000).toISOString(), // Yesterday
       is_read: false,
       content: 'Content about semantic search technologies...',
       summary: 'An exploration of modern semantic search approaches and their applications.',
+      image_url: '',
+      user_id: '1',
+      is_liked: false,
+      source: {
+        id: '2',
+        name: 'Search Technology Today',
+        domain: 'searchtech.com',
+        user_id: '1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      newsletter_source_id: '2',
     },
     {
       id: '3',
       title: 'Natural Language Processing Breakthroughs',
-      sender: 'AI Research Roundup',
       received_at: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
       is_read: true,
       content: 'Content about NLP and language models...',
       summary: 'A summary of recent breakthroughs in natural language processing research.',
+      image_url: '',
+      user_id: '1',
+      is_liked: false,
+      source: {
+        id: '3',
+        name: 'AI Research Roundup',
+        domain: 'airesearch.com',
+        user_id: '1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      newsletter_source_id: '3',
     }
   ] : [];
 
@@ -186,7 +219,12 @@ const Search = () => {
                               {format(new Date(result.received_at), 'MMM d')}
                             </span>
                           </div>
-                          <div className="text-sm text-neutral-500 mb-2">{result.sender}</div>
+                          <div className="text-sm text-neutral-500 mb-2">
+                            {result.source?.name || 'Unknown Source'}
+                            {result.source?.domain && (
+                              <span className="text-gray-400 ml-2">• {result.source.domain}</span>
+                            )}
+                          </div>
                           <p className="text-neutral-700">{result.summary}</p>
                           
                           <div className="mt-3 pt-3 border-t border-neutral-200">

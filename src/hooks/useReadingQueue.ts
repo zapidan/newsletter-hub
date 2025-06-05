@@ -1,7 +1,38 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from './useAuth';
-import { Newsletter } from '../types';
+import { Newsletter, Tag, NewsletterSource } from '../types';
+
+interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {
+  newsletter_source_id: string | null;
+  source: NewsletterSource | null;
+  tags: Tag[];
+}
+
+interface NewsletterFromDB {
+  id: string;
+  title: string;
+  content: string;
+  summary: string | null;
+  image_url: string | null;
+  received_at: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  is_read: boolean;
+  is_liked: boolean;
+  newsletter_source_id: string | null;
+}
+
+interface QueueItemFromDB {
+  id: string;
+  position: number;
+  user_id: string;
+  newsletter_id: string;
+  created_at: string;
+  updated_at: string;
+  newsletters: NewsletterFromDB;
+}
 
 export interface ReadingQueueItem {
   id: string;
@@ -10,7 +41,7 @@ export interface ReadingQueueItem {
   position: number;
   created_at: string;
   updated_at: string;
-  newsletter: Newsletter;
+  newsletter: NewsletterWithRelations;
 }
 
 export const useReadingQueue = () => {
@@ -27,8 +58,9 @@ export const useReadingQueue = () => {
     queryKey: ['readingQueue', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
-      const { data, error } = await supabase
+
+      // Get the reading queue items with basic newsletter info
+      const { data: queueItemsRaw, error } = await supabase
         .from('reading_queue')
         .select(`
           id,
@@ -37,72 +69,104 @@ export const useReadingQueue = () => {
           newsletter_id,
           created_at,
           updated_at,
-          newsletter:newsletters (
-            *,
-            newsletter_tags (
-              tag:tags (id, name, color)
-            )
+          newsletters!inner(
+            id,
+            title,
+            content,
+            summary,
+            image_url,
+            received_at,
+            created_at,
+            updated_at,
+            user_id,
+            is_read,
+            is_liked,
+            newsletter_source_id
           )
         `)
         .eq('user_id', user.id)
         .order('position', { ascending: true });
 
       if (error) throw error;
-      if (!data) return [];
+      if (!queueItemsRaw || !Array.isArray(queueItemsRaw) || queueItemsRaw.length === 0) return [];
 
-      // Transform the data to match the ReadingQueueItem type
-      return data.map(item => {
-        // Safely cast the newsletter object
-        const newsletter = item.newsletter as unknown as {
-          id: string;
-          title: string;
-          sender: string;
-          content: string;
-          summary: string;
-          image_url: string | null;
-          received_at: string;
-          created_at: string;
-          updated_at: string;
-          user_id: string;
-          is_read: boolean;
-          is_archived?: boolean;
-          is_liked: boolean;
-          newsletter_tags: Array<{ tag: { id: string; name: string; color: string } }>;
+      // Cast queueItems to correct type
+      const queueItems: QueueItemFromDB[] = queueItemsRaw as any;
+
+      // Get unique newsletter and source IDs
+      const newsletterIds = Array.from(new Set(queueItems.map(item => item.newsletter_id)));
+      const sourceIds = Array.from(
+        new Set(
+          queueItems
+            .map(item => item.newsletters.newsletter_source_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+
+      // Fetch sources in a single query
+      const sourcesData = new Map<string, NewsletterSource>();
+      if (sourceIds.length > 0) {
+        const { data: sources, error: sourcesError } = await supabase
+          .from('newsletter_sources')
+          .select('*')
+          .in('id', sourceIds);
+
+        if (sourcesError) {
+          console.error('Error fetching sources:', sourcesError);
+        } else if (sources && Array.isArray(sources)) {
+          (sources as NewsletterSource[]).forEach((source) => {
+            sourcesData.set(source.id, source);
+          });
+        }
+      }
+
+      // Fetch tags in a single query
+      const tagsByNewsletterId = new Map<string, Tag[]>();
+      if (newsletterIds.length > 0) {
+        const { data: tags, error: tagsError } = await supabase
+          .from('newsletter_tags')
+          .select('newsletter_id, tags!inner(*)')
+          .in('newsletter_id', newsletterIds);
+
+        if (tagsError) {
+          console.error('Error fetching tags:', tagsError);
+        } else if (tags && Array.isArray(tags)) {
+          (tags as Array<{ newsletter_id: string; tags: Tag }>).forEach((tag) => {
+            if (!tagsByNewsletterId.has(tag.newsletter_id)) {
+              tagsByNewsletterId.set(tag.newsletter_id, []);
+            }
+            // Only push a single Tag, not an array
+            tagsByNewsletterId.get(tag.newsletter_id)?.push(tag.tags);
+          });
+        }
+      }
+
+      // Combine all the data
+      return queueItems.map(item => {
+        const newsletter = item.newsletters;
+        const source = newsletter.newsletter_source_id
+          ? sourcesData.get(newsletter.newsletter_source_id) || null
+          : null;
+
+        const tags = tagsByNewsletterId.get(item.newsletter_id) || [];
+
+        const newsletterWithRelations: NewsletterWithRelations = {
+          ...newsletter,
+          summary: newsletter.summary ?? '', // ensure string
+          image_url: newsletter.image_url ?? '', // ensure string
+          source,
+          tags,
         };
-        
-        // Create the newsletter object with only the fields defined in the Newsletter type
-        const newsletterItem: Newsletter = {
-          id: newsletter.id,
-          title: newsletter.title,
-          sender: newsletter.sender,
-          content: newsletter.content,
-          summary: newsletter.summary,
-          image_url: newsletter.image_url || '',
-          received_at: newsletter.received_at,
-          is_read: newsletter.is_read,
-          is_liked: newsletter.is_liked,
-          user_id: newsletter.user_id,
-          tags: (newsletter.newsletter_tags || []).map(nt => ({
-            id: nt.tag.id,
-            name: nt.tag.name,
-            color: nt.tag.color,
-            user_id: user.id,
-            created_at: new Date().toISOString(),
-          }))
-        };
-        
-        // Create the queue item with the properly typed newsletter
-        const queueItem: ReadingQueueItem = {
+
+        return {
           id: item.id,
-          position: item.position,
           user_id: item.user_id,
           newsletter_id: item.newsletter_id,
+          position: item.position,
           created_at: item.created_at,
           updated_at: item.updated_at,
-          newsletter: newsletterItem
+          newsletter: newsletterWithRelations
         };
-        
-        return queueItem;
       });
     },
     enabled: !!user,
@@ -110,38 +174,24 @@ export const useReadingQueue = () => {
 
   // Add to reading queue
   const addToQueue = useMutation({
-    mutationFn: async (newsletterId: string): Promise<boolean> => {
+    mutationFn: async (newsletterId: string) => {
       if (!user) throw new Error('User not authenticated');
-      
-      // Check if already in queue
-      const { data: existing } = await supabase
-        .from('reading_queue')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('newsletter_id', newsletterId)
-        .single();
-      
-      if (existing) return true; // Already in queue
-      
       // Get current max position
-      const { data: maxPosData } = await supabase
+      const { data: maxPosition } = await supabase
         .from('reading_queue')
         .select('position')
         .eq('user_id', user.id)
         .order('position', { ascending: false })
         .limit(1)
         .single();
-      
-      const nextPosition = (maxPosData?.position || 0) + 1;
-      
+      const position = maxPosition ? maxPosition.position + 1 : 0;
       const { error } = await supabase
         .from('reading_queue')
         .insert({
           user_id: user.id,
           newsletter_id: newsletterId,
-          position: nextPosition,
+          position,
         });
-      
       if (error) throw error;
       return true;
     },
@@ -152,15 +202,12 @@ export const useReadingQueue = () => {
 
   // Remove from reading queue
   const removeFromQueue = useMutation({
-    mutationFn: async (newsletterId: string): Promise<boolean> => {
+    mutationFn: async (queueItemId: string) => {
       if (!user) throw new Error('User not authenticated');
-      
       const { error } = await supabase
         .from('reading_queue')
         .delete()
-        .eq('user_id', user.id)
-        .eq('newsletter_id', newsletterId);
-      
+        .eq('id', queueItemId);
       if (error) throw error;
       return true;
     },
@@ -170,13 +217,15 @@ export const useReadingQueue = () => {
   });
 
   // Toggle item in reading queue
-  const toggleInQueue = async (newsletterId: string, isInQueue: boolean) => {
-    if (isInQueue) {
-      await removeFromQueue.mutateAsync(newsletterId);
+  const toggleInQueue = async (newsletterId: string) => {
+    const existingItem = readingQueue.find((item) => item.newsletter_id === newsletterId);
+    if (existingItem) {
+      await removeFromQueue.mutateAsync(existingItem.id);
     } else {
       await addToQueue.mutateAsync(newsletterId);
     }
   };
+
 
   // Define the type for the mutation context
   type ReorderContext = {

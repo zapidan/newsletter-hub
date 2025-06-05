@@ -62,9 +62,18 @@ const NewsletterCard = ({
           )}
         </div>
         
-        <p className="text-sm text-gray-500 mb-2">
-          {newsletter.sender}
-        </p>
+        <div className="text-sm text-gray-500 mb-2">
+          {newsletter.source ? (
+            <>
+              <span className="font-medium">{newsletter.source.name}</span>
+              {newsletter.source.domain && (
+                <span className="text-gray-400 ml-2">• {newsletter.source.domain}</span>
+              )}
+            </>
+          ) : (
+            <span>Unknown Source</span>
+          )}
+        </div>
         
         {newsletter.received_at && (
           <p className="text-xs text-gray-400 mt-auto">

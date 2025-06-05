@@ -55,17 +55,37 @@ interface UseNewslettersReturn {
 // Helper function to transform newsletter data
 const transformNewsletterData = (data: any[] | null): Newsletter[] => {
   return data
-    ? data.map((item) => ({
-        ...item,
-        tags:
-          item.newsletter_tags?.map((nt: any) => nt.tag ? {
-            id: nt.tag.id,
-            name: nt.tag.name,
-            color: nt.tag.color,
-            user_id: nt.tag.user_id,
-            created_at: nt.tag.created_at,
-          } : null).filter(Boolean) as Tag[] || [],
-      }))
+    ? data.map((item) => {
+        // Extract tags if they exist
+        const tags = item.newsletter_tags?.map((nt: any) => nt.tag ? {
+          id: nt.tag.id,
+          name: nt.tag.name,
+          color: nt.tag.color,
+          user_id: nt.tag.user_id,
+          created_at: nt.tag.created_at,
+        } : null).filter(Boolean) as Tag[] || [];
+
+        // Extract source if it exists
+        const source = item.source ? {
+          id: item.source.id,
+          name: item.source.name,
+          domain: item.source.domain,
+          user_id: item.source.user_id,
+          created_at: item.source.created_at,
+          updated_at: item.source.updated_at
+        } : undefined;
+
+        // Remove the newsletter_tags and source fields from the base object
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { newsletter_tags, ...rest } = item;
+        
+        return {
+          ...rest,
+          tags,
+          source,
+          newsletter_source_id: item.newsletter_source_id || null
+        };
+      })
     : [];
 };
 
@@ -131,7 +151,26 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     query = query.order('received_at', { ascending: false });
     const { data, error } = await query;
     if (error) throw error;
-    return transformNewsletterData(data);
+    const newsletters = transformNewsletterData(data);
+
+    // Fetch all sources in one query and attach them
+    const sourceIds = Array.from(new Set(newsletters.map(n => n.newsletter_source_id).filter(Boolean)));
+    let sourcesMap: Record<string, any> = {};
+    if (sourceIds.length > 0) {
+      const { data: sourcesData, error: sourcesError } = await supabase
+        .from('newsletter_sources')
+        .select('*')
+        .in('id', sourceIds);
+      if (!sourcesError && sourcesData) {
+        sourcesMap = Object.fromEntries(sourcesData.map((s: any) => [s.id, s]));
+      }
+    }
+    // Attach the source object to each newsletter
+    const newslettersWithSources = newsletters.map(n => ({
+      ...n,
+      source: n.newsletter_source_id ? sourcesMap[n.newsletter_source_id] || null : null
+    }));
+    return newslettersWithSources;
   }, [user]);
 
   // Convert comma-separated tagIds to array if needed
@@ -156,13 +195,20 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
 
   // Helper function to update newsletter in cache
   const updateNewsletterInCache = useCallback((id: string, updates: Partial<Newsletter>) => {
-    queryClient.setQueriesData<Newsletter[]>({ queryKey: queryKeys.lists() }, (old) => {
-      if (!old) return [];
-      return old.map(item => 
-        item.id === id ? { ...item, ...updates, updated_at: new Date().toISOString() } : item
-      );
+  queryClient.setQueriesData<Newsletter[]>({ queryKey: queryKeys.lists() }, (old) => {
+    if (!old) return [];
+    return old.map(item => {
+      if (item.id !== id) return item;
+      // Only update updated_at if explicitly specified in updates
+      const { updated_at, ...restUpdates } = updates;
+      return {
+        ...item,
+        ...restUpdates,
+        ...(typeof updated_at !== 'undefined' ? { updated_at } : {})
+      };
     });
-  }, [queryClient]);
+  });
+}, [queryClient]);
 
   // Mutation for toggling like
   const { 

@@ -54,28 +54,59 @@ const NewsletterDetail = () => {
     if (!newsletterId || !user?.id) return null;
     
     try {
-      const { data, error } = await supabase
+      // First fetch the newsletter row (no join)
+      const { data: newsletterData, error: newsletterError } = await supabase
         .from('newsletters')
-        .select(`
-          *,
-          newsletter_tags (
-            tag:tags (id, name, color)
-          )
-        `)
+        .select('*')
         .eq('id', newsletterId)
         .eq('user_id', user.id)
         .single();
       
-      if (error) throw error;
-      if (!data) return null;
+      if (newsletterError) throw newsletterError;
+      if (!newsletterData) return null;
+      
+      // Fetch the source if newsletter_source_id exists
+      let source = null;
+      if (newsletterData.newsletter_source_id) {
+        const { data: sourceData, error: sourceError } = await supabase
+          .from('newsletter_sources')
+          .select('*')
+          .eq('id', newsletterData.newsletter_source_id)
+          .single();
+        if (sourceError) {
+          console.error('Error fetching source:', sourceError);
+        } else {
+          source = sourceData;
+        }
+      }
+      
+      // Then fetch the tags for this newsletter
+      const { data: tagsData, error: tagsError } = await supabase
+        .from('newsletter_tags')
+        .select(`
+          tag:tags (
+            id,
+            name,
+            color
+          )
+        `)
+        .eq('newsletter_id', newsletterId);
+      
+      if (tagsError) throw tagsError;
+      
+      // Combine the data
+      const data = {
+        ...newsletterData,
+        newsletter_tags: tagsData || []
+      };
 
-      // Transform the data to match Newsletter type
+      // Transform the data to match the NewsletterWithTags type
       const transformedData: NewsletterWithTags = {
         ...data,
         id: data.id,
         user_id: data.user_id,
         subject: data.subject || '',
-        sender: data.sender || '',
+        source, // attach the fetched source object
         received_at: data.received_at || new Date().toISOString(),
         is_read: data.is_read || false,
         content: data.content || '',

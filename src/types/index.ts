@@ -19,10 +19,18 @@ export interface NewsletterTag {
   tag: Tag;
 }
 
+export interface NewsletterSource {
+  id: string;
+  name: string;
+  domain: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Newsletter {
   id: string;
   title: string;
-  sender: string;
   content: string;
   summary: string;
   image_url: string;
@@ -30,6 +38,8 @@ export interface Newsletter {
   is_read: boolean;
   is_liked: boolean;
   user_id: string;
+  newsletter_source_id?: string | null;
+  source?: NewsletterSource;
   tags?: Tag[];
 }
 
@@ -69,7 +79,6 @@ export interface ReadingQueueItem {
 
 export interface NewsletterUpdate {
   title?: string;
-  sender?: string;
   content?: string;
   summary?: string;
   image_url?: string;
