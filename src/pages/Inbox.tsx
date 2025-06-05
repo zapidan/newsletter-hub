@@ -519,13 +519,6 @@ const Inbox: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                        newsletter.is_read 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-blue-400 text-white font-bold shadow-sm'
-                      }`}>
-                        {newsletter.is_read ? 'Read' : 'Unread'}
-                      </span>
                       <button
                         type="button"
                         className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${newsletter.is_read ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}

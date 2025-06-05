@@ -11,6 +11,7 @@ import type { Newsletter, Tag } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 const NewsletterDetail = () => {
+  const [tagSelectorKey, setTagSelectorKey] = useState(0);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -119,10 +120,7 @@ const NewsletterDetail = () => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })),
-        is_liked: data.is_liked ?? false,
-        is_bookmarked: data.is_bookmarked ?? false,
-        like_count: data.like_count ?? 0,
-        newsletter_tags: data.newsletter_tags || []
+        is_liked: data.is_liked ?? false
       };
       
       return transformedData;
@@ -143,8 +141,7 @@ const NewsletterDetail = () => {
         const newLikedState = !prev.is_liked;
         return {
           ...prev,
-          is_liked: newLikedState,
-          like_count: (prev.like_count || 0) + (newLikedState ? 1 : -1)
+          is_liked: newLikedState
         };
       });
       
@@ -155,8 +152,7 @@ const NewsletterDetail = () => {
       // Revert the optimistic update on error
       setNewsletter(prev => prev ? {
         ...prev,
-        is_liked: prev.is_liked,
-        like_count: (prev.like_count || 0) + (prev.is_liked ? -1 : 1)
+        is_liked: prev.is_liked
       } : null);
     } finally {
       setIsLiking(false);
@@ -261,116 +257,116 @@ const NewsletterDetail = () => {
         {/* Main Content */}
         <div className="flex-1">
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            {/* Newsletter Title */}
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">
-              {newsletter?.title || 'Newsletter'}
-            </h1>
-            
-            {/* Newsletter Content */}
-            <div className="prose max-w-none mb-6">
-              {newsletter?.content && (
-                <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
-              )}
-            </div>
-            
-            {/* Tags Section */}
-            <div className="mt-4 mb-4">
-              <TagSelector
-                selectedTags={tagsForUI}
-                onTagsChange={async (newTags: Tag[]) => {
-                  if (!id) return;
-                  try {
-                    const ok = await updateNewsletterTags(id, newTags);
-                    if (ok) {
-                      const updated = await fetchNewsletter(id);
-                      if (updated) setNewsletter(updated);
+            {/* Tags and Action Buttons Row */}
+            <div className="flex items-center justify-between mb-4">
+              {/* Tags Section */}
+              <div className="flex-1">
+                <TagSelector
+                  key={tagSelectorKey}
+                  selectedTags={tagsForUI}
+                  onTagsChange={async (newTags: Tag[]) => {
+                    if (!id) return;
+                    try {
+                      const ok = await updateNewsletterTags(id, newTags);
+                      if (ok) {
+                        const updated = await fetchNewsletter(id);
+                        if (updated) setNewsletter(updated);
+                        setTagSelectorKey((k) => k + 1);
+                      }
+                    } catch (err) {
+                      console.error('Failed to update tags');
                     }
-                  } catch (err) {
-                    console.error('Failed to update tags');
-                  }
-                }}
-                onTagDeleted={async () => {
-                  if (!id) return;
-                  try {
-                    const ok = await updateNewsletterTags(id, []);
-                    if (ok) {
-                      const updated = await fetchNewsletter(id);
-                      if (updated) setNewsletter(updated);
+                  }}
+                  onTagDeleted={async () => {
+                    if (!id) return;
+                    try {
+                      const ok = await updateNewsletterTags(id, []);
+                      if (ok) {
+                        const updated = await fetchNewsletter(id);
+                        if (updated) setNewsletter(updated);
+                        setTagSelectorKey((k) => k + 1);
+                      }
+                    } catch (err) {
+                      console.error('Failed to delete tag');
                     }
-                  } catch (err) {
-                    console.error('Failed to delete tag');
-                  }
-                }}
-              />
-            </div>
-            
-            {/* Context & Insights Section */}
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Context & Insights</h2>
-              <div className="text-gray-600">
-                {newsletter?.summary || 'No summary available'}
+                  }}
+                />
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={handleToggleLike}
+                  disabled={isLiking}
+                  className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    newsletter?.is_liked
+                      ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  aria-label={newsletter?.is_liked ? 'Unlike' : 'Like'}
+                >
+                  <Heart
+                    className="h-4 w-4"
+                    fill={newsletter?.is_liked ? '#ef4444' : 'none'}
+                    stroke={newsletter?.is_liked ? '#ef4444' : 'currentColor'}
+                  />
+                </button>
+                
+                <button
+                  onClick={handleToggleBookmark}
+                  disabled={isBookmarking}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    isInQueue
+                      ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {isInQueue ? (
+                    <BookmarkIcon className="h-4 w-4 fill-yellow-500 text-yellow-500" fill="currentColor" />
+                  ) : (
+                    <BookmarkIcon className="h-4 w-4" />
+                  )}
+                  <span>{isInQueue ? 'Saved' : 'Save for later'}</span>
+                </button>
+                
+                <button
+                  onClick={handleArchiveToggle}
+                  disabled={isArchiving}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    newsletter?.is_archived
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                  }`}
+                >
+                  {newsletter?.is_archived ? (
+                    <ArchiveX className="h-4 w-4" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )}
+                  <span>{newsletter?.is_archived ? 'Unarchive' : 'Archive'}</span>
+                </button>
               </div>
             </div>
-            
-            {/* Action Buttons */}
-            <div className="flex items-center gap-4 mb-6">
-              <button
-                onClick={handleToggleLike}
-                disabled={isLiking}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  newsletter?.is_liked
-                    ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {newsletter?.is_liked ? (
-                  <Heart className="h-4 w-4 fill-red-600 text-red-600" fill="currentColor" />
-                ) : (
-                  <Heart className="h-4 w-4" />
-                )}
-                <span>{newsletter?.like_count || 0}</span>
-              </button>
-              
-              <button
-                onClick={handleToggleBookmark}
-                disabled={isBookmarking}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  isInQueue
-                    ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {isInQueue ? (
-                  <BookmarkIcon className="h-4 w-4 fill-yellow-500 text-yellow-500" fill="currentColor" />
-                ) : (
-                  <BookmarkIcon className="h-4 w-4" />
-                )}
-                <span>{isInQueue ? 'Saved' : 'Save for later'}</span>
-              </button>
-              
-              <button
-                onClick={handleArchiveToggle}
-                disabled={isArchiving}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  newsletter?.is_archived
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                }`}
-              >
-                {newsletter?.is_archived ? (
-                  <ArchiveX className="h-4 w-4" />
-                ) : (
-                  <Archive className="h-4 w-4" />
-                )}
-                <span>{newsletter?.is_archived ? 'Unarchive' : 'Archive'}</span>
-              </button>
-            </div>
+          </div>
+          
+          {/* Newsletter Content */}
+          <div className="prose max-w-none mb-6">
+            {newsletter?.content && (
+              <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
+            )}
           </div>
         </div>
         
         {/* Sidebar */}
         <div className="lg:w-80 flex-shrink-0">
-          <div className="bg-white rounded-xl shadow-sm p-6 sticky top-6">
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
+            <div className="text-sm text-gray-600">
+              {newsletter?.summary || 'No summary available'}
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-sm p-6">
             <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
             <div className="flex flex-wrap gap-2">
               {[
