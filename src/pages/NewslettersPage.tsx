@@ -346,7 +346,7 @@ const NewslettersPage: React.FC = () => {
                       disabled={isDeletingSource || isUpdatingSource}
                       title="Edit Source"
                     >
-                      <Edit size={17} />
+                      <Edit size={14} />
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); handleDelete(source.id); }}
@@ -355,14 +355,20 @@ const NewslettersPage: React.FC = () => {
                       title="Delete Source"
                     >
                       {isDeletingSource ? (
-                        <Loader2 size={17} className="animate-spin" />
+                        <Loader2 size={14} className="animate-spin" />
                       ) : (
-                        <Trash2 size={17} />
+                        <Trash2 size={14} />
                       )}
                     </button>
                   </div>
                 </div>
-                <span className="inline-block bg-blue-50 text-blue-700 text-xs font-medium rounded-full px-3 py-1 mb-2">{source.domain}</span>
+                {/* Small logo/preview icon placeholder */}
+                {/* Placeholder for future favicon/logo support */}
+<span className="inline-block mr-2 w-5 h-5 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-xs text-gray-400">
+  {/* Optionally: <Globe size={12} /> or first letter */}
+  <span>{source.name?.[0] || '?'}</span>
+</span>
+<span className="inline-block bg-blue-50 text-blue-700 text-xs font-medium rounded-full px-3 py-1 mb-2">{source.domain}</span>
                 <div className="text-xs text-neutral-500">Added {new Date(source.created_at).toLocaleDateString()}</div>
               </div>
             ))}

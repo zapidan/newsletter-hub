@@ -47,6 +47,7 @@ function App() {
         <Route path="tags" element={<TagsPage />} />
         <Route path="newsletters" element={<NewslettersPage />} />
         <Route path="reading-queue" element={<ReadingQueuePage />} />
+        <Route path="reading-queue/:id" element={<NewsletterDetail />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

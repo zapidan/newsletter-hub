@@ -277,7 +277,7 @@ const Inbox: React.FC = () => {
             {errorNewsletters?.message || 'Something went wrong. Please try again later.'}
           </p>
           <button
-            onClick={() => refetchNewsletters()} // Use refetch from the hook
+            onClick={() => refetchNewsletters()}
             className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
           >
             Try Again
@@ -288,7 +288,6 @@ const Inbox: React.FC = () => {
   }
 
   // If newsletters is null or undefined after loading and no error, show empty state or handle
-  // This case should ideally be covered by the default [] from useNewsletters or the guard clauses
   if (!newsletters) {
     return (
       <div className="text-center p-8 text-neutral-500">
@@ -479,198 +478,213 @@ const Inbox: React.FC = () => {
       
       {/* Main content */}
       <div className={`${selectedTags.length > 0 ? 'pt-2' : 'pt-6'} px-6 pb-6 overflow-auto`}>
-        {filteredNewsletters.map((newsletter: Newsletter) => (
-          <div
-            key={newsletter.id}
-            className={`rounded-lg p-4 mb-2 flex items-start cursor-pointer transition-all duration-200 ${
-              !newsletter.is_read 
-                ? 'bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200' 
-                : 'bg-white border border-neutral-200 hover:bg-neutral-50'
-            } ${isSelecting && selectedIds.has(newsletter.id) ? 'ring-2 ring-primary-400' : ''}`}
-            onClick={() => navigate(`/inbox/${newsletter.id}`)}
-          >
-            {isSelecting && (
-              <input
-                type="checkbox"
-                checked={selectedIds.has(newsletter.id)}
-                onChange={e => { e.stopPropagation(); toggleSelect(newsletter.id); }}
-                className="mr-4 mt-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                onClick={e => e.stopPropagation()}
-                title="Select newsletter"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              {/* Newsletter image and title/sender horizontally aligned */}
-              <div className="flex items-start gap-3 mb-1">
-                <img
-                  src={newsletter.image_url || '/newsletter-icon.svg'}
-                  alt={newsletter.title}
-                  className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
+        {filteredNewsletters.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
+            <Mail className="mx-auto h-14 w-14 mb-4 text-blue-300" />
+            <h2 className="text-xl font-semibold mb-2">
+              {filter === 'unread'
+                ? 'No unread newsletters'
+                : filter === 'liked'
+                ? 'No liked newsletters'
+                : filter === 'archived'
+                ? 'No archived newsletters'
+                : 'No newsletters found'}
+            </h2>
+            <p className="text-base text-neutral-400">Try adjusting your filters or check back later.</p>
+          </div>
+        ) : (
+          filteredNewsletters.map((newsletter: Newsletter) => (
+            <div
+              key={newsletter.id}
+              className={`rounded-lg p-4 mb-2 flex items-start cursor-pointer transition-all duration-200 ${
+                !newsletter.is_read 
+                  ? 'bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200' 
+                  : 'bg-white border border-neutral-200 hover:bg-neutral-50'
+              } ${isSelecting && selectedIds.has(newsletter.id) ? 'ring-2 ring-primary-400' : ''}`}
+              onClick={() => navigate(`/inbox/${newsletter.id}`)}
+            >
+              {isSelecting && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(newsletter.id)}
+                  onChange={e => { e.stopPropagation(); toggleSelect(newsletter.id); }}
+                  className="mr-4 mt-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  onClick={e => e.stopPropagation()}
+                  title="Select newsletter"
                 />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-base truncate">{newsletter.title}</div>
-                      <div className="text-sm text-gray-500 truncate">
-                        {newsletter.source?.name || 'Unknown Source'}
-                        {newsletter.source?.domain && (
-                          <span className="text-gray-400 ml-2">• {newsletter.source.domain}</span>
-                        )}
+              )}
+              <div className="flex-1 min-w-0">
+                {/* Newsletter image and title/sender horizontally aligned */}
+                <div className="flex items-start gap-3 mb-1">
+                  <img
+                    src={newsletter.image_url || '/newsletter-icon.svg'}
+                    alt={newsletter.title}
+                    className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-base truncate">{newsletter.title}</div>
+                        <div className="text-sm text-gray-500 truncate">
+                          {newsletter.source?.name || 'Unknown Source'}
+                          {newsletter.source?.domain && (
+                            <span className="text-gray-400 ml-2">• {newsletter.source.domain}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                        <button
+                          type="button"
+                          className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${newsletter.is_read ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                          onClick={async e => {
+                            e.stopPropagation();
+                            if (newsletter.is_read) {
+                              await bulkMarkAsUnread([newsletter.id]);
+                            } else {
+                              await bulkMarkAsRead([newsletter.id]);
+                            }
+                            refetchNewsletters();
+                          }}
+                          title={newsletter.is_read ? 'Mark as Unread' : 'Mark as Read'}
+                        >
+                          {newsletter.is_read ? 'Mark as Unread' : 'Mark as Read'}
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1 mt-1">
+                      {/* Like button */}
                       <button
                         type="button"
-                        className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${newsletter.is_read ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
-                        onClick={async e => {
+                        className={`p-1.5 transition-colors ${newsletter.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
+                        onClick={(e) => {
                           e.stopPropagation();
-                          if (newsletter.is_read) {
-                            await bulkMarkAsUnread([newsletter.id]);
-                          } else {
-                            await bulkMarkAsRead([newsletter.id]);
-                          }
-                          refetchNewsletters();
+                          handleToggleLike(newsletter.id);
                         }}
-                        title={newsletter.is_read ? 'Mark as Unread' : 'Mark as Read'}
+                        title={newsletter.is_liked ? 'Unlike' : 'Like'}
                       >
-                        {newsletter.is_read ? 'Mark as Unread' : 'Mark as Read'}
+                        <Heart 
+                          className="h-4 w-4"
+                          fill={newsletter.is_liked ? '#EF4444' : 'none'}
+                          stroke={newsletter.is_liked ? '#EF4444' : '#9CA3AF'}
+                          strokeWidth={1.5}
+                        />
+                      </button>
+                      {/* Tag visibility toggle */}
+                      <button
+                        type="button"
+                        className="p-1 rounded hover:bg-gray-200"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleTagVisibility(newsletter.id, e);
+                        }}
+                        title={visibleTags.has(newsletter.id) ? 'Hide tags' : 'Edit tags'}
+                      >
+                        <TagIcon 
+                          size={16} 
+                          className={`${visibleTags.has(newsletter.id) ? 'text-primary-600' : 'text-gray-500'} hover:text-primary-600`}
+                        />
+                      </button>
+                      {/* Reading queue button */}
+                      <button
+                        type="button"
+                        className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
+                          await toggleInQueue(newsletter.id);
+                          await refetchNewsletters();
+                        }}
+                        title={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'Remove from reading queue' : 'Add to reading queue'}
+                      >
+                        <BookmarkIcon 
+                          className="h-4 w-4"
+                          fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? '#9CA3AF' : 'none'}
+                          stroke="#9CA3AF"
+                          strokeWidth={1.5}
+                        />
+                      </button>
+                      {/* Archive/Unarchive button */}
+                      <button
+                        type="button"
+                        className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (newsletter.is_archived) {
+                            await unarchiveNewsletter(newsletter.id);
+                          } else {
+                            await archiveNewsletter(newsletter.id);
+                          }
+                          await refetchNewsletters();
+                        }}
+                        title={newsletter.is_archived ? 'Unarchive' : 'Archive'}
+                      >
+                        {newsletter.is_archived ? (
+                          <ArchiveX className="h-4 w-4 text-green-700" />
+                        ) : (
+                          <Archive className="h-4 w-4 text-amber-700" />
+                        )}
                       </button>
                     </div>
                   </div>
-                  {/* Action buttons */}
-                  <div className="flex items-center gap-1 mt-1">
-                    {/* Like button */}
-                    <button
-                      type="button"
-                      className={`p-1.5 transition-colors ${newsletter.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleLike(newsletter.id);
-                      }}
-                      title={newsletter.is_liked ? 'Unlike' : 'Like'}
-                    >
-                      <Heart 
-                        className="h-4 w-4"
-                        fill={newsletter.is_liked ? '#EF4444' : 'none'}
-                        stroke={newsletter.is_liked ? '#EF4444' : '#9CA3AF'}
-                        strokeWidth={1.5}
-                      />
-                    </button>
-                    {/* Tag visibility toggle */}
-                    <button
-                      type="button"
-                      className="p-1 rounded hover:bg-gray-200"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        toggleTagVisibility(newsletter.id, e);
-                      }}
-                      title={visibleTags.has(newsletter.id) ? 'Hide tags' : 'Edit tags'}
-                    >
-                      <TagIcon 
-                        size={16} 
-                        className={`${visibleTags.has(newsletter.id) ? 'text-primary-600' : 'text-gray-500'} hover:text-primary-600`}
-                      />
-                    </button>
-                    {/* Reading queue button */}
-                    <button
-                      type="button"
-                      className="p-1 rounded-full hover:bg-gray-200 transition-colors"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
-                        await toggleInQueue(newsletter.id, isInQueue);
-                        await refetchNewsletters();
-                      }}
-                      title={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'Remove from reading queue' : 'Add to reading queue'}
-                    >
-                      <BookmarkIcon 
-                        className="h-4 w-4"
-                        fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? '#9CA3AF' : 'none'}
-                        stroke="#9CA3AF"
-                        strokeWidth={1.5}
-                      />
-                    </button>
-                    {/* Archive/Unarchive button */}
-                    <button
-                      type="button"
-                      className="p-1 rounded-full hover:bg-gray-200 transition-colors"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (newsletter.is_archived) {
-                          await unarchiveNewsletter(newsletter.id);
-                        } else {
-                          await archiveNewsletter(newsletter.id);
-                        }
-                        await refetchNewsletters();
-                      }}
-                      title={newsletter.is_archived ? 'Unarchive' : 'Archive'}
-                    >
-                      {newsletter.is_archived ? (
-                        <ArchiveX className="h-4 w-4 text-green-700" />
-                      ) : (
-                        <Archive className="h-4 w-4 text-amber-700" />
-                      )}
-                    </button>
-                  </div>
                 </div>
-              </div>
-              {/* Newsletter summary, tags, and date below the flex row */}
-              <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
-              {visibleTags.has(newsletter.id) && (
-                <div className="w-full mt-2" onClick={e => e.stopPropagation()}>
-                  <TagSelector
-                    selectedTags={newsletter.tags || []}
-                    onTagsChange={async (newTags) => {
-                      const ok = await updateNewsletterTags(newsletter.id, newTags);
-                      if (ok) {
-                        setVisibleTags(prev => {
-                          const newSet = new Set(prev);
-                          newSet.delete(newsletter.id);
-                          return newSet;
-                        });
-                        refetchNewsletters();
-                      }
-                    }}
-                    onTagClick={handleTagClick}
-                    onTagDeleted={() => {
-                      refetchNewsletters();
-                    }}
-                    className="mt-1"
-                  />
-                </div>
-              )}
-              <div className="flex flex-wrap gap-2 mt-2">
-
-                {/* TagSelector for editing tags (always accessible) */}
-                {tagEditId === newsletter.id && (
-                  <div onClick={e => e.stopPropagation()}>
+                {/* Newsletter summary, tags, and date below the flex row */}
+                <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
+                {visibleTags.has(newsletter.id) && (
+                  <div className="w-full mt-2" onClick={e => e.stopPropagation()}>
                     <TagSelector
                       selectedTags={newsletter.tags || []}
                       onTagsChange={async (newTags) => {
                         const ok = await updateNewsletterTags(newsletter.id, newTags);
                         if (ok) {
-                          setTagEditId(null);
+                          setVisibleTags(prev => {
+                            const newSet = new Set(prev);
+                            newSet.delete(newsletter.id);
+                            return newSet;
+                          });
                           refetchNewsletters();
                         }
                       }}
+                      onTagClick={handleTagClick}
                       onTagDeleted={() => {
-                        // Refresh the list when a tag is deleted
                         refetchNewsletters();
                       }}
-                      className="mt-2"
+                      className="mt-1"
                     />
                   </div>
                 )}
-              </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="text-xs text-gray-400">
-                  {new Date(newsletter.received_at).toLocaleDateString()}
-                </span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {/* TagSelector for editing tags (always accessible) */}
+                  {tagEditId === newsletter.id && (
+                    <div onClick={e => e.stopPropagation()}>
+                      <TagSelector
+                        selectedTags={newsletter.tags || []}
+                        onTagsChange={async (newTags) => {
+                          const ok = await updateNewsletterTags(newsletter.id, newTags);
+                          if (ok) {
+                            setTagEditId(null);
+                            refetchNewsletters();
+                          }
+                        }}
+                        onTagDeleted={() => {
+                          // Refresh the list when a tag is deleted
+                          refetchNewsletters();
+                        }}
+                        className="mt-2"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-xs text-gray-400">
+                    {new Date(newsletter.received_at).toLocaleDateString()}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
