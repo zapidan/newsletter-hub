@@ -1,14 +1,23 @@
-import React, { useState, FormEvent, useCallback } from 'react';
+// Requires: npm install @headlessui/react
+import React, { useState, FormEvent, useCallback, Fragment } from 'react';
+import { Dialog, Transition } from '@headlessui/react';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
 import { NewsletterSource } from '../types';
 import { PlusCircle, AlertTriangle, Loader2, ArrowLeft, Trash2, Edit, X, Check } from 'lucide-react';
+
+// Debug styles - can be removed after confirming buttons work
+const debugStyles = {
+  button: 'border-2 border-red-500',
+  text: 'text-black',
+  bg: 'bg-white',
+};
 import { toast } from 'react-hot-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import NewsletterCard from '../components/NewsletterCard';
 
 const NewslettersPage: React.FC = () => {
-  const [showAddSource, setShowAddSource] = useState<boolean>(true);
+  const [showAddModal, setShowAddModal] = useState(false);
   const {
     newsletterSources,
     isLoadingSources,
@@ -26,12 +35,6 @@ const NewslettersPage: React.FC = () => {
     isSuccessAddingSource,
   } = useNewsletterSources();
 
-  React.useEffect(() => {
-    if (newsletterSources) {
-      if (newsletterSources.length > 0) setShowAddSource(false);
-      if (newsletterSources.length === 0) setShowAddSource(true);
-    }
-  }, [newsletterSources]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -111,9 +114,11 @@ const NewslettersPage: React.FC = () => {
           domain: formData.domain 
         });
       }
+      setShowAddModal(false); // Close modal on success
+      resetForm(); // Reset the form
     } catch (error) {
       // Error handling is done by the mutation
-
+      console.error('Error submitting form:', error);
     }
   };
 
@@ -162,86 +167,146 @@ const NewslettersPage: React.FC = () => {
         </p>
       </header>
 
-      {/* Add New Source Form (Collapsible) */}
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-semibold text-primary-800">Add New Source</h2>
-          <button
-            type="button"
-            className="text-blue-600 hover:text-blue-800 focus:outline-none flex items-center gap-1"
-            onClick={() => setShowAddSource(s => !s)}
-            aria-expanded={showAddSource}
+      {/* Add New Source Button and Modal */}
+      <div className="mb-8 flex justify-end">
+        <button
+          type="button"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '0.5rem 1rem',
+            backgroundColor: '#2563eb',
+            color: 'white',
+            fontWeight: 600,
+            borderRadius: '0.375rem',
+            boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            border: '1px solid #1d4ed8',
+          }}
+          onClick={() => setShowAddModal(true)}
+        >
+          <PlusCircle className="mr-2 h-5 w-5" style={{ color: 'white' }} />
+          <span>Add Source</span>
+        </button>
+      </div>
+      <Transition.Root show={showAddModal} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={setShowAddModal}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100"
+            leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"
           >
-            {showAddSource ? <X className="h-5 w-5" /> : <PlusCircle className="h-5 w-5" />}
-            <span className="font-medium text-sm">{showAddSource ? 'Hide' : 'Show'}</span>
-          </button>
-        </div>
-        {showAddSource && (
-          <div className="p-6 bg-white border border-gray-200 rounded-xl shadow-sm mt-2">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="newsletterName" className="block text-sm font-medium text-gray-700 mb-1">
-                  Newsletter Name
-                </label>
-                <input
-                  type="text"
-                  id="newsletterName"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoComplete="off"
-                  disabled={isAddingSource || isUpdatingSource}
-                />
-              </div>
-              <div>
-                <label htmlFor="newsletterDomain" className="block text-sm font-medium text-gray-700 mb-1">
-                  Domain
-                </label>
-                <input
-                  type="text"
-                  id="newsletterDomain"
-                  name="domain"
-                  value={formData.domain}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoComplete="off"
-                  disabled={isAddingSource || isUpdatingSource}
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
-                  disabled={isAddingSource || isUpdatingSource}
-                >
-                  {editingId ? <Check className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-                  {editingId ? 'Update Source' : 'Add Source'}
-                </button>
-                {editingId && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                    onClick={handleCancelEdit}
-                    disabled={isAddingSource || isUpdatingSource}
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-            {/* Error State */}
-            {isErrorAddingSource && errorAddingSource && (
-              <div className="flex items-center text-red-600 bg-red-50 p-3 rounded-md mt-4">
-                <AlertTriangle size={18} className="mr-2 flex-shrink-0" />
-                <span>Error: {errorAddingSource.message}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+          </Transition.Child>
 
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md relative text-left align-middle space-y-6">
+                  <button
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
+                    onClick={() => setShowAddModal(false)}
+                    aria-label="Close"
+                    type="button"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                  <Dialog.Title as="h2" className="text-xl font-semibold text-primary-800 mb-4">
+                    {editingId ? 'Edit Source' : 'Add New Source'}
+                  </Dialog.Title>
+                  <form onSubmit={handleSubmit} className="space-y-6 px-1 py-2">
+                    <div>
+                      <label htmlFor="newsletterName" className="block text-sm font-medium text-gray-700 mb-2">
+                        Newsletter Name
+                      </label>
+                      <input
+                        type="text"
+                        id="newsletterName"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoComplete="off"
+                        disabled={isAddingSource || isUpdatingSource}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="newsletterDomain" className="block text-sm font-medium text-gray-700 mb-2">
+                        Domain
+                      </label>
+                      <input
+                        type="text"
+                        id="newsletterDomain"
+                        name="domain"
+                        value={formData.domain}
+                        onChange={handleInputChange}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoComplete="off"
+                        disabled={isAddingSource || isUpdatingSource}
+                      />
+                    </div>
+                    <div className="flex gap-4 pt-4 pb-2">
+                      <button
+                        type="submit"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '0.5rem 1rem',
+                          backgroundColor: '#2563eb',
+                          color: 'white',
+                          fontWeight: 600,
+                          borderRadius: '0.375rem',
+                          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                          border: '1px solid #1d4ed8',
+                          opacity: (isAddingSource || isUpdatingSource) ? 0.6 : 1,
+                          cursor: (isAddingSource || isUpdatingSource) ? 'not-allowed' : 'pointer'
+                        }}
+                        disabled={isAddingSource || isUpdatingSource}
+                      >
+                        {editingId ? 
+                          <Check className="mr-2 h-4 w-4" style={{ color: 'white' }} /> : 
+                          <PlusCircle className="mr-2 h-4 w-4" style={{ color: 'white' }} />
+                        }
+                        <span>{editingId ? 'Update Source' : 'Add Source'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
+                        onClick={() => setShowAddModal(false)}
+                        disabled={isAddingSource || isUpdatingSource}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        Cancel
+                      </button>
+                      {editingId && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
+                          onClick={handleCancelEdit}
+                          disabled={isAddingSource || isUpdatingSource}
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          Cancel Edit
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                  {/* Error State */}
+                  {isErrorAddingSource && errorAddingSource && (
+                    <div className="flex items-center text-red-600 bg-red-50 p-4 rounded-md mt-4">
+                      <AlertTriangle size={18} className="mr-2 flex-shrink-0" />
+                      <span>Error: {errorAddingSource.message}</span>
+                    </div>
+                  )}
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition.Root>
       {/* Existing Sources List */}
       <section>
         <h2 className="text-xl font-semibold mb-4 text-primary-800">Existing Sources</h2>
@@ -265,19 +330,19 @@ const NewslettersPage: React.FC = () => {
         )}
         {/* Display the list if data is available */}
         {!isLoadingSources && !isErrorSources && newsletterSources.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 p-2">
             {newsletterSources.map((source: NewsletterSource) => (
               <div
                 key={source.id}
-                className={`group relative cursor-pointer rounded-xl border transition-colors shadow-sm px-5 py-5 bg-white hover:border-blue-300 hover:shadow-md ${selectedSourceId === source.id ? 'border-blue-500 ring-2 ring-blue-100' : 'border-neutral-200'}`}
+                className={`group relative cursor-pointer rounded-xl border transition-colors shadow-sm p-6 bg-white hover:border-blue-300 hover:shadow-md ${selectedSourceId === source.id ? 'border-blue-500 ring-2 ring-blue-100' : 'border-neutral-200'}`}
                 onClick={() => setSelectedSourceId(source.id)}
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-4">
                   <span className="truncate font-semibold text-lg text-neutral-900 max-w-[160px]">{source.name}</span>
-                  <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={e => { e.stopPropagation(); handleEdit(source); }}
-                      className="p-1 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      className="p-2 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800 disabled:opacity-50"
                       disabled={isDeletingSource || isUpdatingSource}
                       title="Edit Source"
                     >
@@ -285,7 +350,7 @@ const NewslettersPage: React.FC = () => {
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); handleDelete(source.id); }}
-                      className="p-1 rounded hover:bg-red-50 text-red-500 hover:text-red-700 disabled:opacity-50"
+                      className="p-2 rounded hover:bg-red-50 text-red-500 hover:text-red-700 disabled:opacity-50"
                       disabled={isDeletingSource || isUpdatingSource}
                       title="Delete Source"
                     >
@@ -307,7 +372,7 @@ const NewslettersPage: React.FC = () => {
 
       {/* Newsletters for selected source */}
       {selectedSourceId && (
-        <section className="mt-10">
+        <section className="mt-12">
           <h3 className="text-lg font-semibold mb-4 text-primary-800">Newsletters from this Source</h3>
           {isLoadingNewslettersForSource ? (
             <div className="flex items-center text-gray-500">
@@ -321,16 +386,16 @@ const NewslettersPage: React.FC = () => {
           ) : newslettersForSource.length === 0 ? (
             <p className="text-gray-500 italic">No newsletters found for this source.</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-4">
               {newslettersForSource.map((newsletter: any) => (
                 <NewsletterCard key={newsletter.id} newsletter={newsletter} />
               ))}
             </div>
           )}
         </section>
-      )}
-    </main>
-  );
+    )}
+  </main>
+);
 };
 
 export default NewslettersPage;
