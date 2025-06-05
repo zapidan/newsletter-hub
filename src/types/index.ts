@@ -37,6 +37,7 @@ export interface Newsletter {
   received_at: string;
   is_read: boolean;
   is_liked: boolean;
+  is_archived: boolean;
   user_id: string;
   newsletter_source_id?: string | null;
   source?: NewsletterSource;

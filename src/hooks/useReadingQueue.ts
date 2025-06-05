@@ -7,6 +7,7 @@ interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {
   newsletter_source_id: string | null;
   source: NewsletterSource | null;
   tags: Tag[];
+  is_archived: boolean;
 }
 
 interface NewsletterFromDB {
@@ -21,6 +22,7 @@ interface NewsletterFromDB {
   user_id: string;
   is_read: boolean;
   is_liked: boolean;
+  is_archived: boolean;
   newsletter_source_id: string | null;
 }
 
@@ -81,6 +83,7 @@ export const useReadingQueue = () => {
             user_id,
             is_read,
             is_liked,
+            is_archived,
             newsletter_source_id
           )
         `)
@@ -154,6 +157,7 @@ export const useReadingQueue = () => {
           ...newsletter,
           summary: newsletter.summary ?? '', // ensure string
           image_url: newsletter.image_url ?? '', // ensure string
+          is_archived: newsletter.is_archived ?? false, // ensure boolean
           source,
           tags,
         };

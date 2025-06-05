@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon, Heart } from 'lucide-react';
+import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon, Heart, Archive, ArchiveX } from 'lucide-react';
 
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useReadingQueue } from '../hooks/useReadingQueue';
@@ -35,9 +35,10 @@ const Inbox: React.FC = () => {
   const navigate = useNavigate();
   
   // Local state
-  const [filter, setFilter] = useState<'all' | 'unread' | 'liked'>(
-    (searchParams.get('filter') as 'all' | 'unread' | 'liked') || 'all'
+  const [filter, setFilter] = useState<'all' | 'unread' | 'liked' | 'archived'>(
+    (searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived') || 'all'
   );
+  const showArchived = filter === 'archived';
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -49,9 +50,13 @@ const Inbox: React.FC = () => {
     errorNewsletters, 
     bulkMarkAsRead,
     bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
     toggleLike,
     refetchNewsletters,
-  } = useNewsletters(tagId || undefined);
+    archiveNewsletter,
+    unarchiveNewsletter,
+  } = useNewsletters(tagId || undefined, filter);
   
   // Handle toggle like
   const handleToggleLike = useCallback(async (newsletterId: string) => {
@@ -137,18 +142,62 @@ const Inbox: React.FC = () => {
     });
   }, [setSearchParams]);
 
-  // Filter newsletters based on current filter and tag
+  // Handle bulk archive
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
+
+  // Toast auto-dismiss
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const handleBulkArchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setIsBulkActionLoading(true);
+    try {
+      await bulkArchive(Array.from(selectedIds));
+      setToast({ type: 'success', message: 'Newsletters archived.' });
+    } catch (error) {
+      setToast({ type: 'error', message: 'Failed to archive newsletters.' });
+      console.error('Error archiving:', error);
+    } finally {
+      setSelectedIds(new Set());
+      setIsSelecting(false);
+      setIsBulkActionLoading(false);
+      await refetchNewsletters();
+    }
+  }, [selectedIds, bulkArchive, refetchNewsletters]);
+
+  // Handle bulk unarchive
+  const handleBulkUnarchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setIsBulkActionLoading(true);
+    try {
+      await bulkUnarchive(Array.from(selectedIds));
+      setToast({ type: 'success', message: 'Newsletters unarchived.' });
+    } catch (error) {
+      setToast({ type: 'error', message: 'Failed to unarchive newsletters.' });
+      console.error('Error unarchiving:', error);
+    } finally {
+      setSelectedIds(new Set());
+      setIsSelecting(false);
+      setIsBulkActionLoading(false);
+      await refetchNewsletters();
+    }
+  }, [selectedIds, bulkUnarchive, refetchNewsletters]);
+
+  // Filter newsletters based on tag (archived/non-archived already filtered by hook)
   const filteredNewsletters = useMemo(() => {
     if (!newsletters) return [];
-    
     let result = [...newsletters];
-    
     if (filter === 'unread') {
       result = result.filter(n => !n.is_read);
     } else if (filter === 'liked') {
       result = result.filter(n => n.is_liked);
     }
-    
     if (selectedTagIds.length > 0) {
       result = result.filter(newsletter => 
         selectedTagIds.every(tagId => 
@@ -156,13 +205,11 @@ const Inbox: React.FC = () => {
         )
       );
     }
-    
     return result.sort((a, b) => {
-  const dateDiff = new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
-  if (dateDiff !== 0) return dateDiff;
-  // Secondary sort by id for stability
-  return a.id.localeCompare(b.id);
-});
+      const dateDiff = new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.id.localeCompare(b.id);
+    });
   }, [newsletters, filter, selectedTagIds]);
 
   // Toggle selection of a single newsletter
@@ -288,6 +335,19 @@ const Inbox: React.FC = () => {
               >
                 Liked
               </button>
+              <button
+                onClick={() => setFilter('archived')}
+                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
+                  filter === 'archived'
+                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <Archive className="h-4 w-4" />
+                  <span>Archived</span>
+                </div>
+              </button>
             </div>
             <RefreshCwIcon 
               className="h-5 w-5 text-neutral-500 hover:text-primary-600 cursor-pointer ml-2" 
@@ -336,6 +396,39 @@ const Inbox: React.FC = () => {
             >
               Mark as Unread
             </button>
+            {!showArchived ? (
+              <button 
+                onClick={handleBulkArchive}
+                disabled={selectedIds.size === 0 || isBulkActionLoading}
+                className={`px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                {isBulkActionLoading ? (
+                  <svg className="animate-spin h-4 w-4 mr-1 text-amber-700" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )}
+                <span>Archive</span>
+              </button>
+            ) : (
+              <button 
+                onClick={handleBulkUnarchive}
+                disabled={selectedIds.size === 0 || isBulkActionLoading}
+                className={`px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                {isBulkActionLoading ? (
+                  <svg className="animate-spin h-4 w-4 mr-1 text-green-700" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                ) : (
+                  <ArchiveX className="h-4 w-4" />
+                )}
+                <span>Unarchive</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -370,6 +463,17 @@ const Inbox: React.FC = () => {
               Clear all
             </button>
           </div>
+        </div>
+      )}
+      
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded shadow-lg text-white text-sm
+            ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}
+          role="alert"
+        >
+          {toast.message}
         </div>
       )}
       
@@ -483,6 +587,7 @@ const Inbox: React.FC = () => {
                         e.stopPropagation();
                         const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
                         await toggleInQueue(newsletter.id, isInQueue);
+                        await refetchNewsletters();
                       }}
                       title={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'Remove from reading queue' : 'Add to reading queue'}
                     >
@@ -492,6 +597,27 @@ const Inbox: React.FC = () => {
                         stroke="#9CA3AF"
                         strokeWidth={1.5}
                       />
+                    </button>
+                    {/* Archive/Unarchive button */}
+                    <button
+                      type="button"
+                      className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (newsletter.is_archived) {
+                          await unarchiveNewsletter(newsletter.id);
+                        } else {
+                          await archiveNewsletter(newsletter.id);
+                        }
+                        await refetchNewsletters();
+                      }}
+                      title={newsletter.is_archived ? 'Unarchive' : 'Archive'}
+                    >
+                      {newsletter.is_archived ? (
+                        <ArchiveX className="h-4 w-4 text-green-700" />
+                      ) : (
+                        <Archive className="h-4 w-4 text-amber-700" />
+                      )}
                     </button>
                   </div>
                 </div>

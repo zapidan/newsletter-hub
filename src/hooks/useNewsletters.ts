@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { 
   useQuery, 
   useMutation, 
@@ -48,6 +48,18 @@ interface UseNewslettersReturn {
   bulkMarkAsUnread: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
   isBulkMarkingAsUnread: boolean;
   errorBulkMarkingAsUnread: Error | null;
+  archiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
+  isArchiving: boolean;
+  errorArchiving: Error | null;
+  unarchiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
+  isUnarchiving: boolean;
+  errorUnarchiving: Error | null;
+  bulkArchive: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
+  isBulkArchiving: boolean;
+  errorBulkArchiving: Error | null;
+  bulkUnarchive: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
+  isBulkUnarchiving: boolean;
+  errorBulkUnarchiving: Error | null;
   getNewsletter: (id: string) => Promise<Newsletter | null>;
   refetchNewsletters: (options?: RefetchOptions | undefined) => Promise<QueryObserverResult<Newsletter[], Error>>;
 }
@@ -89,7 +101,7 @@ const transformNewsletterData = (data: any[] | null): Newsletter[] => {
     : [];
 };
 
-export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
+export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewslettersReturn => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -178,37 +190,39 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
   
   const queryKey = getQueryKey(normalizedTagId);
 
-  const {
+  // Add is_archived filter to the query
+  const fetchNewsletters = useCallback(async (tagIds?: string | string[]) => {
+    const data = await fetchNewslettersFn(tagIds);
+    if (filter === 'archived') {
+      return data.filter((newsletter: Newsletter) => newsletter.is_archived);
+    } else {
+      return data.filter((newsletter: Newsletter) => !newsletter.is_archived);
+    }
+  }, [fetchNewslettersFn, filter]);
+
+  // Fetch newsletters data
+  const { 
     data: newsletters = [],
-    isLoading: isLoadingNewsletters,
+    isLoading: isLoadingNewsletters, 
     isError: isErrorNewsletters,
-    error: errorNewsletters,
+    error: errorNewsletters, 
     refetch: refetchNewsletters,
   } = useQuery<Newsletter[], Error>({
-    queryKey,
-    queryFn: () => fetchNewslettersFn(normalizedTagId),
+    queryKey: [...queryKey, { showArchived: filter === 'archived' }],
+    queryFn: () => fetchNewsletters(normalizedTagId),
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
-    placeholderData: keepPreviousData, // Keep previous data while fetching new data,
+    placeholderData: keepPreviousData,
     enabled: !!user,
   });
 
   // Helper function to update newsletter in cache
   const updateNewsletterInCache = useCallback((id: string, updates: Partial<Newsletter>) => {
-  queryClient.setQueriesData<Newsletter[]>({ queryKey: queryKeys.lists() }, (old) => {
-    if (!old) return [];
-    return old.map(item => {
-      if (item.id !== id) return item;
-      // Only update updated_at if explicitly specified in updates
-      const { updated_at, ...restUpdates } = updates;
-      return {
-        ...item,
-        ...restUpdates,
-        ...(typeof updated_at !== 'undefined' ? { updated_at } : {})
-      };
+    queryClient.setQueriesData<Newsletter[]>({ queryKey: queryKeys.lists() }, (old) => {
+      if (!old) return old;
+      return old.map((n) => (n.id === id ? { ...n, ...updates } : n));
     });
-  });
-}, [queryClient]);
+  }, [queryClient]);
 
   // Mutation for toggling like
   const { 
@@ -432,6 +446,136 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     },
   });
 
+  // Mutation for archiving a newsletter
+  const archiveMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[] }>({
+    mutationFn: async (id: string) => {
+      if (!user) throw new Error('User not authenticated');
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ is_archived: true })
+        .eq('id', id)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
+      
+      if (previousNewsletters) {
+        updateNewsletterInCache(id, { is_archived: true });
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(queryKey, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+    },
+  });
+
+  // Mutation for unarchiving a newsletter
+  const unarchiveMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[] }>({
+    mutationFn: async (id: string) => {
+      if (!user) throw new Error('User not authenticated');
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ is_archived: false })
+        .eq('id', id)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
+      
+      if (previousNewsletters) {
+        updateNewsletterInCache(id, { is_archived: false });
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(queryKey, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+    },
+  });
+
+  // Bulk archive mutation
+  const bulkArchiveMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>({
+    mutationFn: async (ids: string[]) => {
+      if (!user) throw new Error('User not authenticated');
+      if (ids.length === 0) return true;
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ is_archived: true })
+        .in('id', ids)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (ids: string[]) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
+      
+      if (previousNewsletters) {
+        ids.forEach(id => updateNewsletterInCache(id, { is_archived: true }));
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (_err, _ids, context) => {
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(queryKey, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+    },
+  });
+
+  // Bulk unarchive mutation
+  const bulkUnarchiveMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>({
+    mutationFn: async (ids: string[]) => {
+      if (!user) throw new Error('User not authenticated');
+      if (ids.length === 0) return true;
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ is_archived: false })
+        .in('id', ids)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (ids: string[]) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
+      
+      if (previousNewsletters) {
+        ids.forEach(id => updateNewsletterInCache(id, { is_archived: false }));
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (_err, _ids, context) => {
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(queryKey, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+    },
+  });
+
   // Function to get a single newsletter (not a direct query in this hook, but uses a mutation)
   const getNewsletter = useCallback(async (id: string): Promise<Newsletter | null> => {
     // First try to get from any existing query
@@ -498,6 +642,8 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     }
   }, [user, queryClient, tagId, markAsReadMutation]); // Added markAsReadMutation to dependencies
 
+  // (Removed) Function to load archived newsletters
+
   return {
     newsletters, // from useQuery
     isLoadingNewsletters,
@@ -505,11 +651,11 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     errorNewsletters,
     
     markAsRead: markAsReadMutation.mutateAsync,
-    isMarkingAsRead: markAsReadMutation.isPending, // Changed from isLoading to isPending
+    isMarkingAsRead: markAsReadMutation.isPending,
     errorMarkingAsRead: markAsReadMutation.error,
 
     markAsUnread: markAsUnreadMutation.mutateAsync,
-    isMarkingAsUnread: markAsUnreadMutation.isPending, // Changed from isLoading to isPending
+    isMarkingAsUnread: markAsUnreadMutation.isPending,
     errorMarkingAsUnread: markAsUnreadMutation.error,
 
     toggleLike,
@@ -517,14 +663,31 @@ export const useNewsletters = (tagId?: string): UseNewslettersReturn => {
     errorTogglingLike,
 
     bulkMarkAsRead: bulkMarkAsReadMutation.mutateAsync,
-    isBulkMarkingAsRead: bulkMarkAsReadMutation.isPending, // Changed from isLoading to isPending
+    isBulkMarkingAsRead: bulkMarkAsReadMutation.isPending,
     errorBulkMarkingAsRead: bulkMarkAsReadMutation.error,
 
     bulkMarkAsUnread: bulkMarkAsUnreadMutation.mutateAsync,
-    isBulkMarkingAsUnread: bulkMarkAsUnreadMutation.isPending, // Changed from isLoading to isPending
+    isBulkMarkingAsUnread: bulkMarkAsUnreadMutation.isPending,
     errorBulkMarkingAsUnread: bulkMarkAsUnreadMutation.error,
+
+      // Archive functionality
+    archiveNewsletter: archiveMutation.mutateAsync,
+    isArchiving: archiveMutation.isPending,
+    errorArchiving: archiveMutation.error,
     
-    getNewsletter, // Remains an async function
-    refetchNewsletters, // Add refetchNewsletters to the return object
+    unarchiveNewsletter: unarchiveMutation.mutateAsync,
+    isUnarchiving: unarchiveMutation.isPending,
+    errorUnarchiving: unarchiveMutation.error,
+    
+    bulkArchive: bulkArchiveMutation.mutateAsync,
+    isBulkArchiving: bulkArchiveMutation.isPending,
+    errorBulkArchiving: bulkArchiveMutation.error,
+    
+    bulkUnarchive: bulkUnarchiveMutation.mutateAsync,
+    isBulkUnarchiving: bulkUnarchiveMutation.isPending,
+    errorBulkUnarchiving: bulkUnarchiveMutation.error,
+    
+    getNewsletter,
+    refetchNewsletters,
   };
 };

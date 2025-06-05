@@ -1,22 +1,14 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useTags } from '../hooks/useTags';
+import { ArrowLeft, Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'lucide-react';
 import { useNewsletters } from '../hooks/useNewsletters';
+import { useTags } from '../hooks/useTags';
 import { useReadingQueue } from '../hooks/useReadingQueue';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../services/supabaseClient';
 import LoadingScreen from '../components/common/LoadingScreen';
 import TagSelector from '../components/TagSelector';
-import type { Tag, Newsletter } from '../types';
-import { Bookmark as BookmarkIcon, Heart, ArrowLeft } from 'lucide-react';
-
-interface NewsletterWithTags extends Omit<Newsletter, 'is_liked' | 'is_bookmarked' | 'like_count'> {
-  tags?: Tag[];
-  is_liked?: boolean;
-  is_bookmarked?: boolean;
-  like_count?: number;
-  newsletter_tags?: Array<{ tag: Tag }>;
-}
+import type { Newsletter, Tag } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,11 +16,18 @@ const NewsletterDetail = () => {
   const location = useLocation();
   const isFromReadingQueue = location.state?.from === '/reading-queue' || location.pathname.includes('reading-queue');
   const { updateNewsletterTags } = useTags();
-  const { markAsRead, toggleLike, getNewsletter } = useNewsletters();
+  const { 
+    markAsRead, 
+    toggleLike, 
+    getNewsletter, 
+    archiveNewsletter, 
+    unarchiveNewsletter 
+  } = useNewsletters();
   const { toggleInQueue, readingQueue } = useReadingQueue();
   const [isBookmarking, setIsBookmarking] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
-  const [newsletter, setNewsletter] = useState<NewsletterWithTags | null>(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -50,7 +49,7 @@ const NewsletterDetail = () => {
   }, [newsletter?.id, readingQueue]);
   
   // Fetch newsletter data
-  const fetchNewsletter = useCallback(async (newsletterId: string): Promise<NewsletterWithTags | null> => {
+  const fetchNewsletter = useCallback(async (newsletterId: string): Promise<Newsletter | null> => {
     if (!newsletterId || !user?.id) return null;
     
     try {
@@ -99,35 +98,36 @@ const NewsletterDetail = () => {
         ...newsletterData,
         newsletter_tags: tagsData || []
       };
-
-      // Transform the data to match the NewsletterWithTags type
-      const transformedData: NewsletterWithTags = {
-        ...data,
+      
+      // Transform the data to match the Newsletter type
+      const transformedData: Newsletter = {
         id: data.id,
         user_id: data.user_id,
-        subject: data.subject || '',
-        source, // attach the fetched source object
+        source,
         received_at: data.received_at || new Date().toISOString(),
         is_read: data.is_read || false,
         content: data.content || '',
         summary: data.summary || null,
-        url: data.url || null,
-        created_at: data.created_at || new Date().toISOString(),
-        updated_at: data.updated_at || new Date().toISOString(),
+        title: data.title || '',
+        image_url: data.image_url || '',
+        is_archived: data.is_archived ?? false,
         tags: (data.newsletter_tags || []).map((nt: any) => ({
           id: nt.tag.id,
           name: nt.tag.name,
           color: nt.tag.color,
-          user_id: user.id,
+          user_id: user?.id || '',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        }))
+        })),
+        is_liked: data.is_liked ?? false,
+        is_bookmarked: data.is_bookmarked ?? false,
+        like_count: data.like_count ?? 0,
+        newsletter_tags: data.newsletter_tags || []
       };
       
       return transformedData;
     } catch (err) {
-
-      setError('Failed to load newsletter. Please try again.');
+      console.error('Failed to load newsletter. Please try again.');
       return null;
     }
   }, [user?.id]);
@@ -151,8 +151,7 @@ const NewsletterDetail = () => {
       // Then make the API call
       await toggleLike(id);
     } catch (err) {
-
-      setError('Failed to update like status');
+      console.error('Failed to update like status');
       // Revert the optimistic update on error
       setNewsletter(prev => prev ? {
         ...prev,
@@ -164,25 +163,41 @@ const NewsletterDetail = () => {
     }
   }, [id, toggleLike, user?.id, newsletter]);
 
-  const handleToggleBookmark = useCallback(async () => {
-    if (!id || !user?.id) return;
+  const handleArchiveToggle = useCallback(async () => {
+    if (!newsletter?.id || isArchiving) return;
     
+    setIsArchiving(true);
     try {
-      setIsBookmarking(true);
-      const currentStatus = !!newsletter?.is_bookmarked;
-      await toggleInQueue(id, currentStatus);
-      
-      setNewsletter(prev => prev ? {
-        ...prev,
-        is_bookmarked: !prev.is_bookmarked
+      if (newsletter.is_archived) {
+        await unarchiveNewsletter(newsletter.id);
+      } else {
+        await archiveNewsletter(newsletter.id);
+      }
+      // Update local state to reflect the change
+      setNewsletter(prev => prev ? { 
+        ...prev, 
+        is_archived: !prev.is_archived 
       } : null);
-    } catch (err) {
+    } catch (error) {
+      console.error('Error toggling archive status:', error);
+    } finally {
+      setIsArchiving(false);
+    }
+  }, [newsletter, isArchiving, archiveNewsletter, unarchiveNewsletter]);
 
-      setError('Failed to update bookmark status');
+  const handleToggleBookmark = useCallback(async () => {
+    if (!newsletter?.id || isBookmarking) return;
+    
+    setIsBookmarking(true);
+    try {
+      await toggleInQueue(newsletter.id);
+      setNewsletter(prev => prev ? { ...prev, is_bookmarked: !isInQueue } : null);
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
     } finally {
       setIsBookmarking(false);
     }
-  }, [id, toggleInQueue, user?.id]);
+  }, [newsletter, isBookmarking, isInQueue, toggleInQueue]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -202,8 +217,7 @@ const NewsletterDetail = () => {
           setError('Newsletter not found');
         }
       } catch (err) {
-
-        setError('Failed to load newsletter');
+        console.error('Failed to load newsletter');
       } finally {
         setLoading(false);
       }
@@ -226,27 +240,12 @@ const NewsletterDetail = () => {
           <ArrowLeft className="h-4 w-4" />
           {isFromReadingQueue ? 'Back to Reading Queue' : 'Back to Inbox'}
         </button>
-        <p className="text-red-500">{error}</p>
+        <div className="bg-red-100 text-red-700 px-4 py-3 rounded-md mb-6">
+          {error}
+        </div>
       </div>
     );
   }
-
-  if (!newsletter) {
-    return (
-      <div className="max-w-6xl w-full mx-auto px-4 py-8">
-        <button
-          onClick={() => navigate(isFromReadingQueue ? '/reading-queue' : '/inbox')}
-          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {isFromReadingQueue ? 'Back to Reading Queue' : 'Back to Inbox'}
-        </button>
-        <p className="text-red-500">Newsletter not found</p>
-      </div>
-    );
-  }
-
-  const { title, summary, content } = newsletter;
 
   return (
     <div className="max-w-6xl w-full mx-auto px-4 py-8">
@@ -257,116 +256,118 @@ const NewsletterDetail = () => {
         <ArrowLeft className="h-4 w-4" />
         {isFromReadingQueue ? 'Back to Reading Queue' : 'Back to Inbox'}
       </button>
-
+      
       <div className="flex flex-col lg:flex-row gap-6">
+        {/* Main Content */}
         <div className="flex-1">
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <div className="flex justify-between items-start mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleToggleLike}
-                  disabled={isLiking}
-                  className="p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-400 hover:text-red-500"
-                  title={newsletter?.is_liked ? 'Unlike' : 'Like'}
-                >
-                  <Heart 
-                    className="h-6 w-6"
-                    fill={newsletter?.is_liked ? '#EF4444' : 'none'}
-                    stroke={newsletter?.is_liked ? '#EF4444' : '#9CA3AF'}
-                    strokeWidth={1.5}
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleToggleBookmark}
-                  disabled={isBookmarking}
-                  className={`p-2 rounded-full hover:bg-gray-200 transition-colors ${
-                    isInQueue ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'
-                  }`}
-                  title={isInQueue ? 'Remove from reading queue' : 'Add to reading queue'}
-                >
-                  <BookmarkIcon 
-                    className="h-6 w-6"
-                    fill={isInQueue ? '#9CA3AF' : 'none'}
-                    stroke="#9CA3AF"
-                    strokeWidth={1.5}
-                  />
-                </button>
-              </div>
+            {/* Newsletter Title */}
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              {newsletter?.title || 'Newsletter'}
+            </h1>
+            
+            {/* Newsletter Content */}
+            <div className="prose max-w-none mb-6">
+              {newsletter?.content && (
+                <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
+              )}
             </div>
-
+            
             {/* Tags Section */}
-            <div className="mt-8 pt-6 border-t border-gray-100">
-              <div className="tags-section">
-                <TagSelector
-                  selectedTags={tagsForUI}
-                  onTagsChange={async (newTags: Tag[]) => {
-                    if (!id) return;
-                    try {
-                      const ok = await updateNewsletterTags(id, newTags);
-                      if (ok) {
-                        const updated = await fetchNewsletter(id);
-                        if (updated) setNewsletter(updated);
-                      }
-                    } catch (err) {
-
-                      setError('Failed to update tags');
-                    }
-                  }}
-                  onTagDeleted={async () => {
-                    if (!id) return;
-                    try {
+            <div className="mt-4 mb-4">
+              <TagSelector
+                selectedTags={tagsForUI}
+                onTagsChange={async (newTags: Tag[]) => {
+                  if (!id) return;
+                  try {
+                    const ok = await updateNewsletterTags(id, newTags);
+                    if (ok) {
                       const updated = await fetchNewsletter(id);
                       if (updated) setNewsletter(updated);
-                    } catch (err) {
-
-                      setError('Failed to refresh newsletter');
                     }
-                  }}
-                />
+                  } catch (err) {
+                    console.error('Failed to update tags');
+                  }
+                }}
+                onTagDeleted={async () => {
+                  if (!id) return;
+                  try {
+                    const ok = await updateNewsletterTags(id, []);
+                    if (ok) {
+                      const updated = await fetchNewsletter(id);
+                      if (updated) setNewsletter(updated);
+                    }
+                  } catch (err) {
+                    console.error('Failed to delete tag');
+                  }
+                }}
+              />
+            </div>
+            
+            {/* Context & Insights Section */}
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Context & Insights</h2>
+              <div className="text-gray-600">
+                {newsletter?.summary || 'No summary available'}
               </div>
             </div>
-
-            {/* Newsletter content */}
-            <div className="mt-6 space-y-6">
-              {summary && (
-                <div className="prose max-w-none">
-                  <div 
-                    className="prose-lg text-gray-700"
-                    style={{ fontStyle: 'italic' }}
-                    dangerouslySetInnerHTML={{ 
-                      __html: summary.replace(/<h1[^>]*>.*<\/h1>/i, '').trim()
-                    }} 
-                  />
-                </div>
-              )}
+            
+            {/* Action Buttons */}
+            <div className="flex items-center gap-4 mb-6">
+              <button
+                onClick={handleToggleLike}
+                disabled={isLiking}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  newsletter?.is_liked
+                    ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {newsletter?.is_liked ? (
+                  <Heart className="h-4 w-4 fill-red-600 text-red-600" fill="currentColor" />
+                ) : (
+                  <Heart className="h-4 w-4" />
+                )}
+                <span>{newsletter?.like_count || 0}</span>
+              </button>
               
-              {content && (
-                <div className="prose max-w-none">
-                  <div 
-                    className="prose-lg text-gray-700"
-                    dangerouslySetInnerHTML={{ 
-                      __html: content
-                        .replace(/<h1[^>]*>.*<\/h1>/i, '')
-                        .replace(/<h2[^>]*>.*<\/h2>/i, '')
-                    }} 
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Context & Insights Card */}
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Context & Insights</h2>
-            <div className="text-gray-600">
-              <p className="italic">No insights available for this newsletter. Add insights or context here.</p>
+              <button
+                onClick={handleToggleBookmark}
+                disabled={isBookmarking}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  isInQueue
+                    ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {isInQueue ? (
+                  <BookmarkIcon className="h-4 w-4 fill-yellow-500 text-yellow-500" fill="currentColor" />
+                ) : (
+                  <BookmarkIcon className="h-4 w-4" />
+                )}
+                <span>{isInQueue ? 'Saved' : 'Save for later'}</span>
+              </button>
+              
+              <button
+                onClick={handleArchiveToggle}
+                disabled={isArchiving}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  newsletter?.is_archived
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                }`}
+              >
+                {newsletter?.is_archived ? (
+                  <ArchiveX className="h-4 w-4" />
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )}
+                <span>{newsletter?.is_archived ? 'Unarchive' : 'Archive'}</span>
+              </button>
             </div>
           </div>
         </div>
-
+        
         {/* Sidebar */}
         <div className="lg:w-80 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm p-6 sticky top-6">
