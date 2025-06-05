@@ -9,6 +9,7 @@ interface NewsletterCardProps {
   onToggleQueue?: (newsletterId: string, addToQueue: boolean) => void;
   onToggleArchive?: (newsletterId: string, isArchived: boolean) => void;
   showArchiveButton?: boolean;
+  showSource?: boolean;
 }
 
 const NewsletterCard = ({
@@ -18,6 +19,7 @@ const NewsletterCard = ({
   onToggleQueue,
   onToggleArchive,
   showArchiveButton = true,
+  showSource = false,
 }: NewsletterCardProps) => {
   const handleBookmarkClick = (e: React.MouseEvent) => {
     e.stopPropagation();
