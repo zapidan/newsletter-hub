@@ -2,10 +2,14 @@
 import React, { useState, FormEvent, useCallback, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
-import { NewsletterSource } from '../types';
-import { Check, X, AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react';
+import { useNewsletters } from '../hooks/useNewsletters';
+import { NewsletterSource, Newsletter } from '../types';
+import { Check, X, AlertTriangle, ArrowLeft, Loader2, Tag as TagIcon, Bookmark, Heart, Archive, ArchiveX } from 'lucide-react';
+import { useReadingQueue } from '../hooks/useReadingQueue';
+import { useTags } from '../hooks/useTags';
+import TagSelector from '../components/TagSelector';
 import { toast } from 'react-hot-toast';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import NewsletterCard from '../components/NewsletterCard';
 import { useNavigate } from 'react-router-dom';
@@ -101,6 +105,33 @@ const NewslettersPage: React.FC = () => {
 
   // State for selected source
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
+  const [loadingStates, setLoadingStates] = useState<Record<string, 'archive' | 'unarchive' | 'like' | 'tags' | null>>({});
+  
+  const { toggleInQueue, readingQueue } = useReadingQueue();
+  const { updateNewsletterTags } = useTags();
+  const { 
+    archiveNewsletter, 
+    unarchiveNewsletter, 
+    toggleLike,
+    errorTogglingLike
+  } = useNewsletters(undefined, selectedSourceId ? 'all' : 'inbox');
+  
+  const queryClient = useQueryClient();
+
+  const toggleTagVisibility = useCallback((newsletterId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setVisibleTags(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(newsletterId)) {
+        newSet.delete(newsletterId);
+      } else {
+        newSet.add(newsletterId);
+      }
+      return newSet;
+    });
+  }, []);
 
   // Fetch newsletters for the selected source
   const {
@@ -108,24 +139,75 @@ const NewslettersPage: React.FC = () => {
     isLoading: isLoadingNewslettersForSource,
     isError: isErrorNewslettersForSource,
     error: errorNewslettersForSource,
-  } = useQuery<{ id: string }[]>({
+  } = useQuery<Newsletter[]>({
     queryKey: ['newslettersBySource', selectedSourceId],
     queryFn: async () => {
       if (!selectedSourceId) return [];
       const { data, error } = await supabase
         .from('newsletters')
-        .select(`*, newsletter_tags ( tag:tags (id, name, color) ), newsletter_source_id`)
+        .select(`*, 
+          newsletter_tags ( tag:tags (id, name, color) ), 
+          newsletter_source_id,
+          newsletter_sources (id, name, domain)
+        `)
         .eq('newsletter_source_id', selectedSourceId)
         .order('received_at', { ascending: false });
       if (error) throw error;
       // Transform tags to match NewsletterCard expectations
       return (data || []).map((item: any) => ({
         ...item,
+        source: item.newsletter_sources,
         tags: (item.newsletter_tags || []).map((nt: any) => nt.tag)
       }));
     },
     enabled: !!selectedSourceId
   });
+
+  // Handle archive/unarchive
+  const handleArchiveToggle = useCallback(async (newsletter: Newsletter) => {
+    const action = newsletter.is_archived ? 'unarchive' : 'archive';
+    setLoadingStates(prev => ({ ...prev, [newsletter.id]: action }));
+    
+    try {
+      if (newsletter.is_archived) {
+        await unarchiveNewsletter(newsletter.id);
+        toast.success('Newsletter unarchived');
+      } else {
+        await archiveNewsletter(newsletter.id);
+        toast.success('Newsletter archived');
+      }
+      // Invalidate relevant queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+      ]);
+    } catch (error) {
+      toast.error(`Failed to ${newsletter.is_archived ? 'unarchive' : 'archive'} newsletter`);
+      console.error('Archive error:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [newsletter.id]: null }));
+    }
+  }, [archiveNewsletter, unarchiveNewsletter, queryClient, selectedSourceId]);
+
+  // Handle like toggle
+  const handleLikeToggle = useCallback(async (newsletter: Newsletter) => {
+    setLoadingStates(prev => ({ ...prev, [newsletter.id]: 'like' }));
+    
+    try {
+      await toggleLike(newsletter.id);
+      // Invalidate relevant queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+      ]);
+      toast.success(newsletter.is_liked ? 'Removed from liked' : 'Added to liked');
+    } catch (error) {
+      toast.error('Failed to update like status');
+      console.error('Like error:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [newsletter.id]: null }));
+    }
+  }, [toggleLike, queryClient, selectedSourceId]);
 
   return (
     <main className="max-w-4xl w-full mx-auto p-6 bg-neutral-50">
@@ -311,18 +393,188 @@ const NewslettersPage: React.FC = () => {
           ) : newslettersForSource.length === 0 ? (
             <p className="text-gray-500 italic">No newsletters found for this source.</p>
           ) : (
-            <div className="flex gap-2 p-2">
-              {newslettersForSource.slice(0, 3).map((newsletter: any) => (
-                <div key={newsletter.id} className="w-28 cursor-pointer" onClick={() => navigate(`/inbox/${newsletter.id}`)}>
-                  <NewsletterCard 
-                    newsletter={{ 
-                      ...newsletter, 
-                      source: newsletter.source || newsletterSources.find((s: any) => s.id === newsletter.newsletter_source_id) || newsletterSources.find((s: any) => s.id === selectedSourceId) 
-                    }} 
-                    showBookmark={false} 
-                    showArchiveButton={false} 
-                    showSource={true}
-                  />
+            <div className="space-y-2">
+              {newslettersForSource.map((newsletter) => (
+                <div
+                  key={newsletter.id}
+                  className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${
+                    !newsletter.is_read 
+                      ? 'bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200' 
+                      : 'bg-white border border-neutral-200 hover:bg-neutral-50'
+                  }`}
+                  onClick={() => navigate(`/inbox/${newsletter.id}`)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-3 mb-1">
+                      <img
+                        src={newsletter.image_url || '/newsletter-icon.svg'}
+                        alt={newsletter.title}
+                        className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-base truncate">{newsletter.title || 'No subject'}</div>
+                            <div className="text-sm text-gray-500 truncate">
+                              {newsletter.source?.name || 'Unknown Source'}
+                              {newsletter.source?.domain && (
+                                <span className="text-gray-400 ml-2">• {newsletter.source.domain}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-1 mt-1">
+                          {/* Like button */}
+                          <button
+                            type="button"
+                            className={`p-1.5 transition-colors ${newsletter.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'} ${errorTogglingLike ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await handleLikeToggle(newsletter);
+                            }}
+                            disabled={!!errorTogglingLike || loadingStates[newsletter.id] === 'like'}
+                            title={newsletter.is_liked ? 'Unlike' : 'Like'}
+                          >
+                            {loadingStates[newsletter.id] === 'like' ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                            ) : (
+                              <Heart 
+                                className="h-4 w-4"
+                                fill={newsletter.is_liked ? '#EF4444' : 'none'}
+                                stroke={newsletter.is_liked ? '#EF4444' : '#9CA3AF'}
+                                strokeWidth={1.5}
+                              />
+                            )}
+                          </button>
+                          {/* Tag visibility toggle */}
+                          <button
+                            type="button"
+                            className="p-1 rounded hover:bg-gray-200"
+                            onClick={(e) => toggleTagVisibility(newsletter.id, e)}
+                            title={visibleTags.has(newsletter.id) ? 'Hide tags' : 'Edit tags'}
+                          >
+                            <TagIcon 
+                              size={16} 
+                              className={`${visibleTags.has(newsletter.id) ? 'text-primary-600' : 'text-gray-500'} hover:text-primary-600`}
+                            />
+                          </button>
+                          {/* Reading queue button */}
+                          <button
+                            type="button"
+                            className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
+                                await toggleInQueue(newsletter.id);
+                                // Invalidate relevant queries
+                                await Promise.all([
+                                  queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] }),
+                                  queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
+                                ]);
+                                toast.success(isInQueue ? 'Removed from reading queue' : 'Added to reading queue');
+                              } catch (error) {
+                                toast.error('Failed to update reading queue');
+                                console.error('Reading queue error:', error);
+                              }
+                            }}
+                            title={readingQueue.some(item => item.newsletter_id === newsletter.id) ? 'Remove from reading queue' : 'Add to reading queue'}
+                          >
+                            <Bookmark 
+                              className="h-4 w-4"
+                              fill={readingQueue.some(item => item.newsletter_id === newsletter.id) ? '#9CA3AF' : 'none'}
+                              stroke="#9CA3AF"
+                              strokeWidth={1.5}
+                            />
+                          </button>
+                          {/* Archive/Unarchive button */}
+                          <button
+                            type="button"
+                            className={`p-1 rounded-full hover:bg-gray-200 transition-colors ${loadingStates[newsletter.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await handleArchiveToggle(newsletter);
+                            }}
+                            disabled={!!loadingStates[newsletter.id]}
+                            title={newsletter.is_archived ? 'Unarchive' : 'Archive'}
+                          >
+                            {loadingStates[newsletter.id] === 'archive' || loadingStates[newsletter.id] === 'unarchive' ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                            ) : newsletter.is_archived ? (
+                              <ArchiveX className="h-4 w-4 text-green-700" />
+                            ) : (
+                              <Archive className="h-4 w-4 text-amber-700" />
+                            )}
+                          </button>
+                        </div>
+                        {/* Newsletter summary */}
+                        <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
+                        
+                        {/* Tags */}
+                        {visibleTags.has(newsletter.id) && (
+                          <div className="w-full mt-2" onClick={e => e.stopPropagation()}>
+                            <TagSelector
+                              selectedTags={newsletter.tags || []}
+                              onTagsChange={async (newTags) => {
+                                setLoadingStates(prev => ({ ...prev, [newsletter.id]: 'tags' }));
+                                try {
+                                  const ok = await updateNewsletterTags(newsletter.id, newTags);
+                                  if (ok) {
+                                    // Invalidate relevant queries to refresh the UI
+                                    await Promise.all([
+                                      queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] }),
+                                      queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+                                    ]);
+                                    
+                                    // Close the tag editor
+                                    setVisibleTags(prev => {
+                                      const newSet = new Set(prev);
+                                      newSet.delete(newsletter.id);
+                                      return newSet;
+                                    });
+                                    
+                                    toast.success('Tags updated successfully');
+                                  } else {
+                                    throw new Error('Failed to update tags');
+                                  }
+                                } catch (error) {
+                                  console.error('Error updating tags:', error);
+                                  toast.error('Failed to update tags');
+                                } finally {
+                                  setLoadingStates(prev => ({ ...prev, [newsletter.id]: null }));
+                                }
+                              }}
+                              className="mt-1"
+                              disabled={loadingStates[newsletter.id] === 'tags'}
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Date */}
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex flex-wrap gap-1">
+                            {newsletter.tags?.map((tag: any) => (
+                              <span 
+                                key={tag.id}
+                                className="px-2 py-0.5 rounded-full text-xs font-medium"
+                                style={{
+                                  backgroundColor: `${tag.color}20`,
+                                  color: tag.color,
+                                  border: `1px solid ${tag.color}40`
+                                }}
+                              >
+                                {tag.name}
+                              </span>
+                            ))}
+                          </div>
+                          <span className="text-xs text-gray-400">
+                            {new Date(newsletter.received_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

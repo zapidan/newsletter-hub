@@ -9,6 +9,7 @@ type TagSelectorProps = {
   onTagDeleted?: (deletedTag: Tag) => void;
   onTagClick?: (tag: Tag, e: React.MouseEvent) => void;
   className?: string;
+  disabled?: boolean;
 };
 
 const colors = [
@@ -27,7 +28,8 @@ export default function TagSelector({
   onTagsChange, 
   onTagDeleted, 
   onTagClick,
-  className = '' 
+  className = '',
+  disabled = false
 }: TagSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
@@ -119,7 +121,7 @@ export default function TagSelector({
 
   return (
     <div className={`relative ${className}`}>
-      <div className="flex flex-wrap gap-2">
+      <div className={`flex flex-wrap items-center gap-2 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
         {selectedTags.map((tag) => (
           <div
             key={tag.id}
