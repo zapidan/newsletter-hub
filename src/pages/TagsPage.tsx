@@ -1,122 +1,107 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Tag as TagIcon, X, Edit2, Trash2, Check, ArrowLeft } from 'lucide-react';
 import { useTags } from '../hooks/useTags';
-import type { Tag, TagCreate, TagWithCount } from '../types';
+import type { Tag, TagCreate, TagWithCount, Newsletter } from '../types';
 import LoadingScreen from '../components/common/LoadingScreen';
 import { supabase } from '../services/supabaseClient';
 
-interface Newsletter {
-  id: string;
-  title: string;
-  content: string;
-  summary: string;
-  received_at: string;
-  is_read: boolean;
-  image_url?: string;
-  user_id: string;
-  is_liked: boolean;
-  newsletter_source_id?: string | null;
-  source?: {
-    id: string;
-    name: string;
-    domain: string;
-    user_id: string;
-    created_at: string;
-    updated_at: string;
-  };
-  tags?: Array<{ id: string; name: string; color: string }>;
-  newsletter_tags?: Array<{ tag: { id: string; name: string; color: string } }>;
-}
-
 const TagsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { getTags, createTag, updateTag, deleteTag, loading, error } = useTags();
+  const { getTags, createTag, updateTag, deleteTag } = useTags();
   const [tags, setTags] = useState<TagWithCount[]>([]);
   const [tagNewsletters, setTagNewsletters] = useState<Record<string, Newsletter[]>>({});
 
-  // Function to load tags and their associated newsletters
-  const loadTagsAndNewsletters = useCallback(async () => {
-    const fetchedTags = await getTags();
-    // Ensure every tag has newsletter_count property (default 0)
-    const tagsWithCount = fetchedTags.map(tag => ({ ...tag, newsletter_count: tag.newsletter_count ?? 0 }));
-    setTags(tagsWithCount);
-    
-    // Fetch newsletters for each tag using the join table
-    const newslettersByTag: Record<string, Newsletter[]> = {};
-    for (const tag of fetchedTags) {
-      // Fetch newsletter_ids from newsletter_tags for this tag
-      const { data: newsletterTagRows, error: tagError } = await supabase
-        .from('newsletter_tags')
-        .select('newsletter_id')
-        .eq('tag_id', tag.id);
-      
-      if (tagError) {
-        console.error('Error fetching tag newsletters:', tagError);
-        newslettersByTag[tag.id] = [];
-        continue;
-      }
-      
-      const newsletterIds = (newsletterTagRows || []).map(row => row.newsletter_id);
-      if (newsletterIds.length === 0) {
-        newslettersByTag[tag.id] = [];
-        continue;
-      }
-      
-      // Fetch newsletters by those IDs, with source and tags joined
-      const { data: newsletters, error: newsError } = await supabase
-        .from('newsletters')
-        .select(`
-          *,
-          newsletter_source_id,
-          source:newsletter_sources(
+  // Fetch all tags (cached)
+  const { data: tagsData = [], isLoading: loadingTags, error: errorTags } = useQuery({
+  queryKey: ['tags'],
+  queryFn: getTags,
+  staleTime: 5 * 60 * 1000
+});
+
+  // Fetch all newsletter_tags join rows (cached)
+  const { data: newsletterTagsData = [], isLoading: loadingNewsletterTags, error: errorNewsletterTags } = useQuery({
+  queryKey: ['newsletter_tags'],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('newsletter_tags')
+      .select('newsletter_id, tag_id');
+    if (error) throw error;
+    return Array.isArray(data) ? data : [];
+  },
+  staleTime: 5 * 60 * 1000
+});
+
+  // Fetch all newsletters (for tag navigation/filtering)
+  const { data: newslettersData = [], isLoading: loadingNewsletters, error: errorNewsletters } = useQuery({
+  queryKey: ['newsletters'],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('newsletters')
+      .select(`
+        *,
+        newsletter_source_id,
+        source:newsletter_sources(
+          id,
+          name,
+          domain,
+          user_id,
+          created_at
+        ),
+        newsletter_tags (
+          tag:tags (
             id,
             name,
-            domain,
-            user_id,
-            created_at,
-            updated_at
-          ),
-          newsletter_tags (
-            tag:tags (
-              id,
-              name,
-              color
-            )
+            color
           )
-        `)
-        .in('id', newsletterIds);
-      
-      if (newsError) {
-        console.error('Error fetching newsletters:', newsError);
-        newslettersByTag[tag.id] = [];
-      } else {
-        // Transform the data to match the expected format
-        newslettersByTag[tag.id] = (newsletters || []).map(item => ({
+        )
+      `);
+    if (error) throw error;
+    return Array.isArray(data)
+      ? data.map((item: any) => ({
           ...item,
-          tags: (item.newsletter_tags || []).map((nt: any) => ({
-            id: nt.tag.id,
-            name: nt.tag.name,
-            color: nt.tag.color
-          })) || []
-        }));
-      }
-    }
-    
-    setTagNewsletters(newslettersByTag);
-    // Update tags with newsletter_count (for TagWithCount compatibility)
-    setTags(prevTags => 
-      prevTags.map(tag => ({
-        ...tag,
-        newsletter_count: newslettersByTag[tag.id]?.length ?? 0
-      }))
-    );
-  }, [getTags]);
+          tags: Array.isArray(item.newsletter_tags)
+            ? item.newsletter_tags.map((nt: any) => nt.tag)
+            : []
+        }))
+      : [];
+  },
+  staleTime: 5 * 60 * 1000
+});
 
-  // Load tags and newsletters on mount
+  // Compute tag usage counts and newsletters-by-tag in-memory
+  const { tagsWithCount, newslettersByTag } = useMemo(() => {
+    // Map tag_id to count
+    const tagCounts: Record<string, number> = {};
+    // Map tag_id to array of newsletters
+    const newslettersMap: Record<string, Newsletter[]> = {};
+    if (Array.isArray(tagsData) && Array.isArray(newsletterTagsData) && Array.isArray(newslettersData)) {
+      // Build a lookup of newsletter_id to newsletter
+      const newsletterLookup: Record<string, Newsletter> = {};
+      newslettersData.forEach((n: Newsletter) => {
+        newsletterLookup[n.id] = n;
+      });
+      // For each tag, find newsletters
+      tagsData.forEach((tag: Tag) => {
+        const relatedNewsletterIds = newsletterTagsData.filter((nt: any) => nt.tag_id === tag.id).map((nt: any) => nt.newsletter_id);
+        newslettersMap[tag.id] = relatedNewsletterIds.map((nid: string) => newsletterLookup[nid]).filter(Boolean);
+        tagCounts[tag.id] = newslettersMap[tag.id].length;
+      });
+    }
+    const tagsWithCount = (tagsData || []).map((tag: Tag) => ({ ...tag, newsletter_count: tagCounts[tag.id] || 0 }));
+    return { tagsWithCount, newslettersByTag: newslettersMap };
+  }, [tagsData, newsletterTagsData, newslettersData]);
+
   useEffect(() => {
-    loadTagsAndNewsletters();
-  }, [loadTagsAndNewsletters]);
+    setTags(tagsWithCount);
+    setTagNewsletters(newslettersByTag);
+  }, [tagsWithCount, newslettersByTag]);
+
+  // Loading and error states
+  const loading = loadingTags || loadingNewsletterTags || loadingNewsletters;
+  const error = errorTags || errorNewsletterTags || errorNewsletters;
+
   const [isCreating, setIsCreating] = useState(false);
   const [newTag, setNewTag] = useState<Omit<TagCreate, 'user_id'>>({ 
     name: '', 
@@ -135,8 +120,8 @@ const TagsPage: React.FC = () => {
       });
       setNewTag({ name: '', color: '#3b82f6' });
       setIsCreating(false);
-      // Refresh the tags list
-      await loadTagsAndNewsletters();
+      // Optionally, trigger a refetch here if needed
+      // queryClient.invalidateQueries(['tags']);
     } catch (err) {
       console.error('Error creating tag:', err);
     }
@@ -156,8 +141,8 @@ const TagsPage: React.FC = () => {
       });
       setEditingTagId(null);
       setEditTagData({});
-      // Refresh the tags list
-      await loadTagsAndNewsletters();
+      // Optionally, trigger a refetch here if needed
+      // queryClient.invalidateQueries(['tags']);
     } catch (err) {
       console.error('Error updating tag:', err);
     }
@@ -167,8 +152,8 @@ const TagsPage: React.FC = () => {
     if (window.confirm('Are you sure you want to delete this tag? This will remove it from all newsletters.')) {
       try {
         await deleteTag(tagId);
-        // Refresh the tags list after successful deletion
-        await loadTagsAndNewsletters();
+        // Optionally, trigger a refetch here if needed
+        // queryClient.invalidateQueries(['tags']);
       } catch (err) {
         console.error('Error deleting tag:', err);
       }
@@ -176,7 +161,7 @@ const TagsPage: React.FC = () => {
   };
 
   if (loading) return <LoadingScreen />;
-  if (error) return <div>Error loading tags: {error}</div>;
+  if (error) return <div>Error loading tags: {typeof error === 'object' && error !== null && 'message' in error ? (error as Error).message : String(error)}</div>;
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -305,14 +290,13 @@ const TagsPage: React.FC = () => {
                         />
                         <span className="font-medium cursor-pointer text-primary-700 hover:underline" onClick={() => navigate(`/inbox?tag=${tag.id}`)}>{tag.name}</span>
                         <span className="text-sm text-neutral-500">
-                          Used in {tagNewsletters[tag.id]?.length || 0} {tagNewsletters[tag.id]?.length === 1 ? 'newsletter' : 'newsletters'}
+                          Used in {(tagNewsletters[tag.id] || []).length} {(tagNewsletters[tag.id] || []).length === 1 ? 'newsletter' : 'newsletters'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
                             setEditingTagId(tag.id);
-                            setEditTagData({ name: tag.name, color: tag.color });
                           }}
                           className="p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-md"
                           title="Edit tag"
