@@ -26,6 +26,7 @@ export interface NewsletterSource {
   user_id: string;
   created_at: string;
   updated_at: string;
+  newsletter_count?: number;
 }
 
 export interface Newsletter {
@@ -35,6 +36,7 @@ export interface Newsletter {
   summary: string;
   image_url: string;
   received_at: string;
+  updated_at: string;
   is_read: boolean;
   is_liked: boolean;
   is_archived: boolean;

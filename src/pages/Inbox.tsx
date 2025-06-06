@@ -59,7 +59,6 @@ const Inbox: React.FC = () => {
     deleteNewsletter,
     isDeletingNewsletter,
     bulkDeleteNewsletters,
-    isBulkDeletingNewsletters,
   } = useNewsletters(tagId || undefined, filter);
   
   // Trash (permanent delete) handlers

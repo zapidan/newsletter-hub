@@ -22,20 +22,34 @@ const queryKeys = {
   userSources: (userId: string) => [...queryKeys.all, 'user', userId],
 };
 
-// Define the type for the variables passed to the mutation
-interface NewsletterSourceVars {
-  name: string;
-  domain: string;
-  id?: string;
-}
-
-interface AddNewsletterSourceVars extends Omit<NewsletterSourceVars, 'id'> {}
-
-interface UpdateNewsletterSourceVars extends NewsletterSourceVars {
+// Function to update a newsletter source's name/title only
+interface UpdateNewsletterSourceVars {
   id: string;
+  name: string;
 }
 
-// Function to fetch newsletter sources
+const updateNewsletterSourceFn = async ({ id, name }: UpdateNewsletterSourceVars): Promise<NewsletterSource> => {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData?.user) {
+    throw userError || new Error('User not found for updating source');
+  }
+  const user = userData.user;
+  if (!name.trim()) {
+    throw new Error('Newsletter source name cannot be empty.');
+  }
+  const { data, error } = await supabase
+    .from('newsletter_sources')
+    .update({ name: name.trim() })
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select()
+    .single();
+  if (error) throw error;
+  if (!data) throw new Error('Failed to update source');
+  return data;
+};
+
+// Optimized function to fetch newsletter sources with newsletter count in one query
 const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) {
@@ -43,15 +57,22 @@ const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
   }
   const user = userData.user;
 
-  const { data, error } = await supabase
+  // Fetch sources and their newsletter counts in one query using PostgREST's count aggregation
+  // This will return an array of sources, each with a newsletters field containing the count
+  const { data: sources, error } = await supabase
     .from('newsletter_sources')
-    .select('*')
+    .select('*, newsletters(count)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  
-  return data || [];
+  if (!sources || sources.length === 0) return [];
+
+  // Map the result to flatten the newsletter_count
+  return sources.map((source: any) => ({
+    ...source,
+    newsletter_count: source.newsletters?.[0]?.count ?? 0
+  }));
 };
 
 // Function to prefetch a single source
@@ -70,78 +91,6 @@ const prefetchSource = async (queryClient: QueryClient, id: string): Promise<voi
     },
     staleTime: STALE_TIME,
   });
-};
-
-// Function to add a newsletter source
-const cleanDomain = (domain: string): string => {
-  let cleaned = domain.toLowerCase().trim();
-  cleaned = cleaned.replace(/^https?:\/\//, '');
-  cleaned = cleaned.replace(/^www\./, '');
-  return cleaned.replace(/\/$/, '');
-};
-
-const addNewsletterSourceFn = async ({ name, domain }: AddNewsletterSourceVars): Promise<NewsletterSource> => {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
-    throw userError || new Error('User not found for adding source');
-  }
-  const user = userData.user;
-
-  const cleanedDomain = cleanDomain(domain);
-
-  if (!name.trim() || !cleanedDomain) {
-    throw new Error('Newsletter name and domain cannot be empty.');
-  }
-
-  const { data, error } = await supabase
-    .from('newsletter_sources')
-    .insert([{ name: name.trim(), domain: cleanedDomain, user_id: user.id }])
-    .select()
-    .single();
-
-  if (error) {
-
-    throw error;
-  }
-  if (!data) {
-    throw new Error('Failed to add newsletter source, no data returned.');
-  }
-  return data;
-};
-
-// Function to update a newsletter source
-const updateNewsletterSourceFn = async ({ id, name, domain }: UpdateNewsletterSourceVars): Promise<NewsletterSource> => {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
-    throw userError || new Error('User not found for updating source');
-  }
-
-  const cleanedDomain = cleanDomain(domain);
-
-  if (!name.trim() || !cleanedDomain) {
-    throw new Error('Newsletter name and domain cannot be empty.');
-  }
-
-  const { data, error } = await supabase
-    .from('newsletter_sources')
-    .update({ 
-      name: name.trim(), 
-      domain: cleanedDomain,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', id)
-    .eq('user_id', userData.user.id)
-    .select()
-    .single();
-
-  if (error) {
-
-    throw error;
-  }
-  if (!data) {
-    throw new Error('Failed to update newsletter source, no data returned.');
-  }
-  return data;
 };
 
 // Function to delete a newsletter source
@@ -210,70 +159,31 @@ export function useNewsletterSources() {
     await prefetchSource(queryClient, id);
   }, [queryClient]);
 
-  // Add mutation with optimistic updates
-  const addMutation = useMutation<NewsletterSource, PostgrestError | Error, AddNewsletterSourceVars, SourceContext>({
-    mutationFn: addNewsletterSourceFn,
-    onMutate: async (newSource) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey });
-      
-      // Snapshot the previous value
-      const previousSources = queryClient.getQueryData<NewsletterSource[]>(queryKey) || [];
-      
-      // Optimistically update to the new value
-      queryClient.setQueryData(queryKey, (old: NewsletterSource[] = []) => [
-        { ...newSource, id: 'temp-id', created_at: new Date().toISOString() },
-        ...old
-      ]);
-      
-      return { previousSources };
-    },
-    onError: (_err, _newSource, context) => {
-      // Rollback on error
-      if (context?.previousSources) {
-        queryClient.setQueryData(queryKey, context.previousSources);
-      }
-    },
-    onSettled: () => {
-      // Invalidate and refetch
-      invalidateSources();
-    },
-  });
 
-  // Update mutation with optimistic updates
+  
+  // Update source mutation
   const updateMutation = useMutation<NewsletterSource, PostgrestError | Error, UpdateNewsletterSourceVars, SourceContext>({
     mutationFn: updateNewsletterSourceFn,
-    onMutate: async (updatedSource) => {
-      // Cancel any outgoing refetches
+    onMutate: async (vars) => {
       await queryClient.cancelQueries({ queryKey });
-      
-      // Snapshot the previous value
       const previousSources = queryClient.getQueryData<NewsletterSource[]>(queryKey) || [];
-      
-      // Optimistically update to the new value
-      queryClient.setQueryData(queryKey, (old: NewsletterSource[] = []) =>
-        old.map(source => 
-          source.id === updatedSource.id 
-            ? { ...source, ...updatedSource, updated_at: new Date().toISOString() }
-            : source
-        )
-      );
-      
+      // Optimistically update the name in the cache
+      queryClient.setQueryData(queryKey, previousSources.map(source =>
+        source.id === vars.id ? { ...source, name: vars.name } : source
+      ));
       return { previousSources };
     },
-    onError: (_err, _variables, context) => {
-      // Rollback on error
+    onError: (_err, _vars, context) => {
       if (context?.previousSources) {
         queryClient.setQueryData(queryKey, context.previousSources);
       }
     },
     onSettled: () => {
-      // Invalidate and refetch
       invalidateSources();
     },
   });
 
-  // Delete mutation with optimistic updates
+  // Delete source mutation
   const deleteMutation = useMutation<void, PostgrestError | Error, string, SourceContext>({
     mutationFn: deleteNewsletterSourceFn,
     onMutate: async (id) => {
@@ -284,8 +194,8 @@ export function useNewsletterSources() {
       const previousSources = queryClient.getQueryData<NewsletterSource[]>(queryKey) || [];
       
       // Optimistically remove the source
-      queryClient.setQueryData(queryKey, (old: NewsletterSource[] = []) =>
-        old.filter(source => source.id !== id)
+      queryClient.setQueryData(queryKey, 
+        previousSources.filter(source => source.id !== id)
       );
       
       return { previousSources };
@@ -302,25 +212,22 @@ export function useNewsletterSources() {
     },
   });
 
-  // Optimize cache updates
-  const updateCache = useCallback((updatedSource: NewsletterSource) => {
-    queryClient.setQueryData<NewsletterSource[]>(queryKey, (old = []) => {
-      const index = old.findIndex(s => s.id === updatedSource.id);
-      if (index >= 0) {
-        const newData = [...old];
-        newData[index] = updatedSource;
-        return newData;
+  // Handle delete source with confirmation
+  const deleteNewsletterSource = useCallback(async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this source? This will not delete any existing newsletters.')) {
+      try {
+        await deleteMutation.mutateAsync(id);
+      } catch (error) {
+        console.error('Error deleting source:', error);
+        throw error;
       }
-      return [updatedSource, ...old];
-    });
-  }, [queryClient, queryKey]);
-
-  // Optimize cache removal
-  const removeFromCache = useCallback((id: string) => {
-    queryClient.setQueryData<NewsletterSource[]>(queryKey, (old = []) => 
-      old.filter(source => source.id !== id)
-    );
-  }, [queryClient, queryKey]);
+    }
+  }, [deleteMutation]);
+  
+  // Alias for deleteNewsletterSource that takes an object with id
+  const deleteSource = useCallback(async ({ id }: { id: string }) => {
+    return deleteNewsletterSource(id);
+  }, [deleteNewsletterSource]);
 
   return {
     // Sources data
@@ -332,14 +239,6 @@ export function useNewsletterSources() {
     isStaleSources,
     refetchSources,
     
-    // Add source
-    addNewsletterSource: addMutation.mutate,
-    addNewsletterSourceAsync: addMutation.mutateAsync,
-    isAddingSource: addMutation.isPending,
-    isErrorAddingSource: addMutation.isError,
-    errorAddingSource: addMutation.error,
-    isSuccessAddingSource: addMutation.isSuccess,
-    
     // Update source
     updateNewsletterSource: updateMutation.mutate,
     updateNewsletterSourceAsync: updateMutation.mutateAsync,
@@ -349,8 +248,7 @@ export function useNewsletterSources() {
     isSuccessUpdatingSource: updateMutation.isSuccess,
     
     // Delete source
-    deleteNewsletterSource: deleteMutation.mutate,
-    deleteNewsletterSourceAsync: deleteMutation.mutateAsync,
+    deleteNewsletterSource: deleteSource,
     isDeletingSource: deleteMutation.isPending,
     isErrorDeletingSource: deleteMutation.isError,
     errorDeletingSource: deleteMutation.error,
@@ -359,7 +257,5 @@ export function useNewsletterSources() {
     // Cache utilities
     invalidateSources,
     prefetchSource: prefetchSourceById,
-    updateCache,
-    removeFromCache,
   } as const;
 }

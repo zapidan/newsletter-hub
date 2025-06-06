@@ -459,29 +459,58 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       if (!user) throw new Error('User not authenticated');
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_archived: true })
+        .update({ 
+          is_archived: true,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id)
         .eq('user_id', user.id);
       if (error) throw error;
       return true;
     },
     onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.lists() }),
+        queryClient.cancelQueries({ queryKey: ['newsletters'] }),
+        queryClient.cancelQueries({ queryKey: ['newslettersBySource'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'inbox'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'archived'] })
+      ]);
+      
+      // Snapshot the previous value
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
       
+      // Optimistically update to the new value
       if (previousNewsletters) {
-        updateNewsletterInCache(id, { is_archived: true });
+        updateNewsletterInCache(id, { 
+          is_archived: true,
+          updated_at: new Date().toISOString()
+        });
       }
       
       return { previousNewsletters };
     },
     onError: (_err, _id, context) => {
+      // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(queryKey, context.previousNewsletters);
       }
     },
     onSettled: () => {
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['newsletters'] });
+      queryClient.invalidateQueries({ queryKey: ['newslettersBySource'] });
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'inbox'] });
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'archived'] });
+      
+      // Force refetch of the current view to ensure UI is in sync
+      queryClient.refetchQueries({ 
+        queryKey: filter === 'archived' 
+          ? ['newsletters', 'archived'] 
+          : ['newsletters', 'inbox'] 
+      });
     },
   });
 
@@ -491,18 +520,34 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       if (!user) throw new Error('User not authenticated');
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_archived: false })
+        .update({ 
+          is_archived: false,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id)
         .eq('user_id', user.id);
       if (error) throw error;
       return true;
     },
     onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.lists() }),
+        queryClient.cancelQueries({ queryKey: ['newsletters'] }),
+        queryClient.cancelQueries({ queryKey: ['newslettersBySource'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'inbox'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'archived'] })
+      ]);
+      
+      // Snapshot the previous value
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
       
+      // Optimistically update to the new value
       if (previousNewsletters) {
-        updateNewsletterInCache(id, { is_archived: false });
+        updateNewsletterInCache(id, { 
+          is_archived: false,
+          updated_at: new Date().toISOString()
+        });
       }
       
       return { previousNewsletters };
