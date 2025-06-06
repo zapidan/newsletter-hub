@@ -29,6 +29,13 @@ export type Newsletter = NewsletterType;
 
 // Define the return type for the useNewsletters hook
 interface UseNewslettersReturn {
+  // Trash (permanent delete) functionality
+  deleteNewsletter: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
+  isDeletingNewsletter: boolean;
+  errorDeletingNewsletter: Error | null;
+  bulkDeleteNewsletters: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
+  isBulkDeletingNewsletters: boolean;
+  errorBulkDeletingNewsletters: Error | null;
   newsletters: Newsletter[];
   isLoadingNewsletters: boolean;
   isErrorNewsletters: boolean;
@@ -576,6 +583,67 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
     },
   });
 
+  // Permanent delete (trash) mutation
+  const deleteNewsletterMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[] }>({
+    mutationFn: async (id: string) => {
+      if (!user) throw new Error('User not authenticated');
+      const { error } = await supabase
+        .from('newsletters')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
+      if (previousNewsletters) {
+        queryClient.setQueryData(queryKey, previousNewsletters.filter(n => n.id !== id));
+      }
+      return { previousNewsletters };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(queryKey, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+    },
+  });
+
+  // Bulk permanent delete (trash) mutation
+  const bulkDeleteNewslettersMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>({
+    mutationFn: async (ids: string[]) => {
+      if (!user) throw new Error('User not authenticated');
+      if (ids.length === 0) return true;
+      const { error } = await supabase
+        .from('newsletters')
+        .delete()
+        .in('id', ids)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (ids: string[]) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
+      if (previousNewsletters) {
+        queryClient.setQueryData(queryKey, previousNewsletters.filter(n => !ids.includes(n.id)));
+      }
+      return { previousNewsletters };
+    },
+    onError: (_err, _ids, context) => {
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(queryKey, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+    },
+  });
+
   // Function to get a single newsletter (not a direct query in this hook, but uses a mutation)
   const getNewsletter = useCallback(async (id: string): Promise<Newsletter | null> => {
     // First try to get from any existing query
@@ -689,5 +757,13 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
     
     getNewsletter,
     refetchNewsletters,
+
+    // Trash (permanent delete) functionality
+    deleteNewsletter: deleteNewsletterMutation.mutateAsync,
+    isDeletingNewsletter: deleteNewsletterMutation.isPending,
+    errorDeletingNewsletter: deleteNewsletterMutation.error,
+    bulkDeleteNewsletters: bulkDeleteNewslettersMutation.mutateAsync,
+    isBulkDeletingNewsletters: bulkDeleteNewslettersMutation.isPending,
+    errorBulkDeletingNewsletters: bulkDeleteNewslettersMutation.error,
   };
 };

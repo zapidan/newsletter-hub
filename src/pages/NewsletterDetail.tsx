@@ -22,7 +22,9 @@ const NewsletterDetail = () => {
     toggleLike, 
     getNewsletter, 
     archiveNewsletter, 
-    unarchiveNewsletter 
+    unarchiveNewsletter, 
+    deleteNewsletter,
+    isDeletingNewsletter
   } = useNewsletters();
   const { toggleInQueue, readingQueue } = useReadingQueue();
   const [isBookmarking, setIsBookmarking] = useState(false);
@@ -43,6 +45,18 @@ const NewsletterDetail = () => {
     });
   }, [newsletter?.tags]);
   
+  // Trash (permanent delete) handler
+  const handleTrash = useCallback(async () => {
+    if (!newsletter?.id) return;
+    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
+    try {
+      await deleteNewsletter(newsletter.id);
+      navigate('/inbox?filter=archived');
+    } catch (error) {
+      console.error('Error deleting newsletter:', error);
+    }
+  }, [newsletter, deleteNewsletter, navigate]);
+
   // Memoize isInQueue calculation
   const isInQueue = useMemo(() => {
     if (!newsletter?.id || !readingQueue) return false;
@@ -345,6 +359,19 @@ const NewsletterDetail = () => {
                   )}
                   <span>{newsletter?.is_archived ? 'Unarchive' : 'Archive'}</span>
                 </button>
+                {/* Trash button for archived newsletters */}
+                {newsletter?.is_archived && (
+                  <button
+                    onClick={handleTrash}
+                    disabled={isDeletingNewsletter}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors bg-red-100 text-red-700 hover:bg-red-200"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m-4 0h16" />
+                    </svg>
+                    <span>Delete Permanently</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon, Heart, Archive, ArchiveX } from 'lucide-react';
+import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon, Heart, Archive, ArchiveX, Trash } from 'lucide-react';
 
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useReadingQueue } from '../hooks/useReadingQueue';
@@ -56,8 +56,36 @@ const Inbox: React.FC = () => {
     refetchNewsletters,
     archiveNewsletter,
     unarchiveNewsletter,
+    deleteNewsletter,
+    isDeletingNewsletter,
+    bulkDeleteNewsletters,
+    isBulkDeletingNewsletters,
   } = useNewsletters(tagId || undefined, filter);
   
+  // Trash (permanent delete) handlers
+  const handleTrash = useCallback(async (newsletterId: string) => {
+    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
+    try {
+      await deleteNewsletter(newsletterId);
+      await refetchNewsletters();
+    } catch (error) {
+      console.error('Error deleting newsletter:', error);
+    }
+  }, [deleteNewsletter, refetchNewsletters]);
+
+  const handleBulkTrash = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
+    try {
+      await bulkDeleteNewsletters(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setIsSelecting(false);
+      await refetchNewsletters();
+    } catch (error) {
+      console.error('Error deleting newsletters:', error);
+    }
+  }, [bulkDeleteNewsletters, selectedIds, refetchNewsletters]);
+
   // Handle toggle like
   const handleToggleLike = useCallback(async (newsletterId: string) => {
     try {
@@ -395,7 +423,35 @@ const Inbox: React.FC = () => {
             >
               Mark as Unread
             </button>
-            {!showArchived ? (
+            {showArchived ? (
+              <>
+                <button 
+                  onClick={handleBulkUnarchive}
+                  disabled={selectedIds.size === 0 || isBulkActionLoading}
+                  className={`px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  {isBulkActionLoading ? (
+                    <svg className="animate-spin h-4 w-4 mr-1 text-green-700" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                  ) : (
+                    <ArchiveX className="h-4 w-4" />
+                  )}
+                  <span>Unarchive</span>
+                </button>
+                <button
+                  onClick={handleBulkTrash}
+                  disabled={selectedIds.size === 0 || isBulkActionLoading}
+                  className={`px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  style={{ marginLeft: 4 }}
+                  title="Delete selected permanently"
+                >
+                  <Trash className="h-4 w-4" />
+                  <span>Trash</span>
+                </button>
+              </>
+            ) : (
               <button 
                 onClick={handleBulkArchive}
                 disabled={selectedIds.size === 0 || isBulkActionLoading}
@@ -410,22 +466,6 @@ const Inbox: React.FC = () => {
                   <Archive className="h-4 w-4" />
                 )}
                 <span>Archive</span>
-              </button>
-            ) : (
-              <button 
-                onClick={handleBulkUnarchive}
-                disabled={selectedIds.size === 0 || isBulkActionLoading}
-                className={`px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                {isBulkActionLoading ? (
-                  <svg className="animate-spin h-4 w-4 mr-1 text-green-700" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                ) : (
-                  <ArchiveX className="h-4 w-4" />
-                )}
-                <span>Unarchive</span>
               </button>
             )}
           </div>
@@ -592,7 +632,6 @@ const Inbox: React.FC = () => {
                         className="p-1 rounded-full hover:bg-gray-200 transition-colors"
                         onClick={async (e) => {
                           e.stopPropagation();
-                          const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
                           await toggleInQueue(newsletter.id);
                           await refetchNewsletters();
                         }}
@@ -626,6 +665,23 @@ const Inbox: React.FC = () => {
                           <Archive className="h-4 w-4 text-amber-700" />
                         )}
                       </button>
+                      {/* Trash button for archived newsletters */}
+                      {newsletter.is_archived && (
+                        <button
+                          type="button"
+                          className="p-1 rounded-full hover:bg-red-100 transition-colors"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleTrash(newsletter.id);
+                          }}
+                          title="Delete permanently"
+                          disabled={isDeletingNewsletter}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m-4 0h16" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
