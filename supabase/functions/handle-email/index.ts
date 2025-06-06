@@ -50,37 +50,58 @@ function verifyMailgunWebhook(
   return encodedToken === signature;
 }
 
-// Process incoming email
+// Process incoming email and insert into newsletters table with updated schema
 async function processIncomingEmail(emailData: EmailData) {
   try {
-    // Extract the username from the 'to' address (format: username@newsletterhub.com)
-    const [username] = emailData.to.split('@');
-    
-    // Look up the user by their email alias
+    // Look up the user by their full email alias (the full 'to' field)
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('id, email_alias')
-      .eq('email_alias', username)
+      .eq('email_alias', emailData.to)
       .single();
 
     if (userError || !userData) {
-      console.error('User not found for alias:', username);
+      console.error('User not found for alias:', emailData.to);
       return { error: 'User not found' };
     }
 
-    // Store the newsletter in the database
+    // Extract domain from the 'from' email address
+    const fromDomain = (emailData.from.split('@')[1] || '').toLowerCase();
+
+    // Look up the newsletter source for this user and domain
+    let newsletterSourceId: string | null = null;
+    if (fromDomain) {
+      const { data: sourceData, error: sourceError } = await supabase
+        .from('newsletter_sources')
+        .select('id')
+        .eq('user_id', userData.id)
+        .eq('domain', fromDomain)
+        .single();
+      if (!sourceError && sourceData?.id) {
+        newsletterSourceId = sourceData.id;
+      }
+    }
+
+    // Prepare newsletter fields based on the current schema
+    const newsletterInsert = {
+      user_id: userData.id,
+      from_email: emailData.from,
+      subject: emailData.subject || '',
+      content: emailData.html || emailData.text || '',
+      received_at: new Date().toISOString(),
+      is_read: false,
+      is_liked: false,
+      is_archived: false,
+      // Optional fields (set to null if not present)
+      title: emailData.subject || null,
+      summary: null,
+      image_url: null,
+      newsletter_source_id: newsletterSourceId,
+    };
+
     const { data, error } = await supabase
       .from('newsletters')
-      .insert([
-        {
-          user_id: userData.id,
-          from_email: emailData.from,
-          subject: emailData.subject,
-          content: emailData.html || emailData.text,
-          received_at: new Date().toISOString(),
-          is_read: false,
-        },
-      ])
+      .insert([newsletterInsert])
       .select();
 
     if (error) {
@@ -94,6 +115,7 @@ async function processIncomingEmail(emailData: EmailData) {
     return { error: 'Internal server error' };
   }
 }
+
 
 // This is the main function that will be called by Supabase Edge Functions
 export default async function handler(req: Request) {
