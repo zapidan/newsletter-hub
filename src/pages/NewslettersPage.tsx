@@ -153,7 +153,7 @@ const NewslettersPage: React.FC = () => {
   });
 
   return (
-    <main className="max-w-4xl w-full mx-auto p-6">
+    <main className="max-w-4xl w-full mx-auto p-6 bg-neutral-50">
       <button
         onClick={() => window.history.back()}
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-6"
@@ -184,7 +184,11 @@ const NewslettersPage: React.FC = () => {
             boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
             border: '1px solid #1d4ed8',
           }}
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+  setEditingId(null);
+  setFormData({ name: '', domain: '' });
+  setShowAddModal(true);
+}}
         >
           <PlusCircle className="mr-2 h-5 w-5" style={{ color: 'white' }} />
           <span>Add Source</span>
@@ -205,7 +209,7 @@ const NewslettersPage: React.FC = () => {
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="fixed inset-0 bg-black bg-opacity-30 transition-opacity" />
+            <div className="fixed inset-0 bg-neutral-200 bg-opacity-90 transition-opacity" />
           </Transition.Child>
 
           <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -219,7 +223,7 @@ const NewslettersPage: React.FC = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-neutral-50 p-6 text-left align-middle shadow-xl transition-all">
                   <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
                     {editingId ? 'Edit Newsletter Source' : 'Add Newsletter Source'}
                   </Dialog.Title>
@@ -247,50 +251,43 @@ const NewslettersPage: React.FC = () => {
                       />
                     </div>
                     <div className="flex justify-end gap-2">
-                      <button
-                        type="submit"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '0.5rem 1rem',
-                          backgroundColor: '#2563eb',
-                          color: 'white',
-                          fontWeight: 600,
-                          borderRadius: '0.375rem',
-                          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                          border: '1px solid #1d4ed8',
-                          opacity: (isAddingSource || isUpdatingSource) ? 0.6 : 1,
-                          cursor: (isAddingSource || isUpdatingSource) ? 'not-allowed' : 'pointer'
-                        }}
-                        disabled={isAddingSource || isUpdatingSource}
-                      >
-                        {editingId ? 
-                          <Check className="mr-2 h-4 w-4" style={{ color: 'white' }} /> : 
-                          <PlusCircle className="mr-2 h-4 w-4" style={{ color: 'white' }} />
-                        }
-                        <span>{editingId ? 'Update Source' : 'Add Source'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
-                        onClick={() => setShowAddModal(false)}
-                        disabled={isAddingSource || isUpdatingSource}
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        Cancel
-                      </button>
-                      {editingId && (
-                        <button
-                          type="button"
-                          className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
-                          onClick={handleCancelEdit}
-                          disabled={isAddingSource || isUpdatingSource}
-                        >
-                          <X className="mr-2 h-4 w-4" />
-                          Cancel Edit
-                        </button>
-                      )}
-                    </div>
+  <button
+    type="submit"
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: '0.5rem 1rem',
+      backgroundColor: '#2563eb',
+      color: 'white',
+      fontWeight: 600,
+      borderRadius: '0.375rem',
+      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+      border: '1px solid #1d4ed8',
+      opacity: (isAddingSource || isUpdatingSource) ? 0.6 : 1,
+      cursor: (isAddingSource || isUpdatingSource) ? 'not-allowed' : 'pointer'
+    }}
+    disabled={isAddingSource || isUpdatingSource}
+  >
+    {editingId ? 
+      <Check className="mr-2 h-4 w-4" style={{ color: 'white' }} /> : 
+      <PlusCircle className="mr-2 h-4 w-4" style={{ color: 'white' }} />
+    }
+    <span>{editingId ? 'Update Source' : 'Add Source'}</span>
+  </button>
+  <button
+    type="button"
+    className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
+    onClick={() => {
+      setShowAddModal(false);
+      setEditingId(null);
+      setFormData({ name: '', domain: '' });
+    }}
+    disabled={isAddingSource || isUpdatingSource}
+  >
+    <X className="mr-2 h-4 w-4" />
+    Cancel
+  </button>
+</div>
                   </form>
                   {/* Error State */}
                   {isErrorAddingSource && errorAddingSource && (
