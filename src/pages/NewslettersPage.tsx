@@ -23,7 +23,7 @@ const NewslettersPage: React.FC = () => {
     isLoadingSources,
     isErrorSources,
     errorSources,
-    updateNewsletterSourceAsync,
+    updateSource,
   } = useNewsletterSources();
 
   // Update sources with counts when they're loaded
@@ -69,9 +69,10 @@ const NewslettersPage: React.FC = () => {
     
     if (!editingId) return;
     
-    // Client-side validation
-    if (!formData.name.trim()) {
-      toast.error('Please enter a name');
+    // Client-side validation with null checks
+    const name = formData?.name;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      toast.error('Please enter a valid name');
       return;
     }
 
@@ -79,7 +80,8 @@ const NewslettersPage: React.FC = () => {
     setUpdateError(null);
 
     try {
-      await updateNewsletterSourceAsync({ id: editingId, name: formData.name });
+      // Pass id and name as separate arguments
+      await updateSource(editingId, formData.name);
       toast.success('Source updated successfully');
       setShowEditModal(false);
     } catch (error) {
@@ -403,17 +405,6 @@ const NewslettersPage: React.FC = () => {
               />
             </svg>
             <h3 className="mt-2 text-sm font-medium text-gray-900">No newsletter sources</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by adding a new newsletter source.</p>
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => setShowAddModal(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <Plus className="-ml-1 mr-2 h-5 w-5" />
-                New Source
-              </button>
-            </div>
           </div>
         )}
         {/* Display the list if data is available */}

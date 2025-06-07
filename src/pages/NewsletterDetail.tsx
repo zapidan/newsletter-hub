@@ -120,6 +120,7 @@ const NewsletterDetail = () => {
         user_id: data.user_id,
         source,
         received_at: data.received_at || new Date().toISOString(),
+        updated_at: data.updated_at || new Date().toISOString(),
         is_read: data.is_read || false,
         content: data.content || '',
         summary: data.summary || null,
