@@ -12,6 +12,8 @@ import TagsPage from './pages/TagsPage';
 import NewslettersPage from './pages/NewslettersPage';
 import ReadingQueuePage from './pages/ReadingQueuePage';
 import LoadingScreen from './components/common/LoadingScreen';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -34,6 +36,8 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={
         <ProtectedRoute>
           <Layout />
