@@ -3,6 +3,7 @@ import { Dialog, Transition } from '@headlessui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../services/supabaseClient';
 import { Newsletter, NewsletterSource } from '../types';
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
@@ -23,6 +24,9 @@ const NewslettersPage: React.FC = () => {
     isErrorSources,
     errorSources,
     updateSource,
+    archiveNewsletterSource,
+    isArchivingSource,
+    errorArchivingSource,
   } = useNewsletterSources();
 
   // Update sources with counts when they're loaded
@@ -95,6 +99,48 @@ const NewslettersPage: React.FC = () => {
 
   // State for selected source
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  
+  // Get the bulkArchive function from useNewsletters
+  const { bulkArchive } = useNewsletters();
+  
+  // Handle archive source
+  const handleArchiveSource = async (sourceId: string) => {
+    if (!confirm('Are you sure you want to delete this source? This will archive all newsletters from this source.')) {
+      return;
+    }
+    
+    try {
+      // First, get all newsletter IDs for this source that aren't already archived
+      const { data: newsletters, error: fetchError } = await supabase
+        .from('newsletters')
+        .select('id')
+        .eq('newsletter_source_id', sourceId)
+        .eq('is_archived', false);
+      
+      if (fetchError) throw fetchError;
+      
+      // Archive all newsletters from this source
+      if (newsletters && newsletters.length > 0) {
+        const newsletterIds = newsletters.map(nl => nl.id);
+        await bulkArchive(newsletterIds);
+      }
+      
+      // Then archive the source
+      await archiveNewsletterSource(sourceId);
+      
+      // Show success message
+      toast.success('Source and its newsletters have been archived');
+      
+      // Clear selection if the archived source was selected
+      if (selectedSourceId === sourceId) {
+        setSelectedSourceId(null);
+      }
+      
+    } catch (error) {
+      console.error('Error archiving source:', error);
+      toast.error(errorArchivingSource?.message || 'Failed to archive source');
+    }
+  };
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   const [loadingStates, setLoadingStates] = useState<Record<string, 'archive' | 'unarchive' | 'like' | 'tags' | null>>({});
   
@@ -402,19 +448,42 @@ const NewslettersPage: React.FC = () => {
                     <h3 className="truncate font-semibold text-lg text-neutral-900">{source.name}</h3>
                     <p className="text-sm text-neutral-500 truncate">{source.domain}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEdit(source);
-                    }}
-                    className="p-1 -mt-1 -mr-1 text-gray-400 hover:text-gray-600 focus:outline-none"
-                    title="Edit source"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                    </svg>
-                  </button>
+                  <div className="flex space-x-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(source);
+                      }}
+                      className="p-1 -mt-1 -mr-1 text-gray-400 hover:text-blue-600 focus:outline-none"
+                      title="Edit source"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await handleArchiveSource(source.id);
+                      }}
+                      className="p-1 -mt-1 -mr-1 text-gray-400 hover:text-red-600 focus:outline-none"
+                      title="Archive source"
+                      disabled={isArchivingSource}
+                    >
+                      {isArchivingSource ? (
+                        <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="flex justify-end items-center mt-4">
                   <div className="flex items-center">

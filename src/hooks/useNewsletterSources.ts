@@ -29,6 +29,11 @@ interface UpdateNewsletterSourceVars {
   name: string;
 }
 
+interface ArchiveNewsletterSourceVars {
+  id: string;
+  archive: boolean;
+}
+
 type SourceContext = {
   previousSources?: NewsletterSource[];
 };
@@ -57,19 +62,25 @@ const updateNewsletterSourceFn = async ({ id, name }: UpdateNewsletterSourceVars
   return data;
 };
 
-const deleteNewsletterSourceFn = async (id: string): Promise<void> => {
+const archiveNewsletterSourceFn = async ({ id, archive }: ArchiveNewsletterSourceVars): Promise<NewsletterSource> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) {
-    throw userError || new Error('User not found for deleting source');
+    throw userError || new Error('User not found for archiving source');
   }
   
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('newsletter_sources')
-    .delete()
+    .update({ 
+      is_archived: archive,
+    })
     .eq('id', id)
-    .eq('user_id', userData.user.id);
+    .eq('user_id', userData.user.id)
+    .select()
+    .single();
     
   if (error) throw error;
+  if (!data) throw new Error('Failed to update source archive status');
+  return data;
 };
 
 const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
@@ -78,11 +89,12 @@ const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
     throw userError || new Error('User not found for fetching sources');
   }
 
-  // First, get all sources for the user
+  // First, get all non-archived sources for the user
   const { data: sources, error } = await supabase
     .from('newsletter_sources')
     .select('*')
     .eq('user_id', userData.user.id)
+    .eq('is_archived', false)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -204,20 +216,26 @@ export const useNewsletterSources = () => {
     },
   });
 
-  // Delete mutation
-  const deleteMutation = useMutation<void, Error, string, SourceContext>({
-    mutationFn: deleteNewsletterSourceFn,
-    onMutate: async (id) => {
+  // Archive mutation
+  const archiveMutation = useMutation<NewsletterSource, Error, ArchiveNewsletterSourceVars, SourceContext>({
+    mutationFn: archiveNewsletterSourceFn,
+    onMutate: async ({ id, archive }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.userSources(userId) });
       
       const previousSources = queryClient.getQueryData<NewsletterSource[]>(
         queryKeys.userSources(userId)
       ) || [];
 
-      queryClient.setQueryData<NewsletterSource[]>(
-        queryKeys.userSources(userId),
-        previousSources.filter(source => source.id !== id)
-      );
+      // Remove the source from the list when archiving
+      if (archive) {
+        queryClient.setQueryData<NewsletterSource[]>(
+          queryKeys.userSources(userId),
+          previousSources.filter(source => source.id !== id)
+        );
+      } else {
+        // When unarchiving, we'll just invalidate the query to refetch
+        await queryClient.invalidateQueries({ queryKey: queryKeys.userSources(userId) });
+      }
 
       return { previousSources };
     },
@@ -233,15 +251,26 @@ export const useNewsletterSources = () => {
       invalidateSources();
     },
   });
+  
+  // Archive a source (soft delete)
+  const archiveSource = useCallback(async (id: string) => {
+    return archiveMutation.mutateAsync({ id, archive: true });
+  }, [archiveMutation]);
+  
+  // Unarchive a source
+  const unarchiveSource = useCallback(async (id: string) => {
+    return archiveMutation.mutateAsync({ id, archive: false });
+  }, [archiveMutation]);
 
   // Wrapper functions
   const updateSource = useCallback((id: string, name: string) => {
     return updateMutation.mutateAsync({ id, name });
   }, [updateMutation]);
-
+  
+  // Keep deleteSource for backward compatibility, but it will now archive instead of delete
   const deleteSource = useCallback((id: string) => {
-    return deleteMutation.mutateAsync(id);
-  }, [deleteMutation]);
+    return archiveMutation.mutateAsync({ id, archive: true });
+  }, [archiveMutation]);
 
   return {
     // Source data
@@ -260,12 +289,26 @@ export const useNewsletterSources = () => {
     isUpdateSuccess: updateMutation.isSuccess,
     resetUpdate: updateMutation.reset,
     
-    // Delete source
+    // Archive source (soft delete)
+    archiveNewsletterSource: archiveSource,
+    isArchivingSource: archiveMutation.isPending,
+    isErrorArchivingSource: archiveMutation.isError,
+    errorArchivingSource: archiveMutation.error,
+    isSuccessArchivingSource: archiveMutation.isSuccess,
+    
+    // Unarchive source
+    unarchiveNewsletterSource: unarchiveSource,
+    isUnarchivingSource: archiveMutation.isPending,
+    isErrorUnarchivingSource: archiveMutation.isError,
+    errorUnarchivingSource: archiveMutation.error,
+    isSuccessUnarchivingSource: archiveMutation.isSuccess,
+    
+    // For backward compatibility
     deleteNewsletterSource: deleteSource,
-    isDeletingSource: deleteMutation.isPending,
-    isErrorDeletingSource: deleteMutation.isError,
-    errorDeletingSource: deleteMutation.error,
-    isSuccessDeletingSource: deleteMutation.isSuccess,
+    isDeletingSource: archiveMutation.isPending,
+    isErrorDeletingSource: archiveMutation.isError,
+    errorDeletingSource: archiveMutation.error,
+    isSuccessDeletingSource: archiveMutation.isSuccess,
     
     // Cache utilities
     invalidateSources,
