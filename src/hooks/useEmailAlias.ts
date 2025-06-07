@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 import { getUserEmailAlias } from '../utils/emailAlias';
 
 type User = {

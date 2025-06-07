@@ -4,7 +4,7 @@ import { ArrowLeft, Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'l
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useTags } from '../hooks/useTags';
 import { useReadingQueue } from '../hooks/useReadingQueue';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import LoadingScreen from '../components/common/LoadingScreen';
 import TagSelector from '../components/TagSelector';
 import type { Newsletter, Tag } from '../types';

@@ -6,7 +6,7 @@ import {
   keepPreviousData
 } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 import { NewsletterSource } from '../types';
 import { useAuth } from './useAuth';
 

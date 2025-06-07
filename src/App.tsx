@@ -1,6 +1,6 @@
 
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
+import { useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Inbox from './pages/Inbox';

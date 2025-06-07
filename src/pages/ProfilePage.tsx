@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { useEmailAlias } from '../hooks/useEmailAlias';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
