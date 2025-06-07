@@ -38,6 +38,7 @@ const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread' | 'liked' | 'archived'>(
     (searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived') || 'all'
   );
+  const [readFilter, setReadFilter] = useState<'all' | 'read' | 'unread'>('all');
   const showArchived = filter === 'archived';
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -220,11 +221,22 @@ const Inbox: React.FC = () => {
   const filteredNewsletters = useMemo(() => {
     if (!newsletters) return [];
     let result = [...newsletters];
+    
+    // Apply main filter
     if (filter === 'unread') {
       result = result.filter(n => !n.is_read);
     } else if (filter === 'liked') {
       result = result.filter(n => n.is_liked);
     }
+    
+    // Apply read status filter
+    if (readFilter === 'read') {
+      result = result.filter(n => n.is_read);
+    } else if (readFilter === 'unread') {
+      result = result.filter(n => !n.is_read);
+    }
+    
+    // Apply tag filter
     if (selectedTagIds.length > 0) {
       result = result.filter(newsletter => 
         selectedTagIds.every(tagId => 
@@ -237,7 +249,7 @@ const Inbox: React.FC = () => {
       if (dateDiff !== 0) return dateDiff;
       return a.id.localeCompare(b.id);
     });
-  }, [newsletters, filter, selectedTagIds]);
+  }, [newsletters, filter, readFilter, selectedTagIds]);
 
   // Toggle selection of a single newsletter
   const toggleSelect = useCallback((id: string) => {
@@ -260,6 +272,21 @@ const Inbox: React.FC = () => {
       setSelectedIds(new Set(filteredNewsletters.map(n => n.id)));
     }
   }, [filteredNewsletters, selectedIds.size]);
+  
+  // Select all read or unread newsletters
+  const selectRead = useCallback(() => {
+    const readIds = filteredNewsletters
+      .filter(n => n.is_read)
+      .map(n => n.id);
+    setSelectedIds(new Set(readIds));
+  }, [filteredNewsletters]);
+  
+  const selectUnread = useCallback(() => {
+    const unreadIds = filteredNewsletters
+      .filter(n => !n.is_read)
+      .map(n => n.id);
+    setSelectedIds(new Set(unreadIds));
+  }, [filteredNewsletters]);
 
   // Handle bulk mark as read
   const handleBulkMarkAsRead = useCallback(async () => {
@@ -375,6 +402,16 @@ const Inbox: React.FC = () => {
                 </div>
               </button>
             </div>
+            <select
+              value={readFilter}
+              onChange={(e) => setReadFilter(e.target.value as 'all' | 'read' | 'unread')}
+              className="ml-2 rounded border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <option value="all">All Status</option>
+              <option value="read">Read</option>
+              <option value="unread">Unread</option>
+            </select>
             <RefreshCwIcon 
               className="h-5 w-5 text-neutral-500 hover:text-primary-600 cursor-pointer ml-2" 
               onClick={(e) => {
@@ -392,7 +429,7 @@ const Inbox: React.FC = () => {
             ) : (
               <button
                 onClick={() => setIsSelecting(true)}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors ml-2"
+                className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
               >
                 Select
               </button>
@@ -400,73 +437,91 @@ const Inbox: React.FC = () => {
           </div>
         </div>
         {isSelecting && (
-          <div className="flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-lg">
-            <span className="text-sm text-gray-700">{selectedIds.size} selected</span>
-            <button
-              onClick={toggleSelectAll}
-              className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
-            >
-              {selectedIds.size === filteredNewsletters.length ? 'Deselect All' : 'Select All'}
-            </button>
-            <button 
-              onClick={handleBulkMarkAsRead}
-              disabled={selectedIds.size === 0}
-              className="px-3 py-1 bg-green-100 text-gray-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
-            >
-              Mark as Read
-            </button>
-            <button 
-              onClick={handleBulkMarkAsUnread}
-              disabled={selectedIds.size === 0}
-              className="px-3 py-1 bg-blue-100 text-gray-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
-            >
-              Mark as Unread
-            </button>
-            {showArchived ? (
-              <>
+          <div className="flex items-center justify-between w-full bg-blue-50 px-4 py-2 rounded-lg">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-700">{selectedIds.size} selected</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
+                >
+                  {selectedIds.size === filteredNewsletters.length ? 'Deselect All' : 'Select All'}
+                </button>
+                <span className="text-gray-300">|</span>
+                <button
+                  onClick={selectRead}
+                  className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
+                >
+                  Select Read
+                </button>
+                <button
+                  onClick={selectUnread}
+                  className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
+                >
+                  Select Unread
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={handleBulkMarkAsRead}
+                disabled={selectedIds.size === 0}
+                className="px-3 py-1 bg-green-100 text-gray-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
+              >
+                Mark as Read
+              </button>
+              <button 
+                onClick={handleBulkMarkAsUnread}
+                disabled={selectedIds.size === 0}
+                className="px-3 py-1 bg-blue-100 text-gray-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
+              >
+                Mark as Unread
+              </button>
+              {showArchived ? (
+                <>
+                  <button 
+                    onClick={handleBulkUnarchive}
+                    disabled={selectedIds.size === 0 || isBulkActionLoading}
+                    className={`px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    {isBulkActionLoading ? (
+                      <svg className="animate-spin h-4 w-4 mr-1 text-green-700" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                    ) : (
+                      <ArchiveX className="h-4 w-4" />
+                    )}
+                    <span>Unarchive</span>
+                  </button>
+                  <button
+                    onClick={handleBulkTrash}
+                    disabled={selectedIds.size === 0 || isBulkActionLoading}
+                    className={`px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    title="Delete selected permanently"
+                  >
+                    <Trash className="h-4 w-4" />
+                    <span>Trash</span>
+                  </button>
+                </>
+              ) : (
                 <button 
-                  onClick={handleBulkUnarchive}
+                  onClick={handleBulkArchive}
                   disabled={selectedIds.size === 0 || isBulkActionLoading}
-                  className={`px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  className={`px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   {isBulkActionLoading ? (
-                    <svg className="animate-spin h-4 w-4 mr-1 text-green-700" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-4 w-4 mr-1 text-amber-700" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                     </svg>
                   ) : (
-                    <ArchiveX className="h-4 w-4" />
+                    <Archive className="h-4 w-4" />
                   )}
-                  <span>Unarchive</span>
+                  <span>Archive</span>
                 </button>
-                <button
-                  onClick={handleBulkTrash}
-                  disabled={selectedIds.size === 0 || isBulkActionLoading}
-                  className={`px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  style={{ marginLeft: 4 }}
-                  title="Delete selected permanently"
-                >
-                  <Trash className="h-4 w-4" />
-                  <span>Trash</span>
-                </button>
-              </>
-            ) : (
-              <button 
-                onClick={handleBulkArchive}
-                disabled={selectedIds.size === 0 || isBulkActionLoading}
-                className={`px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                {isBulkActionLoading ? (
-                  <svg className="animate-spin h-4 w-4 mr-1 text-amber-700" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                ) : (
-                  <Archive className="h-4 w-4" />
-                )}
-                <span>Archive</span>
-              </button>
-            )}
+              )}
+            </div>
           </div>
         )}
       </div>
