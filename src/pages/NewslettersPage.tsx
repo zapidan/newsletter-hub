@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useCallback, Fragment, FormEvent } from 'react';
+import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { useNewsletterSources } from '../hooks/useNewsletterSources';
-import { useNewsletters } from '../hooks/useNewsletters';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, X, Check, AlertTriangle, Heart, Archive, ArchiveX, ArrowLeft, Tag as TagIcon, Plus, Bookmark } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { useReadingQueue } from '../hooks/useReadingQueue';
-import { useTags } from '../hooks/useTags';
-import { supabase } from '../services/supabaseClient';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { Newsletter, NewsletterSource } from '../types';
-
+import { useNewsletters } from '../hooks/useNewsletters';
+import { useNewsletterSources } from '../hooks/useNewsletterSources';
+import { useTags } from '../hooks/useTags';
+import { useReadingQueue } from '../hooks/useReadingQueue';
+import { Loader2, AlertTriangle, Heart, Archive, ArchiveX, ArrowLeft, X, Check, Bookmark, Tag as TagIcon } from 'lucide-react';
+import TagSelector from '../components/TagSelector';
 
 const NewslettersPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
@@ -54,6 +53,7 @@ const NewslettersPage: React.FC = () => {
   };
 
   // Handle editing a source
+
   const handleEdit = (source: NewsletterSource) => {
     setFormData({
       name: source.name,
@@ -100,14 +100,22 @@ const NewslettersPage: React.FC = () => {
   
   const { toggleInQueue, readingQueue } = useReadingQueue();
   const { updateNewsletterTags } = useTags();
+  const queryClient = useQueryClient();
+  
+  // Use the allNewsletters array as the single source of truth
   const { 
+    newsletters: allNewsletters = [],
+    isLoadingNewsletters,
+    isErrorNewsletters,
+    errorNewsletters,
     archiveNewsletter, 
     unarchiveNewsletter,
     toggleLike,
     errorTogglingLike
-  } = useNewsletters(undefined, selectedSourceId ? 'all' : 'inbox');
-  
-  const queryClient = useQueryClient();
+  } = useNewsletters(undefined, selectedSourceId ? 'source' : 'inbox', selectedSourceId || undefined);
+  const newsletters = allNewsletters;
+  const isLoading = isLoadingNewsletters;
+  const isError = isErrorNewsletters;
 
   // Handle like toggle
   const handleLikeToggle = useCallback(async (newsletter: Newsletter) => {
@@ -115,14 +123,14 @@ const NewslettersPage: React.FC = () => {
     
     try {
       await toggleLike(newsletter.id);
-      // Invalidate relevant queries
+      // Invalidate all relevant queries
       await Promise.all([
         queryClient.invalidateQueries({ 
-          queryKey: ['newslettersBySource', selectedSourceId],
+          queryKey: ['newsletters'],
           refetchType: 'active',
         }),
-        queryClient.invalidateQueries({ 
-          queryKey: ['newsletters'],
+        selectedSourceId && queryClient.invalidateQueries({ 
+          queryKey: ['newsletters', { sourceId: selectedSourceId }],
           refetchType: 'active',
         })
       ]);
@@ -152,35 +160,12 @@ const NewslettersPage: React.FC = () => {
     });
   }, []);
 
-  // Fetch newsletters for the selected source
-  const {
-    data: newslettersForSource = [],
-    isLoading: isLoadingNewslettersForSource,
-    isError: isErrorNewslettersForSource,
-    error: errorNewslettersForSource,
-  } = useQuery<Newsletter[]>({
-    queryKey: ['newslettersBySource', selectedSourceId],
-    queryFn: async () => {
-      if (!selectedSourceId) return [];
-      const { data, error } = await supabase
-        .from('newsletters')
-        .select(`*, 
-          newsletter_tags ( tag:tags (id, name, color) ), 
-          newsletter_source_id,
-          newsletter_sources (id, name, domain)
-        `)
-        .eq('newsletter_source_id', selectedSourceId)
-        .order('received_at', { ascending: false });
-      if (error) throw error;
-      // Transform tags to match NewsletterCard expectations
-      return (data || []).map((item: any) => ({
-        ...item,
-        source: item.newsletter_sources,
-        tags: (item.newsletter_tags || []).map((nt: any) => nt.tag)
-      }));
-    },
-    enabled: !!selectedSourceId
-  });
+  // Log any errors
+  useEffect(() => {
+    if (errorNewsletters) {
+      console.error('Error loading newsletters:', errorNewsletters);
+    }
+  }, [errorNewsletters]);
 
   // Handle archive/unarchive
   const handleArchiveToggle = useCallback(async (newsletter: Newsletter, currentFilter: 'all' | 'inbox' | 'archived' = 'inbox') => {
@@ -198,23 +183,15 @@ const NewslettersPage: React.FC = () => {
       
       // Invalidate all relevant queries
       await Promise.all([
-        // Invalidate the source-specific query if we're viewing a source
-        selectedSourceId && queryClient.invalidateQueries({ 
-          queryKey: ['newslettersBySource', selectedSourceId],
-          refetchType: 'active',
-          exact: true
-        }),
         // Invalidate the main newsletters query
         queryClient.invalidateQueries({ 
           queryKey: ['newsletters'],
           refetchType: 'active',
-          exact: true
         }),
-        // Invalidate filtered queries
-        queryClient.invalidateQueries({ 
-          queryKey: ['newsletters', 'inbox'],
+        // Invalidate the source-specific query if we're viewing a source
+        selectedSourceId && queryClient.invalidateQueries({ 
+          queryKey: ['newsletters', { sourceId: selectedSourceId }],
           refetchType: 'active',
-          exact: true
         }),
         queryClient.invalidateQueries({ 
           queryKey: ['newsletters', 'archived'],
@@ -460,20 +437,20 @@ const NewslettersPage: React.FC = () => {
       {selectedSourceId && (
         <section className="mt-12">
           <h3 className="text-lg font-semibold mb-4 text-primary-800">Newsletters from this Source</h3>
-          {isLoadingNewslettersForSource ? (
+          {isLoading ? (
             <div className="flex items-center text-gray-500">
               <Loader2 className="animate-spin mr-2" /> Loading newsletters...
             </div>
-          ) : isErrorNewslettersForSource ? (
+          ) : isError ? (
             <div className="flex items-center text-red-600 bg-red-50 p-4 rounded-md">
               <AlertTriangle size={20} className="mr-3 flex-shrink-0" />
-              <span>Error loading newsletters: {errorNewslettersForSource?.message}</span>
+              <span>Error loading newsletters: {errorNewsletters?.message}</span>
             </div>
-          ) : newslettersForSource.length === 0 ? (
+          ) : newsletters.length === 0 ? (
             <p className="text-gray-500 italic">No newsletters found for this source.</p>
           ) : (
             <div className="space-y-2">
-              {newslettersForSource.map((newsletter) => (
+              {newsletters.map((newsletter: Newsletter) => (
                 <div
                   key={newsletter.id}
                   className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${

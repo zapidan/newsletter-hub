@@ -108,17 +108,16 @@ const transformNewsletterData = (data: any[] | null): Newsletter[] => {
     : [];
 };
 
-export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewslettersReturn => {
+export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string): UseNewslettersReturn => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   // Generate a stable query key based on the current filters
   const getQueryKey = useCallback((tagIds?: string | string[]) => {
-    return queryKeys.list(tagIds ? { tagIds } : {});
-  }, []);
+    return queryKeys.list(tagIds ? { tagIds, sourceId } : { sourceId });
+  }, [sourceId]);
 
   const fetchNewslettersFn = useCallback(async (tagIds?: string | string[]): Promise<Newsletter[]> => {
-    if (!user) throw new Error('User not authenticated');
     if (!user) throw new Error('User not authenticated');
 
     let query = supabase
@@ -132,6 +131,13 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       `
       )
       .eq('user_id', user.id);
+
+    // Apply source filter if provided
+    if (sourceId) {
+      query = query.eq('newsletter_source_id', sourceId);
+      // Only show unarchived items when filtering by source
+      query = query.eq('is_archived', false);
+    }
 
     if (tagIds) {
       const tagIdsArray = Array.isArray(tagIds) ? tagIds : [tagIds];
@@ -197,15 +203,25 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
   
   const queryKey = getQueryKey(normalizedTagId);
 
-  // Add is_archived filter to the query
+  // Apply filters based on the current view
   const fetchNewsletters = useCallback(async (tagIds?: string | string[]) => {
     const data = await fetchNewslettersFn(tagIds);
+
+    // Strict filtering for Newsletter Sources page
+    if (filter === 'source' && sourceId) {
+      return data.filter(
+        (newsletter: Newsletter) =>
+          newsletter.newsletter_source_id === sourceId && !newsletter.is_archived
+      );
+    }
+
     if (filter === 'archived') {
       return data.filter((newsletter: Newsletter) => newsletter.is_archived);
-    } else {
-      return data.filter((newsletter: Newsletter) => !newsletter.is_archived);
     }
-  }, [fetchNewslettersFn, filter]);
+
+    // Inbox and other default views
+    return data.filter((newsletter: Newsletter) => !newsletter.is_archived);
+  }, [fetchNewslettersFn, filter, sourceId]);
 
   // Fetch newsletters data
   const { 
@@ -215,7 +231,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
     error: errorNewsletters, 
     refetch: refetchNewsletters,
   } = useQuery<Newsletter[], Error>({
-    queryKey: [...queryKey, { showArchived: filter === 'archived' }],
+    queryKey: [...queryKey, { showArchived: filter === 'archived', sourceId }],
     queryFn: () => fetchNewsletters(normalizedTagId),
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
@@ -504,6 +520,8 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       queryClient.invalidateQueries({ queryKey: ['newslettersBySource'] });
       queryClient.invalidateQueries({ queryKey: ['newsletters', 'inbox'] });
       queryClient.invalidateQueries({ queryKey: ['newsletters', 'archived'] });
+      // Invalidate newsletter sources to update counts
+      queryClient.invalidateQueries({ queryKey: ['newsletter_sources', 'user', user?.id] });
       
       // Force refetch of the current view to ensure UI is in sync
       queryClient.refetchQueries({ 
@@ -569,18 +587,31 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       if (ids.length === 0) return true;
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_archived: true })
+        .update({ 
+          is_archived: true,
+          updated_at: new Date().toISOString()
+        })
         .in('id', ids)
         .eq('user_id', user.id);
       if (error) throw error;
       return true;
     },
     onMutate: async (ids: string[]) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.lists() }),
+        queryClient.cancelQueries({ queryKey: ['newsletters'] }),
+        queryClient.cancelQueries({ queryKey: ['newslettersBySource'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'inbox'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'archived'] })
+      ]);
+      
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
       
       if (previousNewsletters) {
-        ids.forEach(id => updateNewsletterInCache(id, { is_archived: true }));
+        ids.forEach(id => updateNewsletterInCache(id, { 
+          is_archived: true,
+          updated_at: new Date().toISOString()
+        }));
       }
       
       return { previousNewsletters };
@@ -591,7 +622,14 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       }
     },
     onSettled: () => {
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['newsletters'] });
+      queryClient.invalidateQueries({ queryKey: ['newslettersBySource'] });
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'inbox'] });
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'archived'] });
+      // Invalidate newsletter sources to update counts
+      queryClient.invalidateQueries({ queryKey: ['newsletter_sources', 'user', user?.id] });
     },
   });
 
@@ -602,18 +640,31 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       if (ids.length === 0) return true;
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_archived: false })
+        .update({ 
+          is_archived: false,
+          updated_at: new Date().toISOString()
+        })
         .in('id', ids)
         .eq('user_id', user.id);
       if (error) throw error;
       return true;
     },
     onMutate: async (ids: string[]) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.lists() });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.lists() }),
+        queryClient.cancelQueries({ queryKey: ['newsletters'] }),
+        queryClient.cancelQueries({ queryKey: ['newslettersBySource'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'inbox'] }),
+        queryClient.cancelQueries({ queryKey: ['newsletters', 'archived'] })
+      ]);
+      
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(queryKey);
       
       if (previousNewsletters) {
-        ids.forEach(id => updateNewsletterInCache(id, { is_archived: false }));
+        ids.forEach(id => updateNewsletterInCache(id, { 
+          is_archived: false,
+          updated_at: new Date().toISOString()
+        }));
       }
       
       return { previousNewsletters };
@@ -624,7 +675,14 @@ export const useNewsletters = (tagId?: string, filter: string = 'all'): UseNewsl
       }
     },
     onSettled: () => {
+      // Invalidate all relevant queries
       queryClient.invalidateQueries({ queryKey: queryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['newsletters'] });
+      queryClient.invalidateQueries({ queryKey: ['newslettersBySource'] });
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'inbox'] });
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'archived'] });
+      // Invalidate newsletter sources to update counts
+      queryClient.invalidateQueries({ queryKey: ['newsletter_sources', 'user', user?.id] });
     },
   });
 
