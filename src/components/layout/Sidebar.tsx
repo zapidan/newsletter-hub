@@ -15,13 +15,15 @@ import {
   Bookmark
 } from 'lucide-react';
 import { useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { AuthContext } from '../../context/AuthContext';
+import { useContext } from 'react';
 import { useEmailAlias } from '../../hooks/useEmailAlias';
 import { useUnreadCount } from '../../hooks/useUnreadCount';
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
   const { emailAlias, loading: emailLoading } = useEmailAlias();
   
   const [copied, setCopied] = useState(false);

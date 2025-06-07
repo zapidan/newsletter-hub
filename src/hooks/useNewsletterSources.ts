@@ -6,9 +6,10 @@ import {
   keepPreviousData
 } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { supabase } from '../services/supabaseClient';
 import { NewsletterSource } from '../types';
-import { useAuth } from './useAuth';
+import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
+import { supabase } from '../services/supabaseClient';
 
 // Cache time constants (in milliseconds)
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -134,7 +135,8 @@ const prefetchSource = async (queryClient: QueryClient, id: string): Promise<voi
 // Hook
 export const useNewsletterSources = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
   const userId = user?.id || '';
   
   // Query for newsletter sources

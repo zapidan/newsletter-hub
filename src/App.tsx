@@ -1,6 +1,7 @@
 
 import { Route, Routes, Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
+import { AuthContext } from './context/AuthContext';
+import { useContext } from 'react';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Inbox from './pages/Inbox';
@@ -16,14 +17,14 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const auth = useContext(AuthContext);
   const location = useLocation();
 
-  if (loading) {
+  if (auth?.loading) {
     return <LoadingScreen />;
   }
 
-  if (!user) {
+  if (!auth?.user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
-import { useAuth } from './useAuth';
+import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
 
 // Cache time constants (in milliseconds)
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
 const CACHE_TIME = 30 * 60 * 1000; // 30 minutes
 
 export const useUnreadCount = () => {
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
 
   const { data: unreadCount, isLoading, isError, error } = useQuery({
     queryKey: ['unreadCount', user?.id],

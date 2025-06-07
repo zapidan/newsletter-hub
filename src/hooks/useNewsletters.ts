@@ -9,7 +9,8 @@ import {
   keepPreviousData
 } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
-import { useAuth } from './useAuth';
+import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
 import { Newsletter as NewsletterType, NewsletterUpdate, Tag } from '../types';
 
 // Cache time constants (in milliseconds)
@@ -109,7 +110,8 @@ const transformNewsletterData = (data: any[] | null): Newsletter[] => {
 };
 
 export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string): UseNewslettersReturn => {
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
   const queryClient = useQueryClient();
 
   // Generate a stable query key based on the current filters

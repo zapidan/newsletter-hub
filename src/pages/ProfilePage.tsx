@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
 import { useEmailAlias } from '../hooks/useEmailAlias';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Copy, Check, RefreshCw } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
   const { emailAlias, loading, error, copyToClipboard } = useEmailAlias();
   const [copied, setCopied] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);

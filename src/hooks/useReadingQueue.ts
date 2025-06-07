@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
-import { useAuth } from './useAuth';
+import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
 import { Newsletter, Tag, NewsletterSource } from '../types';
 
 interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {
@@ -47,7 +48,8 @@ export interface ReadingQueueItem {
 }
 
 export const useReadingQueue = () => {
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
   const queryClient = useQueryClient();
 
   // Fetch reading queue

@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { useAuth } from './useAuth';
+import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
 import { Tag, TagCreate, TagUpdate } from '../types';
 
 export const useTags = () => {
-  const { user } = useAuth();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
