@@ -38,7 +38,6 @@ const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread' | 'liked' | 'archived'>(
     (searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived') || 'all'
   );
-  const [readFilter, setReadFilter] = useState<'all' | 'read' | 'unread'>('all');
   const showArchived = filter === 'archived';
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -220,6 +219,7 @@ const Inbox: React.FC = () => {
   // Filter newsletters based on tag (archived/non-archived already filtered by hook)
   const filteredNewsletters = useMemo(() => {
     if (!newsletters) return [];
+    
     let result = [...newsletters];
     
     // Apply main filter
@@ -227,13 +227,6 @@ const Inbox: React.FC = () => {
       result = result.filter(n => !n.is_read);
     } else if (filter === 'liked') {
       result = result.filter(n => n.is_liked);
-    }
-    
-    // Apply read status filter
-    if (readFilter === 'read') {
-      result = result.filter(n => n.is_read);
-    } else if (readFilter === 'unread') {
-      result = result.filter(n => !n.is_read);
     }
     
     // Apply tag filter
@@ -244,12 +237,13 @@ const Inbox: React.FC = () => {
         )
       );
     }
+    
     return result.sort((a, b) => {
       const dateDiff = new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
       if (dateDiff !== 0) return dateDiff;
       return a.id.localeCompare(b.id);
     });
-  }, [newsletters, filter, readFilter, selectedTagIds]);
+  }, [newsletters, filter, selectedTagIds]);
 
   // Toggle selection of a single newsletter
   const toggleSelect = useCallback((id: string) => {
@@ -260,11 +254,14 @@ const Inbox: React.FC = () => {
       } else {
         newSet.add(id);
       }
+      if (newSet.size === 0) {
+        setIsSelecting(false);
+      }
       return newSet;
     });
   }, []);
-  
-  // Toggle select all newsletters
+
+  // Toggle select all visible newsletters
   const toggleSelectAll = useCallback(() => {
     if (selectedIds.size === filteredNewsletters.length) {
       setSelectedIds(new Set());
@@ -402,23 +399,7 @@ const Inbox: React.FC = () => {
                 </div>
               </button>
             </div>
-            <select
-              value={readFilter}
-              onChange={(e) => setReadFilter(e.target.value as 'all' | 'read' | 'unread')}
-              className="ml-2 rounded border-gray-300 text-sm focus:border-primary-500 focus:ring-primary-500"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <option value="all">All Status</option>
-              <option value="read">Read</option>
-              <option value="unread">Unread</option>
-            </select>
-            <RefreshCwIcon 
-              className="h-5 w-5 text-neutral-500 hover:text-primary-600 cursor-pointer ml-2" 
-              onClick={(e) => {
-                e.stopPropagation();
-                refetchNewsletters();
-              }}
-            />
+            
             {isSelecting ? (
               <button 
                 onClick={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
