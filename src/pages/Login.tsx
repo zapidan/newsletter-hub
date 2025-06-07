@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Navigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { Inbox, Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
+import { Inbox, Mail, Lock, AlertCircle, ArrowRight, Check, X } from 'lucide-react';
 
 type LocationState = {
   from?: {
@@ -14,21 +14,34 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
-  const { signIn, signUp, user, loading, error } = useAuth();
+  const { signIn, signUp, user, loading, error, checkPasswordStrength } = useAuth();
   const location = useLocation();
   const locationState = location.state as LocationState;
   const from = locationState?.from?.pathname || '/inbox';
+
+  // Check password strength and show requirements
+  const passwordRequirements = useMemo(
+    () => checkPasswordStrength(password),
+    [password, checkPasswordStrength]
+  );
+
+  const isPasswordStrong = useMemo(
+    () => passwordRequirements.every(req => req.satisfied),
+    [passwordRequirements]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (isSignUp) {
+      if (!isPasswordStrong) {
+        return; // Don't proceed if password doesn't meet requirements
+      }
       await signUp(email, password);
     } else {
       await signIn(email, password);
     }
   };
-
 
   if (user) {
     return <Navigate to={from} replace />;
@@ -112,17 +125,40 @@ const Login = () => {
                   required
                   className="appearance-none block w-full px-3 py-2 pl-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                   placeholder={isSignUp ? 'Create a password' : '••••••••'}
-                  minLength={6}
+                  minLength={8}
                 />
               </div>
+              
+              {/* Password strength indicator */}
+              {isSignUp && password && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-gray-500">Password must contain:</p>
+                  <ul className="space-y-1">
+                    {passwordRequirements.map((req, i) => (
+                      <li key={i} className="flex items-center">
+                        {req.satisfied ? (
+                          <Check className="h-3.5 w-3.5 text-green-500 mr-2" />
+                        ) : (
+                          <X className="h-3.5 w-3.5 text-gray-400 mr-2" />
+                        )}
+                        <span className={`text-xs ${req.satisfied ? 'text-green-600' : 'text-gray-500'}`}>
+                          {req.label}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
             
             <div>
               <button
                 type="submit"
-                disabled={loading}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
-                  loading ? 'opacity-70 cursor-not-allowed' : ''
+                disabled={loading || (isSignUp && !isPasswordStrong)}
+                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                  loading || (isSignUp && !isPasswordStrong)
+                    ? 'bg-primary-400 cursor-not-allowed'
+                    : 'bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
                 }`}
               >
                 {loading ? (
@@ -152,7 +188,9 @@ const Login = () => {
             <div className="mt-6">
               <button
                 type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                }}
                 className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 {isSignUp ? 'Sign in to existing account' : 'Create a new account'}
