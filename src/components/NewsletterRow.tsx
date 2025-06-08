@@ -244,27 +244,26 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
             )}
             
             <div className="flex items-center justify-between mt-2">
-              <div className="w-full">
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {newsletter.tags?.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer"
-                      style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTagClick(tag, e);
-                      }}
-                    >
-                      {tag.name}
-                    </span>
-                  ))}
-                </div>
-                <span className="text-xs text-gray-400">
-                  {new Date(newsletter.received_at).toLocaleDateString()}
-                </span>
+              <div className="flex flex-wrap gap-1">
+                {newsletter.tags?.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer"
+                    style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTagClick(tag, e);
+                    }}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
               </div>
+              <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
+                {new Date(newsletter.received_at).toLocaleDateString()}
+              </span>
             </div>
+
           </div>
         </div>
       </div>
