@@ -1,24 +1,35 @@
 import { FC } from 'react';
 import { Archive } from 'lucide-react';
 import { SourceFilterDropdown } from './SourceFilterDropdown';
+import { TimeFilter, TimeRange } from './TimeFilter';
 
 interface InboxFiltersProps {
   filter: 'all' | 'unread' | 'liked' | 'archived';
   sourceFilter: string | null;
+  timeRange: TimeRange;
   newsletterSources: Array<{ id: string; name: string }>;
   onFilterChange: (filter: 'all' | 'unread' | 'liked' | 'archived') => void;
   onSourceFilterChange: (sourceId: string | null) => void;
+  onTimeRangeChange: (range: TimeRange) => void;
 }
 
 export const InboxFilters: FC<InboxFiltersProps> = ({
   filter,
   sourceFilter,
+  timeRange,
   newsletterSources,
   onFilterChange,
   onSourceFilterChange,
+  onTimeRangeChange,
 }) => {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1">
+        <TimeFilter 
+          selectedRange={timeRange}
+          onChange={onTimeRangeChange}
+          className="mr-2"
+        />
       <button
         onClick={() => onFilterChange('all')}
         className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
@@ -62,12 +73,13 @@ export const InboxFilters: FC<InboxFiltersProps> = ({
           <span>Archived</span>
         </div>
       </button>
-      <SourceFilterDropdown 
-        sources={newsletterSources}
-        selectedSourceId={sourceFilter}
-        onSourceSelect={onSourceFilterChange}
-        className="ml-2"
-      />
+        <SourceFilterDropdown 
+          sources={newsletterSources}
+          selectedSourceId={sourceFilter}
+          onSourceSelect={onSourceFilterChange}
+          className="ml-2"
+        />
+      </div>
     </div>
   );
 };

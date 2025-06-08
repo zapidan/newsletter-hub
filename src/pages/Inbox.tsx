@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Mail, X } from 'lucide-react';
+import { TimeRange } from '../components/TimeFilter';
 import { InboxFilters } from '../components/InboxFilters';
 import BulkSelectionActions from '../components/BulkSelectionActions';
 
@@ -20,6 +21,7 @@ const Inbox: React.FC = () => {
   const tagId = searchParams.get('tag') || undefined;
   const filter = (searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived') || 'all';
   const sourceFilter = searchParams.get('source') || undefined;
+  const timeRange = (searchParams.get('time') as TimeRange) || 'all';
   const showArchived = filter === 'archived';
 
   // Local state
@@ -57,6 +59,18 @@ const Inbox: React.FC = () => {
         newParams.set('source', sourceId);
       } else {
         newParams.delete('source');
+      }
+      return newParams;
+    });
+  }, [setSearchParams]);
+
+  const setTimeRange = useCallback((range: TimeRange) => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      if (range === 'all') {
+        newParams.delete('time');
+      } else {
+        newParams.set('time', range);
       }
       return newParams;
     });
@@ -247,31 +261,62 @@ const Inbox: React.FC = () => {
   // Filter newsletters based on tag (archived/non-archived already filtered by hook)
   const filteredNewsletters = useMemo(() => {
     if (!newsletters) return [];
-    
-    let result = [...newsletters];
-    
-    // Apply main filter
-    if (filter === 'unread') {
-      result = result.filter(n => !n.is_read);
-    } else if (filter === 'liked') {
-      result = result.filter(n => n.is_liked);
+
+    let filtered = [...newsletters];
+
+    // Apply time filter
+    if (timeRange !== 'all') {
+      const now = new Date();
+      const cutoff = new Date(now);
+      
+      switch (timeRange) {
+        case 'day':
+          cutoff.setDate(now.getDate() - 1);
+          break;
+        case '2days':
+          cutoff.setDate(now.getDate() - 2);
+          break;
+        case 'week':
+          cutoff.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          cutoff.setMonth(now.getMonth() - 1);
+          break;
+      }
+      
+      filtered = filtered.filter(newsletter => {
+        const receivedDate = new Date(newsletter.received_at);
+        return receivedDate >= cutoff;
+      });
     }
-    
+
+    // Apply filter
+    if (filter === 'unread') {
+      filtered = filtered.filter((newsletter) => !newsletter.is_read);
+    } else if (filter === 'liked') {
+      filtered = filtered.filter((newsletter) => newsletter.is_liked);
+    } else if (filter === 'archived') {
+      filtered = filtered.filter((newsletter) => newsletter.is_archived);
+    } else {
+      // Default 'all' shows non-archived items
+      filtered = filtered.filter((newsletter) => !newsletter.is_archived);
+    }
+
     // Apply tag filter
     if (selectedTagIds.length > 0) {
-      result = result.filter(newsletter => 
+      filtered = filtered.filter(newsletter => 
         selectedTagIds.every(tagId => 
           (newsletter.tags || []).some((tag: Tag) => tag?.id === tagId)
         )
       );
     }
     
-    return result.sort((a, b) => {
+    return filtered.sort((a, b) => {
       const dateDiff = new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
       if (dateDiff !== 0) return dateDiff;
       return a.id.localeCompare(b.id);
     });
-  }, [newsletters, filter, selectedTagIds]);
+  }, [newsletters, filter, selectedTagIds, timeRange]);
 
   // Toggle selection of a single newsletter
   const toggleSelect = useCallback((id: string) => {
@@ -334,7 +379,7 @@ const Inbox: React.FC = () => {
 
   // Update URL when filter or source changes
   useEffect(() => {
-    console.log('Current state:', { filter, sourceFilter });
+    console.log('Current state:', { filter, sourceFilter, timeRange });
     
     const updateParams = () => {
       const newParams = new URLSearchParams();
@@ -350,6 +395,11 @@ const Inbox: React.FC = () => {
         newParams.set('source', sourceFilter);
       }
       
+      // Set time range if it exists
+      if (timeRange !== 'all') {
+        newParams.set('time', timeRange);
+      }
+      
       // Preserve tag if it exists
       const tagParam = searchParams.get('tag');
       if (tagParam) {
@@ -361,7 +411,7 @@ const Inbox: React.FC = () => {
     };
     
     setSearchParams(updateParams(), { replace: true });
-  }, [filter, sourceFilter, setSearchParams, searchParams]);
+  }, [filter, sourceFilter, timeRange, setSearchParams, searchParams]);
 
   // Log when searchParams change
   useEffect(() => {
@@ -413,9 +463,11 @@ const Inbox: React.FC = () => {
               <InboxFilters
                 filter={filter}
                 sourceFilter={sourceFilter || null}
+                timeRange={timeRange}
                 newsletterSources={newsletterSources}
                 onFilterChange={setFilter}
                 onSourceFilterChange={setSourceFilter}
+                onTimeRangeChange={setTimeRange}
               />
               {!isSelecting && (
                 <button
