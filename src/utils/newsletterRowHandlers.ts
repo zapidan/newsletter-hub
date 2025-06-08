@@ -133,20 +133,27 @@ export const useNewsletterRowHandlers = ({
   // Update tags for a newsletter
   const handleUpdateTags = async (newsletterId: string, tagIds: string[]): Promise<void> => {
     try {
-      // First update the newsletter with the new tags
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+      
+      // First delete existing tags for this newsletter
       const { error: updateError } = await supabase
         .from('newsletter_tags')
         .delete()
-        .eq('newsletter_id', newsletterId);
+        .eq('newsletter_id', newsletterId)
+        .eq('user_id', user.id);
 
       if (updateError) throw updateError;
 
       if (tagIds.length > 0) {
+        // Insert new tags with user_id
         const { error: insertError } = await supabase
           .from('newsletter_tags')
           .insert(tagIds.map(tagId => ({
             newsletter_id: newsletterId,
-            tag_id: tagId
+            tag_id: tagId,
+            user_id: user.id  // Include user_id for RLS
           })));
 
         if (insertError) throw insertError;
