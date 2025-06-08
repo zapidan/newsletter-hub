@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Tag } from '../types';
 import { useTags } from '../hooks/useTags';
 import { Plus, X, Trash2 } from 'lucide-react';
@@ -36,6 +36,7 @@ export default function TagSelector({
   const [selectedColor, setSelectedColor] = useState(colors[0]);
   const { getTags, createTag, deleteTag } = useTags();
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Load available tags
   useEffect(() => {
@@ -46,34 +47,65 @@ export default function TagSelector({
     loadTags();
   }, [getTags]);
 
+  // Close dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isOpen && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (isOpen && event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    // Only add event listeners if the dropdown is open
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+
+      // Cleanup function to remove event listeners
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [isOpen]);
+
   const handleAddTag = useCallback(async () => {
     if (!newTagName.trim()) return;
 
-    // Check if tag already exists
-    const existingTag = availableTags.find(tag => 
-      tag.name.toLowerCase() === newTagName.toLowerCase()
-    );
+    try {
+      // Check if tag already exists
+      const existingTag = availableTags.find(tag => 
+        tag.name.toLowerCase() === newTagName.toLowerCase()
+      );
 
-    if (existingTag) {
-      // Add existing tag if not already selected
-      if (!selectedTags.some(tag => tag.id === existingTag.id)) {
-        onTagsChange([...selectedTags, existingTag]);
-      }
-    } else {
-      // Create new tag
-      const newTag = await createTag({
-        name: newTagName.trim(),
-        color: selectedColor,
-      });
+      if (existingTag) {
+        // Add existing tag if not already selected
+        if (!selectedTags.some(tag => tag.id === existingTag.id)) {
+          onTagsChange([...selectedTags, existingTag]);
+        }
+      } else {
+        // Create new tag
+        const newTag = await createTag({
+          name: newTagName.trim(),
+          color: selectedColor,
+        });
 
-      if (newTag) {
-        setAvailableTags(prev => [...prev, newTag]);
-        onTagsChange([...selectedTags, newTag]);
+        if (newTag) {
+          setAvailableTags(prev => [...prev, newTag]);
+          onTagsChange([...selectedTags, newTag]);
+        }
       }
+
+      setNewTagName('');
+      setIsOpen(false);
+    } catch (error) {
+      console.error('Error adding tag:', error);
     }
-
-    setNewTagName('');
-    setIsOpen(false);
   }, [newTagName, selectedColor, availableTags, selectedTags, onTagsChange, createTag]);
 
   const handleRemoveTag = useCallback((tagId: string) => {
@@ -117,10 +149,11 @@ export default function TagSelector({
     } else {
       onTagsChange([...selectedTags, tag]);
     }
+    setIsOpen(false);
   }, [selectedTags, onTagsChange, handleRemoveTag]);
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} ref={dropdownRef}>
       <div className={`flex flex-wrap items-center gap-2 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
         {selectedTags.map((tag) => (
           <div
