@@ -112,8 +112,11 @@ export const useNewsletterRowHandlers = ({
       } else {
         // Add to queue
         const { error } = await supabase
-          .from('reading_queue')
-          .insert([{ newsletter_id: newsletter.id }]);
+        .from('reading_queue')
+        .insert([{ 
+          newsletter_id: newsletter.id,
+          user_id: (await supabase.auth.getUser()).data.user?.id 
+        }]);
 
         if (error) throw error;
       }
