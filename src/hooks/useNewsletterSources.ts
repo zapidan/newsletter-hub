@@ -10,6 +10,8 @@ import { NewsletterSource } from '../types';
 import { AuthContext } from '../context/AuthContext';
 import { useContext } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { useEffect } from 'react';
+
 
 // Cache time constants (in milliseconds)
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -150,6 +152,23 @@ export const useNewsletterSources = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const userId = user?.id || '';
+
+  // Auto-invalidate when newsletters change
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event?.query?.queryKey?.[0] === 'newsletters' && 
+          event?.type === 'updated') {
+        // Invalidate newsletter sources when newsletter cache updates
+        queryClient.invalidateQueries({ 
+          queryKey: queryKeys.userSources(userId),
+          refetchType: 'active'
+        });
+      }
+    });
+    
+    return unsubscribe;
+  }, [queryClient, userId]);
+
   
   // Query for newsletter sources
   const {
