@@ -1,115 +1,141 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Mail, X, ChevronDown, Archive, ArchiveX, Trash } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Mail, X, ChevronDown, Archive } from 'lucide-react';
 
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
 import { useReadingQueue } from '../hooks/useReadingQueue';
 import { useTags } from '../hooks/useTags';
+import { useNewsletterRowHandlers } from '../utils/newsletterRowHandlers';
+import type { Newsletter, Tag } from '../types';
 import LoadingScreen from '../components/common/LoadingScreen';
 import NewsletterRow from '../components/NewsletterRow';
-import type { Newsletter, Tag } from '../types';
 
 const Inbox: React.FC = () => {
-  const { updateNewsletterTags } = useTags();
-  const [tagEditId, setTagEditId] = useState<string | null>(null);
-  const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
-  const { toggleInQueue, readingQueue } = useReadingQueue();
-
-
-  const toggleTagVisibility = useCallback((newsletterId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setVisibleTags(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(newsletterId)) {
-        newSet.delete(newsletterId);
-      } else {
-        newSet.add(newsletterId);
-      }
-      return newSet;
-    });
-  }, []);
-
   // Router and URL state
   const [searchParams, setSearchParams] = useSearchParams();
-  const tagId = searchParams.get('tag');
-
-  
-  // Local state
-  const [filter, setFilter] = useState<'all' | 'unread' | 'liked' | 'archived'>(
-    (searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived') || 'all'
-  );
-  const [sourceFilter, setSourceFilter] = useState<string | null>(searchParams.get('source') || null);
+  const tagId = searchParams.get('tag') || undefined;
+  const filter = (searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived') || 'all';
+  const sourceFilter = searchParams.get('source') || undefined;
   const showArchived = filter === 'archived';
 
-  // Fetch newsletter sources
+  // Local state
+  const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Hooks
+  const queryClient = useQueryClient();
+  const { getTags } = useTags();
+  const { readingQueue } = useReadingQueue();
   const { newsletterSources = [], isLoadingSources } = useNewsletterSources();
   const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [_, setIsBulkActionLoading] = useState(false);
+
+  // Filter handlers
+  const setFilter = useCallback((newFilter: 'all' | 'unread' | 'liked' | 'archived') => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      if (newFilter === 'all') {
+        newParams.delete('filter');
+      } else {
+        newParams.set('filter', newFilter);
+      }
+      return newParams;
+    });
+  }, [setSearchParams]);
+
+  const setSourceFilter = useCallback((sourceId: string | null) => {
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      if (sourceId) {
+        newParams.set('source', sourceId);
+      } else {
+        newParams.delete('source');
+      }
+      return newParams;
+    });
+  }, [setSearchParams]);
+
+  // Load tags on mount
+  useEffect(() => {
+    const loadTags = async () => {
+      const tags = await getTags();
+      setAllTags(tags);
+    };
+    loadTags();
+  }, [getTags]);
+
+  // Use the shared newsletter row handlers
+  const {
+    handleToggleLike,
+    handleToggleArchive,
+    handleToggleRead,
+    handleToggleQueue,
+    handleUpdateTags,
+    handleTagClick: handleNewsletterTagClick,
+  } = useNewsletterRowHandlers({
+    queryClient,
+    searchParams,
+    setSearchParams,
+  });
+
+  // Handle tag click for the NewsletterRow component
+  const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
+    // Forward the tag and event to the handler
+    handleNewsletterTagClick(tag, e);
+  }, [handleNewsletterTagClick]);
 
   // Fetch newsletters data
   const { 
     newsletters = [],
     isLoadingNewsletters, 
     isErrorNewsletters,
-    errorNewsletters, 
-    bulkMarkAsRead,
-    bulkMarkAsUnread,
-    bulkArchive,
-    bulkUnarchive,
-    toggleLike,
-    refetchNewsletters,
-    archiveNewsletter,
-    unarchiveNewsletter,
+    errorNewsletters,
     deleteNewsletter,
     isDeletingNewsletter,
     bulkDeleteNewsletters,
-  } = useNewsletters(tagId || undefined, filter, sourceFilter || undefined);
-  
-  // Trash (permanent delete) handlers
-  const handleTrash = useCallback(async (newsletterId: string) => {
-    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
-    try {
-      await deleteNewsletter(newsletterId);
-      await refetchNewsletters();
-    } catch (error) {
-      console.error('Error deleting newsletter:', error);
-    }
-  }, [deleteNewsletter, refetchNewsletters]);
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    refetchNewsletters,
+    bulkArchive,
+    bulkUnarchive
+  } = useNewsletters(tagId, filter, sourceFilter);
 
-  const handleBulkTrash = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
-    try {
-      await bulkDeleteNewsletters(Array.from(selectedIds));
-      setSelectedIds(new Set());
-      setIsSelecting(false);
-      await refetchNewsletters();
-    } catch (error) {
-      console.error('Error deleting newsletters:', error);
-    }
-  }, [bulkDeleteNewsletters, selectedIds, refetchNewsletters]);
+  // Toggle tag visibility
+  const toggleTagVisibility = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setVisibleTags((prev: Set<string>) => {
+      const newVisibleTags = new Set(prev);
+      if (newVisibleTags.has(id)) {
+        newVisibleTags.delete(id);
+      } else {
+        newVisibleTags.add(id);
+      }
+      return newVisibleTags;
+    });
+  }, []);
 
-  // Toggle newsletter like status
-  const handleToggleLike = useCallback(async (newsletter: Newsletter) => {
-    try {
-      await toggleLike(newsletter.id);
-    } catch (error) {
-      console.error('Error toggling like:', error);
-    }
-  }, [toggleLike]);
-
-  // Get tags from URL
+  // Get selected tag IDs from URL
   const selectedTagIds = useMemo(() => {
-    return tagId ? tagId.split(',') : [];
+    return tagId ? tagId.split(',').filter(Boolean) : [];
   }, [tagId]);
 
-  const allTags = useMemo(() => {
-    if (!newsletters) return new Map<string, Tag>();
-    // Get all unique tags from all newsletters
+  // Get unique tags from all available tags and newsletters
+  const allUniqueTags = useMemo(() => {
     const tags = new Map<string, Tag>();
+    
+    // First add all tags from the tags API
+    allTags.forEach(tag => {
+      if (tag?.id) {
+        tags.set(tag.id, tag);
+      }
+    });
+    
+    // Then add any tags from newsletters that might not be in the main tags list
     newsletters.forEach(newsletter => {
       (newsletter.tags || []).forEach((tag: Tag) => {
         if (tag?.id && !tags.has(tag.id)) {
@@ -117,38 +143,16 @@ const Inbox: React.FC = () => {
         }
       });
     });
+    
     return tags;
-  }, [newsletters]);
+  }, [allTags, newsletters]);
 
   // Get selected tag objects
   const selectedTags = useMemo(() => {
     return selectedTagIds
-      .map(id => allTags.get(id))
+      .map(id => allUniqueTags.get(id))
       .filter((tag): tag is Tag => tag !== undefined);
-  }, [selectedTagIds, allTags]);
-
-  // Handle tag click - toggle tag in filter
-  const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSearchParams(prev => {
-      const currentTags = new Set(prev.get('tag')?.split(',').filter(Boolean) || []);
-      
-      if (currentTags.has(tag.id)) {
-        currentTags.delete(tag.id);
-      } else {
-        currentTags.add(tag.id);
-      }
-      
-      const newParams = new URLSearchParams(prev);
-      if (currentTags.size > 0) {
-        newParams.set('tag', Array.from(currentTags).join(','));
-      } else {
-        newParams.delete('tag');
-      }
-      
-      return newParams;
-    });
-  }, [setSearchParams]);
+  }, [selectedTagIds, allUniqueTags]);
 
   // Clear all tag filters
   const clearTagFilter = useCallback(() => {
@@ -158,27 +162,21 @@ const Inbox: React.FC = () => {
       return newParams;
     });
   }, [setSearchParams]);
-  
+
   // Remove a specific tag from filters
   const removeTagFromFilter = useCallback((tagId: string) => {
-    setSearchParams(prev => {
-      const currentTags = new Set(prev.get('tag')?.split(',').filter(Boolean) || []);
-      currentTags.delete(tagId);
-      
-      const newParams = new URLSearchParams(prev);
-      if (currentTags.size > 0) {
-        newParams.set('tag', Array.from(currentTags).join(','));
-      } else {
-        newParams.delete('tag');
-      }
-      
-      return newParams;
-    });
-  }, [setSearchParams]);
-
-  // Handle bulk archive
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
+    const currentTags = new Set(searchParams.get('tag')?.split(',').filter(Boolean) || []);
+    currentTags.delete(tagId);
+    
+    const newParams = new URLSearchParams(searchParams);
+    if (currentTags.size > 0) {
+      newParams.set('tag', Array.from(currentTags).join(','));
+    } else {
+      newParams.delete('tag');
+    }
+    
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -188,6 +186,33 @@ const Inbox: React.FC = () => {
     }
   }, [toast]);
 
+  // Trash (permanent delete) handlers
+  const handleTrash = useCallback(async (newsletterId: string) => {
+    if (!window.confirm('Are you sure you want to delete this newsletter?')) return;
+    try {
+      await deleteNewsletter(newsletterId);
+      await refetchNewsletters();
+    } catch (error) {
+      console.error('Error deleting newsletter:', error);
+      throw error;
+    }
+  }, [deleteNewsletter, refetchNewsletters]);
+
+  const handleBulkTrash = useCallback(async () => {
+    if (!selectedIds || selectedIds.size === 0) return;
+    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
+    try {
+      await bulkDeleteNewsletters(Array.from(selectedIds));
+      setSelectedIds?.(new Set());
+      setIsSelecting?.(false);
+      await refetchNewsletters();
+    } catch (error) {
+      console.error('Error deleting newsletters:', error);
+      throw error;
+    }
+  }, [bulkDeleteNewsletters, selectedIds, refetchNewsletters, setSelectedIds, setIsSelecting]);
+
+  // Handle bulk archive
   const handleBulkArchive = useCallback(async () => {
     if (selectedIds.size === 0) return;
     setIsBulkActionLoading(true);
@@ -276,7 +301,7 @@ const Inbox: React.FC = () => {
       setSelectedIds(new Set(filteredNewsletters.map(n => n.id)));
     }
   }, [filteredNewsletters, selectedIds.size]);
-  
+
   // Select all read or unread newsletters
   const selectRead = useCallback(() => {
     const readIds = filteredNewsletters
@@ -284,7 +309,7 @@ const Inbox: React.FC = () => {
       .map(n => n.id);
     setSelectedIds(new Set(readIds));
   }, [filteredNewsletters]);
-  
+
   const selectUnread = useCallback(() => {
     const unreadIds = filteredNewsletters
       .filter(n => !n.is_read)
@@ -368,7 +393,7 @@ const Inbox: React.FC = () => {
     
     setSearchParams(updateParams(), { replace: true });
   }, [filter, sourceFilter, setSearchParams, searchParams]);
-  
+
   // Log when searchParams change
   useEffect(() => {
     console.log('Current URL params:', searchParams.toString());
@@ -399,7 +424,7 @@ const Inbox: React.FC = () => {
     );
   }
 
-  // If newsletters is null or undefined after loading and no error, show empty state or handle
+  // If newsletters is null or undefined after loading and no error, show empty state
   if (!newsletters) {
     return (
       <div className="text-center p-8 text-neutral-500">
@@ -600,44 +625,27 @@ const Inbox: React.FC = () => {
                 <>
                   <button 
                     onClick={handleBulkUnarchive}
-                    disabled={selectedIds.size === 0 || isBulkActionLoading}
-                    className={`px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    disabled={selectedIds.size === 0}
+                    className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
                   >
-                    {isBulkActionLoading ? (
-                      <svg className="animate-spin h-4 w-4 mr-1 text-green-700" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                      </svg>
-                    ) : (
-                      <ArchiveX className="h-4 w-4" />
-                    )}
-                    <span>Unarchive</span>
+                    Unarchive
                   </button>
                   <button
                     onClick={handleBulkTrash}
-                    disabled={selectedIds.size === 0 || isBulkActionLoading}
-                    className={`px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    disabled={selectedIds.size === 0}
+                    className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50"
                     title="Delete selected permanently"
                   >
-                    <Trash className="h-4 w-4" />
-                    <span>Trash</span>
+                    Trash
                   </button>
                 </>
               ) : (
                 <button 
                   onClick={handleBulkArchive}
-                  disabled={selectedIds.size === 0 || isBulkActionLoading}
-                  className={`px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1 ${isBulkActionLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  disabled={selectedIds.size === 0}
+                  className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50"
                 >
-                  {isBulkActionLoading ? (
-                    <svg className="animate-spin h-4 w-4 mr-1 text-amber-700" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                    </svg>
-                  ) : (
-                    <Archive className="h-4 w-4" />
-                  )}
-                  <span>Archive</span>
+                  Archive
                 </button>
               )}
             </div>
@@ -713,35 +721,17 @@ const Inbox: React.FC = () => {
               isSelected={isSelecting && selectedIds.has(newsletter.id)}
               onToggleSelect={isSelecting ? toggleSelect : undefined}
               onToggleLike={handleToggleLike}
-              onToggleArchive={async (id) => {
-                if (newsletter.is_archived) {
-                  await unarchiveNewsletter(id);
-                } else {
-                  await archiveNewsletter(id);
-                }
-                await refetchNewsletters();
-              }}
-              onToggleRead={async (id) => {
-                if (newsletter.is_read) {
-                  await bulkMarkAsUnread([id]);
-                } else {
-                  await bulkMarkAsRead([id]);
-                }
-                await refetchNewsletters();
-              }}
+              onToggleArchive={handleToggleArchive}
+              onToggleRead={handleToggleRead}
               onTrash={handleTrash}
-              onToggleQueue={async (id) => {
-                await toggleInQueue(id);
-                await refetchNewsletters();
-              }}
-              onToggleTagVisibility={toggleTagVisibility}
-              onUpdateTags={updateNewsletterTags}
+              onToggleQueue={handleToggleQueue}
+              onUpdateTags={handleUpdateTags}
               onTagClick={handleTagClick}
               visibleTags={visibleTags}
               readingQueue={readingQueue}
               isDeletingNewsletter={isDeletingNewsletter}
+              onToggleTagVisibility={toggleTagVisibility}
               loadingStates={{}}
-              errorTogglingLike={undefined}
             />
           ))
         )}

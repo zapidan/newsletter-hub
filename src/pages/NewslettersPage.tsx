@@ -6,11 +6,10 @@ import { supabase } from '../services/supabaseClient';
 import { Newsletter, NewsletterSource } from '../types';
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
-import { useTags } from '../hooks/useTags';
 import { useReadingQueue } from '../hooks/useReadingQueue';
+import { useNewsletterRowHandlers } from '../utils/newsletterRowHandlers';
 import { Loader2, AlertTriangle, ArrowLeft, X, Check } from 'lucide-react';
 import NewsletterRow from '../components/NewsletterRow';
-
 
 const NewslettersPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
@@ -56,7 +55,6 @@ const NewslettersPage: React.FC = () => {
   };
 
   // Handle editing a source
-
   const handleEdit = (source: NewsletterSource) => {
     setFormData({
       name: source.name,
@@ -67,7 +65,7 @@ const NewslettersPage: React.FC = () => {
     setUpdateError(null);
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!editingId) return;
@@ -140,11 +138,11 @@ const NewslettersPage: React.FC = () => {
       toast.error(errorArchivingSource?.message || 'Failed to archive source');
     }
   };
+
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
-  const [loadingStates, setLoadingStates] = useState<Record<string, string>>({});
+  const [loadingStates, _] = useState<Record<string, string>>({});
   
-  const { toggleInQueue, readingQueue } = useReadingQueue();
-  const { updateNewsletterTags } = useTags();
+  const { readingQueue } = useReadingQueue();
   const queryClient = useQueryClient();
   
   // Use the allNewsletters array as the single source of truth
@@ -153,43 +151,26 @@ const NewslettersPage: React.FC = () => {
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
-    archiveNewsletter, 
-    unarchiveNewsletter,
-    toggleLike,
     errorTogglingLike
   } = useNewsletters(undefined, selectedSourceId ? 'source' : 'inbox', selectedSourceId || undefined);
+  
   const newsletters = allNewsletters;
   const isLoading = isLoadingNewsletters;
   const isError = isErrorNewsletters;
 
-  // Handle like toggle
-  const handleLikeToggle = useCallback(async (newsletter: Newsletter) => {
-    setLoadingStates(prev => ({ ...prev, [newsletter.id]: 'like' }));
-    
-    try {
-      await toggleLike(newsletter.id);
-      // Invalidate all relevant queries
-      await Promise.all([
-        queryClient.invalidateQueries({ 
-          queryKey: ['newsletters'],
-          refetchType: 'active',
-        }),
-        selectedSourceId && queryClient.invalidateQueries({ 
-          queryKey: ['newsletters', { sourceId: selectedSourceId }],
-          refetchType: 'active',
-        })
-      ]);
-    } catch (error) {
-      toast.error('Failed to update like status');
-      console.error('Like error:', error);
-    } finally {
-      setLoadingStates(prev => {
-        const newStates = { ...prev };
-        delete newStates[newsletter.id];
-        return newStates;
-      });
-    }
-  }, [toggleLike, queryClient, selectedSourceId]);
+  // Set up shared handlers using useNewsletterRowHandlers
+  const {
+    handleToggleLike,
+    handleToggleArchive,
+    handleToggleRead,
+    handleToggleQueue,
+    handleUpdateTags,
+    handleTagClick
+  } = useNewsletterRowHandlers({
+    queryClient,
+    searchParams: new URLSearchParams(), // Empty for this page
+    setSearchParams: () => {}, // No-op for this page
+  });
 
   const toggleTagVisibility = useCallback((newsletterId: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -211,64 +192,6 @@ const NewslettersPage: React.FC = () => {
       console.error('Error loading newsletters:', errorNewsletters);
     }
   }, [errorNewsletters]);
-
-  // Handle archive/unarchive
-  const handleArchiveToggle = useCallback(async (newsletter: Newsletter, currentFilter: 'all' | 'inbox' | 'archived' = 'inbox') => {
-    const action = newsletter.is_archived ? 'unarchive' : 'archive';
-    setLoadingStates(prev => ({ ...prev, [newsletter.id]: action }));
-    
-    try {
-      if (newsletter.is_archived) {
-        await unarchiveNewsletter(newsletter.id);
-        toast.success('Newsletter unarchived');
-      } else {
-        await archiveNewsletter(newsletter.id);
-        toast.success('Newsletter archived');
-      }
-      
-      // Invalidate all relevant queries
-      await Promise.all([
-        // Invalidate the main newsletters query
-        queryClient.invalidateQueries({ 
-          queryKey: ['newsletters'],
-          refetchType: 'active',
-        }),
-        // Invalidate the source-specific query if we're viewing a source
-        selectedSourceId && queryClient.invalidateQueries({ 
-          queryKey: ['newsletters', { sourceId: selectedSourceId }],
-          refetchType: 'active',
-        }),
-        queryClient.invalidateQueries({ 
-          queryKey: ['newsletters', 'archived'],
-          refetchType: 'active',
-          exact: true
-        })
-      ].filter(Boolean));
-      
-      // Force a refetch of the current view
-      await queryClient.refetchQueries({
-        queryKey: selectedSourceId 
-          ? ['newslettersBySource', selectedSourceId]
-          : ['newsletters', currentFilter === 'archived' ? 'archived' : 'inbox'],
-        type: 'active',
-        exact: true
-      });
-    } catch (error) {
-      toast.error(`Failed to ${newsletter.is_archived ? 'unarchive' : 'archive'} newsletter`);
-      console.error('Archive error:', error);
-      // Force a hard refresh of the current query
-      await queryClient.refetchQueries({
-        queryKey: ['newslettersBySource', selectedSourceId],
-        type: 'active',
-      });
-    } finally {
-      setLoadingStates(prev => {
-        const newStates = { ...prev };
-        delete newStates[newsletter.id];
-        return newStates;
-      });
-    }
-  }, [archiveNewsletter, unarchiveNewsletter, queryClient, selectedSourceId]);
 
   return (
     <main className="max-w-4xl w-full mx-auto p-6 bg-neutral-50">
@@ -389,8 +312,6 @@ const NewslettersPage: React.FC = () => {
           </div>
         </Dialog>
       </Transition.Root>
-
-      {/* Edit functionality is now handled by the main modal */}
 
       {/* Existing Sources List */}
       <section>
@@ -522,77 +443,14 @@ const NewslettersPage: React.FC = () => {
                   key={newsletter.id}
                   newsletter={newsletter}
                   isSelected={false}
-                  onToggleLike={handleLikeToggle}
-                  onToggleArchive={async (id) => {
-                    setLoadingStates(prev => ({ ...prev, [id]: newsletter.is_archived ? 'unarchive' : 'archive' }));
-                    try {
-                      if (newsletter.is_archived) {
-                        await unarchiveNewsletter(id);
-                      } else {
-                        await archiveNewsletter(id);
-                      }
-                      await queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] });
-                    } catch (error) {
-                      console.error('Error toggling archive status:', error);
-                      toast.error('Failed to update archive status');
-                    } finally {
-                      setLoadingStates(prev => {
-                        const newStates = { ...prev };
-                        delete newStates[id];
-                        return newStates;
-                      });
-                    }
-                  }}
-                  onToggleRead={async (id) => {
-                    try {
-                      const currentNewsletter = newsletters.find(nl => nl.id === id);
-                      if (!currentNewsletter) return;
-                      
-                      await updateNewsletterTags(id, [
-                        ...(currentNewsletter.tags || []),
-                        ...(currentNewsletter.is_read ? [] : [{ 
-                          id: 'read', 
-                          name: 'Read', 
-                          color: '#e5e7eb',
-                          user_id: currentNewsletter.user_id,
-                          created_at: new Date().toISOString()
-                        }])
-                      ]);
-                      await queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] });
-                    } catch (error) {
-                      console.error('Error toggling read status:', error);
-                      toast.error('Failed to update read status');
-                    }
-                  }}
+                  onToggleLike={handleToggleLike}
+                  onToggleArchive={handleToggleArchive}
+                  onToggleRead={handleToggleRead}
                   onTrash={() => {}}
-                  onToggleQueue={async (id) => {
-                    try {
-                      await toggleInQueue(id);
-                      await Promise.all([
-                        queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] }),
-                        queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
-                      ]);
-                    } catch (error) {
-                      console.error('Error toggling queue status:', error);
-                      toast.error('Failed to update reading queue');
-                    }
-                  }}
+                  onToggleQueue={handleToggleQueue}
                   onToggleTagVisibility={toggleTagVisibility}
-                  onUpdateTags={async (id, newTags) => {
-                    try {
-                      await updateNewsletterTags(id, newTags);
-                      await queryClient.invalidateQueries({ queryKey: ['newslettersBySource', selectedSourceId] });
-                      return true;
-                    } catch (error) {
-                      console.error('Error updating tags:', error);
-                      toast.error('Failed to update tags');
-                      return false;
-                    }
-                  }}
-                  onTagClick={(tag, e) => {
-                    e.stopPropagation();
-                    // Handle tag click (e.g., filter by tag)
-                  }}
+                  onUpdateTags={handleUpdateTags}
+                  onTagClick={handleTagClick}
                   visibleTags={visibleTags}
                   readingQueue={readingQueue}
                   isDeletingNewsletter={false}
@@ -606,6 +464,6 @@ const NewslettersPage: React.FC = () => {
       )}
     </main>
   );
-}
+};
 
 export default NewslettersPage;

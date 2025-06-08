@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Heart, BookmarkIcon, Tag as TagIcon, Archive, ArchiveX, Trash } from 'lucide-react';
 import { Newsletter, Tag } from '../types';
 import TagSelector from './TagSelector';
@@ -11,14 +11,14 @@ interface NewsletterRowProps {
   onToggleArchive: (id: string) => Promise<void>;
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
-  onToggleQueue: (id: string) => Promise<void>;
+  onToggleQueue: (newsletter: Newsletter) => Promise<void>;
   onToggleTagVisibility: (id: string, e: React.MouseEvent) => void;
-  onUpdateTags: (id: string, newTags: Tag[]) => Promise<boolean>;
+  onUpdateTags: (newsletterId: string, tagIds: string[]) => Promise<void>;
   onTagClick: (tag: Tag, e: React.MouseEvent) => void;
   visibleTags: Set<string>;
   readingQueue: Array<{ newsletter_id: string }>;
   isDeletingNewsletter: boolean;
-  loadingStates: Record<string, string>;
+  loadingStates?: Record<string, string>;
   errorTogglingLike?: Error | null;
 }
 
@@ -37,7 +37,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   visibleTags,
   readingQueue,
   isDeletingNewsletter,
-  loadingStates,
+  loadingStates = {},
   errorTogglingLike,
 }) => {
   const handleRowClick = (e: React.MouseEvent) => {
@@ -47,6 +47,25 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
       window.open(`/inbox/${newsletter.id}`, '_blank');
     }
   };
+
+  const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onTagClick(tag, e);
+  }, [onTagClick]);
+
+  const handleToggleQueue = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await onToggleQueue(newsletter);
+  };
+
+  const handleUpdateTags = useCallback(async (tagIds: string[]) => {
+    try {
+      await onUpdateTags(newsletter.id, tagIds);
+    } catch (error) {
+      console.error('Error updating tags:', error);
+      throw error;
+    }
+  }, [onUpdateTags, newsletter.id]);
 
   return (
     <div
@@ -153,10 +172,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               <button
                 type="button"
                 className="p-1 rounded-full hover:bg-gray-200 transition-colors"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  await onToggleQueue(newsletter.id);
-                }}
+                onClick={handleToggleQueue}
                 title={
                   readingQueue.some((item) => item.newsletter_id === newsletter.id)
                     ? 'Remove from reading queue'
@@ -205,46 +221,47 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               )}
             </div>
             <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
-        <div className="flex items-center justify-between mt-2">
-          <div className="w-full">
-            <div className="flex flex-wrap gap-1">
-              {newsletter.tags?.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                  style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTagClick(tag, e);
-                  }}
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
+            
+            {/* Tags display */}
             {visibleTags.has(newsletter.id) && (
-              <div className="w-full mt-2" onClick={(e) => e.stopPropagation()}>
+              <div className="w-full mt-2" onClick={e => e.stopPropagation()}>
                 <TagSelector
                   selectedTags={newsletter.tags || []}
                   onTagsChange={async (newTags) => {
-                    const ok = await onUpdateTags(newsletter.id, newTags);
-                    if (ok) {
-                      // Close the tag selector after successful update
-                      const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
-                      onToggleTagVisibility(newsletter.id, fakeEvent);
-                    }
+                    const tagIds = newTags.map(tag => tag.id);
+                    await handleUpdateTags(tagIds);
                   }}
-                  onTagClick={onTagClick}
-                  onTagDeleted={() => {}}
+                  onTagClick={handleTagClick}
+                  onTagDeleted={() => {
+                    // Refresh handled by parent
+                  }}
                   className="mt-1"
                 />
               </div>
             )}
-          </div>
-          <span className="text-xs text-gray-400">
-            {new Date(newsletter.received_at).toLocaleDateString()}
-          </span>
-        </div>
+            
+            <div className="flex items-center justify-between mt-2">
+              <div className="w-full">
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {newsletter.tags?.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer"
+                      style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTagClick(tag, e);
+                      }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+                <span className="text-xs text-gray-400">
+                  {new Date(newsletter.received_at).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
