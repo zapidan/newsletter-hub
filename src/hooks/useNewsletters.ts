@@ -243,13 +243,24 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
     });
   }, [queryClient, user?.id]);
 
+  const updateUnreadCountInCache = useCallback((delta: number) => {
+    if (!user?.id) return;
+    const unreadCountKey = ['unreadCount', user.id];
+    
+    queryClient.setQueryData<number>(unreadCountKey, (currentCount) => {
+      const newCount = Math.max(0, (currentCount || 0) + delta);
+      console.log(`Updating unread count: ${currentCount} -> ${newCount} (delta: ${delta})`);
+      return newCount;
+    });
+  }, [queryClient, user?.id]);
+
   // MARK AS READ
-  const markAsReadMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[] }>({
+  const markAsReadMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; wasUnread?: boolean }>({
     mutationFn: async (id: string) => {
       if (!user) throw new Error('User not authenticated');
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_read: true } as NewsletterUpdate)
+        .update({ is_read: true })
         .eq('id', id)
         .eq('user_id', user.id);
       if (error) throw error;
@@ -258,16 +269,26 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
     onMutate: async (id: string) => {
       const cacheKey = ['newsletters', 'all', user?.id];
       await queryClient.cancelQueries({ queryKey: cacheKey });
+      await queryClient.cancelQueries({ queryKey: ['unreadCount', user?.id] });
+      
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(cacheKey);
+      const newsletter = previousNewsletters?.find(n => n.id === id);
+      const wasUnread = newsletter && !newsletter.is_read && !newsletter.is_archived;
+      
       if (previousNewsletters) {
         updateNewsletterInCache(id, { is_read: true });
+        if (wasUnread) {
+          updateUnreadCountInCache(-1);
+        }
       }
-      return { previousNewsletters };
+      return { previousNewsletters, wasUnread };
     },
-    onError: (_err: Error, _id: string, context: { previousNewsletters?: Newsletter[] } | undefined) => {
+    onError: (_err, _id, context) => {
       if (context?.previousNewsletters) {
-        const cacheKey = ['newsletters', 'all', user?.id];
-        queryClient.setQueryData(cacheKey, context.previousNewsletters);
+        queryClient.setQueryData(['newsletters', 'all', user?.id], context.previousNewsletters);
+        if (context.wasUnread) {
+          updateUnreadCountInCache(1);
+        }
       }
     },
     onSettled: () => {
@@ -277,46 +298,56 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
   });
 
   // MARK AS UNREAD
-  const markAsUnreadMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[] }>({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error('User not authenticated');
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ is_read: false } as NewsletterUpdate)
-        .eq('id', id)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (id: string) => {
-      const cacheKey = ['newsletters', 'all', user?.id];
-      await queryClient.cancelQueries({ queryKey: cacheKey });
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(cacheKey);
-      if (previousNewsletters) {
-        updateNewsletterInCache(id, { is_read: false });
+  const markAsUnreadMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; wasRead?: boolean }>({
+  mutationFn: async (id: string) => {
+    if (!user) throw new Error('User not authenticated');
+    const { error } = await supabase
+      .from('newsletters')
+      .update({ is_read: false })
+      .eq('id', id)
+      .eq('user_id', user.id);
+    if (error) throw error;
+    return true;
+  },
+  onMutate: async (id: string) => {
+    const cacheKey = ['newsletters', 'all', user?.id];
+    await queryClient.cancelQueries({ queryKey: cacheKey });
+    await queryClient.cancelQueries({ queryKey: ['unreadCount', user?.id] });
+    
+    const previousNewsletters = queryClient.getQueryData<Newsletter[]>(cacheKey);
+    const newsletter = previousNewsletters?.find(n => n.id === id);
+    const wasRead = newsletter && newsletter.is_read && !newsletter.is_archived;
+    
+    if (previousNewsletters) {
+      updateNewsletterInCache(id, { is_read: false });
+      if (wasRead) {
+        updateUnreadCountInCache(1);
       }
-      return { previousNewsletters };
-    },
-    onError: (_err: Error, _id: string, context: { previousNewsletters?: Newsletter[] } | undefined) => {
-      if (context?.previousNewsletters) {
-        const cacheKey = ['newsletters', 'all', user?.id];
-        queryClient.setQueryData(cacheKey, context.previousNewsletters);
+    }
+    return { previousNewsletters, wasRead };
+  },
+  onError: (_err, _id, context) => {
+    if (context?.previousNewsletters) {
+      queryClient.setQueryData(['newsletters', 'all', user?.id], context.previousNewsletters);
+      if (context.wasRead) {
+        updateUnreadCountInCache(-1);
       }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['newsletters', 'all', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
-    },
-  });
+    }
+  },
+  onSettled: () => {
+    queryClient.invalidateQueries({ queryKey: ['newsletters', 'all', user?.id] });
+    queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
+  },
+});
 
   // BULK MARK AS READ
-  const bulkMarkAsReadMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>({
+  const bulkMarkAsReadMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[]; unreadCount?: number }>({
     mutationFn: async (ids: string[]) => {
       if (!user) throw new Error('User not authenticated');
       if (ids.length === 0) return true;
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_read: true } as NewsletterUpdate)
+        .update({ is_read: true })
         .in('id', ids)
         .eq('user_id', user.id);
       if (error) throw error;
@@ -325,16 +356,32 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
     onMutate: async (ids: string[]) => {
       const cacheKey = ['newsletters', 'all', user?.id];
       await queryClient.cancelQueries({ queryKey: cacheKey });
+      await queryClient.cancelQueries({ queryKey: ['unreadCount', user?.id] });
+      
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(cacheKey);
+      let unreadCount = 0;
+      
       if (previousNewsletters) {
-        ids.forEach(id => updateNewsletterInCache(id, { is_read: true }));
+        ids.forEach(id => {
+          const newsletter = previousNewsletters.find(n => n.id === id);
+          if (newsletter && !newsletter.is_read && !newsletter.is_archived) {
+            unreadCount++;
+          }
+          updateNewsletterInCache(id, { is_read: true });
+        });
+        
+        if (unreadCount > 0) {
+          updateUnreadCountInCache(-unreadCount);
+        }
       }
-      return { previousNewsletters };
+      return { previousNewsletters, unreadCount };
     },
-    onError: (_err: Error, _ids: string[], context: { previousNewsletters?: Newsletter[] } | undefined) => {
+    onError: (_err, _ids, context) => {
       if (context?.previousNewsletters) {
-        const cacheKey = ['newsletters', 'all', user?.id];
-        queryClient.setQueryData(cacheKey, context.previousNewsletters);
+        queryClient.setQueryData(['newsletters', 'all', user?.id], context.previousNewsletters);
+        if (context.unreadCount && context.unreadCount > 0) {
+          updateUnreadCountInCache(context.unreadCount);
+        }
       }
     },
     onSettled: () => {
@@ -344,13 +391,13 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
   });
 
   // BULK MARK AS UNREAD
-  const bulkMarkAsUnreadMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>({
+  const bulkMarkAsUnreadMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[]; readCount?: number }>({
     mutationFn: async (ids: string[]) => {
       if (!user) throw new Error('User not authenticated');
       if (ids.length === 0) return true;
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_read: false } as NewsletterUpdate)
+        .update({ is_read: false })
         .in('id', ids)
         .eq('user_id', user.id);
       if (error) throw error;
@@ -359,16 +406,32 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
     onMutate: async (ids: string[]) => {
       const cacheKey = ['newsletters', 'all', user?.id];
       await queryClient.cancelQueries({ queryKey: cacheKey });
+      await queryClient.cancelQueries({ queryKey: ['unreadCount', user?.id] });
+      
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(cacheKey);
+      let readCount = 0;
+      
       if (previousNewsletters) {
-        ids.forEach(id => updateNewsletterInCache(id, { is_read: false }));
+        ids.forEach(id => {
+          const newsletter = previousNewsletters.find(n => n.id === id);
+          if (newsletter && newsletter.is_read && !newsletter.is_archived) {
+            readCount++;
+          }
+          updateNewsletterInCache(id, { is_read: false });
+        });
+        
+        if (readCount > 0) {
+          updateUnreadCountInCache(readCount);
+        }
       }
-      return { previousNewsletters };
+      return { previousNewsletters, readCount };
     },
-    onError: (_err: Error, _ids: string[], context: { previousNewsletters?: Newsletter[] } | undefined) => {
+    onError: (_err, _ids, context) => {
       if (context?.previousNewsletters) {
-        const cacheKey = ['newsletters', 'all', user?.id];
-        queryClient.setQueryData(cacheKey, context.previousNewsletters);
+        queryClient.setQueryData(['newsletters', 'all', user?.id], context.previousNewsletters);
+        if (context.readCount && context.readCount > 0) {
+          updateUnreadCountInCache(-context.readCount);
+        }
       }
     },
     onSettled: () => {
@@ -378,7 +441,7 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
   });
 
   // ARCHIVE
-  const archiveMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; sourceId: string | null; now?: string }>({
+  const archiveMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; sourceId: string | null; now?: string; wasUnread?: boolean }>({
     mutationFn: async (id: string) => {
       if (!user) throw new Error('User not authenticated');
       const now = new Date().toISOString();
@@ -400,17 +463,21 @@ const updateSourceCountInCache = useCallback((sourceId: string | null, delta: nu
       const previousNewsletters = queryClient.getQueryData<Newsletter[]>(cacheKey);
       const newsletterToArchive = previousNewsletters?.find(n => n.id === id);
       const sourceId = newsletterToArchive?.newsletter_source_id || null;
+      const newsletter = previousNewsletters?.find(n => n.id === id);
+      const wasUnread = newsletter && !newsletter.is_read && !newsletter.is_archived;
       if (previousNewsletters) {
         updateNewsletterInCache(id, { is_archived: true, updated_at: now });
         if (sourceId) updateSourceCountInCache(sourceId, -1);
+        if (wasUnread) updateUnreadCountInCache(-1)
       }
-      return { previousNewsletters, sourceId, now };
+      return { previousNewsletters, sourceId, wasUnread, now };
     },
     onError: (_err, _id, context) => {
       if (context?.previousNewsletters) {
         const cacheKey = ['newsletters', 'all', user?.id];
         queryClient.setQueryData(cacheKey, context.previousNewsletters);
         if (context.sourceId) updateSourceCountInCache(context.sourceId, 1);
+        if (context.wasUnread) updateUnreadCountInCache(1);
       }
     },
     onSettled: () => {
