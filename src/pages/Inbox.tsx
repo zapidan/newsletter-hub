@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Mail, X, ChevronDown, Archive } from 'lucide-react';
+import { Mail, X, ChevronDown, Archive, ArchiveX, Trash } from 'lucide-react';
 
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
@@ -441,14 +441,14 @@ const Inbox: React.FC = () => {
           <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              {/* Separate All button that shows all newsletters */}
+              {/* All button that shows all newsletters - now always clickable */}
               <button
                 onClick={() => {
                   setFilter('all');
-                  setSourceFilter(null); // Clear source filter when clicking All
+                  // Don't clear source filter when clicking All - keep it independent
                 }}
                 className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                  filter === 'all' && !sourceFilter
+                  filter === 'all'
                     ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                 }`}
@@ -544,7 +544,7 @@ const Inbox: React.FC = () => {
                           }}
                           className={`w-full text-left px-4 py-2 text-sm flex justify-between items-center ${
                             sourceFilter === source.id
-                              ? 'bg-blue-50 text-blue-800 font-medium' 
+                              ? 'bg-blue-50 text-blue-800 font-medium'
                               : 'text-gray-700 hover:bg-gray-100'
                           }`}
                         >
@@ -626,26 +626,29 @@ const Inbox: React.FC = () => {
                   <button 
                     onClick={handleBulkUnarchive}
                     disabled={selectedIds.size === 0}
-                    className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
+                    className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1"
                   >
-                    Unarchive
+                    <ArchiveX className="h-4 w-4" />
+                    <span>Unarchive</span>
                   </button>
                   <button
                     onClick={handleBulkTrash}
                     disabled={selectedIds.size === 0}
-                    className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50"
+                    className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1"
                     title="Delete selected permanently"
                   >
-                    Trash
+                    <Trash className="h-4 w-4" />
+                    <span>Trash</span>
                   </button>
                 </>
               ) : (
                 <button 
                   onClick={handleBulkArchive}
                   disabled={selectedIds.size === 0}
-                  className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50"
+                  className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1"
                 >
-                  Archive
+                  <Archive className="h-4 w-4" />
+                  <span>Archive</span>
                 </button>
               )}
             </div>
