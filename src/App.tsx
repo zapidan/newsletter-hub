@@ -15,6 +15,7 @@ import ReadingQueuePage from './pages/ReadingQueuePage';
 import LoadingScreen from './components/common/LoadingScreen';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import DailySummary from './pages/DailySummary';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useContext(AuthContext);
@@ -53,6 +54,7 @@ function App() {
         <Route path="newsletters" element={<NewslettersPage />} />
         <Route path="reading-queue" element={<ReadingQueuePage />} />
         <Route path="reading-queue/:id" element={<NewsletterDetail />} />
+        <Route path="daily-summary" element={<DailySummary />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

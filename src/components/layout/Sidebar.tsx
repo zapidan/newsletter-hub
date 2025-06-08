@@ -12,7 +12,8 @@ import {
   Check,
   Tag,
   Newspaper,
-  Bookmark
+  Bookmark,
+  CalendarDays
 } from 'lucide-react';
 import { useState } from 'react';
 import { AuthContext } from '../../context/AuthContext';
@@ -45,6 +46,7 @@ const Sidebar = () => {
   const navLinks = [
     { to: '/inbox', icon: <Inbox size={20} />, label: 'Inbox' },
     { to: '/reading-queue', icon: <Bookmark size={20} />, label: 'Reading Queue' },
+    { to: '/daily-summary', icon: <CalendarDays size={20} />, label: 'Daily Summary' },
     { to: '/search', icon: <Search size={20} />, label: 'Search' },
     { to: '/trending', icon: <TrendingUp size={20} />, label: 'Trending Topics' },
     { to: '/tags', icon: <Tag size={20} />, label: 'Tags' },
