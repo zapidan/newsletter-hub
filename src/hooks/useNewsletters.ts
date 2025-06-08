@@ -1,4 +1,4 @@
-import { useCallback } from 'react'; // Removed unused useMemo
+import { useCallback, useMemo, useContext } from 'react';
 import { 
   useQuery, 
   useMutation, 
@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { AuthContext } from '../context/AuthContext';
-import { useContext } from 'react';
+
 import { Newsletter as NewsletterType, NewsletterUpdate, Tag } from '../types';
 
 // Cache time in milliseconds (5 minutes)
@@ -112,87 +112,41 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
   const user = auth?.user;
   const queryClient = useQueryClient();
 
-  // Generate a stable query key based on the current filters
-  const getQueryKey = useCallback((tagIds?: string | string[]) => {
-    const filters: Record<string, unknown> = { 
-      filter,
-      sourceId: sourceId || null,
-      // Always include archive status in the key to force a refetch when it changes
-      isArchiveFilter: filter === 'archived'
-    };
-    
-    if (tagIds) {
-      filters.tagIds = tagIds;
-    }
-    
-    console.log('Generated query key with filters:', filters);
-    return queryKeys.list(filters);
-  }, [sourceId, filter]);
+  // Convert comma-separated tagIds to array if needed
+  const normalizedTagId = tagId?.includes(',') ? tagId.split(',').filter(Boolean) : tagId;
 
-  const fetchNewslettersFn = useCallback(async (tagIds?: string | string[]): Promise<Newsletter[]> => {
+  // Generate a stable query key - we'll use a single key since we're fetching all newsletters at once
+  const getQueryKey = useCallback(() => {
+    // Single key for all newsletters
+    return queryKeys.list({ type: 'all-newsletters' });
+  }, []);
+
+  // Fetch all newsletters from the database without any filtering
+  const fetchAllNewsletters = useCallback(async (): Promise<Newsletter[]> => {
     if (!user) throw new Error('User not authenticated');
 
-    console.log('Fetching newsletters with filters:', { sourceId, filter, tagIds });
+    console.log('Fetching all newsletters');
 
-    // Start with base query - fetch everything and let the query function handle filtering
-    let query = supabase
+    // Fetch all newsletters with their related data
+    const { data, error } = await supabase
       .from('newsletters')
-      .select(
-        `
+      .select(`
         *,
         newsletter_source:newsletter_sources(*),
         newsletter_tags (
           tag:tags (id, name, color)
         )
-      `
-      )
+      `)
       .eq('user_id', user.id)
       .order('received_at', { ascending: false });
-
-    // Don't apply any server-side filtering here - let the query function handle it
-    // This ensures we have all the data we need for different filter combinations
-
-    if (tagIds) {
-      const tagIdsArray = Array.isArray(tagIds) ? tagIds : [tagIds];
-      
-      // For each tag, find newsletters that have that tag
-      const newsletterIdsByTag = await Promise.all(
-        tagIdsArray.map(async (tagId) => {
-          const { data: newsletterTagRows, error: tagError } = await supabase
-            .from('newsletter_tags')
-            .select('newsletter_id')
-            .eq('tag_id', tagId);
-          if (tagError) throw tagError;
-          return (newsletterTagRows || []).map(row => row.newsletter_id);
-        })
-      );
-      
-      // Find the intersection of all newsletter IDs (newsletters that have ALL tags)
-      if (newsletterIdsByTag.length > 0) {
-        // Start with the first set of IDs
-        let commonIds = new Set(newsletterIdsByTag[0]);
-        
-        // Intersect with each subsequent set
-        for (let i = 1; i < newsletterIdsByTag.length; i++) {
-          const currentSet = new Set(newsletterIdsByTag[i]);
-          commonIds = new Set([...commonIds].filter(id => currentSet.has(id)));
-        }
-        
-        if (commonIds.size > 0) {
-          query = query.in('id', Array.from(commonIds));
-        } else {
-          return []; // No newsletters match all tags
-        }
-      }
+    
+    if (error) {
+      console.error('Error fetching newsletters:', error);
+      throw error;
     }
 
-    query = query.order('received_at', { ascending: false });
-    const { data, error } = await query;
-    if (error) throw error;
-    const newsletters = transformNewsletterData(data);
-
     // Fetch all sources in one query and attach them
-    const sourceIds = Array.from(new Set(newsletters.map(n => n.newsletter_source_id).filter(Boolean)));
+    const sourceIds = Array.from(new Set(data.map(n => n.newsletter_source_id).filter(Boolean)));
     let sourcesMap: Record<string, any> = {};
     if (sourceIds.length > 0) {
       const { data: sourcesData, error: sourcesError } = await supabase
@@ -204,72 +158,80 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       }
     }
     // Attach the source object to each newsletter
-    const newslettersWithSources = newsletters.map(n => ({
+    const newslettersWithSources = data.map(n => ({
       ...n,
       source: n.newsletter_source_id ? sourcesMap[n.newsletter_source_id] || null : null
     }));
-    return newslettersWithSources;
+    return transformNewsletterData(newslettersWithSources);
   }, [user]);
 
-  // Convert comma-separated tagIds to array if needed
-  const normalizedTagId = tagId?.includes(',') ? tagId.split(',').filter(Boolean) : tagId;
-  
-  const queryKey = getQueryKey(normalizedTagId);
+  const queryKey = getQueryKey();
 
-  // Apply filters based on the current view
-  const fetchNewsletters = useCallback(async (tagIds?: string | string[]) => {
-    console.log('Fetching newsletters with filter:', filter, 'sourceId:', sourceId);
-    const data = await fetchNewslettersFn(tagIds);
-    console.log('Fetched newsletters count:', data.length);
-    return data;
-  }, [fetchNewslettersFn, filter, sourceId]);
+  // Apply filters to the cached data
+  const filterNewsletters = useCallback((newsletters: Newsletter[], tagIds?: string | string[]) => {
+    let filtered = [...newsletters];
+    
+    // Apply tag filter if provided
+    if (tagIds && tagIds.length > 0) {
+      const tagIdsArray = Array.isArray(tagIds) ? tagIds : [tagIds];
+      filtered = filtered.filter(newsletter => 
+        newsletter.tags?.some(tag => tag && tag.id && tagIdsArray.includes(tag.id))
+      );
+      console.log(`Filtered to ${filtered.length} newsletters with tags:`, tagIdsArray);
+    }
+    
+    // Apply status filters
+    if (filter === 'unread') {
+      filtered = filtered.filter(n => !n.is_read);
+    } else if (filter === 'liked') {
+      filtered = filtered.filter(n => n.is_liked);
+    } else if (filter === 'archived') {
+      filtered = filtered.filter(n => n.is_archived);
+    } else {
+      // Default: show unarchived items
+      filtered = filtered.filter(n => !n.is_archived);
+    }
+    
+    // Apply source filter if active
+    if (sourceId) {
+      filtered = filtered.filter(n => n.newsletter_source_id === sourceId);
+    }
+    
+    console.log(`Filtered to ${filtered.length} newsletters with filter:`, { filter, sourceId });
+    return filtered;
+  }, [filter, sourceId]);
 
-  // Main query for newsletters
+  // Main query for all newsletters
   const { 
-    data: newsletters = [], 
+    data: allNewsletters = [], 
     isLoading: isLoadingNewsletters, 
     isError: isErrorNewsletters, 
     error: errorNewsletters, 
     refetch: refetchNewsletters 
-  } = useQuery<Newsletter[], Error>({
-    queryKey: getQueryKey(tagId ? [tagId] : undefined),
-    queryFn: async () => {
-      console.log('Running query with sourceId:', sourceId, 'and filter:', filter);
-      const result = await fetchNewsletters(tagId ? [tagId] : undefined);
-      console.log('Query result count:', result.length, { sourceId, filter });
-      // Apply client-side filtering as a fallback
-      let filtered = [...result];
-      if (sourceId) {
-        filtered = filtered.filter(n => n.newsletter_source_id === sourceId);
-      }
-      if (filter === 'unread') {
-        filtered = filtered.filter(n => !n.is_read);
-      } else if (filter === 'liked') {
-        filtered = filtered.filter(n => n.is_liked);
-      } else if (filter === 'archived') {
-        filtered = filtered.filter(n => n.is_archived);
-      } else {
-        filtered = filtered.filter(n => !n.is_archived);
-      }
-      console.log('Filtered result count:', filtered.length);
-      return filtered;
-    },
+  } = useQuery<Newsletter[]>({
+    queryKey: getQueryKey(),
+    queryFn: fetchAllNewsletters,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: CACHE_DURATION, // 30 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
     enabled: !!user,
-    // Cache settings for optimal filter switching
-    staleTime: 0, // Always consider data stale to trigger refetches
-    gcTime: CACHE_DURATION, // Keep cache for 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnMount: 'always',
-    refetchOnReconnect: true,
   });
+
+  // Apply filters to the cached data
+  const newsletters = useMemo(() => {
+    if (!allNewsletters.length) return [];
+    return filterNewsletters(allNewsletters, normalizedTagId);
+  }, [allNewsletters, filterNewsletters, normalizedTagId]);
 
   // Helper function to update newsletter in cache
   const updateNewsletterInCache = useCallback((id: string, updates: Partial<Newsletter>) => {
-    queryClient.setQueriesData<Newsletter[]>({ queryKey: queryKeys.lists() }, (old) => {
+    queryClient.setQueryData<Newsletter[]>(getQueryKey(), (old) => {
       if (!old) return old;
       return old.map((n) => (n.id === id ? { ...n, ...updates } : n));
     });
-  }, [queryClient]);
+  }, [queryClient, getQueryKey]);
 
   // Mutation for toggling like
   const { 
