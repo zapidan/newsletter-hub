@@ -379,6 +379,17 @@ const NewsletterDetail = () => {
           
           {/* Newsletter Content */}
           <div className="prose max-w-none mb-6">
+            {newsletter?.received_at && (
+              <div className="text-sm text-gray-500 mb-6">
+                {new Date(newsletter.received_at).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </div>
+            )}
             {newsletter?.content && (
               <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
             )}
