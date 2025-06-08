@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Mail, X, Archive, ArchiveX, Trash } from 'lucide-react';
+import { Mail, X, Archive } from 'lucide-react';
 import { SourceFilterDropdown } from '../components/SourceFilterDropdown';
+import BulkSelectionActions from '../components/BulkSelectionActions';
 
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
@@ -465,14 +466,7 @@ const Inbox: React.FC = () => {
                 }}
                 className="ml-2"
               />
-              {isSelecting ? (
-                <button 
-                  onClick={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
-                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors ml-2"
-                >
-                  Cancel
-                </button>
-              ) : (
+              {!isSelecting && (
                 <button
                   onClick={() => setIsSelecting(true)}
                   className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
@@ -483,81 +477,29 @@ const Inbox: React.FC = () => {
             </div>
           </div>
         </div>
-        {isSelecting && (
-          <div className="flex items-center justify-between w-full bg-blue-50 px-4 py-2 rounded-lg">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-700">{selectedIds.size} selected</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={toggleSelectAll}
-                  className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
-                >
-                  {selectedIds.size === filteredNewsletters.length ? 'Deselect All' : 'Select All'}
-                </button>
-                <span className="text-gray-300">|</span>
-                <button
-                  onClick={selectRead}
-                  className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
-                >
-                  Select Read
-                </button>
-                <button
-                  onClick={selectUnread}
-                  className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
-                >
-                  Select Unread
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={handleBulkMarkAsRead}
-                disabled={selectedIds.size === 0}
-                className="px-3 py-1 bg-green-100 text-gray-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
-              >
-                Mark as Read
-              </button>
-              <button 
-                onClick={handleBulkMarkAsUnread}
-                disabled={selectedIds.size === 0}
-                className="px-3 py-1 bg-blue-100 text-gray-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
-              >
-                Mark as Unread
-              </button>
-              {showArchived ? (
-                <>
-                  <button 
-                    onClick={handleBulkUnarchive}
-                    disabled={selectedIds.size === 0 || isBulkActionLoading}
-                    className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1"
-                  >
-                    <ArchiveX className="h-4 w-4" />
-                    <span>Unarchive</span>
-                  </button>
-                  <button
-                    onClick={handleBulkTrash}
-                    disabled={selectedIds.size === 0 || isBulkActionLoading}
-                    className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1"
-                    title="Delete selected permanently"
-                  >
-                    <Trash className="h-4 w-4" />
-                    <span>Trash</span>
-                  </button>
-                </>
-              ) : (
-                <button 
-                  onClick={handleBulkArchive}
-                  disabled={selectedIds.size === 0 || isBulkActionLoading}
-                  className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1"
-                >
-                  <Archive className="h-4 w-4" />
-                  <span>Archive</span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+
       </div>
+
+      {/* Bulk Actions Dropdown */}
+      {isSelecting && (
+        <div className="mt-2">
+          <BulkSelectionActions
+            selectedCount={selectedIds.size}
+            totalCount={filteredNewsletters.length}
+            showArchived={showArchived}
+            isBulkActionLoading={isBulkActionLoading}
+            onSelectAll={toggleSelectAll}
+            onSelectRead={selectRead}
+            onSelectUnread={selectUnread}
+            onMarkAsRead={handleBulkMarkAsRead}
+            onMarkAsUnread={handleBulkMarkAsUnread}
+            onArchive={handleBulkArchive}
+            onUnarchive={handleBulkUnarchive}
+            onDelete={handleBulkTrash}
+            onCancel={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
+          />
+        </div>
+      )}
 
       {/* Selected tags filter */}
       {selectedTags.length > 0 && (
