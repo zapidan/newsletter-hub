@@ -19,17 +19,21 @@ const NewsletterDetail = () => {
   const { updateNewsletterTags } = useTags();
   const { 
     markAsRead, 
+    markAsUnread,
     toggleLike, 
     getNewsletter, 
     archiveNewsletter, 
     unarchiveNewsletter, 
     deleteNewsletter,
-    isDeletingNewsletter
+    isDeletingNewsletter,
+    isMarkingAsRead,
+    isMarkingAsUnread
   } = useNewsletters();
   const { toggleInQueue, readingQueue } = useReadingQueue();
   const [isBookmarking, setIsBookmarking] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [isTogglingReadStatus, setIsTogglingReadStatus] = useState(false);
   const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +200,28 @@ const NewsletterDetail = () => {
     }
   }, [newsletter, isArchiving, archiveNewsletter, unarchiveNewsletter]);
 
+  const handleToggleReadStatus = useCallback(async () => {
+    if (!newsletter?.id || isTogglingReadStatus) return;
+    
+    setIsTogglingReadStatus(true);
+    try {
+      if (newsletter.is_read) {
+        await markAsUnread(newsletter.id);
+      } else {
+        await markAsRead(newsletter.id);
+      }
+      // Update local state to reflect the change
+      setNewsletter(prev => prev ? { 
+        ...prev, 
+        is_read: !prev.is_read 
+      } : null);
+    } catch (error) {
+      console.error('Error toggling read status:', error);
+    } finally {
+      setIsTogglingReadStatus(false);
+    }
+  }, [newsletter, isTogglingReadStatus, markAsRead, markAsUnread]);
+
   const handleToggleBookmark = useCallback(async () => {
     if (!newsletter?.id || isBookmarking) return;
     
@@ -310,6 +336,24 @@ const NewsletterDetail = () => {
               
               {/* Action Buttons */}
               <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={handleToggleReadStatus}
+                  disabled={isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread}
+                  className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                    newsletter?.is_read
+                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                      : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                  }`}
+                  aria-label={newsletter?.is_read ? 'Mark as unread' : 'Mark as read'}
+                >
+                  {newsletter?.is_read ? (
+                    <span>Mark Unread</span>
+                  ) : (
+                    <span>Mark Read</span>
+                  )}
+                </button>
+
+                
                 <button
                   onClick={handleToggleLike}
                   disabled={isLiking}
