@@ -76,18 +76,12 @@ const Inbox: React.FC = () => {
     handleToggleRead,
     handleToggleQueue,
     handleUpdateTags,
-    handleTagClick: handleNewsletterTagClick,
+    handleTagClick,
   } = useNewsletterRowHandlers({
     queryClient,
     searchParams,
     setSearchParams,
   });
-
-  // Handle tag click for the NewsletterRow component
-  const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
-    // Forward the tag and event to the handler
-    handleNewsletterTagClick(tag, e);
-  }, [handleNewsletterTagClick]);
 
   // Fetch newsletters data
   const { 

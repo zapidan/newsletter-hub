@@ -7,12 +7,14 @@ type UseNewsletterRowHandlersProps = {
   queryClient: ReturnType<typeof useQueryClient>;
   searchParams: URLSearchParams;
   setSearchParams: (params: URLSearchParams) => void;
+  navigateToInboxWithTag?: (tagId: string) => void;
 };
 
 export const useNewsletterRowHandlers = ({
   queryClient,
   searchParams,
   setSearchParams,
+  navigateToInboxWithTag,
 }: UseNewsletterRowHandlersProps) => {
   // Toggle like status for a newsletter
   const handleToggleLike = async (newsletter: Newsletter): Promise<void> => {
@@ -160,6 +162,13 @@ export const useNewsletterRowHandlers = ({
   const handleTagClick = (tag: Tag, e: React.MouseEvent) => {
     e.stopPropagation();
     
+    // If navigateToInboxWithTag is provided, use it for navigation
+    if (navigateToInboxWithTag) {
+      navigateToInboxWithTag(tag.id);
+      return;
+    }
+    
+    // Otherwise, use the existing tag filtering logic
     const currentTags = new Set(searchParams.get('tag')?.split(',').filter(Boolean) || []);
     
     if (currentTags.has(tag.id)) {

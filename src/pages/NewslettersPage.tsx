@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
 import { Newsletter, NewsletterSource } from '../types';
 import { useNewsletters } from '../hooks/useNewsletters';
@@ -158,6 +159,8 @@ const NewslettersPage: React.FC = () => {
   const isLoading = isLoadingNewsletters;
   const isError = isErrorNewsletters;
 
+  const navigate = useNavigate();
+
   // Set up shared handlers using useNewsletterRowHandlers
   const {
     handleToggleLike,
@@ -169,7 +172,10 @@ const NewslettersPage: React.FC = () => {
   } = useNewsletterRowHandlers({
     queryClient,
     searchParams: new URLSearchParams(), // Empty for this page
-    setSearchParams: () => {}, // No-op for this page
+    setSearchParams: () => {}, // No-op since we're using navigateToInboxWithTag
+    navigateToInboxWithTag: (tagId) => {
+      navigate(`/inbox?tag=${encodeURIComponent(tagId)}`);
+    },
   });
 
   const toggleTagVisibility = useCallback((newsletterId: string, e: React.MouseEvent) => {
