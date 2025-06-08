@@ -1,21 +1,19 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react'; // Removed unused useMemo
 import { 
   useQuery, 
   useMutation, 
   useQueryClient, 
   UseMutateAsyncFunction, 
   QueryObserverResult, 
-  RefetchOptions,
-  keepPreviousData
+  RefetchOptions
 } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
 import { AuthContext } from '../context/AuthContext';
 import { useContext } from 'react';
 import { Newsletter as NewsletterType, NewsletterUpdate, Tag } from '../types';
 
-// Cache time constants (in milliseconds)
-const STALE_TIME = 5 * 60 * 1000; // 5 minutes
-const CACHE_TIME = 30 * 60 * 1000; // 30 minutes
+// Cache time in milliseconds (5 minutes)
+const CACHE_DURATION = 5 * 60 * 1000;
 
 // Query keys
 const queryKeys = {
@@ -116,30 +114,43 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
 
   // Generate a stable query key based on the current filters
   const getQueryKey = useCallback((tagIds?: string | string[]) => {
-    return queryKeys.list(tagIds ? { tagIds, sourceId } : { sourceId });
-  }, [sourceId]);
+    const filters: Record<string, unknown> = { 
+      filter,
+      sourceId: sourceId || null,
+      // Always include archive status in the key to force a refetch when it changes
+      isArchiveFilter: filter === 'archived'
+    };
+    
+    if (tagIds) {
+      filters.tagIds = tagIds;
+    }
+    
+    console.log('Generated query key with filters:', filters);
+    return queryKeys.list(filters);
+  }, [sourceId, filter]);
 
   const fetchNewslettersFn = useCallback(async (tagIds?: string | string[]): Promise<Newsletter[]> => {
     if (!user) throw new Error('User not authenticated');
 
+    console.log('Fetching newsletters with filters:', { sourceId, filter, tagIds });
+
+    // Start with base query - fetch everything and let the query function handle filtering
     let query = supabase
       .from('newsletters')
       .select(
         `
         *,
+        newsletter_source:newsletter_sources(*),
         newsletter_tags (
           tag:tags (id, name, color)
         )
       `
       )
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .order('received_at', { ascending: false });
 
-    // Apply source filter if provided
-    if (sourceId) {
-      query = query.eq('newsletter_source_id', sourceId);
-      // Only show unarchived items when filtering by source
-      query = query.eq('is_archived', false);
-    }
+    // Don't apply any server-side filtering here - let the query function handle it
+    // This ensures we have all the data we need for different filter combinations
 
     if (tagIds) {
       const tagIdsArray = Array.isArray(tagIds) ? tagIds : [tagIds];
@@ -207,38 +218,49 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
 
   // Apply filters based on the current view
   const fetchNewsletters = useCallback(async (tagIds?: string | string[]) => {
+    console.log('Fetching newsletters with filter:', filter, 'sourceId:', sourceId);
     const data = await fetchNewslettersFn(tagIds);
-
-    // Strict filtering for Newsletter Sources page
-    if (filter === 'source' && sourceId) {
-      return data.filter(
-        (newsletter: Newsletter) =>
-          newsletter.newsletter_source_id === sourceId && !newsletter.is_archived
-      );
-    }
-
-    if (filter === 'archived') {
-      return data.filter((newsletter: Newsletter) => newsletter.is_archived);
-    }
-
-    // Inbox and other default views
-    return data.filter((newsletter: Newsletter) => !newsletter.is_archived);
+    console.log('Fetched newsletters count:', data.length);
+    return data;
   }, [fetchNewslettersFn, filter, sourceId]);
 
-  // Fetch newsletters data
+  // Main query for newsletters
   const { 
-    data: newsletters = [],
+    data: newsletters = [], 
     isLoading: isLoadingNewsletters, 
-    isError: isErrorNewsletters,
+    isError: isErrorNewsletters, 
     error: errorNewsletters, 
-    refetch: refetchNewsletters,
+    refetch: refetchNewsletters 
   } = useQuery<Newsletter[], Error>({
-    queryKey: [...queryKey, { showArchived: filter === 'archived', sourceId }],
-    queryFn: () => fetchNewsletters(normalizedTagId),
-    staleTime: STALE_TIME,
-    gcTime: CACHE_TIME,
-    placeholderData: keepPreviousData,
+    queryKey: getQueryKey(tagId ? [tagId] : undefined),
+    queryFn: async () => {
+      console.log('Running query with sourceId:', sourceId, 'and filter:', filter);
+      const result = await fetchNewsletters(tagId ? [tagId] : undefined);
+      console.log('Query result count:', result.length, { sourceId, filter });
+      // Apply client-side filtering as a fallback
+      let filtered = [...result];
+      if (sourceId) {
+        filtered = filtered.filter(n => n.newsletter_source_id === sourceId);
+      }
+      if (filter === 'unread') {
+        filtered = filtered.filter(n => !n.is_read);
+      } else if (filter === 'liked') {
+        filtered = filtered.filter(n => n.is_liked);
+      } else if (filter === 'archived') {
+        filtered = filtered.filter(n => n.is_archived);
+      } else {
+        filtered = filtered.filter(n => !n.is_archived);
+      }
+      console.log('Filtered result count:', filtered.length);
+      return filtered;
+    },
     enabled: !!user,
+    // Cache settings for optimal filter switching
+    staleTime: 0, // Always consider data stale to trigger refetches
+    gcTime: CACHE_DURATION, // Keep cache for 5 minutes
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
   });
 
   // Helper function to update newsletter in cache

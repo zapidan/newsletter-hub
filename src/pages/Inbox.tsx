@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, RefreshCw as RefreshCwIcon, X, Tag as TagIcon, BookmarkIcon, Heart, Archive, ArchiveX, Trash } from 'lucide-react';
+import { Mail, X, Tag as TagIcon, BookmarkIcon, Heart, Archive, ArchiveX, Trash, ChevronDown } from 'lucide-react';
 
 import { useNewsletters } from '../hooks/useNewsletters';
+import { useNewsletterSources } from '../hooks/useNewsletterSources';
 import { useReadingQueue } from '../hooks/useReadingQueue';
 import { useTags } from '../hooks/useTags';
 import TagSelector from '../components/TagSelector';
@@ -38,7 +39,12 @@ const Inbox: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'unread' | 'liked' | 'archived'>(
     (searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived') || 'all'
   );
+  const [sourceFilter, setSourceFilter] = useState<string | null>(searchParams.get('source') || null);
   const showArchived = filter === 'archived';
+
+  // Fetch newsletter sources
+  const { newsletterSources = [], isLoadingSources } = useNewsletterSources();
+  const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -59,7 +65,7 @@ const Inbox: React.FC = () => {
     deleteNewsletter,
     isDeletingNewsletter,
     bulkDeleteNewsletters,
-  } = useNewsletters(tagId || undefined, filter);
+  } = useNewsletters(tagId || undefined, filter, sourceFilter || undefined);
   
   // Trash (permanent delete) handlers
   const handleTrash = useCallback(async (newsletterId: string) => {
@@ -304,14 +310,68 @@ const Inbox: React.FC = () => {
     setIsSelecting(false);
   }, [selectedIds, bulkMarkAsUnread]);
 
-  // Update URL when filter changes
+  // Close dropdown when clicking outside
   useEffect(() => {
-    setSearchParams(prev => {
-      const newParams = new URLSearchParams(prev);
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isSourceDropdownOpen && !target.closest('.source-filter-dropdown')) {
+        setIsSourceDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSourceDropdownOpen]);
+
+  // Close dropdown when pressing Escape
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isSourceDropdownOpen) {
+        setIsSourceDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isSourceDropdownOpen]);
+
+  // Update URL when filter or source changes
+  useEffect(() => {
+    console.log('Current state:', { filter, sourceFilter });
+    
+    const updateParams = () => {
+      const newParams = new URLSearchParams();
+      
+      // Always set the filter
       newParams.set('filter', filter);
+      
+      // Set source if it exists
+      if (sourceFilter) {
+        console.log('Setting source param:', sourceFilter);
+        newParams.set('source', sourceFilter);
+      }
+      
+      // Preserve tag if it exists
+      const tagParam = searchParams.get('tag');
+      if (tagParam) {
+        newParams.set('tag', tagParam);
+      }
+      
+      console.log('Updating URL with params:', newParams.toString());
       return newParams;
-    }, { replace: true });
-  }, [filter, setSearchParams]);
+    };
+    
+    setSearchParams(updateParams(), { replace: true });
+  }, [filter, sourceFilter, setSearchParams, searchParams]);
+  
+  // Log when searchParams change
+  useEffect(() => {
+    console.log('Current URL params:', searchParams.toString());
+  }, [searchParams]);
 
   // Loading and error states for the main newsletter list
   if (isLoadingNewsletters) {
@@ -398,23 +458,95 @@ const Inbox: React.FC = () => {
                   <span>Archived</span>
                 </div>
               </button>
+              <div className="relative ml-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsSourceDropdownOpen(!isSourceDropdownOpen);
+                  }}
+                  className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
+                    sourceFilter
+                      ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' 
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                  }`}
+                >
+                  <span>
+                    {sourceFilter 
+                      ? `Source: ${newsletterSources.find(s => s.id === sourceFilter)?.name || 'Unknown'}` 
+                      : 'Filter by Source'}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${isSourceDropdownOpen ? 'transform rotate-180' : ''}`} />
+                </button>
+                
+                {isSourceDropdownOpen && (
+                  <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200 source-filter-dropdown">
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('Clearing source filter');
+                          setSourceFilter(null);
+                          setIsSourceDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm ${
+                          !sourceFilter 
+                            ? 'bg-blue-50 text-blue-800 font-medium' 
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        All Sources
+                      </button>
+                      {newsletterSources.map((source) => (
+                        <button
+                          key={source.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Selected source:', source.id);
+                            setSourceFilter(source.id);
+                            setIsSourceDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm flex justify-between items-center ${
+                            sourceFilter === source.id
+                              ? 'bg-blue-50 text-blue-800 font-medium' 
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <span className="truncate">{source.name}</span>
+                          <span className="ml-2 text-xs text-gray-500">{source.newsletter_count}</span>
+                        </button>
+                      ))}
+                      {newsletterSources.length === 0 && !isLoadingSources && (
+                        <div className="px-4 py-2 text-sm text-gray-500 italic">No sources found</div>
+                      )}
+                      {isLoadingSources && (
+                        <div className="px-4 py-2 text-sm text-gray-500">Loading sources...</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {isSelecting ? (
+                <button 
+                  onClick={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
+                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors ml-2"
+                >
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsSelecting(true)}
+                  className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  Select
+                </button>
+              )}
             </div>
-            
-            {isSelecting ? (
-              <button 
-                onClick={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors ml-2"
-              >
-                Cancel
-              </button>
-            ) : (
-              <button
-                onClick={() => setIsSelecting(true)}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                Select
-              </button>
-            )}
           </div>
         </div>
         {isSelecting && (
