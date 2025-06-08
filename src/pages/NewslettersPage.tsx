@@ -395,7 +395,6 @@ const NewslettersPage: React.FC = () => {
 
       {/* Existing Sources List */}
       <section>
-        <h2 className="text-xl font-semibold mb-4 text-primary-800">Existing Sources</h2>
         {/* Display loading state for the list */}
         {isLoadingSources && (
           <div className="flex items-center justify-center text-gray-500 py-6">

@@ -182,9 +182,9 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     
     // Apply status filters
     if (filter === 'unread') {
-      filtered = filtered.filter(n => !n.is_read);
+      filtered = filtered.filter(n => !n.is_read && !n.is_archived);
     } else if (filter === 'liked') {
-      filtered = filtered.filter(n => n.is_liked);
+      filtered = filtered.filter(n => n.is_liked && !n.is_archived);
     } else if (filter === 'archived') {
       filtered = filtered.filter(n => n.is_archived);
     } else {
