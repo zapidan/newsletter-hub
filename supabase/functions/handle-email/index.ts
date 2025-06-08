@@ -16,8 +16,9 @@ const FRONTEND_WEBHOOK_URL = Deno.env.get('FRONTEND_WEBHOOK_URL') || '';
 const { createHmac } = crypto;
 
 // Create a Supabase client
-// @ts-ignore - Supabase client for Deno
+// @ts-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { parse } from 'https://esm.sh/node-html-parser@6.1.10';
 
 // Initialize Supabase client with service role key
 // @ts-ignore - Deno.env is available in the Deno runtime
@@ -36,6 +37,29 @@ interface EmailData {
   'message-headers': string;
   'recipient'?: string;
   'sender'?: string;
+}
+
+// Configuration
+const WORDS_PER_MINUTE = 200;
+
+// Function to calculate word count from HTML
+function getWordCount(html: string): number {
+  try {
+    // Parse HTML and get text content
+    const root = parse(html);
+    const text = root.textContent || '';
+    
+    // Count words (split by whitespace and filter out empty strings)
+    return text.trim().split(/\s+/).filter(Boolean).length;
+  } catch (error) {
+    console.error('Error calculating word count:', error);
+    return 0;
+  }
+}
+
+// Function to calculate read time in minutes
+function calculateReadTime(wordCount: number): number {
+  return Math.ceil(wordCount / WORDS_PER_MINUTE) || 1; // At least 1 minute
 }
 
 // Verify Mailgun webhook signature
@@ -82,21 +106,29 @@ async function processIncomingEmail(emailData: EmailData) {
       }
     }
 
+    // Get the content (prefer HTML but fall back to plain text)
+    const content = emailData.html || emailData.text || '';
+    
+    // Calculate word count and read time
+    const wordCount = getWordCount(content);
+    const readTimeMinutes = calculateReadTime(wordCount);
+
     // Prepare newsletter fields based on the current schema
     const newsletterInsert = {
       user_id: userData.id,
       from_email: emailData.from,
       subject: emailData.subject || '',
-      content: emailData.html || emailData.text || '',
+      content: content,
       received_at: new Date().toISOString(),
       is_read: false,
       is_liked: false,
       is_archived: false,
-      // Optional fields (set to null if not present)
       title: emailData.subject || null,
       summary: null,
       image_url: null,
       newsletter_source_id: newsletterSourceId,
+      word_count: wordCount,
+      estimated_read_time: readTimeMinutes,
     };
 
     const { data, error } = await supabase

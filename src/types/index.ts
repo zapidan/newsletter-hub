@@ -45,6 +45,8 @@ export interface Newsletter {
   newsletter_source_id?: string | null;
   source?: NewsletterSource;
   tags?: Tag[];
+  word_count: number;
+  estimated_read_time: number;
 }
 
 export interface User {

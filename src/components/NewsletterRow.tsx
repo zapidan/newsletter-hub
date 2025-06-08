@@ -260,7 +260,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 ))}
               </div>
               <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
-                {new Date(newsletter.received_at).toLocaleDateString()}
+{new Date(newsletter.received_at).toLocaleDateString()} · {newsletter.estimated_read_time} min read
               </span>
             </div>
 

@@ -131,6 +131,8 @@ const NewsletterDetail = () => {
         title: data.title || '',
         image_url: data.image_url || '',
         is_archived: data.is_archived ?? false,
+        word_count: data.word_count || 0,
+        estimated_read_time: data.estimated_read_time || 1,
         tags: (data.newsletter_tags || []).map((nt: any) => ({
           id: nt.tag.id,
           name: nt.tag.name,
@@ -425,13 +427,20 @@ const NewsletterDetail = () => {
           <div className="prose max-w-none mb-6">
             {newsletter?.received_at && (
               <div className="text-sm text-gray-500 mb-6">
-                {new Date(newsletter.received_at).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                <div>
+                  {new Date(newsletter.received_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </div>
+                {newsletter.estimated_read_time > 0 && (
+                  <div className="mt-1 text-gray-400">
+                    {newsletter.estimated_read_time} min read • {newsletter.word_count.toLocaleString()} words
+                  </div>
+                )}
               </div>
             )}
             {newsletter?.content && (
