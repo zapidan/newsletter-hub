@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'lucide-react';
 import { useNewsletters } from '../hooks/useNewsletters';
@@ -21,7 +21,6 @@ const NewsletterDetail = () => {
     markAsRead, 
     markAsUnread,
     toggleLike, 
-    getNewsletter, 
     archiveNewsletter, 
     unarchiveNewsletter, 
     deleteNewsletter,
@@ -238,32 +237,39 @@ const NewsletterDetail = () => {
     }
   }, [newsletter, isBookmarking, isInQueue, toggleInQueue]);
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!id) return;
-      
-      try {
-        setLoading(true);
-        const data = await fetchNewsletter(id);
-        
-        if (data) {
-          setNewsletter(data);
-          
-          if (!data.is_read) {
-            await markAsRead(id);
-          }
-        } else {
-          setError('Newsletter not found');
-        }
-      } catch (err) {
-        console.error('Failed to load newsletter');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadData = useCallback(async () => {
+    if (!id) return;
     
+    try {
+      setLoading(true);
+      const data = await fetchNewsletter(id);
+      
+      if (data) {
+        setNewsletter(data);
+        
+        // Mark as read if not already read
+        if (!data.is_read) {
+          await markAsRead(id);
+        }
+        
+        // Auto-archive if not already archived
+        if (!data.is_archived) {
+          await archiveNewsletter(id);
+          setNewsletter(prev => prev ? { ...prev, is_archived: true } : null);
+        }
+      } else {
+        setError('Newsletter not found');
+      }
+    } catch (err) {
+      console.error('Failed to load newsletter or update status:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, fetchNewsletter, markAsRead, archiveNewsletter]);
+
+  useEffect(() => {
     loadData();
-  }, [id, fetchNewsletter, markAsRead]);
+  }, [loadData]);
 
   if (loading) {
     return <LoadingScreen />;
