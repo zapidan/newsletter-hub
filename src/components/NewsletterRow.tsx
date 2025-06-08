@@ -206,39 +206,41 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
             </div>
             <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
         <div className="flex items-center justify-between mt-2">
-          <div className="flex flex-wrap gap-1">
-            {newsletter.tags?.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTagClick(tag, e);
-                }}
-              >
-                {tag.name}
-              </span>
-            ))}
+          <div className="w-full">
+            <div className="flex flex-wrap gap-1">
+              {newsletter.tags?.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTagClick(tag, e);
+                  }}
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+            {visibleTags.has(newsletter.id) && (
+              <div className="w-full mt-2" onClick={(e) => e.stopPropagation()}>
+                <TagSelector
+                  selectedTags={newsletter.tags || []}
+                  onTagsChange={async (newTags) => {
+                    const ok = await onUpdateTags(newsletter.id, newTags);
+                    if (ok) {
+                      // Close the tag selector after successful update
+                      const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
+                      onToggleTagVisibility(newsletter.id, fakeEvent);
+                    }
+                  }}
+                  onTagClick={onTagClick}
+                  onTagDeleted={() => {}}
+                  className="mt-1"
+                />
+              </div>
+            )}
           </div>
-          {visibleTags.has(newsletter.id) && (
-          <div className="w-full mt-2" onClick={(e) => e.stopPropagation()}>
-            <TagSelector
-              selectedTags={newsletter.tags || []}
-              onTagsChange={async (newTags) => {
-                const ok = await onUpdateTags(newsletter.id, newTags);
-                if (ok) {
-                  // Close the tag selector after successful update
-                  const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
-                  onToggleTagVisibility(newsletter.id, fakeEvent);
-                }
-              }}
-              onTagClick={onTagClick}
-              onTagDeleted={() => {}}
-              className="mt-1"
-            />
-          </div>
-           )}
           <span className="text-xs text-gray-400">
             {new Date(newsletter.received_at).toLocaleDateString()}
           </span>
