@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Mail, X, ChevronDown, Archive, ArchiveX, Trash } from 'lucide-react';
+import { Mail, X, Archive, ArchiveX, Trash } from 'lucide-react';
+import { SourceFilterDropdown } from '../components/SourceFilterDropdown';
 
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
@@ -30,10 +31,10 @@ const Inbox: React.FC = () => {
   const queryClient = useQueryClient();
   const { getTags } = useTags();
   const { readingQueue } = useReadingQueue();
-  const { newsletterSources = [], isLoadingSources } = useNewsletterSources();
-  const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
+  const { newsletterSources = [] } = useNewsletterSources();
+
   const [allTags, setAllTags] = useState<Tag[]>([]);
-  const [_, setIsBulkActionLoading] = useState(false);
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
   // Filter handlers
   const setFilter = useCallback((newFilter: 'all' | 'unread' | 'liked' | 'archived') => {
@@ -197,14 +198,14 @@ const Inbox: React.FC = () => {
     if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
     try {
       await bulkDeleteNewsletters(Array.from(selectedIds));
-      setSelectedIds?.(new Set());
-      setIsSelecting?.(false);
+      setSelectedIds(new Set());
+      setIsSelecting(false);
       await refetchNewsletters();
     } catch (error) {
       console.error('Error deleting newsletters:', error);
       throw error;
     }
-  }, [bulkDeleteNewsletters, selectedIds, refetchNewsletters, setSelectedIds, setIsSelecting]);
+  }, [bulkDeleteNewsletters, selectedIds, refetchNewsletters]);
 
   // Handle bulk archive
   const handleBulkArchive = useCallback(async () => {
@@ -330,35 +331,6 @@ const Inbox: React.FC = () => {
     setIsSelecting(false);
   }, [selectedIds, bulkMarkAsUnread]);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (isSourceDropdownOpen && !target.closest('.source-filter-dropdown')) {
-        setIsSourceDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isSourceDropdownOpen]);
-
-  // Close dropdown when pressing Escape
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isSourceDropdownOpen) {
-        setIsSourceDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isSourceDropdownOpen]);
-
   // Update URL when filter or source changes
   useEffect(() => {
     console.log('Current state:', { filter, sourceFilter });
@@ -366,8 +338,10 @@ const Inbox: React.FC = () => {
     const updateParams = () => {
       const newParams = new URLSearchParams();
       
-      // Always set the filter
-      newParams.set('filter', filter);
+      // Only set filter if it's not 'all'
+      if (filter !== 'all') {
+        newParams.set('filter', filter);
+      }
       
       // Set source if it exists
       if (sourceFilter) {
@@ -483,79 +457,14 @@ const Inbox: React.FC = () => {
                 </div>
               </button>
               {/* Source filter dropdown - separate from All button */}
-              <div className="relative ml-2">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsSourceDropdownOpen(!isSourceDropdownOpen);
-                  }}
-                  className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                    sourceFilter
-                      ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' 
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                  }`}
-                >
-                  <span>
-                    {sourceFilter 
-                      ? `Source: ${newsletterSources.find(s => s.id === sourceFilter)?.name || 'Unknown'}` 
-                      : 'Filter by Source'}
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${isSourceDropdownOpen ? 'transform rotate-180' : ''}`} />
-                </button>
-                
-                {isSourceDropdownOpen && (
-                  <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200 source-filter-dropdown">
-                    <div className="py-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log('Clearing source filter');
-                          setSourceFilter(null);
-                          setIsSourceDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-2 text-sm ${
-                          !sourceFilter 
-                            ? 'bg-blue-50 text-blue-800 font-medium' 
-                            : 'text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        All Sources
-                      </button>
-                      {newsletterSources.map((source) => (
-                        <button
-                          key={source.id}
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('Selected source:', source.id);
-                            setSourceFilter(source.id);
-                            setIsSourceDropdownOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-sm flex justify-between items-center ${
-                            sourceFilter === source.id
-                              ? 'bg-blue-50 text-blue-800 font-medium'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          <span className="truncate">{source.name}</span>
-                          <span className="ml-2 text-xs text-gray-500">{source.newsletter_count}</span>
-                        </button>
-                      ))}
-                      {newsletterSources.length === 0 && !isLoadingSources && (
-                        <div className="px-4 py-2 text-sm text-gray-500 italic">No sources found</div>
-                      )}
-                      {isLoadingSources && (
-                        <div className="px-4 py-2 text-sm text-gray-500">Loading sources...</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <SourceFilterDropdown 
+                sources={newsletterSources}
+                selectedSourceId={sourceFilter || null}
+                onSourceSelect={(sourceId: string | null) => {
+                  setSourceFilter(sourceId);
+                }}
+                className="ml-2"
+              />
               {isSelecting ? (
                 <button 
                   onClick={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
@@ -619,7 +528,7 @@ const Inbox: React.FC = () => {
                 <>
                   <button 
                     onClick={handleBulkUnarchive}
-                    disabled={selectedIds.size === 0}
+                    disabled={selectedIds.size === 0 || isBulkActionLoading}
                     className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1"
                   >
                     <ArchiveX className="h-4 w-4" />
@@ -627,7 +536,7 @@ const Inbox: React.FC = () => {
                   </button>
                   <button
                     onClick={handleBulkTrash}
-                    disabled={selectedIds.size === 0}
+                    disabled={selectedIds.size === 0 || isBulkActionLoading}
                     className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1"
                     title="Delete selected permanently"
                   >
@@ -638,7 +547,7 @@ const Inbox: React.FC = () => {
               ) : (
                 <button 
                   onClick={handleBulkArchive}
-                  disabled={selectedIds.size === 0}
+                  disabled={selectedIds.size === 0 || isBulkActionLoading}
                   className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1"
                 >
                   <Archive className="h-4 w-4" />
