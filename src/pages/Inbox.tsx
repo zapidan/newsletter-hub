@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Mail, X, Archive } from 'lucide-react';
-import { SourceFilterDropdown } from '../components/SourceFilterDropdown';
+import { Mail, X } from 'lucide-react';
+import { InboxFilters } from '../components/InboxFilters';
 import BulkSelectionActions from '../components/BulkSelectionActions';
 
 import { useNewsletters } from '../hooks/useNewsletters';
@@ -409,62 +409,13 @@ const Inbox: React.FC = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              {/* All button that shows all newsletters - now always clickable */}
-              <button
-                onClick={() => {
-                  setFilter('all');
-                  // Don't clear source filter when clicking All - keep it independent
-                }}
-                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                  filter === 'all'
-                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                }`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => setFilter('unread')}
-                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                  filter === 'unread' 
-                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                }`}
-              >
-                Unread
-              </button>
-              <button
-                onClick={() => setFilter('liked')}
-                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                  filter === 'liked' 
-                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                }`}
-              >
-                Liked
-              </button>
-              <button
-                onClick={() => setFilter('archived')}
-                className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                  filter === 'archived'
-                    ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
-                }`}
-              >
-                <div className="flex items-center gap-1">
-                  <Archive className="h-4 w-4" />
-                  <span>Archived</span>
-                </div>
-              </button>
-              {/* Source filter dropdown - separate from All button */}
-              <SourceFilterDropdown 
-                sources={newsletterSources}
-                selectedSourceId={sourceFilter || null}
-                onSourceSelect={(sourceId: string | null) => {
-                  setSourceFilter(sourceId);
-                }}
-                className="ml-2"
+            <div className="flex items-center gap-2">
+              <InboxFilters
+                filter={filter}
+                sourceFilter={sourceFilter || null}
+                newsletterSources={newsletterSources}
+                onFilterChange={setFilter}
+                onSourceFilterChange={setSourceFilter}
               />
               {!isSelecting && (
                 <button
@@ -477,7 +428,6 @@ const Inbox: React.FC = () => {
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Bulk Actions Dropdown */}
