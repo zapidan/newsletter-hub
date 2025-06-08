@@ -415,10 +415,14 @@ const Inbox: React.FC = () => {
           <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
+              {/* Separate All button that shows all newsletters */}
               <button
-                onClick={() => setFilter('all')}
+                onClick={() => {
+                  setFilter('all');
+                  setSourceFilter(null); // Clear source filter when clicking All
+                }}
                 className={`px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
-                  filter === 'all' 
+                  filter === 'all' && !sourceFilter
                     ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700' 
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
                 }`}
@@ -458,6 +462,7 @@ const Inbox: React.FC = () => {
                   <span>Archived</span>
                 </div>
               </button>
+              {/* Source filter dropdown - separate from All button */}
               <div className="relative ml-2">
                 <button
                   type="button"
@@ -850,10 +855,29 @@ const Inbox: React.FC = () => {
                         </button>
                       )}
                     </div>
+                    <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
+                    <div className="flex items-center justify-between mt-2">
+                    <div className="flex flex-wrap gap-1">
+                      {newsletter.tags?.map(tag => (
+                        <span 
+                          key={tag.id}
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                          style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTagClick(tag, e);
+                          }}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {new Date(newsletter.received_at).toLocaleDateString()}
+                    </span>
+                  </div>
                   </div>
                 </div>
-                {/* Newsletter summary, tags, and date below the flex row */}
-                <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
                 {visibleTags.has(newsletter.id) && (
                   <div className="w-full mt-2" onClick={e => e.stopPropagation()}>
                     <TagSelector
@@ -877,33 +901,6 @@ const Inbox: React.FC = () => {
                     />
                   </div>
                 )}
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {/* TagSelector for editing tags (always accessible) */}
-                  {tagEditId === newsletter.id && (
-                    <div onClick={e => e.stopPropagation()}>
-                      <TagSelector
-                        selectedTags={newsletter.tags || []}
-                        onTagsChange={async (newTags) => {
-                          const ok = await updateNewsletterTags(newsletter.id, newTags);
-                          if (ok) {
-                            setTagEditId(null);
-                            refetchNewsletters();
-                          }
-                        }}
-                        onTagDeleted={() => {
-                          // Refresh the list when a tag is deleted
-                          refetchNewsletters();
-                        }}
-                        className="mt-2"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-xs text-gray-400">
-                    {new Date(newsletter.received_at).toLocaleDateString()}
-                  </span>
-                </div>
               </div>
             </div>
           ))
