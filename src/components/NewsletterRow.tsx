@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Heart, BookmarkIcon, Tag as TagIcon, Archive, ArchiveX, Trash } from 'lucide-react';
 import { Newsletter, Tag } from '../types';
 import TagSelector from './TagSelector';
@@ -40,11 +41,13 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   loadingStates = {},
   errorTogglingLike,
 }) => {
+  const navigate = useNavigate();
+
   const handleRowClick = (e: React.MouseEvent) => {
     // Only navigate if the click wasn't on a button or link
     const target = e.target as HTMLElement;
     if (!target.closest('button') && !target.closest('a')) {
-      window.open(`/inbox/${newsletter.id}`, '_blank');
+      navigate(`/inbox/${newsletter.id}`);
     }
   };
 
