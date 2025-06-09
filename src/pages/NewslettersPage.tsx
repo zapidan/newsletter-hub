@@ -28,7 +28,7 @@ const NewslettersPage: React.FC = () => {
     isErrorSources,
     updateSource,
     archiveNewsletterSource,
-    isArchivingSource,
+    isArchivingSource
   } = useNewsletterSources();
 
   useEffect(() => {
@@ -98,6 +98,16 @@ const NewslettersPage: React.FC = () => {
   const [editingGroup, setEditingGroup] = useState<NewsletterSourceGroup | null>(null);
   const { bulkArchive } = useNewsletters();
   
+  // Debug modal states
+  React.useEffect(() => {
+    console.log('Modal states:', {
+      isGroupModalOpen,
+      showEditModal,
+      deleteConfirmId: !!deleteConfirmId,
+      anyModalOpen: isGroupModalOpen || showEditModal || !!deleteConfirmId
+    });
+  }, [isGroupModalOpen, showEditModal, deleteConfirmId]);
+  
   // Fetch source groups
   const { 
     groups = [] as NewsletterSourceGroup[],
@@ -131,7 +141,8 @@ const NewslettersPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error archiving source:', error);
-      toast.error(errorArchivingSource?.message || 'Failed to archive source');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to archive source';
+      toast.error(errorMessage);
     } finally {
       setDeleteConfirmId(null);
     }
@@ -194,8 +205,27 @@ const NewslettersPage: React.FC = () => {
     }
   }, [errorNewsletters]);
 
+  // Debug overlay
+  const anyModalOpen = isGroupModalOpen || showEditModal || !!deleteConfirmId;
+  
+  // Log modal state changes
+  React.useEffect(() => {
+    console.log('Modal state changed:', { isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen });
+  }, [isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen]);
+
+  // Force re-render when any modal state changes
+  const modalStateKey = React.useMemo(() => ({
+    isGroupModalOpen,
+    showEditModal,
+    hasDeleteConfirmId: !!deleteConfirmId,
+    anyModalOpen: isGroupModalOpen || showEditModal || !!deleteConfirmId
+  }), [isGroupModalOpen, showEditModal, deleteConfirmId]);
+
+
+
   return (
-    <main className="max-w-6xl w-full mx-auto p-6 bg-neutral-50">
+    <div className="container mx-auto px-4 py-8">
+      <main className="max-w-6xl w-full mx-auto p-6 bg-neutral-50">
       <button
         onClick={() => window.history.back()}
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-6"
@@ -267,18 +297,15 @@ const NewslettersPage: React.FC = () => {
         ) : groups.length === 0 ? (
           <div className="text-gray-500 text-sm">No groups created yet</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {groups.map((group) => (
-              <SourceGroupCard 
-                key={group.id} 
-                group={group} 
-                onEdit={(group) => {
-                  setEditingGroup(group);
-                  setIsGroupModalOpen(true);
-                }}
-              />
-            ))}
-          </div>
+          <SourceGroupsList 
+            key={JSON.stringify(modalStateKey)}
+            groups={groups}
+            onEditGroup={(group) => {
+              setEditingGroup(group);
+              setIsGroupModalOpen(true);
+            }}
+            isAnyModalOpen={modalStateKey.anyModalOpen}
+          />
         )}
       </div>
 
@@ -596,7 +623,34 @@ const NewslettersPage: React.FC = () => {
         } : undefined}
       />
     </main>
+  </div>
   );
 };
+
+// Separate component to force re-renders when modal state changes
+const SourceGroupsList = React.memo(({ 
+  groups, 
+  onEditGroup, 
+  isAnyModalOpen 
+}: { 
+  groups: NewsletterSourceGroup[]; 
+  onEditGroup: (group: NewsletterSourceGroup) => void; 
+  isAnyModalOpen: boolean;
+}) => {
+  console.log('Rendering SourceGroupsList with isAnyModalOpen:', isAnyModalOpen);
+  
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {groups.map((group) => (
+        <SourceGroupCard 
+          key={group.id}
+          group={group}
+          onEdit={onEditGroup}
+          isAnyModalOpen={isAnyModalOpen}
+        />
+      ))}
+    </div>
+  );
+});
 
 export default NewslettersPage;

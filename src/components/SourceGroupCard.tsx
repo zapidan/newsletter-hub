@@ -8,9 +8,10 @@ import { useClickOutside } from '../hooks/useClickOutside';
 interface SourceGroupCardProps {
   group: NewsletterSourceGroup;
   onEdit: (group: NewsletterSourceGroup) => void;
+  isAnyModalOpen?: boolean;
 }
 
-export const SourceGroupCard = ({ group, onEdit }: SourceGroupCardProps) => {
+export const SourceGroupCard = ({ group, onEdit, isAnyModalOpen = false }: SourceGroupCardProps) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const { deleteGroup } = useNewsletterSourceGroups();
   const dropdownRef = useClickOutside<HTMLDivElement>(() => setShowDropdown(false));
@@ -33,48 +34,59 @@ export const SourceGroupCard = ({ group, onEdit }: SourceGroupCardProps) => {
     onEdit(group);
   };
 
+  // Debug output - visible in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[DEBUG] SourceGroupCard ${group.id} - isAnyModalOpen:`, isAnyModalOpen);
+  }
+
   return (
-    <Link
-      to={`/inbox?group=${group.id}`}
-      className="group relative flex flex-col p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-200 hover:shadow-md transition-all duration-200 overflow-hidden"
-    >
-      <div className="absolute top-2 right-2">
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setShowDropdown(!showDropdown);
-          }}
-          className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-          aria-label="Group options"
-        >
-          <MoreHorizontal size={18} />
-        </button>
-        
-        {showDropdown && (
-          <div 
-            ref={dropdownRef}
-            className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-0"
-          >
-            <div className="py-1">
-              <button
-                onClick={handleEdit}
-                className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Edit size={16} className="mr-2 text-gray-500" />
-                Edit Group
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-              >
-                <Trash2 size={16} className="mr-2" />
-                Delete
-              </button>
-            </div>
-          </div>
-        )}
+    <div className="relative">
+      {/* Debug overlay - always visible for now */}
+      <div className="absolute -top-5 left-0 bg-red-500 text-white text-xs px-2 py-0.5 rounded-t-md z-50">
+        Modal: {String(isAnyModalOpen)}
       </div>
+      <Link
+        to={`/inbox?group=${group.id}`}
+        className="group relative flex flex-col p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-200 hover:shadow-md transition-all duration-200 overflow-hidden"
+      >
+      {!isAnyModalOpen ? (
+        <div className="absolute top-2 right-2">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowDropdown(!showDropdown);
+            }}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+            aria-label="Group options"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {showDropdown && (
+            <div
+              ref={dropdownRef}
+              className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-40"
+            >
+              <div className="py-1">
+                <button
+                  onClick={handleEdit}
+                  className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Edit size={16} className="mr-2 text-gray-500" />
+                  Edit Group
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                >
+                  <Trash2 size={16} className="mr-2" />
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
       
       <div className="flex flex-col items-center text-center">
         <div className="p-3 mb-3 bg-blue-100 rounded-full text-blue-600">
@@ -107,6 +119,7 @@ export const SourceGroupCard = ({ group, onEdit }: SourceGroupCardProps) => {
           </div>
         </div>
       )}
-    </Link>
+      </Link>
+    </div>
   );
 };
