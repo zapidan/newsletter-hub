@@ -4,13 +4,16 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { Newsletter, NewsletterSource } from '../types';
+import { Newsletter, NewsletterSource, NewsletterSourceGroup } from '../types';
 import { useNewsletters } from '../hooks/useNewsletters';
 import { useNewsletterSources } from '../hooks/useNewsletterSources';
+import { useNewsletterSourceGroups } from '../hooks/useNewsletterSourceGroups';
 import { useReadingQueue } from '../hooks/useReadingQueue';
 import { useNewsletterRowHandlers } from '../utils/newsletterRowHandlers';
-import { Loader2, AlertTriangle, ArrowLeft, X, Check } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowLeft, X, Check, FolderPlus } from 'lucide-react';
 import NewsletterRow from '../components/NewsletterRow';
+import { CreateSourceGroupModal } from '../components/CreateSourceGroupModal';
+import { SourceGroupCard } from '../components/SourceGroupCard';
 
 const NewslettersPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
@@ -23,11 +26,9 @@ const NewslettersPage: React.FC = () => {
     newsletterSources,
     isLoadingSources,
     isErrorSources,
-    errorSources,
     updateSource,
     archiveNewsletterSource,
     isArchivingSource,
-    errorArchivingSource,
   } = useNewsletterSources();
 
   useEffect(() => {
@@ -91,9 +92,19 @@ const NewslettersPage: React.FC = () => {
     }
   };
 
-  // State for selected source
+  // State for selected source and groups
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<NewsletterSourceGroup | null>(null);
   const { bulkArchive } = useNewsletters();
+  
+  // Fetch source groups
+  const { 
+    groups = [] as NewsletterSourceGroup[],
+    isLoading: isLoadingGroups,
+    isError: isGroupsError,
+    error: groupsError
+  } = useNewsletterSourceGroups();
 
   // Handle archive source (delete confirmation)
   const handleArchiveSource = async (sourceId: string) => {
@@ -193,14 +204,85 @@ const NewslettersPage: React.FC = () => {
         Back to Inbox
       </button>
       
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-primary-900">Manage Newsletter Sources</h1>
-        <p className="text-gray-600 mt-1">
-          Define your newsletter sources by name and their primary email domain.
-        </p>
+      <header className="mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-primary-900">Manage Newsletter Sources</h1>
+          <p className="text-gray-600 mt-1">
+            Define your newsletter sources by name and their primary email domain.
+          </p>
+        </div>
       </header>
 
-      <div className="mb-6">
+      {/* Groups Section */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">Your Groups</h2>
+          <div style={{
+            padding: '2px',
+            background: 'linear-gradient(45deg, #3b82f6, #1d4ed8)',
+            borderRadius: '0.375rem',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          }}>
+            <button
+              onClick={() => {
+                console.log('New Group button clicked');
+                setEditingGroup(null);
+                setIsGroupModalOpen(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0.5rem 1rem',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                borderRadius: '0.25rem',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                lineHeight: '1.25rem',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#1d4ed8';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#2563eb';
+              }}
+            >
+              <FolderPlus className="mr-2 h-4 w-4" style={{ color: 'white' }} />
+              <span>New Group</span>
+            </button>
+          </div>
+        </div>
+        
+        {isLoadingGroups ? (
+          <div className="flex items-center text-gray-500">
+            <Loader2 className="animate-spin mr-2 h-4 w-4" />
+            Loading groups...
+          </div>
+        ) : isGroupsError ? (
+          <div className="text-red-600 text-sm">Error loading groups</div>
+        ) : groups.length === 0 ? (
+          <div className="text-gray-500 text-sm">No groups created yet</div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {groups.map((group) => (
+              <SourceGroupCard 
+                key={group.id} 
+                group={group} 
+                onEdit={(group) => {
+                  setEditingGroup(group);
+                  setIsGroupModalOpen(true);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mb-6 mt-12">
         <h2 className="text-xl font-semibold text-gray-800">Newsletter Sources</h2>
       </div>
 
@@ -219,20 +301,21 @@ const NewslettersPage: React.FC = () => {
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="fixed inset-0 bg-neutral-200 bg-opacity-90 transition-opacity" />
+            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" />
           </Transition.Child>
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md">
               <Transition.Child
                 as={Fragment}
                 enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
+                enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                enterTo="opacity-100 translate-y-0 sm:scale-100"
                 leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
+                leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+                leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-neutral-50 p-6 text-left align-middle shadow-xl transition-all">
+                <Dialog.Panel className="w-full bg-white rounded-lg overflow-hidden shadow-xl transform transition-all">
+                  <div className="p-6">
                   <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
                     Edit Newsletter Source
                   </Dialog.Title>
@@ -297,6 +380,7 @@ const NewslettersPage: React.FC = () => {
                       <span>Error: {updateError.message}</span>
                     </div>
                   )}
+                  </div>
                 </Dialog.Panel>
               </Transition.Child>
             </div>
@@ -306,55 +390,52 @@ const NewslettersPage: React.FC = () => {
 
       {/* Delete Confirmation Modal */}
       <Transition.Root show={!!deleteConfirmId} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={cancelDelete}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-neutral-200 bg-opacity-90 transition-opacity" />
-          </Transition.Child>
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                    Delete Newsletter Source
-                  </Dialog.Title>
-                  <div className="mb-4 text-gray-700">
+        <Dialog as="div" className="fixed inset-0 z-[9999] overflow-y-auto" onClose={cancelDelete}>
+          <div className="flex min-h-screen items-center justify-center p-4 text-center">
+            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" />
+
+            {/* This element is to trick the browser into centering the modal contents. */}
+            <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">
+              &#8203;
+            </span>
+            
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-200"
+              enterFrom="opacity-0 translate-y-4 sm:scale-95"
+              enterTo="opacity-100 translate-y-0 sm:scale-100"
+              leave="ease-in duration-150"
+              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+              leaveTo="opacity-0 translate-y-4 sm:scale-95"
+            >
+              <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white shadow-xl rounded-2xl">
+                <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">
+                  Delete Newsletter Source
+                </Dialog.Title>
+                <div className="mt-2">
+                  <p className="text-sm text-gray-500">
                     Are you sure you want to delete this source? This will archive all newsletters from this source.
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                      onClick={cancelDelete}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                      onClick={confirmDelete}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
+                  </p>
+                </div>
+
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    onClick={cancelDelete}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    onClick={confirmDelete}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </Transition.Child>
           </div>
         </Dialog>
       </Transition.Root>
@@ -418,7 +499,7 @@ const NewslettersPage: React.FC = () => {
                     </div>
                   )}
                   <div className="flex-1 flex flex-col items-center justify-center pt-2 pb-4">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
                       selectedSourceId === source.id ? 'bg-blue-200' : 'bg-gray-100'
                     }`}>
                       <span className={`text-lg font-bold ${
@@ -427,7 +508,7 @@ const NewslettersPage: React.FC = () => {
                         {source.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
-                    <h3 className={`font-medium text-xs truncate mb-1 max-w-full ${
+                    <h3 className={`font-medium text-xs truncate mb-1 max-w-full px-2 ${
                       selectedSourceId === source.id ? 'text-blue-900' : 'text-neutral-900'
                     }`} title={source.name}>
                       {source.name}
@@ -495,6 +576,20 @@ const NewslettersPage: React.FC = () => {
           )}
         </section>
       )}
+      {/* Create/Edit Group Modal */}
+      <CreateSourceGroupModal
+        isOpen={isGroupModalOpen}
+        onClose={() => {
+          setIsGroupModalOpen(false);
+          setEditingGroup(null);
+        }}
+        sources={newsletterSources}
+        groupToEdit={editingGroup ? {
+          id: editingGroup.id,
+          name: editingGroup.name,
+          sources: editingGroup.sources || []
+        } : undefined}
+      />
     </main>
   );
 };

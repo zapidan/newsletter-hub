@@ -73,6 +73,26 @@ export interface NewsletterSource {
   updated_at: string;
 }
 
+export interface NewsletterSourceGroup {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  sources?: NewsletterSource[];
+  _count?: {
+    sources: number;
+  };
+}
+
+export interface NewsletterSourceGroupMember {
+  id: string;
+  group_id: string;
+  source_id: string;
+  created_at: string;
+  source?: NewsletterSource;
+}
+
 export interface ReadingQueueItem {
   id: string;
   user_id: string;
