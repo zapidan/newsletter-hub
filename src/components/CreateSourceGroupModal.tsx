@@ -85,8 +85,8 @@ export const CreateSourceGroupModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-50">
-      <div className="bg-white rounded-lg w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-6 z-[9999]">
+      <div className="bg-white rounded-lg w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden p-6 relative z-[10000]">
         <div className="flex justify-between items-center pb-4 border-b">
           <h2 className="text-xl font-semibold">
             {groupToEdit ? 'Edit Group' : 'Create New Group'}

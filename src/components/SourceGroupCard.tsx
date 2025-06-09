@@ -54,7 +54,7 @@ export const SourceGroupCard = ({ group, onEdit }: SourceGroupCardProps) => {
         {showDropdown && (
           <div 
             ref={dropdownRef}
-            className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10"
+            className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-0"
           >
             <div className="py-1">
               <button
