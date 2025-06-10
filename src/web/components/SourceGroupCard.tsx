@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Folder, MoreHorizontal, Trash2, Edit } from 'lucide-react';
 import { useState } from 'react';
 import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
@@ -8,10 +7,20 @@ import { useClickOutside } from '@common/hooks/useClickOutside';
 interface SourceGroupCardProps {
   group: NewsletterSourceGroup;
   onEdit: (group: NewsletterSourceGroup) => void;
+  onDelete?: (groupId: string) => void;
   isAnyModalOpen?: boolean;
+  isSelected?: boolean;
+  onClick?: (groupId: string) => void;
 }
 
-export const SourceGroupCard = ({ group, onEdit, isAnyModalOpen = false }: SourceGroupCardProps) => {
+export const SourceGroupCard = ({ 
+  group, 
+  onEdit, 
+  onDelete,
+  isAnyModalOpen = false, 
+  isSelected = false,
+  onClick
+}: SourceGroupCardProps) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const { deleteGroup } = useNewsletterSourceGroups();
   const dropdownRef = useClickOutside<HTMLDivElement>(() => setShowDropdown(false));
@@ -22,8 +31,11 @@ export const SourceGroupCard = ({ group, onEdit, isAnyModalOpen = false }: Sourc
     if (window.confirm(`Are you sure you want to delete the group "${group.name}"? This action cannot be undone.`)) {
       try {
         await deleteGroup.mutateAsync(group.id);
+        // Call onDelete callback if provided
+        onDelete?.(group.id);
       } catch (error) {
         console.error('Failed to delete group:', error);
+        throw error; // Re-throw to allow error handling in the parent
       }
     }
   };
@@ -39,15 +51,20 @@ export const SourceGroupCard = ({ group, onEdit, isAnyModalOpen = false }: Sourc
     console.log(`[DEBUG] SourceGroupCard ${group.id} - isAnyModalOpen:`, isAnyModalOpen);
   }
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onClick?.(group.id);
+  };
+
   return (
     <div className="relative">
-      {/* Debug overlay - always visible for now */}
-      <div className="absolute -top-5 left-0 bg-red-500 text-white text-xs px-2 py-0.5 rounded-t-md z-50">
-        Modal: {String(isAnyModalOpen)}
-      </div>
-      <Link
-        to={`/inbox?group=${group.id}`}
-        className="group relative flex flex-col p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-200 hover:shadow-md transition-all duration-200 overflow-hidden"
+      <div
+        onClick={handleClick}
+        className={`group relative flex flex-col p-4 bg-white rounded-lg border transition-all duration-200 overflow-hidden cursor-pointer
+          ${isSelected 
+            ? 'border-blue-400 bg-blue-50' 
+            : 'border-gray-200 hover:border-blue-200 hover:shadow-md'}`}
       >
       {!isAnyModalOpen ? (
         <div className="absolute top-2 right-2">
@@ -95,7 +112,7 @@ export const SourceGroupCard = ({ group, onEdit, isAnyModalOpen = false }: Sourc
         <h3 className="font-medium text-gray-900 mb-1">{group.name}</h3>
         <p className="text-sm text-gray-500">
           {group._count?.sources || group.sources?.length || 0} 
-          {group._count?.sources === 1 || group.sources?.length === 1 ? 'source' : 'sources'}
+          {group._count?.sources === 1 || group.sources?.length === 1 ? ' source' : ' sources'}
         </p>
       </div>
       
@@ -119,7 +136,7 @@ export const SourceGroupCard = ({ group, onEdit, isAnyModalOpen = false }: Sourc
           </div>
         </div>
       )}
-      </Link>
+      </div>
     </div>
   );
 };

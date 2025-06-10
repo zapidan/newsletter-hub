@@ -100,9 +100,60 @@ const NewslettersPage: React.FC = () => {
 
   // State for selected source and groups
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<NewsletterSourceGroup | null>(null);
   const { bulkArchive } = useNewsletters();
+  
+  // Reset source selection when group is selected and vice versa
+  useEffect(() => {
+    if (selectedGroupId) {
+      setSelectedSourceId(null);
+    }
+  }, [selectedGroupId]);
+  
+  useEffect(() => {
+    if (selectedSourceId) {
+      setSelectedGroupId(null);
+    }
+  }, [selectedSourceId]);
+  
+  // Fetch source groups
+  const { 
+    groups: sourceGroups = [] as NewsletterSourceGroup[],
+    isLoading: isLoadingGroups,
+    isError: isGroupsError,
+    deleteGroup
+  } = useNewsletterSourceGroups();
+  
+  const handleDeleteGroup = useCallback(async (groupId: string) => {
+    try {
+      await deleteGroup.mutateAsync(groupId);
+      // If the deleted group was selected, clear the selection
+      if (selectedGroupId === groupId) {
+        setSelectedGroupId(null);
+      }
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      toast.error('Failed to delete group');
+    }
+  }, [deleteGroup, selectedGroupId]);
+  
+  // Memoize the groups to prevent unnecessary re-renders
+  const groups = React.useMemo(() => sourceGroups, [sourceGroups]);
+  
+  // Get source IDs from selected group for filtering
+  const selectedGroupSourceIds = React.useMemo(() => {
+    if (!selectedGroupId) return [];
+    const group = groups.find(g => g.id === selectedGroupId);
+    return group?.sources?.map(s => s.id) || [];
+  }, [selectedGroupId, groups]);
+  
+  // Clear group filter
+  const clearGroupFilter = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedGroupId(null);
+  }, []);
   
   // Debug modal states
   React.useEffect(() => {
@@ -114,12 +165,7 @@ const NewslettersPage: React.FC = () => {
     });
   }, [isGroupModalOpen, showEditModal, deleteConfirmId]);
   
-  // Fetch source groups
-  const { 
-    groups = [] as NewsletterSourceGroup[],
-    isLoading: isLoadingGroups,
-    isError: isGroupsError
-  } = useNewsletterSourceGroups();
+
 
   // Handle archive source (delete confirmation)
   const handleArchiveSource = async (sourceId: string) => {
@@ -158,7 +204,7 @@ const NewslettersPage: React.FC = () => {
   const { readingQueue } = useReadingQueue();
 
   const {
-    newsletters: allNewsletters = [],
+    newsletters = [],
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
@@ -166,9 +212,12 @@ const NewslettersPage: React.FC = () => {
     markAsRead,
     toggleLike,
     markAsUnread
-  } = useNewsletters(undefined, selectedSourceId ? 'source' : 'inbox', selectedSourceId || undefined);
-
-  const newsletters = allNewsletters;
+  } = useNewsletters(
+    undefined, 
+    selectedSourceId ? 'source' : 'inbox', 
+    selectedSourceId || undefined,
+    selectedGroupId ? selectedGroupSourceIds : undefined
+  );
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   // Removed unused handleArchive as we've implemented the functionality directly
 
@@ -197,7 +246,7 @@ const NewslettersPage: React.FC = () => {
   const handleToggleArchive = useCallback(async (id: string) => {
     try {
       // Find the newsletter to check its current archive status
-      const newsletter = allNewsletters.find(n => n.id === id);
+      const newsletter = newsletters.find((n: Newsletter) => n.id === id);
       if (!newsletter) return;
       
       // Toggle the archive status
@@ -221,12 +270,12 @@ const NewslettersPage: React.FC = () => {
       toast.error('Failed to update archive status');
       throw error;
     }
-  }, [allNewsletters, queryClient]);
+  }, [newsletters, queryClient]);
   
   const handleToggleRead = useCallback(async (id: string) => {
     try {
       // Check if the newsletter is read or unread and call the appropriate function
-      const newsletter = allNewsletters.find(n => n.id === id);
+      const newsletter = newsletters.find((n: Newsletter) => n.id === id);
       if (newsletter) {
         if (newsletter.is_read) {
           await markAsUnread(id);
@@ -238,7 +287,7 @@ const NewslettersPage: React.FC = () => {
       console.error('Error toggling read status:', error);
       throw error;
     }
-  }, [allNewsletters, markAsRead, markAsUnread]);
+  }, [newsletters, markAsRead, markAsUnread]);
   
   const handleToggleQueue = useCallback(async (newsletter: Newsletter) => {
     try {
@@ -327,21 +376,23 @@ const NewslettersPage: React.FC = () => {
     }
   }, [errorNewsletters]);
 
-  // Debug overlay
+  // Debug overlay and modal state tracking
   const anyModalOpen = isGroupModalOpen || showEditModal || !!deleteConfirmId;
   
-  // Log modal state changes
-  React.useEffect(() => {
-    console.log('Modal state changed:', { isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen });
-  }, [isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen]);
+  // Log modal state changes in development
+  if (process.env.NODE_ENV === 'development') {
+    React.useEffect(() => {
+      console.log('Modal state changed:', { isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen });
+    }, [isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen]);
+  }
 
-  // Force re-render when any modal state changes
+  // Create a stable key for the SourceGroupsList to force re-render when modal state changes
   const modalStateKey = React.useMemo(() => ({
     isGroupModalOpen,
     showEditModal,
     hasDeleteConfirmId: !!deleteConfirmId,
-    anyModalOpen: isGroupModalOpen || showEditModal || !!deleteConfirmId
-  }), [isGroupModalOpen, showEditModal, deleteConfirmId]);
+    anyModalOpen
+  }), [isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen]);
 
 
 
@@ -368,7 +419,17 @@ const NewslettersPage: React.FC = () => {
       {/* Groups Section */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-800">Your Groups</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-gray-800">Your Groups</h2>
+            {selectedGroupId && (
+              <button 
+                onClick={clearGroupFilter}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
           <div style={{
             padding: '2px',
             background: 'linear-gradient(45deg, #3b82f6, #1d4ed8)',
@@ -422,17 +483,16 @@ const NewslettersPage: React.FC = () => {
           <SourceGroupsList 
             key={JSON.stringify(modalStateKey)}
             groups={groups}
+            selectedGroupId={selectedGroupId}
+            onGroupClick={setSelectedGroupId}
             onEditGroup={(group) => {
               setEditingGroup(group);
               setIsGroupModalOpen(true);
             }}
+            onDeleteGroup={handleDeleteGroup}
             isAnyModalOpen={modalStateKey.anyModalOpen}
           />
         )}
-      </div>
-
-      <div className="mb-6 mt-12">
-        <h2 className="text-xl font-semibold text-gray-800">Newsletter Sources</h2>
       </div>
 
       {/* Edit Modal */}
@@ -689,10 +749,27 @@ const NewslettersPage: React.FC = () => {
         )}
       </section>
 
-      {/* Newsletters for selected source */}
-      {selectedSourceId && (
+      {/* Newsletters for selected source or group */}
+      {(selectedSourceId || selectedGroupId) && (
         <section className="mt-12">
-          <h3 className="text-lg font-semibold mb-4 text-primary-800">Newsletters from this Source</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-primary-800">
+              {selectedSourceId 
+                ? `Newsletters from this Source` 
+                : `Newsletters in this Group`}
+            </h3>
+            {(selectedGroupId || selectedSourceId) && (
+              <button
+                onClick={() => {
+                  setSelectedSourceId(null);
+                  setSelectedGroupId(null);
+                }}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
           {isLoadingNewsletters ? (
             <div className="flex justify-center items-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
@@ -753,14 +830,22 @@ const NewslettersPage: React.FC = () => {
 // Separate component to force re-renders when modal state changes
 const SourceGroupsList = React.memo(({ 
   groups, 
+  selectedGroupId,
+  onGroupClick,
   onEditGroup, 
-  isAnyModalOpen 
+  isAnyModalOpen,
+  onDeleteGroup
 }: { 
   groups: NewsletterSourceGroup[]; 
+  selectedGroupId: string | null;
+  onGroupClick: (groupId: string) => void;
   onEditGroup: (group: NewsletterSourceGroup) => void; 
   isAnyModalOpen: boolean;
+  onDeleteGroup: (groupId: string) => void;
 }) => {
-  console.log('Rendering SourceGroupsList with isAnyModalOpen:', isAnyModalOpen);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Rendering SourceGroupsList with isAnyModalOpen:', isAnyModalOpen);
+  }
   
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -768,7 +853,15 @@ const SourceGroupsList = React.memo(({
         <SourceGroupCard 
           key={group.id}
           group={group}
+          isSelected={group.id === selectedGroupId}
+          onClick={() => onGroupClick(group.id)}
           onEdit={onEditGroup}
+          onDelete={() => {
+            if (selectedGroupId === group.id) {
+              onGroupClick(''); // Clear the selected group
+            }
+            onDeleteGroup(group.id);
+          }}
           isAnyModalOpen={isAnyModalOpen}
         />
       ))}

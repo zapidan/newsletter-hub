@@ -6,6 +6,7 @@ import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGrou
 interface CreateSourceGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   sources: NewsletterSource[];
   groupToEdit?: {
     id: string;
@@ -17,6 +18,7 @@ interface CreateSourceGroupModalProps {
 export const CreateSourceGroupModal = ({
   isOpen,
   onClose,
+  onSuccess,
   sources,
   groupToEdit
 }: CreateSourceGroupModalProps) => {
@@ -46,7 +48,7 @@ export const CreateSourceGroupModal = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || isSaving) return;
+    if (!isFormValid || isSaving) return;
     
     try {
       if (groupToEdit) {
@@ -61,6 +63,7 @@ export const CreateSourceGroupModal = ({
           sourceIds: Array.from(selectedSourceIds)
         });
       }
+      onSuccess?.();
       onClose();
     } catch (error) {
       console.error('Failed to save group:', error);
@@ -81,6 +84,10 @@ export const CreateSourceGroupModal = ({
     source.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     source.domain.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Form is valid if name is not empty and at least one source is selected
+  const isFormValid = name.trim().length > 0 && selectedSourceIds.size > 0;
+  const isSubmitDisabled = !isFormValid || isSaving;
 
   if (!isOpen) return null;
 
@@ -220,10 +227,21 @@ export const CreateSourceGroupModal = ({
             </button>
             <button
               type="submit"
-              disabled={!name.trim() || selectedSourceIds.size === 0 || isSaving}
-              className={`px-5 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                (!name.trim() || selectedSourceIds.size === 0) ? 'opacity-50 cursor-not-allowed' : ''
+              disabled={isSubmitDisabled}
+              className={`px-5 py-2 text-sm font-medium text-white border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                isSubmitDisabled 
+                  ? 'bg-blue-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700'
               }`}
+              title={
+                isSubmitDisabled 
+                  ? !name.trim() 
+                    ? 'Please enter a group name' 
+                    : selectedSourceIds.size === 0 
+                      ? 'Please select at least one source' 
+                      : ''
+                  : ''
+              }
             >
               {isSaving ? (
                 'Saving...'

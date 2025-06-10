@@ -102,7 +102,7 @@ const transformNewsletterData = (data: any[] | null): Newsletter[] => {
     : [];
 };
 
-export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string | null): UseNewslettersReturn => {
+export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string | null, groupSourceIds?: string[]): UseNewslettersReturn => {
   const auth = useContext(AuthContext);
   if (!auth) {
     throw new Error('useNewsletters must be used within an AuthProvider');
@@ -336,8 +336,17 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
 
   const newsletters = useMemo(() => {
     if (!allNewsletters.length) return [];
-    return filterNewsletters(allNewsletters, normalizedTagId);
-  }, [allNewsletters, filterNewsletters, normalizedTagId]);
+    let filtered = filterNewsletters(allNewsletters, normalizedTagId);
+    
+    // Filter by group sources if provided
+    if (groupSourceIds && groupSourceIds.length > 0) {
+      filtered = filtered.filter(newsletter => 
+        newsletter.newsletter_source_id && groupSourceIds.includes(newsletter.newsletter_source_id)
+      );
+    }
+    
+    return filtered;
+  }, [allNewsletters, filterNewsletters, normalizedTagId, groupSourceIds]);
 
   // Helper: update newsletter count for a source in cache
   const updateSourceCountInCache = useCallback((sourceId: string | null, delta: number) => {

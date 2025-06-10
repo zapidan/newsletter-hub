@@ -33,9 +33,16 @@ export const useNewsletterSourceGroups = () => {
   // Create a new group with sources
   const createGroup = useMutation({
     mutationFn: async ({ name, sourceIds }: { name: string; sourceIds: string[] }) => {
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+      
       const { data: group, error: groupError } = await supabase
         .from('newsletter_source_groups')
-        .insert({ name })
+        .insert({ 
+          name,
+          user_id: user.id 
+        })
         .select()
         .single();
       
