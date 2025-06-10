@@ -102,7 +102,7 @@ const transformNewsletterData = (data: any[] | null): Newsletter[] => {
     : [];
 };
 
-export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string): UseNewslettersReturn => {
+export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string | null): UseNewslettersReturn => {
   const auth = useContext(AuthContext);
   if (!auth) {
     throw new Error('useNewsletters must be used within an AuthProvider');
