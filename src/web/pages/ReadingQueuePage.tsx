@@ -3,7 +3,7 @@ import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useNavigate } from 'react-router-dom';
 import { ReadingQueueItem } from '@common/types';
 import { toast } from 'react-hot-toast';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsletterRow';
 import { useNewsletters } from '@common/hooks/useNewsletters';
@@ -18,6 +18,7 @@ const ReadingQueuePage: React.FC = () => {
     refetch,
     addToQueue,
     removeFromQueue,
+    reorderQueue,
     toggleRead,
     toggleArchive,
   } = useReadingQueue();
@@ -83,13 +84,12 @@ const ReadingQueuePage: React.FC = () => {
   }, [error]);
 
   // Handle drag end for reordering
-  const handleDragEnd = useCallback(async (event: any) => {
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     
-    if (active.id !== over.id) {
-      // Get the current order
+    if (active.id !== over?.id) {
       const oldIndex = validQueueItems.findIndex(item => item.id === active.id);
-      const newIndex = validQueueItems.findIndex(item => item.id === over.id);
+      const newIndex = validQueueItems.findIndex(item => item.id === over?.id);
       
       if (oldIndex === -1 || newIndex === -1) return;
       
@@ -105,27 +105,31 @@ const ReadingQueuePage: React.FC = () => {
       }));
       
       try {
-        // This would be an API call to update positions in the database
-        // await updateQueuePositions(updates);
-        // For now, we'll just refetch to update the UI
-        await refetch();
+        await reorderQueue(updates);
+        // The query will automatically refetch due to the invalidation in the mutation
       } catch (error) {
         console.error('Failed to update queue order:', error);
         toast.error('Failed to update queue order');
       }
     }
-  }, [validQueueItems, refetch]);
+  }, [validQueueItems, reorderQueue]);
 
   // Handle toggling read status
-  const handleToggleRead = useCallback(async (id: string) => {
+  const handleToggleRead = useCallback(async (newsletterId: string) => {
     try {
-      await toggleRead(id);
+      const item = validQueueItems.find(item => item.newsletter.id === newsletterId);
+      if (!item) return;
+      
+      await toggleRead({ 
+        newsletterId, 
+        isRead: !item.newsletter.is_read 
+      });
       await refetch();
     } catch (error) {
       console.error('Failed to toggle read status:', error);
       toast.error('Failed to update read status');
     }
-  }, [toggleRead, refetch]);
+  }, [toggleRead, refetch, validQueueItems]);
 
   // Handle toggling like status
   const handleToggleLike = useCallback(async (newsletter: any) => {

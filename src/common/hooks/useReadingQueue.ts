@@ -326,12 +326,27 @@ export const useReadingQueue = () => {
       if (!user?.id) throw new Error('User not authenticated');
       
       try {
+        // First, verify all items belong to the current user
+        const { data: existingItems, error: fetchError } = await supabase
+          .from('reading_queue')
+          .select('id')
+          .in('id', updates.map(u => u.id))
+          .eq('user_id', user.id);
+          
+        if (fetchError) throw fetchError;
+        
+        if (existingItems.length !== updates.length) {
+          throw new Error('Some items do not exist or you do not have permission to update them');
+        }
+        
+        // Then update the positions
         const { data, error } = await supabase
           .from('reading_queue')
           .upsert(
             updates.map(({ id, position }) => ({
               id,
               position,
+              user_id: user.id, // Include user_id to satisfy RLS
               updated_at: new Date().toISOString(),
             })),
             { onConflict: 'id' }
