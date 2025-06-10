@@ -47,7 +47,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     // Only navigate if the click wasn't on a button or link
     const target = e.target as HTMLElement;
     if (!target.closest('button') && !target.closest('a')) {
-      navigate(`/inbox/${newsletter.id}`);
+      navigate(`/newsletters/${newsletter.id}`);
     }
   };
 

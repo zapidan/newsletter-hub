@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Mail, X } from 'lucide-react';
+import { useAuth } from '@common/contexts/AuthContext';
 import { TimeRange } from '@web/components/TimeFilter';
 import { InboxFilters } from '@web/components/InboxFilters';
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
@@ -9,6 +10,7 @@ import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useNewsletterSources } from '@common/hooks/useNewsletterSources';
 import { useTags } from '@common/hooks/useTags';
 import type { Newsletter, Tag } from '@common/types';
+import { supabase } from '@common/services/supabaseClient';
 import LoadingScreen from '@common/components/common/LoadingScreen';
 import NewsletterRow from '@web/components/NewsletterRow';
 
@@ -51,6 +53,7 @@ const Inbox: React.FC = () => {
     isErrorNewsletters,
     errorNewsletters,
     markAsRead,
+    markAsUnread,
     toggleLike,
     deleteNewsletter,
     isDeletingNewsletter,
@@ -133,45 +136,115 @@ const Inbox: React.FC = () => {
   }, [toggleLike]);
 
   const handleToggleArchive = useCallback(async (id: string) => {
-    if (!bulkArchive) return;
     try {
-      await bulkArchive([id]);
-      setToast({ type: 'success', message: 'Newsletter archived' });
+      const newsletter = newsletters.find(n => n.id === id);
+      if (!newsletter) return;
+      
+      if (newsletter.is_archived) {
+        await bulkUnarchive([id]);
+        setToast({ type: 'success', message: 'Newsletter unarchived' });
+      } else {
+        await bulkArchive([id]);
+        setToast({ type: 'success', message: 'Newsletter archived' });
+      }
+      // No need to manually refetch as the mutation will invalidate the cache
     } catch (error) {
-      console.error('Error archiving newsletter:', error);
-      setToast({ type: 'error', message: 'Failed to archive newsletter' });
+      console.error('Error toggling archive status:', error);
+      setToast({ type: 'error', message: 'Failed to update archive status' });
     }
-  }, [bulkArchive]);
+  }, [bulkArchive, bulkUnarchive, newsletters]);
 
   const handleToggleRead = useCallback(async (id: string) => {
-    if (!markAsRead) return;
     try {
-      await markAsRead(id);
+      const newsletter = newsletters.find(n => n.id === id);
+      if (!newsletter) return;
+      
+      // Use markAsRead for marking as read, markAsUnread for marking as unread
+      if (newsletter.is_read) {
+        await markAsUnread(id);
+      } else {
+        await markAsRead(id);
+      }
+      // No need to manually refetch as the mutation will invalidate the cache
     } catch (error) {
-      console.error('Error marking as read:', error);
+      console.error('Error toggling read status:', error);
       setToast({ type: 'error', message: 'Failed to update read status' });
     }
-  }, [markAsRead]);
+  }, [markAsRead, markAsUnread, newsletters]);
 
+  const { toggleInQueue } = useReadingQueue();
   const handleToggleQueue = useCallback(async (newsletter: Newsletter) => {
     try {
-      // Implement add/remove from reading queue
-      console.log('Toggle queue for newsletter:', newsletter.id);
+      await toggleInQueue(newsletter.id);
+      await refetchNewsletters();
     } catch (error) {
       console.error('Error toggling queue:', error);
       setToast({ type: 'error', message: 'Failed to update reading queue' });
     }
-  }, []);
+  }, [toggleInQueue, refetchNewsletters]);
+
+  const { user } = useAuth();
 
   const handleUpdateTags = useCallback(async (newsletterId: string, tagIds: string[]) => {
+    if (!user) {
+      setToast({ type: 'error', message: 'You must be logged in to update tags' });
+      return;
+    }
+
     try {
-      // Implement tag update
-      console.log('Update tags for newsletter:', newsletterId, tagIds);
+      // Get the current newsletter
+      const newsletter = newsletters.find(n => n.id === newsletterId);
+      if (!newsletter) {
+        setToast({ type: 'error', message: 'Newsletter not found' });
+        return;
+      }
+      
+      // Get current tag IDs
+      const currentTagIds = (newsletter.tags || []).map(tag => tag.id);
+      
+      // Find tags to add and remove
+      const tagsToAdd = tagIds.filter(id => !currentTagIds.includes(id));
+      const tagsToRemove = currentTagIds.filter(id => !tagIds.includes(id));
+      
+      // Add new tags
+      const addPromises = tagsToAdd.map(async (tagId) => {
+        const { error } = await supabase
+          .from('newsletter_tags')
+          .insert([{ 
+            newsletter_id: newsletterId, 
+            tag_id: tagId,
+            user_id: user.id  // Include user_id for RLS
+          }]);
+          
+        if (error) throw error;
+      });
+      
+      // Remove old tags
+      const removePromises = tagsToRemove.map(async (tagId) => {
+        const { error } = await supabase
+          .from('newsletter_tags')
+          .delete()
+          .eq('newsletter_id', newsletterId)
+          .eq('tag_id', tagId)
+          .eq('user_id', user.id);  // Add user_id condition for RLS
+          
+        if (error) throw error;
+      });
+      
+      // Wait for all operations to complete
+      await Promise.all([...addPromises, ...removePromises]);
+      
+      // Refetch newsletters to update the UI
+      await refetchNewsletters();
+      
+      setToast({ type: 'success', message: 'Tags updated successfully' });
     } catch (error) {
       console.error('Error updating tags:', error);
-      setToast({ type: 'error', message: 'Failed to update tags' });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update tags';
+      setToast({ type: 'error', message: errorMessage });
+      throw error; // Re-throw to allow the TagSelector to handle the error
     }
-  }, []);
+  }, [user, newsletters, refetchNewsletters]);
 
   const handleTagClick = useCallback((tag: Tag | string, e: React.MouseEvent) => {
     e.stopPropagation();
