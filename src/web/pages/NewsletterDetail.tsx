@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, memo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useRef } from 'react';
 import { ArrowLeft, Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'lucide-react';
 import { useNewsletters } from '@common/hooks/useNewsletters';
 import { useTags } from '@common/hooks/useTags';
@@ -7,10 +8,10 @@ import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useAuth } from '@common/contexts/AuthContext';
 import LoadingScreen from '@common/components/common/LoadingScreen';
 import TagSelector from '@web/components/TagSelector';
-import type { Newsletter, Tag } from '@common/types';
-import { supabase } from '@common/services/supabaseClient';
+import type { Newsletter, NewsletterWithRelations, Tag } from '@common/types';
+// toast is used in the component
 
-const NewsletterDetail = () => {
+const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -59,22 +60,138 @@ const NewsletterDetail = () => {
     markAsRead, 
     markAsUnread,
     toggleLike, 
-    archiveNewsletter, 
-    unarchiveNewsletter, 
+    toggleArchive,
+    isArchiving,
+    isUnarchiving,
     deleteNewsletter,
     isDeletingNewsletter,
     isMarkingAsRead,
-    isMarkingAsUnread
-  } = useNewsletters();
-  const { toggleInQueue, readingQueue } = useReadingQueue();
-  const [isBookmarking, setIsBookmarking] = useState(false);
-  const [isLiking, setIsLiking] = useState(false);
-  const [isArchiving, setIsArchiving] = useState(false);
-  const [isTogglingReadStatus, setIsTogglingReadStatus] = useState(false);
-  const [newsletter, setNewsletter] = useState<Newsletter | null>(null);
+    isMarkingAsUnread,
+    toggleInQueue,
+    isTogglingInQueue,
+    getNewsletter
+  } = useNewsletters(undefined, 'all', undefined, []);
+  
+  const { user } = useAuth();
+  const { readingQueue } = useReadingQueue();
+  
+  const [newsletter, setNewsletter] = useState<NewsletterWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const [isBookmarking, setIsBookmarking] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
+  const [isTogglingReadStatus, setIsTogglingReadStatus] = useState(false);
+  
+  // Check if current newsletter is in reading queue
+  const isInQueue = useMemo(() => {
+    if (!newsletter?.id || !readingQueue) return false;
+    return readingQueue.some(item => item.newsletter_id === newsletter.id);
+  }, [newsletter?.id, readingQueue]);
+  
+  // Update local state when reading queue changes
+  // Only update is_bookmarked if the queue membership changes, not on every newsletter change
+  useEffect(() => {
+    setNewsletter(prev => prev ? { ...prev, is_bookmarked: isInQueue } : null);
+  }, [isInQueue]);
+
+  // Track the fetch state and mount status
+  const isMounted = useRef(true);
+  const lastFetchedId = useRef<string | null>(null);
+  const isFetching = useRef(false);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Fetch newsletter detail when id or user?.id changes
+  useEffect(() => {
+    // Skip if no ID or user
+    if (!id || !user?.id) {
+      setLoading(true);
+      return;
+    }
+    
+    // Skip if already fetching this ID
+    if (isFetching.current && lastFetchedId.current === id) {
+      console.log('Already fetching newsletter:', id);
+      return;
+    }
+    
+    // Skip if we already have this newsletter loaded
+    if (newsletter?.id === id) {
+      console.log('Using cached newsletter:', id);
+      setLoading(false);
+      return;
+    }
+    
+    console.log('Initializing newsletter fetch for:', id);
+    
+    // Update state
+    lastFetchedId.current = id;
+    isFetching.current = true;
+    setLoading(true);
+    setError(null);
+    
+    // Create a flag to track if the component is still mounted
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        controller.abort('Request timed out');
+      }
+    }, 10000); // 10 second timeout
+    
+    const fetchData = async () => {
+      try {
+        const data = await getNewsletter(id);
+        
+        // Skip if component unmounted or ID changed
+        if (!isMounted.current || lastFetchedId.current !== id) {
+          console.log('Skipping state update - component unmounted or ID changed');
+          return;
+        }
+        
+        console.log('Processing newsletter data for:', data?.id);
+        
+        if (data?.id === id) {
+          setNewsletter(data);
+          setError(null);
+        } else {
+          setError('Newsletter not found');
+          setNewsletter(null);
+        }
+      } catch (err) {
+        console.error('Error in newsletter fetch:', err);
+        
+        // Skip if component unmounted or ID changed
+        if (!isMounted.current || lastFetchedId.current !== id) {
+          return;
+        }
+        
+        setError(err instanceof Error ? err.message : 'Failed to load newsletter');
+        setNewsletter(null);
+      } finally {
+        // Clear the timeout
+        clearTimeout(timeoutId);
+        
+        // Only update state if this is still the current fetch
+        if (isMounted.current && lastFetchedId.current === id) {
+          isFetching.current = false;
+          setLoading(false);
+        }
+      }
+    };
+    
+    fetchData();
+    
+    // Cleanup function
+    return () => {
+      controller.abort('Component unmounted or ID changed');
+      clearTimeout(timeoutId);
+    };
+  }, [id, user?.id]); // Removed getNewsletter from deps since it's stable now
   
   // Memoize the transformed tags to prevent unnecessary re-renders
   const tagsForUI = useMemo((): Tag[] => {
@@ -97,96 +214,6 @@ const NewsletterDetail = () => {
       console.error('Error deleting newsletter:', error);
     }
   }, [newsletter, deleteNewsletter, navigate]);
-
-  // Memoize isInQueue calculation
-  const isInQueue = useMemo(() => {
-    if (!newsletter?.id || !readingQueue) return false;
-    return readingQueue.some(item => item.newsletter_id === newsletter.id);
-  }, [newsletter?.id, readingQueue]);
-  
-  // Fetch newsletter data
-  const fetchNewsletter = useCallback(async (newsletterId: string): Promise<Newsletter | null> => {
-    if (!newsletterId || !user?.id) return null;
-    
-    try {
-      // First fetch the newsletter row (no join)
-      const { data: newsletterData, error: newsletterError } = await supabase
-        .from('newsletters')
-        .select('*')
-        .eq('id', newsletterId)
-        .eq('user_id', user.id)
-        .single();
-      
-      if (newsletterError) throw newsletterError;
-      if (!newsletterData) return null;
-      
-      // Fetch the source if newsletter_source_id exists
-      let source = null;
-      if (newsletterData.newsletter_source_id) {
-        const { data: sourceData, error: sourceError } = await supabase
-          .from('newsletter_sources')
-          .select('*')
-          .eq('id', newsletterData.newsletter_source_id)
-          .single();
-        if (sourceError) {
-          console.error('Error fetching source:', sourceError);
-        } else {
-          source = sourceData;
-        }
-      }
-      
-      // Then fetch the tags for this newsletter
-      const { data: tagsData, error: tagsError } = await supabase
-        .from('newsletter_tags')
-        .select(`
-          tag:tags (
-            id,
-            name,
-            color
-          )
-        `)
-        .eq('newsletter_id', newsletterId);
-      
-      if (tagsError) throw tagsError;
-      
-      // Combine the data
-      const data = {
-        ...newsletterData,
-        newsletter_tags: tagsData || []
-      };
-      
-      // Transform the data to match the Newsletter type
-      const transformedData: Newsletter = {
-        id: data.id,
-        user_id: data.user_id,
-        source,
-        received_at: data.received_at || new Date().toISOString(),
-        updated_at: data.updated_at || new Date().toISOString(),
-        is_read: data.is_read || false,
-        content: data.content || '',
-        summary: data.summary || null,
-        title: data.title || '',
-        image_url: data.image_url || '',
-        is_archived: data.is_archived ?? false,
-        word_count: data.word_count || 0,
-        estimated_read_time: data.estimated_read_time || 1,
-        tags: (data.newsletter_tags || []).map((nt: any) => ({
-          id: nt.tag.id,
-          name: nt.tag.name,
-          color: nt.tag.color,
-          user_id: user?.id || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })),
-        is_liked: data.is_liked ?? false
-      };
-      
-      return transformedData;
-    } catch (err) {
-      console.error('Failed to load newsletter. Please try again.');
-      return null;
-    }
-  }, [user?.id]);
 
   const handleToggleLike = useCallback(async () => {
     if (!id || !user?.id || !newsletter) return;
@@ -218,15 +245,10 @@ const NewsletterDetail = () => {
   }, [id, toggleLike, user?.id, newsletter]);
 
   const handleArchiveToggle = useCallback(async () => {
-    if (!newsletter?.id || isArchiving) return;
+    if (!newsletter?.id || isArchiving || isUnarchiving) return;
     
-    setIsArchiving(true);
     try {
-      if (newsletter.is_archived) {
-        await unarchiveNewsletter(newsletter.id);
-      } else {
-        await archiveNewsletter(newsletter.id);
-      }
+      await toggleArchive(newsletter.id, !newsletter.is_archived);
       // Update local state to reflect the change
       setNewsletter(prev => prev ? { 
         ...prev, 
@@ -234,10 +256,8 @@ const NewsletterDetail = () => {
       } : null);
     } catch (error) {
       console.error('Error toggling archive status:', error);
-    } finally {
-      setIsArchiving(false);
     }
-  }, [newsletter, isArchiving, archiveNewsletter, unarchiveNewsletter]);
+  }, [newsletter, isArchiving, isUnarchiving, toggleArchive]);
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!newsletter?.id || isTogglingReadStatus) return;
@@ -262,52 +282,48 @@ const NewsletterDetail = () => {
   }, [newsletter, isTogglingReadStatus, markAsRead, markAsUnread]);
 
   const handleToggleBookmark = useCallback(async () => {
-    if (!newsletter?.id || isBookmarking) return;
+    if (!newsletter?.id || isBookmarking || isTogglingInQueue || !toggleInQueue) return;
     
     setIsBookmarking(true);
     try {
       await toggleInQueue(newsletter.id);
-      setNewsletter(prev => prev ? { ...prev, is_bookmarked: !isInQueue } : null);
+      // The is_bookmarked state will be updated by the useEffect above
     } catch (error) {
       console.error('Error toggling bookmark:', error);
     } finally {
       setIsBookmarking(false);
     }
-  }, [newsletter, isBookmarking, isInQueue, toggleInQueue]);
+  }, [newsletter, isBookmarking, isTogglingInQueue, toggleInQueue]);
 
-  const loadData = useCallback(async () => {
-    if (!id) return;
+  // Load newsletter data when component mounts or id changes
+  useEffect(() => {
+    const fetchData = async () => {
+    if (!id || !user?.id) return;
     
     try {
       setLoading(true);
-      const data = await fetchNewsletter(id);
-      
+      const data = await getNewsletter(id);
       if (data) {
-        setNewsletter(data);
+        setNewsletter(data as unknown as NewsletterWithRelations);
         
         // Mark as read if not already read
         if (!data.is_read) {
           await markAsRead(id);
-        }
-        
-        // Auto-archive if not already archived
-        if (!data.is_archived) {
-          await archiveNewsletter(id);
-          setNewsletter(prev => prev ? { ...prev, is_archived: true } : null);
         }
       } else {
         setError('Newsletter not found');
       }
     } catch (err) {
       console.error('Failed to load newsletter or update status:', err);
+      setError('Failed to load newsletter. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [id, fetchNewsletter, markAsRead, archiveNewsletter]);
+  };
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  fetchData();
+  // Only depend on id and getNewsletter, not on newsletter state
+}, [id, getNewsletter, markAsRead, user?.id]);
 
   if (loading) {
     return <LoadingScreen />;
@@ -315,7 +331,7 @@ const NewsletterDetail = () => {
 
   if (error) {
     return (
-      <div className="max-w-6xl w-full mx-auto px-4 py-8">
+      <div key={`error-${id}`} className="max-w-6xl w-full mx-auto px-4 py-8">
         <button
           onClick={handleBack}
           className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
@@ -330,8 +346,9 @@ const NewsletterDetail = () => {
     );
   }
 
+  // Add key to force remount when ID changes
   return (
-    <div className="max-w-6xl w-full mx-auto px-4 py-8">
+    <div key={`newsletter-${id}`} className="max-w-6xl w-full mx-auto px-4 py-8">
       <button
         onClick={handleBack}
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
@@ -355,7 +372,7 @@ const NewsletterDetail = () => {
                     try {
                       const ok = await updateNewsletterTags(id, newTags);
                       if (ok) {
-                        const updated = await fetchNewsletter(id);
+                        const updated = await getNewsletter(id);
                         if (updated) setNewsletter(updated);
                         setTagSelectorKey((k) => k + 1);
                       }
@@ -368,7 +385,7 @@ const NewsletterDetail = () => {
                     try {
                       const ok = await updateNewsletterTags(id, []);
                       if (ok) {
-                        const updated = await fetchNewsletter(id);
+                        const updated = await getNewsletter(id);
                         if (updated) setNewsletter(updated);
                         setTagSelectorKey((k) => k + 1);
                       }
@@ -409,28 +426,28 @@ const NewsletterDetail = () => {
                   }`}
                   aria-label={newsletter?.is_liked ? 'Unlike' : 'Like'}
                 >
-                  <Heart
-                    className="h-4 w-4"
-                    fill={newsletter?.is_liked ? '#ef4444' : 'none'}
-                    stroke={newsletter?.is_liked ? '#ef4444' : 'currentColor'}
+                  <Heart 
+                    className={`h-4 w-4 ${newsletter?.is_liked ? 'fill-red-500' : 'fill-none'}`}
+                    stroke={newsletter?.is_liked ? 'currentColor' : 'currentColor'}
                   />
+                  <span>{newsletter?.is_liked ? 'Liked' : 'Like'}</span>
                 </button>
                 
                 <button
                   onClick={handleToggleBookmark}
                   disabled={isBookmarking}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    isInQueue
+                    newsletter?.is_bookmarked
                       ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
+                  aria-label={newsletter?.is_bookmarked ? 'Remove from queue' : 'Add to queue'}
                 >
-                  {isInQueue ? (
-                    <BookmarkIcon className="h-4 w-4 fill-yellow-500 text-yellow-500" fill="currentColor" />
-                  ) : (
-                    <BookmarkIcon className="h-4 w-4" />
-                  )}
-                  <span>{isInQueue ? 'Saved' : 'Save for later'}</span>
+                  <BookmarkIcon 
+                    className={`h-4 w-4 ${newsletter?.is_bookmarked ? 'fill-yellow-500' : 'fill-none'}`} 
+                    stroke="currentColor" 
+                  />
+                  <span>{newsletter?.is_bookmarked ? 'Saved' : 'Save for later'}</span>
                 </button>
                 
                 <button
@@ -525,6 +542,5 @@ const NewsletterDetail = () => {
       </div>
     </div>
   );
-};
-
+});
 export default NewsletterDetail;

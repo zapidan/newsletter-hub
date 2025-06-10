@@ -1,7 +1,9 @@
 import React from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import { Layout } from "@common/components/layout";
 import { ProtectedRoute } from "@common/components/ProtectedRoute";
+import ErrorBoundary from "@web/components/ErrorBoundary";
 import InboxPage from "@web/pages/Inbox";
 import NewsletterDetailPage from "@web/pages/NewsletterDetail";
 import NewslettersPage from "@web/pages/NewslettersPage";
@@ -16,6 +18,7 @@ import ForgotPasswordPage from "@web/pages/ForgotPassword";
 import ResetPasswordPage from "@web/pages/ResetPassword";
 import DailySummary from "@web/pages/DailySummary";
 import { useAuth } from "@common/contexts/AuthContext";
+import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 
 // A custom hook that builds on useLocation to parse the query string
 function useQuery() {
@@ -38,12 +41,64 @@ const App: React.FC = () => {
   }, [user, location, navigate, redirectTo]);
 
   if (loading) {
-    return <div>Loading...</div>; // Or a proper loading component
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
+  // Custom error fallback component
+  const errorFallback = (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="text-center">
+        <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-500" />
+        <h3 className="mt-2 text-lg font-medium text-gray-900">Oops! Something went wrong</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          We're having trouble loading the application. Please try refreshing the page.
+        </p>
+        <div className="mt-6">
+          <button
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <Layout>
-      <Routes>
+    <ErrorBoundary fallback={errorFallback}>
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          duration: 5000,
+          style: {
+            background: '#fff',
+            color: '#1f2937',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+            borderRadius: '0.5rem',
+            padding: '0.75rem 1rem',
+            fontSize: '0.875rem',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      <Layout>
+        <Routes>
         {/* Redirect root to login or inbox based on auth status */}
         <Route 
           path="/" 
@@ -146,8 +201,9 @@ const App: React.FC = () => {
             <Navigate to={user ? "/inbox" : "/login"} state={{ from: location }} replace />
           } 
         />
-      </Routes>
-    </Layout>
+        </Routes>
+      </Layout>
+    </ErrorBoundary>
   );
 };
 

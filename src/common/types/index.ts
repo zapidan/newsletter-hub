@@ -41,9 +41,10 @@ export interface Newsletter {
   is_read: boolean;
   is_liked: boolean;
   is_archived: boolean;
+  is_bookmarked?: boolean;
   user_id: string;
   newsletter_source_id?: string | null;
-  source?: NewsletterSource;
+  source: NewsletterSource | null;
   tags?: Tag[];
   word_count: number;
   estimated_read_time: number;

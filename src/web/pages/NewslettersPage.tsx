@@ -233,12 +233,13 @@ const NewslettersPage: React.FC = () => {
   const [newsletters, setNewsletters] = useState<NewsletterWithRelations[]>(fetchedNewsletters || []);
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   
-  // Update local state when fetchedNewsletters changes
+  // Update local state when fetchedNewsletters changes, but only if the data is different
   useEffect(() => {
-    if (fetchedNewsletters) {
+    if (fetchedNewsletters && 
+        JSON.stringify(fetchedNewsletters) !== JSON.stringify(newsletters)) {
       setNewsletters(fetchedNewsletters);
     }
-  }, [fetchedNewsletters]);
+  }, [fetchedNewsletters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTagClick = useCallback(async (tag: Tag, e: React.MouseEvent) => {
     // Handle tag click logic here
@@ -309,6 +310,12 @@ const NewslettersPage: React.FC = () => {
   
   const handleToggleQueue = useCallback(async (newsletterId: string) => {
     try {
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
       // Check if the newsletter is already in the reading queue
       const isInQueue = readingQueue.some(item => item.newsletter_id === newsletterId);
       
@@ -317,17 +324,48 @@ const NewslettersPage: React.FC = () => {
         const { error } = await supabase
           .from('reading_queue')
           .delete()
-          .eq('newsletter_id', newsletterId);
+          .eq('newsletter_id', newsletterId)
+          .eq('user_id', user.id);
           
         if (error) throw error;
         toast.success('Removed from reading queue');
       } else {
-        // Add to queue
+        // First, verify the newsletter exists
+        const { data: newsletter, error: newsletterError } = await supabase
+          .from('newsletters')
+          .select('id')
+          .eq('id', newsletterId)
+          .single();
+          
+        if (newsletterError || !newsletter) {
+          throw new Error('Newsletter not found');
+        }
+        
+        // Get the current max position for the user's queue
+        const { data: maxPosition } = await supabase
+          .from('reading_queue')
+          .select('position')
+          .eq('user_id', user.id)
+          .order('position', { ascending: false })
+          .limit(1);
+          
+        // Handle the case where there are no items in the queue
+        const nextPosition = maxPosition && maxPosition.length > 0 ? maxPosition[0].position + 1 : 0;
+        
+        // Add to queue with user_id and position
         const { error } = await supabase
           .from('reading_queue')
-          .insert([{ newsletter_id: newsletterId }]);
+          .insert({ 
+            user_id: user.id, 
+            newsletter_id: newsletterId,
+            position: nextPosition
+          });
           
-        if (error) throw error;
+        if (error) {
+          console.error('Error adding to reading queue:', error);
+          throw error;
+        }
+        
         toast.success('Added to reading queue');
       }
       
@@ -335,7 +373,7 @@ const NewslettersPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['readingQueue'] });
     } catch (error) {
       console.error('Error toggling queue status:', error);
-      toast.error('Failed to update reading queue');
+      toast.error(error instanceof Error ? error.message : 'Failed to update reading queue');
       throw error;
     }
   }, [readingQueue, queryClient]);

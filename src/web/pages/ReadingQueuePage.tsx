@@ -1,233 +1,140 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import React from 'react';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
-// Types are used in other parts of the file
-import { ArrowLeft, Bookmark as BookmarkIcon, ArrowUp, ArrowDown } from 'lucide-react';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsletterRow';
+import { useNavigate } from 'react-router-dom';
+import { ReadingQueueItem } from '@common/types';
+import { toast } from 'react-hot-toast';
 
-const ReadingQueuePage = () => {
-  const queryClient = useQueryClient();
+const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
-  const [sortByDate, setSortByDate] = useState(false);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  
   const { 
     readingQueue = [], 
     isLoading, 
     error, 
     refetch,
-    toggleRead,
-    toggleLike,
-    toggleArchive,
-    reorderQueue,
   } = useReadingQueue();
 
-  // Initialize sensors for drag and drop
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+  // Filter out any null items from the queue
+  const validQueueItems = React.useMemo(() => 
+    readingQueue.filter((item): item is ReadingQueueItem => item !== null),
+    [readingQueue]
   );
   
-  // Handle drag end for reordering
-  const handleDragEnd = useCallback(async (event: any) => {
-    const { active, over } = event;
-    
-    if (active.id !== over.id) {
-      const oldIndex = readingQueue.findIndex((item) => item.id === active.id);
-      const newIndex = readingQueue.findIndex((item) => item.id === over.id);
-      
-      if (oldIndex === -1 || newIndex === -1) return;
-      
-      // Create a new array with the updated order
-      const updatedItems = [...readingQueue];
-      const [movedItem] = updatedItems.splice(oldIndex, 1);
-      updatedItems.splice(newIndex, 0, movedItem);
-      
-      // Update positions
-      const updates = updatedItems.map((item, index) => ({
-        id: item.id,
-        position: index,
-      }));
-      
-      try {
-        await reorderQueue(updates);
-      } catch (error) {
-        console.error('Error reordering queue:', error);
-        // Revert the UI on error
-        refetch();
-      }
+  const handleBrowseNewsletters = () => {
+    navigate('/');
+  };
+
+  // Handle error state with toast notifications
+  React.useEffect(() => {
+    if (error) {
+      toast.error(`Error loading reading queue: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }, [readingQueue, reorderQueue, refetch]);
-  
-  // Toggle read status
-  const handleToggleRead = useCallback(async (id: string) => {
-    if (!id) return;
-    
-    try {
-      // Find the newsletter in the reading queue to get the current is_read status
-      const queueItem = readingQueue?.find(item => item.newsletter.id === id);
-      if (!queueItem) return;
-      
-      await toggleRead({ 
-        newsletterId: id, 
-        isRead: !queueItem.newsletter.is_read 
-      });
-      await refetch();
-    } catch (error) {
-      console.error('Failed to toggle read status:', error);
-    }
-  }, [toggleRead, refetch, readingQueue]);
-  
-  // Toggle like status
-  const handleToggleLike = useCallback(async (id: string) => {
-    if (!id) return;
-    
-    try {
-      // Find the newsletter in the reading queue to get the current is_liked status
-      const queueItem = readingQueue?.find(item => item.newsletter.id === id);
-      if (!queueItem) return;
-      
-      await toggleLike({ 
-        newsletterId: id, 
-        isLiked: !queueItem.newsletter.is_liked 
-      });
-      await refetch();
-    } catch (error) {
-      console.error('Failed to toggle like status:', error);
-    }
-  }, [toggleLike, refetch, readingQueue]);
-  
-  // Toggle archive status
-  const handleToggleArchive = useCallback(async (id: string) => {
-    if (!id) return;
-    
-    try {
-      // Find the newsletter in the reading queue to get the current is_archived status
-      const queueItem = readingQueue?.find(item => item.newsletter.id === id);
-      if (!queueItem) return;
-      
-      await toggleArchive({ 
-        newsletterId: id, 
-        isArchived: !queueItem.newsletter.is_archived 
-      });
-      await refetch();
-    } catch (error) {
-      console.error('Failed to toggle archive status:', error);
-    }
-  }, [toggleArchive, refetch, readingQueue]);
+  }, [error]);
 
-  // Sort items based on sort mode
-  const sortedItems = useMemo(() => {
-    const sortableItems = [...(readingQueue || [])];
-
-    sortableItems.sort((a, b) => {
-      if (!sortByDate) {
-        // In manual sort mode, sort by position
-        return a.position - b.position;
-      } else {
-        // In date sort mode, sort by received date
-        const dateA = new Date(a.newsletter.received_at);
-        const dateB = new Date(b.newsletter.received_at);
-        return sortDirection === 'asc' 
-          ? dateA.getTime() - dateB.getTime()
-          : dateB.getTime() - dateA.getTime();
-      }
-    });
-
-    return sortableItems;
-  }, [readingQueue, sortByDate, sortDirection]);
-
-  // Toggle sort mode between manual and date
-  const toggleSortMode = useCallback(() => {
-    setSortByDate(prev => !prev);
-  }, []);
-
-  // Toggle sort direction
-  const toggleSortDirection = useCallback(() => {
-    setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-  }, []);
-
-  if (isLoading) {
-    return <div>Loading...</div>;
+  // Show error UI
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 border-l-4 border-red-400 rounded-md">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-red-700">
+              Failed to load reading queue. Please try again.
+            </p>
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  if (error) {
-    return <div>Error loading reading queue: {error.message}</div>;
+  // Handle loading state
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="text-gray-500">Loading your reading queue...</p>
+      </div>
+    );
+  }
+
+  // Handle empty queue
+  if (validQueueItems.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-12 text-center">
+        <svg
+          className="mx-auto h-12 w-12 text-gray-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1}
+            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+          />
+        </svg>
+        <h3 className="mt-2 text-lg font-medium text-gray-900">No newsletters in queue</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Add newsletters to your reading queue to see them here.
+        </p>
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={handleBrowseNewsletters}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Browse Newsletters
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center mb-6">
-        <button 
-          onClick={() => navigate(-1)} 
-          className="mr-4 p-2 rounded-full hover:bg-gray-100"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <h1 className="text-2xl font-bold">Reading Queue</h1>
-        <div className="ml-auto flex space-x-2">
-          <button
-            onClick={toggleSortMode}
-            className="px-3 py-1 text-sm bg-gray-100 rounded hover:bg-gray-200"
-          >
-            {sortByDate ? 'Sort by Position' : 'Sort by Date'}
-          </button>
-          {sortByDate && (
-            <button
-              onClick={toggleSortDirection}
-              className="p-1 rounded-full hover:bg-gray-200"
-              title={sortDirection === 'asc' ? 'Sort Oldest First' : 'Sort Newest First'}
-            >
-              {sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
-            </button>
-          )}
-        </div>
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Reading Queue</h1>
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+          {validQueueItems.length} {validQueueItems.length === 1 ? 'item' : 'items'}
+        </span>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="space-y-2">
-          <SortableContext
-            items={sortedItems.map(item => item.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {sortedItems.map((item) => (
-              <SortableNewsletterRow
-                key={item.id}
-                id={item.id}
-                newsletter={item.newsletter}
-                onToggleRead={handleToggleRead}
-                onToggleLike={handleToggleLike}
-                onToggleArchive={handleToggleArchive}
-              />
-            ))}
-          </SortableContext>
-        </div>
-      </DndContext>
-
-      {sortedItems.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          <p>Your reading queue is empty.</p>
-          <button
-            onClick={() => navigate('/')}
-            className="mt-2 text-blue-600 hover:underline"
-          >
-            Browse newsletters
-          </button>
-        </div>
-      )}
+      <div className="space-y-4">
+        {validQueueItems.length > 0 ? (
+          validQueueItems.map((item) => (
+            <div key={item.id} className="bg-white rounded-lg shadow p-4">
+              <h3 className="text-lg font-medium text-gray-900">{item.newsletter.title}</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {item.newsletter.summary || 'No summary available'}
+              </p>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Your reading queue is empty</p>
+            <button
+              onClick={handleBrowseNewsletters}
+              className="mt-2 text-blue-600 hover:underline"
+            >
+              Browse newsletters
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

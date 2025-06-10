@@ -3,10 +3,19 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import NewsletterRow from '../NewsletterRow';
-import { NewsletterWithRelations, Tag } from '@common/types';
+import type { Tag, Newsletter as BaseNewsletter, NewsletterSource } from '@common/types';
+
+// Create a type that makes all properties optional and handles the source field
+type Newsletter = Omit<BaseNewsletter, 'source'> & {
+  source?: NewsletterSource | null;
+  newsletter_source_id?: string | null;
+  tags?: any[];
+  user_newsletter_tags?: any[];
+  [key: string]: any; // For any other properties that might be present
+};
 
 interface NewsletterRowProps extends React.HTMLAttributes<HTMLDivElement> {
-  newsletter: NewsletterWithRelations;
+  newsletter: Newsletter;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => Promise<void>;
   onToggleRead?: (id: string) => Promise<void>;
@@ -18,7 +27,7 @@ interface NewsletterRowProps extends React.HTMLAttributes<HTMLDivElement> {
   onTagClick?: (tag: Tag, e: React.MouseEvent) => void;
   onToggleTagVisibility?: (id: string, e: React.MouseEvent) => void;
   onRemoveFromQueue?: (e: React.MouseEvent, id: string) => void;
-  onNewsletterClick?: (newsletter: NewsletterWithRelations) => void;
+  onNewsletterClick?: (newsletter: Newsletter) => void;
   isInReadingQueue?: boolean;
   className?: string;
   showCheckbox?: boolean;
@@ -77,7 +86,7 @@ export const SortableNewsletterRow: React.FC<NewsletterRowProps & { id: string; 
   };
 
   // Convert the ID-based onToggleLike to the expected NewsletterWithRelations-based function
-  const handleToggleLike = useCallback(async (newsletterItem: NewsletterWithRelations) => {
+  const handleToggleLike = useCallback(async (newsletterItem: Newsletter) => {
     try {
       if (onToggleLike) {
         await onToggleLike(newsletterItem.id);
@@ -117,7 +126,7 @@ export const SortableNewsletterRow: React.FC<NewsletterRowProps & { id: string; 
         )}
         <div className="flex-1">
           <NewsletterRow 
-            newsletter={newsletter}
+            newsletter={newsletter as any} // Type assertion to handle the type mismatch
             isSelected={isSelected}
             onToggleSelect={onToggleSelect}
             onToggleRead={onToggleRead}
@@ -129,7 +138,7 @@ export const SortableNewsletterRow: React.FC<NewsletterRowProps & { id: string; 
             onTagClick={onTagClick}
             onToggleTagVisibility={onToggleTagVisibility}
             onRemoveFromQueue={onRemoveFromQueue}
-            onNewsletterClick={onNewsletterClick}
+            onNewsletterClick={onNewsletterClick as any}
             isInReadingQueue={isInReadingQueue}
             showCheckbox={showCheckbox}
             showTags={showTags}

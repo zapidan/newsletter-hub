@@ -1,21 +1,21 @@
-import { useCallback, useMemo, useContext, useEffect } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { 
   useQuery, 
   useMutation, 
   useQueryClient, 
-  UseMutateAsyncFunction, 
   QueryObserverResult, 
-  RefetchOptions
+  RefetchOptions,
+  UseMutateAsyncFunction
 } from '@tanstack/react-query';
 import { supabase } from '../services/supabaseClient';
-import { AuthContext } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
+import { NewsletterWithRelations, Tag } from '../types';
 
-import { Newsletter, NewsletterSource, Tag } from '../types';
+type PreviousNewslettersState = { 
+  previousNewsletters?: NewsletterWithRelations[] 
+};
 
-// Cache time in milliseconds (5 minutes)
-const CACHE_DURATION = 5 * 60 * 1000;
-
-// Query keys
+// Query keys and constants defined at module level to prevent recreation
 const queryKeys = {
   all: ['newsletters'],
   lists: () => [...queryKeys.all, 'list'],
@@ -24,20 +24,21 @@ const queryKeys = {
   tags: (tagId?: string) => tagId ? [...queryKeys.all, 'tags', tagId] : [...queryKeys.all, 'tags'],
 };
 
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Helper type for the previous state in mutations
-type PreviousNewslettersState = { previousNewsletters?: Newsletter[] };
+// Helper function to update newsletter in cache
+// Removed unused updateNewsletterInCache function
 
 interface UseNewslettersReturn {
   // Single newsletter operations
-  getNewsletter: (id: string) => Promise<Newsletter | null>;
+  getNewsletter: (id: string) => Promise<NewsletterWithRelations | null>;
   
   // Newsletter list and query
-  newsletters: Newsletter[];
+  newsletters: NewsletterWithRelations[];
   isLoadingNewsletters: boolean;
   isErrorNewsletters: boolean;
   errorNewsletters: Error | null;
-  refetchNewsletters: (options?: RefetchOptions) => Promise<QueryObserverResult<Newsletter[], Error>>;
+  refetchNewsletters: (options?: RefetchOptions) => Promise<QueryObserverResult<NewsletterWithRelations[], Error>>;
   
   // Read status mutations
   markAsRead: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
@@ -56,13 +57,12 @@ interface UseNewslettersReturn {
   errorBulkMarkingAsUnread: Error | null;
   
   // Like mutations
-  toggleLike: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
+  toggleLike: (id: string, isLikedParam?: boolean, options?: any) => Promise<boolean>;
   isTogglingLike: boolean;
   errorTogglingLike: Error | null;
   
   // Archive mutations
-  archiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
-  unarchiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
+  toggleArchive: (id: string, isArchived: boolean, options?: any) => Promise<boolean>;
   isArchiving: boolean;
   errorArchiving: Error | null;
   isUnarchiving: boolean;
@@ -75,7 +75,7 @@ interface UseNewslettersReturn {
   errorBulkArchiving: Error | null;
   isBulkUnarchiving: boolean;
   errorBulkUnarchiving: Error | null;
-  
+    
   // Queue mutations
   toggleInQueue: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
   isTogglingInQueue: boolean;
@@ -91,234 +91,107 @@ interface UseNewslettersReturn {
 }
 
 // Helper function to transform newsletter data
-const transformNewsletterData = (data: any[] | null): Newsletter[] => {
-  return data
-    ? data.map((item) => {
-        const tags = item.newsletter_tags?.map((nt: any) => nt.tag ? {
-          id: nt.tag.id,
-          name: nt.tag.name,
-          color: nt.tag.color,
-          user_id: nt.tag.user_id,
-          created_at: nt.tag.created_at,
-        } : null).filter(Boolean) as Tag[] || [];
+const transformNewsletterData = (data: any[] | null): NewsletterWithRelations[] => {
+  if (!data) return [];
+  
+  return data.map((item) => {
+    const tags = (item.newsletter_tags || []).map((nt: { tag: Tag }) => 
+      nt.tag ? {
+        id: nt.tag.id,
+        name: nt.tag.name,
+        color: nt.tag.color,
+        user_id: nt.tag.user_id,
+        created_at: nt.tag.created_at || new Date().toISOString(),
+      } : null
+    ).filter(Boolean) as Tag[];
 
-        const source = item.source ? {
-          id: item.source.id,
-          name: item.source.name,
-          domain: item.source.domain,
-          user_id: item.source.user_id,
-          created_at: item.source.created_at,
-          updated_at: item.source.updated_at
-        } : undefined;
+    const source = item.source || item.newsletter_source || null;
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { newsletter_tags, ...rest } = item;
-        
-        return {
-          ...rest,
-          tags,
-          source,
-          newsletter_source_id: item.newsletter_source_id || null
-        };
-      })
-    : [];
+    return {
+      ...item,
+      newsletter_source_id: item.newsletter_source_id || null,
+      source,
+      tags,
+      is_archived: item.is_archived || false,
+      is_read: item.is_read || false,
+      is_liked: item.is_liked || false,
+    } as NewsletterWithRelations;
+  });
 };
 
-export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string | null, groupSourceIds?: string[]): UseNewslettersReturn => {
-  const auth = useContext(AuthContext);
-  if (!auth) {
-    throw new Error('useNewsletters must be used within an AuthProvider');
-  }
-  const { user, loading: authLoading } = auth;
+
+
+export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string | null, groupSourceIds: string[] = []): UseNewslettersReturn => {
   const queryClient = useQueryClient();
-
-  // Convert comma-separated tagIds to array if needed
-  const normalizedTagId = tagId?.includes(',') ? tagId.split(',').filter(Boolean) : tagId;
-
-  // Cache key includes user ID to properly separate caches between users
-  const CACHE_KEY = ['newsletters', 'all', user?.id || 'unauthorized'];
-
-  // Check if we should enable the query
-  const isEnabled = !!user?.id && !authLoading;
-
-  // Fetch all newsletters from the database without any sorting (let client handle it)
-  const fetchAllNewsletters = useCallback(async (): Promise<Newsletter[]> => {
+  const { user } = useAuth();
+  
+  if (!user) {
+    throw new Error('useNewsletters must be used within an AuthProvider with a logged-in user');
+  }  
+  // Define CACHE_KEY with all dependencies that affect the query
+  const CACHE_KEY = useMemo(
+    () => ['newsletters', { userId: user?.id, tagId, filter, sourceId, groupSourceIds }],
+    [user?.id, tagId, filter, sourceId, groupSourceIds]
+  );
+  
+  // Helper function to fetch all newsletters with proper typing
+  const fetchAllNewsletters = useCallback(async (): Promise<NewsletterWithRelations[]> => {
     if (!user?.id) {
       console.warn('[useNewsletters] No user ID available, skipping newsletter fetch');
       return [];
     }
     
-    if (authLoading) {
-      console.log('[useNewsletters] Auth is still loading, waiting for user session...');
-      return [];
-    }
-
-    console.log('[DEBUG] Fetching newsletters for user:', user.id);
-    
     try {
-      const query = supabase
+      const { data, error } = await supabase
         .from('newsletters')
         .select(`
           *,
-          newsletter_source:newsletter_sources(*),
-          newsletter_tags (
-            tag:tags (id, name, color)
+          source:newsletter_sources(*),
+          newsletter_tags!left(
+            tag:tags(*)
           )
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      console.log('[DEBUG] Supabase query:', {
-        table: 'newsletters',
-        select: '*',
-        eq: { user_id: user.id },
-        order: { created_at: 'desc' }
-      });
-
-      const { data, error, status, statusText } = await query;
-      
-      console.log('[DEBUG] Supabase response:', {
-        status,
-        statusText,
-        error,
-        dataCount: data?.length || 0,
-        firstItem: data?.[0] || null
-      });
-
       if (error) {
-        console.error('[ERROR] Supabase query error:', error);
+        console.error('Error fetching newsletters:', error);
         throw error;
       }
 
-      if (!data) {
-        console.warn('[WARN] No data returned from Supabase');
-        return [];
-      }
-
-      console.log(`[DEBUG] Retrieved ${data.length} newsletters`);
-      
-      // Process the data
-      const processedData = data as Newsletter[];
-      
-      // Fetch all sources in one query and attach them
-      const sourceIds = Array.from(new Set(processedData
-        .map((n: Newsletter) => n.newsletter_source_id)
-        .filter(Boolean) as string[]
-      ));
-      
-      let sourcesMap: Record<string, any> = {};
-      
-      if (sourceIds.length > 0) {
-        console.log('[DEBUG] Fetching sources for newsletters:', sourceIds);
-        const { data: sourcesData, error: sourcesError } = await supabase
-          .from('newsletter_sources')
-          .select('*')
-          .in('id', sourceIds);
-          
-        console.log('[DEBUG] Sources response:', { 
-          sourcesCount: sourcesData?.length,
-          error: sourcesError 
-        });
-        
-        if (sourcesError) {
-          console.error('[ERROR] Error fetching sources:', sourcesError);
-          throw sourcesError;
-        }
-        
-        if (sourcesData) {
-          sourcesMap = Object.fromEntries(sourcesData.map((s: any) => [s.id, s]));
-        }
-      }
-      
-      // Attach the source object to each newsletter
-      const newslettersWithSources = processedData.map((n: Newsletter) => {
-        const source = n.newsletter_source_id ? sourcesMap[n.newsletter_source_id] || null : null;
-        console.log(`[DEBUG] Processing newsletter ${n.id} with source:`, 
-          { 
-            hasSource: !!source,
-            sourceId: n.newsletter_source_id,
-            sourceData: source 
-          }
-        );
-        
-        return {
-          ...n,
-          source: source,
-          newsletter_source: source // Keep both for backward compatibility
-        };
-      });
-      
-      const transformed = transformNewsletterData(newslettersWithSources);
-      console.log('[DEBUG] Transformed newsletters:', transformed);
-      
-      return transformed;
+      return transformNewsletterData(data || []);
     } catch (error) {
-      console.error('[ERROR] Error in fetchAllNewsletters:', error);
+      console.error('Error in fetchAllNewsletters:', error);
       throw error;
     }
-  }, [user]);
-
-  // Main query - SINGLE CACHE KEY
+  }, [user?.id]);
+  
+  // Main query for newsletters
   const { 
     data: allNewsletters = [], 
     isLoading: isLoadingNewsletters, 
     isError: isErrorNewsletters, 
     error: errorNewsletters, 
     refetch: refetchNewsletters 
-  } = useQuery<Newsletter[]>({
+  } = useQuery<NewsletterWithRelations[]>({
     queryKey: CACHE_KEY,
     queryFn: fetchAllNewsletters,
-    staleTime: 5 * 60 * 1000,
+    staleTime: CACHE_DURATION,
     gcTime: CACHE_DURATION,
-    refetchOnWindowFocus: true, // Refresh data when window regains focus
-    refetchOnMount: true, // Ensure fresh data on mount
-    refetchOnReconnect: true, // Refresh on reconnect
-    enabled: isEnabled, // Only enable the query if we have a user ID and auth is not loading
-    retry: 1, // Retry once on failure
-    retryDelay: 1000, // Wait 1 second before retrying
+    enabled: !!user?.id,
   });
 
-  // Log authentication state changes
-  useEffect(() => {
-    console.log('[useNewsletters] Auth state changed:', { 
-      hasUser: !!user, 
-      userId: user?.id,
-      authLoading,
-      isEnabled
-    });
-    
-    if (user?.id) {
-      console.log('[useNewsletters] User authenticated, query enabled:', isEnabled);
-    } else if (!authLoading) {
-      console.log('[useNewsletters] No authenticated user and auth loading complete');
-    }
-  }, [user?.id, authLoading, isEnabled, user]);
-
-  // Invalidate and refetch when user changes
-  useEffect(() => {
-    console.log('[DEBUG] Auth state changed:', { 
-      hasUser: !!user,
-      userId: user?.id,
-      isAuthenticated: !!user?.id
-    });
-    
-    if (user?.id) {
-      console.log('[DEBUG] User authenticated, invalidating newsletter cache');
-      queryClient.invalidateQueries({ queryKey: ['newsletters'] });
-    } else {
-      console.log('[DEBUG] No user authenticated, clearing newsletter cache');
-      queryClient.setQueryData(CACHE_KEY, []);
-    }
-  }, [user?.id, queryClient]);
+  // Convert comma-separated tagIds to array if needed
+  const normalizedTagId = tagId?.includes(',') ? tagId.split(',').filter(Boolean) : tagId;
 
   // Filtering and sorting (client-side)
-  const filterNewsletters = useCallback((newsletters: Newsletter[], tagIds?: string | string[]) => {
+  const filterNewsletters = useCallback((newsletters: NewsletterWithRelations[], tagIds?: string | string[]) => {
     let filtered = [...newsletters];
     
     if (tagIds && tagIds.length > 0) {
       const tagIdsArray = Array.isArray(tagIds) ? tagIds : [tagIds];
       filtered = filtered.filter(newsletter => 
-        newsletter.tags?.some(tag => tag && tag.id && tagIdsArray.includes(tag.id))
+        newsletter.tags?.some(tag => tag.id && tagIdsArray.includes(tag.id))
       );
     }
     
@@ -370,455 +243,209 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     return filtered;
   }, [allNewsletters, filterNewsletters, normalizedTagId, groupSourceIds]);
 
-  // Helper: update newsletter count for a source in cache
-  const updateSourceCountInCache = useCallback((sourceId: string | null, delta: number) => {
-    if (!sourceId || !user?.id) return;
-    const sourcesKey = ['newsletterSources', 'user', user.id];
-    
-    queryClient.setQueryData<NewsletterSource[]>(sourcesKey, (currentSources) => {
-      if (!currentSources) return [];
-      
-      return currentSources.map(source => {
-        if (source.id === sourceId) {
-          return {
-            ...source,
-            newsletter_count: Math.max(0, (source.newsletter_count || 0) + delta)
-          };
-        }
-        return source;
-      });
-    });
-  }, [queryClient, user?.id]);
-
-  // Helper: update newsletter in cache - CONSISTENT CACHE KEY
-  const updateNewsletterInCache = useCallback((id: string, updates: Partial<Newsletter>) => {
-    queryClient.setQueryData<Newsletter[]>(CACHE_KEY, (old = []) => {
+  // Helper: update newsletter in cache with proper typing
+  const updateNewsletterInCache = useCallback((id: string, updates: Partial<NewsletterWithRelations>) => {
+    queryClient.setQueryData<NewsletterWithRelations[]>(CACHE_KEY, (old = []) => {
       return old.map(item => {
         if (item.id === id) {
           const now = new Date().toISOString();
           return { 
             ...item, 
-            ...updates, 
-            updated_at: updates.updated_at !== undefined ? updates.updated_at : now 
-          };
+            ...updates,
+            newsletter_source_id: updates.newsletter_source_id ?? item.newsletter_source_id,
+            source: updates.source ?? item.source,
+            tags: updates.tags ?? item.tags ?? [],
+            is_archived: updates.is_archived ?? item.is_archived ?? false,
+            is_read: updates.is_read ?? item.is_read ?? false,
+            is_liked: updates.is_liked ?? item.is_liked ?? false,
+            updated_at: updates.updated_at || now 
+          } as NewsletterWithRelations;
         }
         return item;
       });
     });
-  }, [queryClient]);
+  }, [queryClient, CACHE_KEY]);
 
-  const updateUnreadCountInCache = useCallback((delta: number) => {
-    if (!user?.id) return;
-    const unreadCountKey = ['unreadCount', user.id];
-    
-    queryClient.setQueryData<number>(unreadCountKey, (currentCount) => {
-      const newCount = Math.max(0, (currentCount || 0) + delta);
-      return newCount;
-    });
-  }, [queryClient, user?.id]);
-
-  // MARK AS READ
-  const markAsReadMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; wasUnread?: boolean }>({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error('User not authenticated');
+  // Mark as read mutation
+  const markAsReadMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
+    mutationFn: async (newsletterId) => {
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_read: true })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .update({ 
+          is_read: true,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', newsletterId);
+      
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (newsletterId) => {
+      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY) || [];
+      
+      // Update cache optimistically
+      queryClient.setQueryData(
+        CACHE_KEY,
+        previousNewsletters.map(n => 
+          n.id === newsletterId 
+            ? { ...n, is_read: true, updated_at: new Date().toISOString() }
+            : n
+        )
+      );
+      
+      return { previousNewsletters };
+    },
+    onError: (err, _newsletterId, context) => {
+      console.error('Error marking as read:', err);
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    },
+  });
+
+  // Mark as unread mutation
+  const markAsUnreadMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ is_read: false, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      
       if (error) throw error;
       return true;
     },
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
       
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const newsletter = previousNewsletters?.find(n => n.id === id);
-      const wasUnread = newsletter && !newsletter.is_read && !newsletter.is_archived;
+      queryClient.setQueryData(
+        CACHE_KEY,
+        previousNewsletters?.map(newsletter => 
+          newsletter.id === id 
+            ? { ...newsletter, is_read: false, updated_at: new Date().toISOString() } 
+            : newsletter
+        ) || []
+      );
       
-      if (previousNewsletters) {
-        updateNewsletterInCache(id, { is_read: true });
-        if (wasUnread) {
-          updateUnreadCountInCache(-1);
-        }
-      }
-      return { previousNewsletters, wasUnread };
+      return { previousNewsletters };
     },
-    onError: (_err, _id, context) => {
+    onError: (err, _id, context) => {
+      console.error('Error marking as unread:', err);
       if (context?.previousNewsletters) {
         queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        if (context.wasUnread) {
-          updateUnreadCountInCache(1);
-        }
       }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
     },
   });
 
-  // MARK AS UNREAD
-  const markAsUnreadMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; wasRead?: boolean }>({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error('User not authenticated');
+  // Delete newsletter mutation
+  const deleteNewsletterMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
+    mutationFn: async (newsletterId: string) => {
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_read: false })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .delete()
+        .eq('id', newsletterId);
+      
       if (error) throw error;
       return true;
     },
-    onMutate: async (id: string) => {
+    onMutate: async (newsletterId) => {
       await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
       
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const newsletter = previousNewsletters?.find(n => n.id === id);
-      const wasRead = newsletter && newsletter.is_read && !newsletter.is_archived;
+      queryClient.setQueryData(
+        CACHE_KEY,
+        previousNewsletters?.filter(n => n.id !== newsletterId) || []
+      );
       
-      if (previousNewsletters) {
-        updateNewsletterInCache(id, { is_read: false });
-        if (wasRead) {
-          updateUnreadCountInCache(1);
-        }
-      }
-      return { previousNewsletters, wasRead };
+      return { previousNewsletters };
     },
-    onError: (_err, _id, context) => {
+    onError: (err, _newsletterId, context) => {
+      console.error('Error deleting newsletter:', err);
       if (context?.previousNewsletters) {
         queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        if (context.wasRead) {
-          updateUnreadCountInCache(-1);
-        }
       }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
     },
   });
 
-  // BULK MARK AS READ
-  const bulkMarkAsReadMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[]; unreadCount?: number }>({
-    mutationFn: async (ids: string[]) => {
-      if (!user) throw new Error('User not authenticated');
-      if (ids.length === 0) return true;
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ is_read: true })
-        .in('id', ids)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (ids: string[]) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      let unreadCount = 0;
-      
-      if (previousNewsletters) {
-        ids.forEach(id => {
-          const newsletter = previousNewsletters.find(n => n.id === id);
-          if (newsletter && !newsletter.is_read && !newsletter.is_archived) {
-            unreadCount++;
-          }
-          updateNewsletterInCache(id, { is_read: true });
-        });
-        
-        if (unreadCount > 0) {
-          updateUnreadCountInCache(-unreadCount);
-        }
-      }
-      return { previousNewsletters, unreadCount };
-    },
-    onError: (_err, _ids, context) => {
-      if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        if (context.unreadCount && context.unreadCount > 0) {
-          updateUnreadCountInCache(context.unreadCount);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
-    },
-  });
-
-  // BULK MARK AS UNREAD
-  const bulkMarkAsUnreadMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[]; readCount?: number }>({
-    mutationFn: async (ids: string[]) => {
-      if (!user) throw new Error('User not authenticated');
-      if (ids.length === 0) return true;
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ is_read: false })
-        .in('id', ids)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (ids: string[]) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      let readCount = 0;
-      
-      if (previousNewsletters) {
-        ids.forEach(id => {
-          const newsletter = previousNewsletters.find(n => n.id === id);
-          if (newsletter && newsletter.is_read && !newsletter.is_archived) {
-            readCount++;
-          }
-          updateNewsletterInCache(id, { is_read: false });
-        });
-        
-        if (readCount > 0) {
-          updateUnreadCountInCache(readCount);
-        }
-      }
-      return { previousNewsletters, readCount };
-    },
-    onError: (_err, _ids, context) => {
-      if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        if (context.readCount && context.readCount > 0) {
-          updateUnreadCountInCache(-context.readCount);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
-    },
-  });
-
-  // ARCHIVE
-  const archiveMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; sourceId: string | null; wasUnread?: boolean }>({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error('User not authenticated');
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ 
-          is_archived: true,
-          updated_at: now
-        })
-        .eq('id', id)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const newsletterToArchive = previousNewsletters?.find(n => n.id === id);
-      const sourceId = newsletterToArchive?.newsletter_source_id || null;
-      const wasUnread = newsletterToArchive && !newsletterToArchive.is_read && !newsletterToArchive.is_archived;
-      
-      if (previousNewsletters) {
-        const now = new Date().toISOString();
-        updateNewsletterInCache(id, { is_archived: true, updated_at: now });
-        if (sourceId) updateSourceCountInCache(sourceId, -1);
-        if (wasUnread) updateUnreadCountInCache(-1);
-      }
-      return { previousNewsletters, sourceId, wasUnread };
-    },
-    onError: (_err, _id, context) => {
-      if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        if (context.sourceId) updateSourceCountInCache(context.sourceId, 1);
-        if (context.wasUnread) updateUnreadCountInCache(1);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['unreadCount', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['newsletterSources', 'user', user?.id] });
-    },
-  });
-
-  // UNARCHIVE
-  const unarchiveMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; sourceId: string | null }>({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error('User not authenticated');
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ 
-          is_archived: false,
-          updated_at: now
-        })
-        .eq('id', id)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const newsletterToUnarchive = previousNewsletters?.find(n => n.id === id);
-      const sourceId = newsletterToUnarchive?.newsletter_source_id || null;
-      
-      if (previousNewsletters) {
-        const now = new Date().toISOString();
-        updateNewsletterInCache(id, { is_archived: false, updated_at: now });
-        if (sourceId) updateSourceCountInCache(sourceId, 1);
-      }
-      return { previousNewsletters, sourceId };
-    },
-    onError: (_err, _id, context) => {
-      if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        if (context.sourceId) updateSourceCountInCache(context.sourceId, -1);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['newsletterSources', 'user', user?.id] });
-    },
-  });
-
-  // Bulk archive mutation
-  const bulkArchiveMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[]; sourceIdToCount?: Record<string, number> }>({
-    mutationFn: async (ids: string[]) => {
-      if (!user) throw new Error('User not authenticated');
-      if (ids.length === 0) return true;
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ 
-          is_archived: true,
-          updated_at: now
-        })
-        .in('id', ids)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (ids: string[]) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const sourceIdToCount: Record<string, number> = {};
-      
-      if (previousNewsletters) {
-        const now = new Date().toISOString();
-        ids.forEach(id => {
-          const n = previousNewsletters.find(nl => nl.id === id);
-          if (n && n.newsletter_source_id) {
-            sourceIdToCount[n.newsletter_source_id] = (sourceIdToCount[n.newsletter_source_id] || 0) + 1;
-          }
-          updateNewsletterInCache(id, { is_archived: true, updated_at: now });
-        });
-        Object.entries(sourceIdToCount).forEach(([sid, count]) => updateSourceCountInCache(sid, -count));
-      }
-      return { previousNewsletters, sourceIdToCount };
-    },
-    onError: (_err, _ids, context) => {
-      if (context?.previousNewsletters && context.sourceIdToCount) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        Object.entries(context.sourceIdToCount).forEach(([sid, count]) => updateSourceCountInCache(sid, count));
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['newsletterSources', 'user', user?.id] });
-    },
-  });
-
-  // Bulk unarchive mutation
-  const bulkUnarchiveMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[]; sourceIdToCount?: Record<string, number> }>({
-    mutationFn: async (ids: string[]) => {
-      if (!user) throw new Error('User not authenticated');
-      if (ids.length === 0) return true;
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ 
-          is_archived: false,
-          updated_at: now
-        })
-        .in('id', ids)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (ids: string[]) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const sourceIdToCount: Record<string, number> = {};
-      
-      if (previousNewsletters) {
-        const now = new Date().toISOString();
-        ids.forEach(id => {
-          const n = previousNewsletters.find(nl => nl.id === id);
-          if (n && n.newsletter_source_id) {
-            sourceIdToCount[n.newsletter_source_id] = (sourceIdToCount[n.newsletter_source_id] || 0) + 1;
-          }
-          updateNewsletterInCache(id, { is_archived: false, updated_at: now });
-        });
-        Object.entries(sourceIdToCount).forEach(([sid, count]) => updateSourceCountInCache(sid, count));
-      }
-      return { previousNewsletters, sourceIdToCount };
-    },
-    onError: (_err, _ids, context) => {
-      if (context?.previousNewsletters && context.sourceIdToCount) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        Object.entries(context.sourceIdToCount).forEach(([sid, count]) => updateSourceCountInCache(sid, -count));
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['newsletterSources', 'user', user?.id] });
-    },
-  });
-
-  // Toggle like status
-  const toggleLikeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (!user) throw new Error('User not authenticated');
-      
-      const { data: currentNewsletter } = await supabase
-        .from('newsletters')
-        .select('is_liked')
-        .eq('id', id)
-        .single();
-      
-      if (!currentNewsletter) throw new Error('Newsletter not found');
+  // Toggle like mutation
+  const toggleLikeMutation = useMutation<boolean, Error, { id: string; isLiked: boolean }, PreviousNewslettersState>({
+    mutationFn: async ({ id }) => {
+      const newsletter = allNewsletters.find(n => n.id === id);
+      if (!newsletter) throw new Error('Newsletter not found');
       
       const { error } = await supabase
         .from('newsletters')
         .update({ 
-          is_liked: !currentNewsletter.is_liked,
-          updated_at: new Date().toISOString()
+          is_liked: !newsletter.is_liked,
+          updated_at: new Date().toISOString() 
         })
         .eq('id', id);
-        
+      
+      if (error) throw error;
+      return !newsletter.is_liked;
+    },
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      
+      if (previousNewsletters) {
+        queryClient.setQueryData(
+          CACHE_KEY,
+          previousNewsletters.map(n => 
+            n.id === id 
+              ? { ...n, is_liked: !n.is_liked }
+              : n
+          )
+        );
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (err, _variables, context) => {
+      console.error('Error toggling like:', err);
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    },
+  });
+
+  // Archive mutation
+  const archiveMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ 
+          is_archived: true,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', id);
+      
       if (error) throw error;
       return true;
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
       
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      
-      if (previousNewsletters) {
-        const now = new Date().toISOString();
-        updateNewsletterInCache(id, { 
-          is_liked: !previousNewsletters.find(n => n.id === id)?.is_liked,
-          updated_at: now
-        });
-      }
+      updateNewsletterInCache(id, { is_archived: true });
       
       return { previousNewsletters };
     },
     onError: (err, _id, context) => {
+      console.error('Error archiving newsletter:', err);
       if (context?.previousNewsletters) {
         queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
       }
@@ -828,208 +455,440 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     },
   });
 
-  // DELETE (permanent delete)
-  const deleteNewsletterMutation = useMutation<boolean, Error, string, { previousNewsletters?: Newsletter[]; sourceId: string | null }>({
+  // Unarchive mutation
+  const unarchiveMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
     mutationFn: async (id: string) => {
-      if (!user) throw new Error('User not authenticated');
       const { error } = await supabase
         .from('newsletters')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .update({ 
+          is_archived: false,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', id);
+      
       if (error) throw error;
       return true;
     },
-    onMutate: async (id: string) => {
+    onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
       
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const newsletterToDelete = previousNewsletters?.find(n => n.id === id);
-      const sourceId = newsletterToDelete?.newsletter_source_id || null;
+      updateNewsletterInCache(id, { is_archived: false });
       
-      if (previousNewsletters) {
-        queryClient.setQueryData<Newsletter[]>(CACHE_KEY, (old = []) => {
-          return old.filter(n => n.id !== id);
-        });
-        
-        if (sourceId) updateSourceCountInCache(sourceId, -1);
-      }
-      return { previousNewsletters, sourceId };
+      return { previousNewsletters };
     },
-    onError: (_err, _id, context) => {
+    onError: (err, _id, context) => {
+      console.error('Error unarchiving newsletter:', err);
       if (context?.previousNewsletters) {
         queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        if (context.sourceId) updateSourceCountInCache(context.sourceId, 1);
       }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['newsletterSources', 'user', user?.id] });
     },
   });
 
-  // BULK DELETE (permanent delete)
-  const bulkDeleteNewslettersMutation = useMutation<boolean, Error, string[], { previousNewsletters?: Newsletter[]; sourceIdToCount?: Record<string, number> }>({
-    mutationFn: async (ids: string[]) => {
-      if (!user) throw new Error('User not authenticated');
-      if (ids.length === 0) return true;
-      const { error } = await supabase
-        .from('newsletters')
-        .delete()
-        .in('id', ids)
-        .eq('user_id', user.id);
-      if (error) throw error;
-      return true;
-    },
-    onMutate: async (ids: string[]) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      
-      const previousNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-      const sourceIdToCount: Record<string, number> = {};
-      
-      if (previousNewsletters) {
-        ids.forEach(id => {
-          const n = previousNewsletters.find(nl => nl.id === id);
-          if (n && n.newsletter_source_id) {
-            sourceIdToCount[n.newsletter_source_id] = (sourceIdToCount[n.newsletter_source_id] || 0) + 1;
-          }
-        });
-        
-        queryClient.setQueryData<Newsletter[]>(CACHE_KEY, (old = []) => {
-          return old.filter(n => !ids.includes(n.id));
-        });
-        
-        Object.entries(sourceIdToCount).forEach(([sid, count]) => updateSourceCountInCache(sid, -count));
-      }
-      return { previousNewsletters, sourceIdToCount };
-    },
-    onError: (_err, _ids, context) => {
-      if (context?.previousNewsletters && context.sourceIdToCount) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
-        Object.entries(context.sourceIdToCount).forEach(([sid, count]) => updateSourceCountInCache(sid, count));
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
-      queryClient.invalidateQueries({ queryKey: ['newsletterSources', 'user', user?.id] });
-    },
+  // Bulk archive and unarchive mutations are defined at the end of the file
+
+  // Cache to store newsletter data by ID and track in-flight requests
+  const newsletterCache = useRef<{
+    data: Map<string, NewsletterWithRelations | null>;
+    inFlight: Map<string, Promise<NewsletterWithRelations | null>>;
+  }>({ 
+    data: new Map(),
+    inFlight: new Map()
   });
-
-  // Function to get a single newsletter
-  const getNewsletter = useCallback(async (id: string): Promise<Newsletter | null> => {
-    const cachedNewsletters = queryClient.getQueryData<Newsletter[]>(CACHE_KEY);
-    const found = cachedNewsletters?.find(n => n.id === id);
-    if (found) return found;
-
-    try {
-      const { data, error } = await supabase
-        .from('newsletters')
-        .select(`
-          *,
-          newsletter_tags (
-            tag:tags (id, name, color)
-          )
-        `)
-        .eq('id', id)
-        .eq('user_id', user?.id)
-        .single();
-
-      if (error) throw error;
-      
-      if (data) {
-        const transformed = transformNewsletterData([data]);
-        const newsletter = transformed[0];
-        
-        queryClient.setQueryData<Newsletter[]>(CACHE_KEY, (old = []) => {
-          const exists = old.some(n => n.id === id);
-          return exists 
-            ? old.map(n => n.id === id ? newsletter : n)
-            : [...old, newsletter];
-        });
-        
-        return newsletter;
-      }
-      return null;
-    } catch (error) {
+  
+  // Memoize the getNewsletter function with stable reference
+  const getNewsletter = useCallback(async (id: string): Promise<NewsletterWithRelations | null> => {
+    if (!user?.id) {
+      console.log('No user ID, skipping fetch');
       return null;
     }
-  }, [user, queryClient]);
+    
+    // Return from cache if available
+    if (newsletterCache.current.data.has(id)) {
+      console.log('Returning newsletter from cache:', id);
+      return newsletterCache.current.data.get(id) || null;
+    }
+    
+    // Return existing promise if there's already a request in flight
+    if (newsletterCache.current.inFlight.has(id)) {
+      console.log('Returning existing in-flight request for:', id);
+      return newsletterCache.current.inFlight.get(id) || null;
+    }
+    
+    console.log('Creating new fetch for newsletter:', id, 'for user:', user.id);
+    
+    // Create a new promise for this request
+    const fetchPromise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('newsletters')
+          .select(`
+            *,
+            source:newsletter_sources(*),
+            newsletter_tags!left(
+              tag:tags(*)
+            )
+          `)
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-  // Toggle in queue mutation
-  const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
-    mutationFn: async (newsletterId) => {
-      const { data, error } = await supabase.rpc('toggle_newsletter_in_queue', {
-        p_newsletter_id: newsletterId
-      });
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+
+        if (!data) {
+          console.log('No newsletter found for ID:', id);
+          newsletterCache.current.data.set(id, null);
+          return null;
+        }
+
+        // Transform the data only if we have it
+        const result = transformNewsletterData([data])[0];
+        console.log('Successfully fetched newsletter:', result?.id);
+        
+        // Cache the result
+        if (result) {
+          newsletterCache.current.data.set(id, result);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('Error in getNewsletter:', error);
+        throw error;
+      } finally {
+        // Remove from in-flight cache when done
+        newsletterCache.current.inFlight.delete(id);
+      }
+    })();
+    
+    // Store the promise in the in-flight cache
+    newsletterCache.current.inFlight.set(id, fetchPromise);
+    
+    // Return the promise
+    return fetchPromise;
+  }, [user?.id]); // Only depends on user.id
+
+  // Filter newsletters based on current filters
+  const filteredNewsletters = useMemo(() => {
+    if (!allNewsletters) return [];
+    let filtered = [...allNewsletters];
+    
+    // Apply tag filter if provided
+    if (tagId) {
+      filtered = filtered.filter(newsletter => 
+        newsletter.tags?.some((tag: Tag) => tag && tag.id === tagId)
+      );
+    }
+    
+    // Apply source filter if provided
+    if (sourceId) {
+      filtered = filtered.filter(newsletter => 
+        newsletter.newsletter_source_id === sourceId
+      );
+    }
+    
+    // Apply group source filter if provided
+    if (groupSourceIds && groupSourceIds.length > 0) {
+      filtered = filtered.filter(newsletter => 
+        newsletter.newsletter_source_id && groupSourceIds.includes(newsletter.newsletter_source_id)
+      );
+    }
+    
+    // Apply status filter
+    switch (filter) {
+      case 'unread':
+        filtered = filtered.filter(n => !n.is_read && !n.is_archived);
+        break;
+      case 'liked':
+        filtered = filtered.filter(n => n.is_liked && !n.is_archived);
+        break;
+      case 'archived':
+        filtered = filtered.filter(n => n.is_archived);
+        break;
+      default:
+        filtered = filtered.filter(n => !n.is_archived);
+    }
+    
+    // Sort by received_at descending
+    return [...filtered].sort((a, b) => 
+      new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
+    );
+  }, [allNewsletters, filter, tagId, sourceId, groupSourceIds]);
+
+  const deleteNewsletter = useCallback(async (id: string, options?: Parameters<typeof deleteNewsletterMutation.mutateAsync>[1]) => {
+    return deleteNewsletterMutation.mutateAsync(id, options);
+  }, [deleteNewsletterMutation]);
+
+  const markAsRead = useCallback(async (id: string, options?: Parameters<typeof markAsReadMutation.mutateAsync>[1]) => {
+    return markAsReadMutation.mutateAsync(id, options);
+  }, [markAsReadMutation]);
+
+  const markAsUnread = useCallback(async (id: string, options?: Parameters<typeof markAsUnreadMutation.mutateAsync>[1]) => {
+    return markAsUnreadMutation.mutateAsync(id, options);
+  }, [markAsUnreadMutation]);
+
+  const toggleLike = useCallback(async (id: string, isLikedParam?: boolean, options?: Parameters<typeof toggleLikeMutation.mutateAsync>[1]) => {
+    // If isLiked is not provided, we'll toggle the current state
+    let isLiked = isLikedParam;
+    if (isLiked === undefined) {
+      const newsletter = allNewsletters?.find(n => n.id === id);
+      isLiked = !newsletter?.is_liked;
+    }
+    return toggleLikeMutation.mutateAsync({ id, isLiked: isLiked ?? false }, options);
+  }, [toggleLikeMutation, allNewsletters]);
+
+  const toggleArchive = useCallback(async (newsletterId: string, isArchived: boolean, options?: any) => {
+    const mutation = isArchived ? unarchiveMutation : archiveMutation;
+    return mutation.mutateAsync(newsletterId, options);
+  }, [archiveMutation, unarchiveMutation]);
+
+  // Bulk mark as read
+  const bulkMarkAsReadMutation = useMutation<boolean, Error, string[], PreviousNewslettersState>({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ 
+          is_read: true,
+          updated_at: new Date().toISOString() 
+        })
+        .in('id', ids);
       
       if (error) throw error;
-      return !!data;
+      return true;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['readingQueue'] });
+    onMutate: async (newsletterIds) => {
+      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      
+      if (previousNewsletters) {
+        queryClient.setQueryData(
+          CACHE_KEY,
+          previousNewsletters.map(n => 
+            newsletterIds.includes(n.id) 
+              ? { ...n, is_read: true }
+              : n
+          )
+        );
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (err, _ids, context) => {
+      console.error('Error bulk marking as read:', err);
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: CACHE_KEY });
     },
   });
+
+  // Bulk mark as unread mutation
+  const bulkMarkAsUnreadMutation = useMutation<boolean, Error, string[], PreviousNewslettersState>({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ 
+          is_read: false,
+          updated_at: new Date().toISOString() 
+        })
+        .in('id', ids);
+      
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (newsletterIds) => {
+      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      
+      if (previousNewsletters) {
+        queryClient.setQueryData(
+          CACHE_KEY,
+          previousNewsletters.map(n => 
+            newsletterIds.includes(n.id) 
+              ? { ...n, is_read: false }
+              : n
+          )
+        );
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (err, _ids, context) => {
+      console.error('Error bulk marking as unread:', err);
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    },
+  });
+
+  const bulkArchiveMutation = useMutation<boolean, Error, string[], PreviousNewslettersState>({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ 
+          is_archived: true,
+          updated_at: new Date().toISOString() 
+        })
+        .in('id', ids);
+      
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (_ids) => {
+      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      
+      if (previousNewsletters) {
+        queryClient.setQueryData(
+          CACHE_KEY,
+          previousNewsletters.map(n => 
+            _ids.includes(n.id) 
+              ? { ...n, is_archived: true }
+              : n
+          )
+        );
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (_err, _ids, context) => {
+      console.error('Error bulk archiving newsletters:', _err);
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    },
+  });
+
+  const bulkUnarchiveMutation = useMutation<boolean, Error, string[], PreviousNewslettersState>({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('newsletters')
+        .update({ 
+          is_archived: false,
+          updated_at: new Date().toISOString() 
+        })
+        .in('id', ids);
+      
+      if (error) throw error;
+      return true;
+    },
+    onMutate: async (_ids) => {
+      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      
+      if (previousNewsletters) {
+        queryClient.setQueryData(
+          CACHE_KEY,
+          previousNewsletters.map(n => 
+            _ids.includes(n.id) 
+              ? { ...n, is_archived: false }
+              : n
+          )
+        );
+      }
+      
+      return { previousNewsletters };
+    },
+    onError: (_err, _ids, context) => {
+      console.error('Error bulk unarchiving newsletters:', _err);
+      if (context?.previousNewsletters) {
+        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    },
+  });
+
+  const bulkMarkAsRead = useCallback(async (ids: string[], options?: any) => {
+    return bulkMarkAsReadMutation.mutateAsync(ids, options);
+  }, [bulkMarkAsReadMutation]);
+
+  const bulkMarkAsUnread = useCallback(async (ids: string[], options?: any) => {
+    return bulkMarkAsUnreadMutation.mutateAsync(ids, options);
+  }, [bulkMarkAsUnreadMutation]);
+
+  const bulkArchive = useCallback(async (ids: string[], options?: any) => {
+    return bulkArchiveMutation.mutateAsync(ids, options);
+  }, [bulkArchiveMutation]);
+
+  const bulkUnarchive = useCallback(async (ids: string[], options?: any) => {
+    return bulkUnarchiveMutation.mutateAsync(ids, options);
+  }, [bulkUnarchiveMutation]);
 
   return {
     // Single newsletter operations
     getNewsletter,
+    deleteNewsletter,
+    isDeletingNewsletter: deleteNewsletterMutation.isPending,
+    errorDeletingNewsletter: deleteNewsletterMutation.error,
     
     // Newsletter list and query
-    newsletters,
+    newsletters: filteredNewsletters,
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
     refetchNewsletters,
     
     // Read status mutations
-    markAsRead: markAsReadMutation.mutateAsync,
+    markAsRead,
+    markAsUnread,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
     isMarkingAsRead: markAsReadMutation.isPending,
     errorMarkingAsRead: markAsReadMutation.error,
-    markAsUnread: markAsUnreadMutation.mutateAsync,
     isMarkingAsUnread: markAsUnreadMutation.isPending,
     errorMarkingAsUnread: markAsUnreadMutation.error,
-    
-    // Bulk read status mutations
-    bulkMarkAsRead: bulkMarkAsReadMutation.mutateAsync,
     isBulkMarkingAsRead: bulkMarkAsReadMutation.isPending,
     errorBulkMarkingAsRead: bulkMarkAsReadMutation.error,
-    bulkMarkAsUnread: bulkMarkAsUnreadMutation.mutateAsync,
     isBulkMarkingAsUnread: bulkMarkAsUnreadMutation.isPending,
     errorBulkMarkingAsUnread: bulkMarkAsUnreadMutation.error,
     
-    // Like mutations
-    toggleLike: toggleLikeMutation.mutateAsync,
+    // Like mutation
+    toggleLike,
     isTogglingLike: toggleLikeMutation.isPending,
     errorTogglingLike: toggleLikeMutation.error,
     
     // Archive mutations
-    archiveNewsletter: archiveMutation.mutateAsync,
-    unarchiveNewsletter: unarchiveMutation.mutateAsync,
+    toggleArchive,
+    bulkArchive,
+    bulkUnarchive,
     isArchiving: archiveMutation.isPending,
     errorArchiving: archiveMutation.error,
     isUnarchiving: unarchiveMutation.isPending,
     errorUnarchiving: unarchiveMutation.error,
-    
-    // Bulk archive mutations
-    bulkArchive: bulkArchiveMutation.mutateAsync,
-    bulkUnarchive: bulkUnarchiveMutation.mutateAsync,
     isBulkArchiving: bulkArchiveMutation.isPending,
     errorBulkArchiving: bulkArchiveMutation.error,
     isBulkUnarchiving: bulkUnarchiveMutation.isPending,
     errorBulkUnarchiving: bulkUnarchiveMutation.error,
     
     // Queue mutations
-    toggleInQueue: toggleInQueueMutation.mutateAsync,
-    isTogglingInQueue: toggleInQueueMutation.isPending,
-    errorTogglingInQueue: toggleInQueueMutation.error,
+    toggleInQueue: async (_id: string) => {
+      console.warn('toggleInQueue not implemented');
+      return false;
+    },
+    isTogglingInQueue: false,
+    errorTogglingInQueue: null,
     
     // Delete mutations
-    deleteNewsletter: deleteNewsletterMutation.mutateAsync,
-    isDeletingNewsletter: deleteNewsletterMutation.isPending,
-    errorDeletingNewsletter: deleteNewsletterMutation.error,
-    bulkDeleteNewsletters: bulkDeleteNewslettersMutation.mutateAsync,
-    isBulkDeletingNewsletters: bulkDeleteNewslettersMutation.isPending,
-    errorBulkDeletingNewsletters: bulkDeleteNewslettersMutation.error,
+    bulkDeleteNewsletters: async (_ids: string[]) => {
+      console.warn('bulkDeleteNewsletters not implemented');
+      return false;
+    },
+    isBulkDeletingNewsletters: false,
+    errorBulkDeletingNewsletters: null
   };
 };
