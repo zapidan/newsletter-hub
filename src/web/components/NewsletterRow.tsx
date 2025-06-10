@@ -42,6 +42,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   onTagClick,
   onRemoveFromQueue,
   onNewsletterClick,
+  showCheckbox = false,
   visibleTags,
   readingQueue,
   isDeletingNewsletter,
@@ -94,7 +95,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
           : 'bg-white border border-neutral-200 hover:bg-neutral-50'
       } ${isSelected ? 'ring-2 ring-primary-400' : ''}`}
     >
-      {onToggleSelect && (
+      {showCheckbox && onToggleSelect && (
         <input
           type="checkbox"
           checked={isSelected}

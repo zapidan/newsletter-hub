@@ -7,7 +7,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsletterRow';
 import { useNewsletters } from '@common/hooks/useNewsletters';
-import { ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
@@ -267,16 +267,7 @@ const ReadingQueuePage: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="mr-4 p-1 rounded-full hover:bg-gray-100"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-2xl font-bold text-gray-900">Reading Queue</h1>
-        </div>
+        <h1 className="text-2xl font-bold">Reading Queue</h1>
         <div className="flex items-center space-x-4">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
             {validQueueItems.length} {validQueueItems.length === 1 ? 'item' : 'items'}
