@@ -10,7 +10,7 @@ import { useNewsletters } from '@common/hooks/useNewsletters';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useNewsletterSources } from '@common/hooks/useNewsletterSources';
 import { useTags } from '@common/hooks/useTags';
-import type { Newsletter, Tag } from '@common/types';
+import type { Newsletter, NewsletterWithRelations, Tag } from '@common/types';
 import { supabase } from '@common/services/supabaseClient';
 import LoadingScreen from '@common/components/common/LoadingScreen';
 import NewsletterRow from '@web/components/NewsletterRow';
@@ -161,7 +161,7 @@ const Inbox: React.FC = () => {
   }, [getTags]);
 
   // Newsletter row handlers
-  const handleToggleLike = useCallback(async (newsletter: Newsletter) => {
+  const handleToggleLike = useCallback(async (newsletter: NewsletterWithRelations) => {
     if (!toggleLike) return;
     try {
       await toggleLike(newsletter.id);
@@ -203,9 +203,9 @@ const Inbox: React.FC = () => {
     }
   }, [markAsRead, markAsUnread, newsletters]);
 
-  const handleToggleQueue = useCallback(async (newsletter: Newsletter) => {
+  const handleToggleQueue = useCallback(async (newsletterId: string) => {
     try {
-      await toggleInQueue(newsletter.id);
+      await toggleInQueue(newsletterId);
       await refetchNewsletters();
     } catch (error) {
       console.error('Error toggling queue:', error);

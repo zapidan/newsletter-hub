@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useContext, useState, useEffect } from 'react';
+import { useCallback, useMemo, useContext, useEffect } from 'react';
 import { 
   useQuery, 
   useMutation, 
@@ -10,7 +10,7 @@ import {
 import { supabase } from '../services/supabaseClient';
 import { AuthContext } from '../contexts/AuthContext';
 
-import { NewsletterSource, Newsletter as NewsletterType, Tag } from '../types';
+import { Newsletter, NewsletterSource, Tag } from '../types';
 
 // Cache time in milliseconds (5 minutes)
 const CACHE_DURATION = 5 * 60 * 1000;
@@ -24,48 +24,70 @@ const queryKeys = {
   tags: (tagId?: string) => tagId ? [...queryKeys.all, 'tags', tagId] : [...queryKeys.all, 'tags'],
 };
 
-export type Newsletter = NewsletterType;
+
+// Helper type for the previous state in mutations
+type PreviousNewslettersState = { previousNewsletters?: Newsletter[] };
 
 interface UseNewslettersReturn {
-  deleteNewsletter: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
-  isDeletingNewsletter: boolean;
-  errorDeletingNewsletter: Error | null;
-  bulkDeleteNewsletters: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
-  isBulkDeletingNewsletters: boolean;
-  errorBulkDeletingNewsletters: Error | null;
+  // Single newsletter operations
+  getNewsletter: (id: string) => Promise<Newsletter | null>;
+  
+  // Newsletter list and query
   newsletters: Newsletter[];
   isLoadingNewsletters: boolean;
   isErrorNewsletters: boolean;
   errorNewsletters: Error | null;
-  markAsRead: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
+  refetchNewsletters: (options?: RefetchOptions) => Promise<QueryObserverResult<Newsletter[], Error>>;
+  
+  // Read status mutations
+  markAsRead: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
   isMarkingAsRead: boolean;
   errorMarkingAsRead: Error | null;
-  markAsUnread: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
+  markAsUnread: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
   isMarkingAsUnread: boolean;
   errorMarkingAsUnread: Error | null;
-  toggleLike: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
-  isTogglingLike: boolean;
-  errorTogglingLike: Error | null;
-  bulkMarkAsRead: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
+  
+  // Bulk read status mutations
+  bulkMarkAsRead: UseMutateAsyncFunction<boolean, Error, string[], PreviousNewslettersState>;
   isBulkMarkingAsRead: boolean;
   errorBulkMarkingAsRead: Error | null;
-  bulkMarkAsUnread: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
+  bulkMarkAsUnread: UseMutateAsyncFunction<boolean, Error, string[], PreviousNewslettersState>;
   isBulkMarkingAsUnread: boolean;
   errorBulkMarkingAsUnread: Error | null;
-  archiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
+  
+  // Like mutations
+  toggleLike: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
+  isTogglingLike: boolean;
+  errorTogglingLike: Error | null;
+  
+  // Archive mutations
+  archiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
+  unarchiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
   isArchiving: boolean;
   errorArchiving: Error | null;
-  unarchiveNewsletter: UseMutateAsyncFunction<boolean, Error, string, { previousNewsletters?: Newsletter[] }>;
   isUnarchiving: boolean;
   errorUnarchiving: Error | null;
-  bulkArchive: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
+  
+  // Bulk archive mutations
+  bulkArchive: UseMutateAsyncFunction<boolean, Error, string[], PreviousNewslettersState>;
+  bulkUnarchive: UseMutateAsyncFunction<boolean, Error, string[], PreviousNewslettersState>;
   isBulkArchiving: boolean;
   errorBulkArchiving: Error | null;
-  bulkUnarchive: UseMutateAsyncFunction<boolean, Error, string[], { previousNewsletters?: Newsletter[] }>;
   isBulkUnarchiving: boolean;
   errorBulkUnarchiving: Error | null;
-  getNewsletter: (id: string) => Promise<Newsletter | null>;
-  refetchNewsletters: (options?: RefetchOptions | undefined) => Promise<QueryObserverResult<Newsletter[], Error>>;
+  
+  // Queue mutations
+  toggleInQueue: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
+  isTogglingInQueue: boolean;
+  errorTogglingInQueue: Error | null;
+  
+  // Delete mutations
+  deleteNewsletter: UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>;
+  isDeletingNewsletter: boolean;
+  errorDeletingNewsletter: Error | null;
+  bulkDeleteNewsletters: UseMutateAsyncFunction<boolean, Error, string[], PreviousNewslettersState>;
+  isBulkDeletingNewsletters: boolean;
+  errorBulkDeletingNewsletters: Error | null;
 }
 
 // Helper function to transform newsletter data
@@ -933,40 +955,76 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     }
   }, [user, queryClient]);
 
+  // Toggle in queue mutation
+  const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
+    mutationFn: async (newsletterId) => {
+      const { data, error } = await supabase.rpc('toggle_newsletter_in_queue', {
+        p_newsletter_id: newsletterId
+      });
+      
+      if (error) throw error;
+      return !!data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['readingQueue'] });
+      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    },
+  });
+
   return {
+    // Single newsletter operations
+    getNewsletter,
+    
+    // Newsletter list and query
     newsletters,
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
+    refetchNewsletters,
+    
+    // Read status mutations
     markAsRead: markAsReadMutation.mutateAsync,
     isMarkingAsRead: markAsReadMutation.isPending,
     errorMarkingAsRead: markAsReadMutation.error,
     markAsUnread: markAsUnreadMutation.mutateAsync,
     isMarkingAsUnread: markAsUnreadMutation.isPending,
     errorMarkingAsUnread: markAsUnreadMutation.error,
-    toggleLike: toggleLikeMutation.mutateAsync,
-    isTogglingLike: toggleLikeMutation.isPending,
-    errorTogglingLike: toggleLikeMutation.error,
+    
+    // Bulk read status mutations
     bulkMarkAsRead: bulkMarkAsReadMutation.mutateAsync,
     isBulkMarkingAsRead: bulkMarkAsReadMutation.isPending,
     errorBulkMarkingAsRead: bulkMarkAsReadMutation.error,
     bulkMarkAsUnread: bulkMarkAsUnreadMutation.mutateAsync,
     isBulkMarkingAsUnread: bulkMarkAsUnreadMutation.isPending,
     errorBulkMarkingAsUnread: bulkMarkAsUnreadMutation.error,
+    
+    // Like mutations
+    toggleLike: toggleLikeMutation.mutateAsync,
+    isTogglingLike: toggleLikeMutation.isPending,
+    errorTogglingLike: toggleLikeMutation.error,
+    
+    // Archive mutations
     archiveNewsletter: archiveMutation.mutateAsync,
+    unarchiveNewsletter: unarchiveMutation.mutateAsync,
     isArchiving: archiveMutation.isPending,
     errorArchiving: archiveMutation.error,
-    unarchiveNewsletter: unarchiveMutation.mutateAsync,
     isUnarchiving: unarchiveMutation.isPending,
     errorUnarchiving: unarchiveMutation.error,
+    
+    // Bulk archive mutations
     bulkArchive: bulkArchiveMutation.mutateAsync,
+    bulkUnarchive: bulkUnarchiveMutation.mutateAsync,
     isBulkArchiving: bulkArchiveMutation.isPending,
     errorBulkArchiving: bulkArchiveMutation.error,
-    bulkUnarchive: bulkUnarchiveMutation.mutateAsync,
     isBulkUnarchiving: bulkUnarchiveMutation.isPending,
     errorBulkUnarchiving: bulkUnarchiveMutation.error,
-    getNewsletter,
-    refetchNewsletters,
+    
+    // Queue mutations
+    toggleInQueue: toggleInQueueMutation.mutateAsync,
+    isTogglingInQueue: toggleInQueueMutation.isPending,
+    errorTogglingInQueue: toggleInQueueMutation.error,
+    
+    // Delete mutations
     deleteNewsletter: deleteNewsletterMutation.mutateAsync,
     isDeletingNewsletter: deleteNewsletterMutation.isPending,
     errorDeletingNewsletter: deleteNewsletterMutation.error,

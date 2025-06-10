@@ -10,9 +10,9 @@ import {
   useReadingQueue 
 } from '@common/hooks';
 import { 
-  Newsletter, 
   NewsletterSource, 
-  NewsletterSourceGroup, 
+  NewsletterSourceGroup,
+  NewsletterWithRelations, 
   Tag 
 } from '@common/types';
 import { Loader2, AlertTriangle, ArrowLeft, X, Check, FolderPlus } from 'lucide-react';
@@ -206,7 +206,7 @@ const NewslettersPage: React.FC = () => {
   const { readingQueue } = useReadingQueue();
 
   const {
-    newsletters = [],
+    newsletters: fetchedNewsletters = [],
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
@@ -219,9 +219,26 @@ const NewslettersPage: React.FC = () => {
     selectedSourceId ? 'source' : 'inbox', 
     selectedSourceId || undefined,
     selectedGroupId ? selectedGroupSourceIds : undefined
-  );
+  ) as { 
+    newsletters: NewsletterWithRelations[];
+    isLoadingNewsletters: boolean;
+    isErrorNewsletters: boolean;
+    errorNewsletters: Error | null;
+    errorTogglingLike: Error | null;
+    markAsRead: (id: string) => Promise<boolean>;
+    toggleLike: (id: string) => Promise<boolean>;
+    markAsUnread: (id: string) => Promise<boolean>;
+  };
+  
+  const [newsletters, setNewsletters] = useState<NewsletterWithRelations[]>(fetchedNewsletters || []);
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
-  // Removed unused handleArchive as we've implemented the functionality directly
+  
+  // Update local state when fetchedNewsletters changes
+  useEffect(() => {
+    if (fetchedNewsletters) {
+      setNewsletters(fetchedNewsletters);
+    }
+  }, [fetchedNewsletters]);
 
   const handleTagClick = useCallback(async (tag: Tag, e: React.MouseEvent) => {
     // Handle tag click logic here
@@ -231,7 +248,7 @@ const NewslettersPage: React.FC = () => {
   }, []);
   
   // Mock handlers for now - implement these as needed
-  const handleToggleLike = useCallback(async (newsletter: Newsletter) => {
+  const handleToggleLike = useCallback(async (newsletter: NewsletterWithRelations) => {
     try {
       await toggleLike(newsletter.id);
     } catch (error) {
@@ -240,18 +257,17 @@ const NewslettersPage: React.FC = () => {
     }
   }, [toggleLike]);
   
-  // Mock function for toggling selection (not used in this view but required by NewsletterRow)
-  const handleToggleSelect = useCallback((id: string) => {
-    console.log('Toggle select:', id);
+  const handleToggleSelect = useCallback(async () => {
+    // Implementation
   }, []);
   
   const handleToggleArchive = useCallback(async (id: string) => {
     try {
+      // Toggle the archive status
       // Find the newsletter to check its current archive status
-      const newsletter = newsletters.find((n: Newsletter) => n.id === id);
+      const newsletter = newsletters.find(n => n.id === id);
       if (!newsletter) return;
       
-      // Toggle the archive status
       const { error } = await supabase
         .from('newsletters')
         .update({ is_archived: !newsletter.is_archived })
@@ -272,36 +288,36 @@ const NewslettersPage: React.FC = () => {
       toast.error('Failed to update archive status');
       throw error;
     }
-  }, [newsletters, queryClient]);
+  }, [queryClient]);
   
   const handleToggleRead = useCallback(async (id: string) => {
     try {
       // Check if the newsletter is read or unread and call the appropriate function
-      const newsletter = newsletters.find((n: Newsletter) => n.id === id);
-      if (newsletter) {
-        if (newsletter.is_read) {
-          await markAsUnread(id);
-        } else {
-          await markAsRead(id);
-        }
+      const newsletter = newsletters.find(n => n.id === id);
+      if (!newsletter) return;
+      
+      if (newsletter.is_read) {
+        await markAsUnread(id);
+      } else {
+        await markAsRead(id);
       }
     } catch (error) {
       console.error('Error toggling read status:', error);
       throw error;
     }
-  }, [newsletters, markAsRead, markAsUnread]);
+  }, [markAsRead, markAsUnread]);
   
-  const handleToggleQueue = useCallback(async (newsletter: Newsletter) => {
+  const handleToggleQueue = useCallback(async (newsletterId: string) => {
     try {
       // Check if the newsletter is already in the reading queue
-      const isInQueue = readingQueue.some(item => item.newsletter_id === newsletter.id);
+      const isInQueue = readingQueue.some(item => item.newsletter_id === newsletterId);
       
       if (isInQueue) {
         // Remove from queue
         const { error } = await supabase
           .from('reading_queue')
           .delete()
-          .eq('newsletter_id', newsletter.id);
+          .eq('newsletter_id', newsletterId);
           
         if (error) throw error;
         toast.success('Removed from reading queue');
@@ -309,7 +325,7 @@ const NewslettersPage: React.FC = () => {
         // Add to queue
         const { error } = await supabase
           .from('reading_queue')
-          .insert([{ newsletter_id: newsletter.id }]);
+          .insert([{ newsletter_id: newsletterId }]);
           
         if (error) throw error;
         toast.success('Added to reading queue');
@@ -789,7 +805,7 @@ const NewslettersPage: React.FC = () => {
             <p className="text-gray-500 italic">No newsletters found for this source.</p>
           ) : (
             <div className="space-y-2">
-              {newsletters.map((newsletter: Newsletter) => (
+              {newsletters.map((newsletter: NewsletterWithRelations) => (
                 <NewsletterRow
                   key={newsletter.id}
                   newsletter={newsletter}

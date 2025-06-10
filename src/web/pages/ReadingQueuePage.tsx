@@ -1,24 +1,129 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
-import { Newsletter } from '@common/types';
-// LoadingScreen is not used, removing to fix lint warning
+// Types are used in other parts of the file
 import { ArrowLeft, Bookmark as BookmarkIcon, ArrowUp, ArrowDown } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { QueueItem } from '../components/reading-queue/QueueItem';
+import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsletterRow';
 
 const ReadingQueuePage = () => {
-  const { 
-    readingQueue, 
-    isLoading, 
-    error, 
-    toggleInQueue,
-    reorderQueue
-  } = useReadingQueue();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [sortByDate, setSortByDate] = useState(false);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  const { 
+    readingQueue = [], 
+    isLoading, 
+    error, 
+    refetch,
+    toggleRead,
+    toggleLike,
+    toggleArchive,
+    reorderQueue,
+  } = useReadingQueue();
+
+  // Initialize sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+  
+  // Handle drag end for reordering
+  const handleDragEnd = useCallback(async (event: any) => {
+    const { active, over } = event;
+    
+    if (active.id !== over.id) {
+      const oldIndex = readingQueue.findIndex((item) => item.id === active.id);
+      const newIndex = readingQueue.findIndex((item) => item.id === over.id);
+      
+      if (oldIndex === -1 || newIndex === -1) return;
+      
+      // Create a new array with the updated order
+      const updatedItems = [...readingQueue];
+      const [movedItem] = updatedItems.splice(oldIndex, 1);
+      updatedItems.splice(newIndex, 0, movedItem);
+      
+      // Update positions
+      const updates = updatedItems.map((item, index) => ({
+        id: item.id,
+        position: index,
+      }));
+      
+      try {
+        await reorderQueue(updates);
+      } catch (error) {
+        console.error('Error reordering queue:', error);
+        // Revert the UI on error
+        refetch();
+      }
+    }
+  }, [readingQueue, reorderQueue, refetch]);
+  
+  // Toggle read status
+  const handleToggleRead = useCallback(async (id: string) => {
+    if (!id) return;
+    
+    try {
+      // Find the newsletter in the reading queue to get the current is_read status
+      const queueItem = readingQueue?.find(item => item.newsletter.id === id);
+      if (!queueItem) return;
+      
+      await toggleRead({ 
+        newsletterId: id, 
+        isRead: !queueItem.newsletter.is_read 
+      });
+      await refetch();
+    } catch (error) {
+      console.error('Failed to toggle read status:', error);
+    }
+  }, [toggleRead, refetch, readingQueue]);
+  
+  // Toggle like status
+  const handleToggleLike = useCallback(async (id: string) => {
+    if (!id) return;
+    
+    try {
+      // Find the newsletter in the reading queue to get the current is_liked status
+      const queueItem = readingQueue?.find(item => item.newsletter.id === id);
+      if (!queueItem) return;
+      
+      await toggleLike({ 
+        newsletterId: id, 
+        isLiked: !queueItem.newsletter.is_liked 
+      });
+      await refetch();
+    } catch (error) {
+      console.error('Failed to toggle like status:', error);
+    }
+  }, [toggleLike, refetch, readingQueue]);
+  
+  // Toggle archive status
+  const handleToggleArchive = useCallback(async (id: string) => {
+    if (!id) return;
+    
+    try {
+      // Find the newsletter in the reading queue to get the current is_archived status
+      const queueItem = readingQueue?.find(item => item.newsletter.id === id);
+      if (!queueItem) return;
+      
+      await toggleArchive({ 
+        newsletterId: id, 
+        isArchived: !queueItem.newsletter.is_archived 
+      });
+      await refetch();
+    } catch (error) {
+      console.error('Failed to toggle archive status:', error);
+    }
+  }, [toggleArchive, refetch, readingQueue]);
 
   // Sort items based on sort mode
   const sortedItems = useMemo(() => {
@@ -32,185 +137,95 @@ const ReadingQueuePage = () => {
         // In date sort mode, sort by received date
         const dateA = new Date(a.newsletter.received_at);
         const dateB = new Date(b.newsletter.received_at);
-        return sortDirection === 'desc' 
-          ? dateB.getTime() - dateA.getTime()
-          : dateA.getTime() - dateB.getTime();
+        return sortDirection === 'asc' 
+          ? dateA.getTime() - dateB.getTime()
+          : dateB.getTime() - dateA.getTime();
       }
     });
 
     return sortableItems;
   }, [readingQueue, sortByDate, sortDirection]);
 
-  const toggleSortMode = () => {
-    const newSortByDate = !sortByDate;
-    setSortByDate(newSortByDate);
-    // When switching to date sort, default to newest first
-    if (newSortByDate && sortDirection !== 'desc') {
-      setSortDirection('desc');
-    }
-  };
+  // Toggle sort mode between manual and date
+  const toggleSortMode = useCallback(() => {
+    setSortByDate(prev => !prev);
+  }, []);
 
-  const toggleSortDirection = () => {
+  // Toggle sort direction
+  const toggleSortDirection = useCallback(() => {
     setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-  };
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = useCallback(async (event: any) => {
-    if (sortByDate) return; // Don't allow drag and drop in date sort mode
-    
-    const { active, over } = event;
-    
-    if (!over || active.id === over.id) return;
-    
-    const oldIndex = sortedItems.findIndex(item => item.newsletter.id === active.id);
-    const newIndex = sortedItems.findIndex(item => item.newsletter.id === over.id);
-    
-    if (oldIndex === -1 || newIndex === -1) {
-      console.log('Could not find items for reorder');
-      return;
-    }
-    
-    // Create a new array with the item moved to the new position
-    const newItems = [...sortedItems];
-    const [movedItem] = newItems.splice(oldIndex, 1);
-    newItems.splice(newIndex, 0, movedItem);
-    
-    // Update the position of each item based on their new index
-    const updatedItems = newItems.map((item, index) => ({
-      ...item,
-      position: index + 1 // 1-based position
-    }));
-    
-    // Prepare updates for the database
-    const updates = updatedItems.map(item => ({
-      id: item.id,
-      position: item.position
-    }));
-    
-    // Update the database
-    try {
-      await reorderQueue(updates);
-    } catch (error) {
-      console.error('Failed to update queue order:', error);
-    }
-  }, [sortedItems, reorderQueue]);
+  }, []);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading reading queue...</div>;
+    return <div>Loading...</div>;
   }
 
   if (error) {
-    return (
-      <div className="p-4 text-red-600">
-        <p>Error loading reading queue: {error.message}</p>
-      </div>
-    );
+    return <div>Error loading reading queue: {error.message}</div>;
   }
 
-  const handleNewsletterClick = useCallback((newsletter: Newsletter | { id: string }) => {
-    const state = { 
-      from: '/reading-queue',
-      fromReadingQueue: true,
-      timestamp: Date.now() // Add timestamp to ensure state is fresh
-    };
-    console.log('Navigating to newsletter with state:', state);
-    navigate(`/newsletters/${newsletter.id}`, { state });
-  }, [navigate]);
-
-  const handleRemoveFromQueue = useCallback(async (e: React.MouseEvent, newsletterId: string) => {
-    e.stopPropagation();
-    await toggleInQueue(newsletterId);
-  }, [toggleInQueue]);
-
   return (
-    <div className="p-6 bg-neutral-50 min-h-screen">
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="inline-flex">
+    <div className="p-6">
+      <div className="flex items-center mb-6">
+        <button 
+          onClick={() => navigate(-1)} 
+          className="mr-4 p-2 rounded-full hover:bg-gray-100"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-2xl font-bold">Reading Queue</h1>
+        <div className="ml-auto flex space-x-2">
           <button
-            onClick={() => navigate('/inbox')}
-            className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
+            onClick={toggleSortMode}
+            className="px-3 py-1 text-sm bg-gray-100 rounded hover:bg-gray-200"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Inbox
+            {sortByDate ? 'Sort by Position' : 'Sort by Date'}
           </button>
-        </div>
-        <div className="flex items-center justify-between w-full">
-          <h1 className="text-3xl font-bold text-neutral-800">Reading Queue</h1>
-          <div className="flex items-center gap-2">
+          {sortByDate && (
             <button
-              onClick={toggleSortMode}
-              className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md ${
-                sortByDate 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'bg-neutral-100 text-neutral-700'
-              }`}
+              onClick={toggleSortDirection}
+              className="p-1 rounded-full hover:bg-gray-200"
+              title={sortDirection === 'asc' ? 'Sort Oldest First' : 'Sort Newest First'}
             >
-              {sortByDate ? (
-                <span>Sort by Date</span>
-              ) : (
-                <span>Manual Order</span>
-              )}
+              {sortDirection === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
             </button>
-            {sortByDate && (
-              <button
-                onClick={toggleSortDirection}
-                className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-600"
-                title={sortDirection === 'desc' ? 'Newest first' : 'Oldest first'}
-              >
-                {sortDirection === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
-      {sortedItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-lg shadow-sm border border-neutral-200">
-          <BookmarkIcon className="h-12 w-12 text-neutral-400 mb-4" />
-          <h2 className="text-xl font-semibold text-neutral-700 mb-2">Your reading queue is empty</h2>
-          <p className="text-neutral-500 max-w-md text-center">
-            Click the bookmark icon on any newsletter to add it to your reading queue.
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="space-y-2">
+          <SortableContext
+            items={sortedItems.map(item => item.id)}
+            strategy={verticalListSortingStrategy}
           >
-            <SortableContext
-              items={sortedItems.map(item => item.newsletter.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="divide-y divide-neutral-200">
-                {sortedItems.map((item) => (
-                  <div key={item.id}>
-                    <QueueItem
-                      item={item}
-                      isDraggable={!sortByDate}
-                      onClick={() => handleNewsletterClick(item.newsletter)}
-                      onRemove={(id) => {
-                        const e = new Event('click') as unknown as React.MouseEvent;
-                        e.stopPropagation = () => {};
-                        handleRemoveFromQueue(e, id);
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+            {sortedItems.map((item) => (
+              <SortableNewsletterRow
+                key={item.id}
+                id={item.id}
+                newsletter={item.newsletter}
+                onToggleRead={handleToggleRead}
+                onToggleLike={handleToggleLike}
+                onToggleArchive={handleToggleArchive}
+              />
+            ))}
+          </SortableContext>
+        </div>
+      </DndContext>
+
+      {sortedItems.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          <p>Your reading queue is empty.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-2 text-blue-600 hover:underline"
+          >
+            Browse newsletters
+          </button>
         </div>
       )}
     </div>

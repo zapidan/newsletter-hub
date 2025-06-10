@@ -1,21 +1,26 @@
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, BookmarkIcon, Tag as TagIcon, Archive, ArchiveX, Trash } from 'lucide-react';
-import { Newsletter, Tag } from '@common/types';
+import { NewsletterWithRelations, Tag } from '@common/types';
 import TagSelector from './TagSelector';
 
 interface NewsletterRowProps {
-  newsletter: Newsletter;
+  newsletter: NewsletterWithRelations;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
-  onToggleLike: (newsletter: Newsletter) => Promise<void>;
+  onToggleLike: (newsletter: NewsletterWithRelations) => Promise<void>;
   onToggleArchive: (id: string) => Promise<void>;
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
-  onToggleQueue: (newsletter: Newsletter) => Promise<void>;
+  onToggleQueue: (newsletterId: string) => Promise<void>;
   onToggleTagVisibility: (id: string, e: React.MouseEvent) => void;
   onUpdateTags: (newsletterId: string, tagIds: string[]) => Promise<void>;
   onTagClick: (tag: Tag, e: React.MouseEvent) => void;
+  onRemoveFromQueue?: (e: React.MouseEvent, id: string) => void;
+  onNewsletterClick?: (newsletter: NewsletterWithRelations) => void;
+  isInReadingQueue?: boolean;
+  showCheckbox?: boolean;
+  showTags?: boolean;
   visibleTags: Set<string>;
   readingQueue: Array<{ newsletter_id: string }>;
   isDeletingNewsletter: boolean;
@@ -35,6 +40,8 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   onToggleTagVisibility,
   onUpdateTags,
   onTagClick,
+  onRemoveFromQueue,
+  onNewsletterClick,
   visibleTags,
   readingQueue,
   isDeletingNewsletter,
@@ -47,7 +54,11 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     // Only navigate if the click wasn't on a button or link
     const target = e.target as HTMLElement;
     if (!target.closest('button') && !target.closest('a')) {
-      navigate(`/newsletters/${newsletter.id}`);
+      if (onNewsletterClick) {
+        onNewsletterClick(newsletter);
+      } else {
+        navigate(`/newsletters/${newsletter.id}`);
+      }
     }
   };
 
@@ -58,7 +69,11 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
 
   const handleToggleQueue = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    await onToggleQueue(newsletter);
+    if (readingQueue.some(item => item.newsletter_id === newsletter.id) && onRemoveFromQueue) {
+      onRemoveFromQueue(e, newsletter.id);
+    } else {
+      await onToggleQueue(newsletter.id);
+    }
   };
 
   const handleUpdateTags = useCallback(async (tagIds: string[]) => {

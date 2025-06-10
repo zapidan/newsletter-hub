@@ -64,15 +64,6 @@ export interface UserProfile {
   // Add other profile fields as needed
 }
 
-export interface NewsletterSource {
-  id: string;
-  user_id: string;
-  name: string;
-  domain: string;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface NewsletterSourceGroup {
   id: string;
   user_id: string;
