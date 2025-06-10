@@ -18,7 +18,7 @@ interface NewsletterRowProps {
   onTagClick: (tag: Tag, e: React.MouseEvent) => void;
   onRemoveFromQueue?: (e: React.MouseEvent, id: string) => void;
   onNewsletterClick?: (newsletter: NewsletterWithRelations) => void;
-  isInReadingQueue?: boolean;
+  isInReadingQueue: boolean;
   showCheckbox?: boolean;
   showTags?: boolean;
   visibleTags: Set<string>;
@@ -42,10 +42,11 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   onTagClick,
   onRemoveFromQueue,
   onNewsletterClick,
+  isInReadingQueue = false,
   showCheckbox = false,
   visibleTags,
-  readingQueue,
-  isDeletingNewsletter,
+  readingQueue = [],
+  isDeletingNewsletter = false,
   loadingStates = {},
   errorTogglingLike,
 }) => {
@@ -68,14 +69,18 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     onTagClick(tag, e);
   }, [onTagClick]);
 
-  const handleToggleQueue = async (e: React.MouseEvent) => {
+  const handleToggleQueue = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (readingQueue.some(item => item.newsletter_id === newsletter.id) && onRemoveFromQueue) {
-      onRemoveFromQueue(e, newsletter.id);
-    } else {
-      await onToggleQueue(newsletter.id);
+    try {
+      if (isInReadingQueue && onRemoveFromQueue) {
+        onRemoveFromQueue(e, newsletter.id);
+      } else if (onToggleQueue) {
+        await onToggleQueue(newsletter.id);
+      }
+    } catch (error) {
+      console.error('Error toggling queue status:', error);
     }
-  };
+  }, [onToggleQueue, onRemoveFromQueue, isInReadingQueue, newsletter.id]);
 
   const handleUpdateTags = useCallback(async (tagIds: string[]) => {
     try {
@@ -174,6 +179,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 type="button"
                 className="p-1 rounded hover:bg-gray-200"
                 onClick={(e) => {
+                  console.log('Tag icon clicked for newsletter:', newsletter.id);
                   e.preventDefault();
                   e.stopPropagation();
                   onToggleTagVisibility(newsletter.id, e);
@@ -186,6 +192,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                     visibleTags.has(newsletter.id) ? 'text-primary-600' : 'text-gray-500'
                   } hover:text-primary-600`}
                 />
+                {visibleTags.has(newsletter.id) && <span className="sr-only">(Active)</span>}
               </button>
               {/* Reading queue button */}
               <button
@@ -200,9 +207,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               >
                 <BookmarkIcon
                   className="h-4 w-4"
-                  fill={
-                    readingQueue.some((item) => item.newsletter_id === newsletter.id) ? '#9CA3AF' : 'none'
-                  }
+                  fill={isInReadingQueue ? '#9CA3AF' : 'none'}
                   stroke="#9CA3AF"
                   strokeWidth={1.5}
                 />

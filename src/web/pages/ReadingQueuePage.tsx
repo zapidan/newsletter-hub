@@ -315,7 +315,6 @@ const ReadingQueuePage: React.FC = () => {
                 key={item.id}
                 id={item.id}
                 newsletter={item.newsletter}
-                isInReadingQueue={true}
                 onToggleRead={handleToggleRead}
                 onToggleLike={handleToggleLike}
                 onToggleArchive={handleToggleArchive}
@@ -337,8 +336,9 @@ const ReadingQueuePage: React.FC = () => {
                 showCheckbox={false}
                 showTags={true}
                 visibleTags={new Set<string>()}
-                readingQueue={[]}
+                readingQueue={readingQueue}
                 isDeletingNewsletter={false}
+                isInReadingQueue={true}
               />
             ))}
           </div>

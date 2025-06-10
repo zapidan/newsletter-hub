@@ -209,12 +209,15 @@ const Inbox: React.FC = () => {
 
   const handleToggleQueue = useCallback(async (newsletterId: string) => {
     try {
-      const isInQueue = readingQueue.some(item => item.newsletter_id === newsletterId);
-      if (isInQueue) {
-        await removeFromQueue(newsletterId);
+      const queueItem = readingQueue.find(item => item.newsletter_id === newsletterId);
+      if (queueItem) {
+        // If item is in queue, remove it using the queue item ID
+        await removeFromQueue(queueItem.id);
       } else {
+        // If item is not in queue, add it
         await addToQueue(newsletterId);
       }
+      // Invalidate the newsletters query to refresh the UI
       await refetchNewsletters();
     } catch (error) {
       console.error('Error toggling queue:', error);
@@ -256,6 +259,14 @@ const Inbox: React.FC = () => {
         if (error) throw error;
       });
       await Promise.all([...addPromises, ...removePromises]);
+      
+      // Close the tag selector after updating tags
+      setVisibleTags(prev => {
+        const newVisibleTags = new Set(prev);
+        newVisibleTags.delete(newsletterId);
+        return newVisibleTags;
+      });
+      
       await refetchNewsletters();
       setToast({ type: 'success', message: 'Tags updated successfully' });
     } catch (error) {
@@ -264,16 +275,28 @@ const Inbox: React.FC = () => {
     }
   }, [user, newsletters, refetchNewsletters]);
 
+  // Log visibleTags changes for debugging
+  useEffect(() => {
+    console.log('visibleTags updated:', Array.from(visibleTags));
+  }, [visibleTags]);
+
   // Toggle tag visibility
   const toggleTagVisibility = useCallback((id: string, e: React.MouseEvent) => {
+    console.log('toggleTagVisibility called with id:', id);
     e.stopPropagation();
     setVisibleTags((prev: Set<string>) => {
+      console.log('Previous visibleTags:', Array.from(prev));
       const newVisibleTags = new Set(prev);
       if (newVisibleTags.has(id)) {
+        console.log('Removing tag with id:', id);
         newVisibleTags.delete(id);
       } else {
+        // Close all other tag selectors when opening a new one
+        console.log('Adding tag with id:', id, 'and clearing others');
+        newVisibleTags.clear();
         newVisibleTags.add(id);
       }
+      console.log('New visibleTags:', Array.from(newVisibleTags));
       return newVisibleTags;
     });
   }, []);
@@ -492,16 +515,22 @@ const Inbox: React.FC = () => {
   }, [navigate]);
 
   // Handle remove from queue
-  const handleRemoveFromQueue = useCallback(async (e: React.MouseEvent, id: string) => {
+  const handleRemoveFromQueue = useCallback(async (e: React.MouseEvent, newsletterId: string) => {
     e.stopPropagation();
     try {
-      await removeFromQueue(id);
-      await refetchNewsletters();
+      const queueItem = readingQueue.find(item => item.newsletter_id === newsletterId);
+      if (queueItem) {
+        await removeFromQueue(queueItem.id);
+        await refetchNewsletters();
+      } else {
+        console.warn('Could not find queue item for newsletter:', newsletterId);
+        setToast({ type: 'error', message: 'Failed to find item in queue' });
+      }
     } catch (error) {
       console.error('Error removing from queue:', error);
       setToast({ type: 'error', message: 'Failed to remove from queue' });
     }
-  }, [removeFromQueue, refetchNewsletters]);
+  }, [readingQueue, removeFromQueue, refetchNewsletters]);
 
   if (isLoadingNewsletters) {
     return <LoadingScreen />;

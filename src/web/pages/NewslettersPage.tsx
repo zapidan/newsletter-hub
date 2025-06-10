@@ -859,6 +859,7 @@ const NewslettersPage: React.FC = () => {
                   onTagClick={handleTagClick}
                   visibleTags={visibleTags}
                   readingQueue={readingQueue}
+                  isInReadingQueue={readingQueue.some(item => item.newsletter_id === newsletter.id)}
                   isDeletingNewsletter={false}
                   loadingStates={{}}
                   errorTogglingLike={errorTogglingLike}

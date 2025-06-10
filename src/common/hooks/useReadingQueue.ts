@@ -287,7 +287,17 @@ export const useReadingQueue = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['readingQueue', user?.id] });
+      // Invalidate both reading queue and newsletters queries
+      Promise.all([
+        queryClient.invalidateQueries({ 
+          queryKey: ['readingQueue', user?.id],
+          refetchType: 'active',
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['newsletters'],
+          refetchType: 'active',
+        })
+      ]).catch(console.error);
     },
   });
 
@@ -312,11 +322,17 @@ export const useReadingQueue = () => {
       }
     },
     onSuccess: () => {
-      // Invalidate and refetch the reading queue
-      queryClient.invalidateQueries({ 
-        queryKey: ['readingQueue', user?.id],
-        refetchType: 'active',
-      });
+      // Invalidate and refetch the reading queue and newsletters
+      Promise.all([
+        queryClient.invalidateQueries({ 
+          queryKey: ['readingQueue', user?.id],
+          refetchType: 'active',
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['newsletters'],
+          refetchType: 'active',
+        })
+      ]).catch(console.error);
     },
   });
 
