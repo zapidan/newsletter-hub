@@ -18,6 +18,14 @@ interface NewsletterFromDB {
   is_liked: boolean;
   is_archived: boolean;
   newsletter_source_id: string | null;
+  newsletter_sources?: {
+    id: string;
+    name: string;
+    domain: string;
+    user_id: string;
+    created_at: string;
+    updated_at: string;
+  } | null;
 }
 
 interface QueueItemFromDB {
@@ -74,7 +82,15 @@ export const useReadingQueue = () => {
               is_read,
               is_liked,
               is_archived,
-              newsletter_source_id
+              newsletter_source_id,
+              newsletter_sources (
+                id,
+                name,
+                domain,
+                user_id,
+                created_at,
+                updated_at
+              )
             )
           `)
           .eq('user_id', user.id)
@@ -165,11 +181,11 @@ export const useReadingQueue = () => {
             newsletter_source_id: queueItem.newsletters.newsletter_source_id,
             source: queueItem.newsletters.newsletter_source_id ? {
               id: queueItem.newsletters.newsletter_source_id,
-              name: (queueItem.newsletters as any).newsletter_sources?.name || 'Unknown Source',
-              domain: (queueItem.newsletters as any).newsletter_sources?.domain || '',
-              user_id: queueItem.newsletters.user_id,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
+              name: queueItem.newsletters.newsletter_sources?.name || 'Unknown Source',
+              domain: queueItem.newsletters.newsletter_sources?.domain || '',
+              user_id: queueItem.newsletters.newsletter_sources?.user_id || queueItem.newsletters.user_id,
+              created_at: queueItem.newsletters.newsletter_sources?.created_at || new Date().toISOString(),
+              updated_at: queueItem.newsletters.newsletter_sources?.updated_at || new Date().toISOString()
             } : null,
             tags: ((queueItem.newsletters as any).newsletter_tags?.map((tag: any) => ({
               id: tag.tag_id,

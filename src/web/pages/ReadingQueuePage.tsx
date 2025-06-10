@@ -42,12 +42,10 @@ const ReadingQueuePage = () => {
   }, [readingQueue, sortByDate, sortDirection]);
 
   const toggleSortMode = () => {
-    if (sortByDate) {
-      // If currently sorting by date, switch back to manual sort
-      setSortByDate(false);
-    } else {
-      // If currently in manual sort, switch to date sort (newest first by default)
-      setSortByDate(true);
+    const newSortByDate = !sortByDate;
+    setSortByDate(newSortByDate);
+    // When switching to date sort, default to newest first
+    if (newSortByDate && sortDirection !== 'desc') {
       setSortDirection('desc');
     }
   };
@@ -68,12 +66,14 @@ const ReadingQueuePage = () => {
   );
 
   const handleDragEnd = useCallback(async (event: any) => {
+    if (sortByDate) return; // Don't allow drag and drop in date sort mode
+    
     const { active, over } = event;
     
     if (!over || active.id === over.id) return;
     
-    const oldIndex = sortedItems.findIndex(item => item.id === active.id);
-    const newIndex = sortedItems.findIndex(item => item.id === over.id);
+    const oldIndex = sortedItems.findIndex(item => item.newsletter.id === active.id);
+    const newIndex = sortedItems.findIndex(item => item.newsletter.id === over.id);
     
     if (oldIndex === -1 || newIndex === -1) {
       console.log('Could not find items for reorder');
@@ -91,11 +91,10 @@ const ReadingQueuePage = () => {
       position: index + 1 // 1-based position
     }));
     
-    // Update positions in the database
+    // Prepare updates for the database
     const updates = updatedItems.map(item => ({
       id: item.id,
-      position: item.position,
-      updated_at: new Date().toISOString()
+      position: item.position
     }));
     
     // Update the database
@@ -119,7 +118,11 @@ const ReadingQueuePage = () => {
   }
 
   const handleNewsletterClick = useCallback((newsletter: Newsletter | { id: string }) => {
-    navigate(`/inbox/${newsletter.id}`, { state: { from: '/reading-queue' } });
+    navigate(`/newsletters/${newsletter.id}`, { 
+      state: { 
+        from: '/reading-queue'
+      } 
+    });
   }, [navigate]);
 
   const handleRemoveFromQueue = useCallback(async (e: React.MouseEvent, newsletterId: string) => {
@@ -185,18 +188,16 @@ const ReadingQueuePage = () => {
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={sortedItems.map(item => item.id)}
+              items={sortedItems.map(item => item.newsletter.id)}
               strategy={verticalListSortingStrategy}
             >
               <div className="divide-y divide-neutral-200">
                 {sortedItems.map((item) => (
-                  <div 
-                    key={item.id}
-                    onClick={() => handleNewsletterClick(item.newsletter)}
-                    className="cursor-pointer"
-                  >
+                  <div key={item.id}>
                     <QueueItem
                       item={item}
+                      isDraggable={!sortByDate}
+                      onClick={() => handleNewsletterClick(item.newsletter)}
                       onRemove={(id) => {
                         const e = new Event('click') as unknown as React.MouseEvent;
                         e.stopPropagation = () => {};

@@ -28,7 +28,10 @@ const Sidebar = () => {
   const { emailAlias, loading: emailLoading } = useEmailAlias();
   
   const [copied, setCopied] = useState(false);
-  const { unreadCount } = useUnreadCount();
+  // Use the optimized unread count hook
+  const { unreadCount, isLoading } = useUnreadCount();
+  // Only show the badge after initial load and when count > 0
+  const showUnreadBadge = !isLoading && unreadCount !== undefined && unreadCount > 0;
 
   const copyToClipboard = async () => {
     if (!emailAlias) return;
@@ -127,10 +130,18 @@ const Sidebar = () => {
               onClick={() => setIsOpen(false)}
             >
               {link.icon}
-              <span>{link.label}</span>
-              {link.to === '/inbox' && unreadCount > 0 && (
-                <span className="ml-auto bg-primary-100 text-primary-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  {unreadCount}
+              <span className="flex-1">{link.label}</span>
+              {link.to === '/inbox' && (
+                <span 
+                  className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full transition-all duration-200 ${
+                    showUnreadBadge 
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'opacity-0 w-0 px-0 overflow-hidden'
+                  }`}
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {showUnreadBadge ? unreadCount : ''}
                 </span>
               )}
             </NavLink>
