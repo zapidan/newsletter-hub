@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, Fragment } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@common/services/supabaseClient';
@@ -21,6 +22,7 @@ import { SourceGroupCard } from '@web/components/SourceGroupCard';
 import { useQueryClient } from '@tanstack/react-query';
 
 const NewslettersPage: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editModalSourceId, setEditModalSourceId] = useState<string | null>(null);
@@ -400,7 +402,11 @@ const NewslettersPage: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <main className="max-w-6xl w-full mx-auto p-6 bg-neutral-50">
       <button
-        onClick={() => window.history.back()}
+        onClick={(e) => {
+          e.preventDefault();
+          // Use React Router's navigate for client-side navigation
+          navigate('/inbox');
+        }}
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-6"
       >
         <ArrowLeft className="h-4 w-4" />

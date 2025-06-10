@@ -15,7 +15,45 @@ const NewsletterDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const isFromReadingQueue = location.state?.from === '/reading-queue' || location.pathname.includes('reading-queue');
+  // Check if we came from the reading queue using multiple indicators
+  const isFromReadingQueue = useMemo(() => {
+    return (
+      location.state?.fromReadingQueue === true ||
+      location.state?.from === '/reading-queue' ||
+      (typeof location.state?.from === 'string' && location.state.from.includes('reading-queue')) ||
+      (typeof document.referrer === 'string' && document.referrer.includes('reading-queue'))
+    );
+  }, [location.state]);
+    
+  const handleBack = useCallback(() => {
+    console.log('Navigation state:', location.state);
+    console.log('Document referrer:', document.referrer);
+    
+    // Check multiple indicators to determine if we came from reading queue
+    const fromReadingQueue = 
+      location.state?.fromReadingQueue === true ||
+      location.state?.from === '/reading-queue' ||
+      (typeof document.referrer === 'string' && document.referrer.includes('reading-queue')) ||
+      (typeof location.state?.from === 'string' && location.state.from.includes('reading-queue'));
+    
+    console.log('From reading queue:', fromReadingQueue);
+    
+    // Use window.history to go back first, then navigate if needed
+    if (window.history.length > 1) {
+      // If we have history, go back
+      window.history.back();
+      // Then navigate to the correct route if needed (as a fallback)
+      setTimeout(() => {
+        if (window.location.pathname === '/newsletters/' + id) {
+          // If we're still on the same page, force navigation
+          navigate(fromReadingQueue ? '/reading-queue' : '/inbox', { replace: true });
+        }
+      }, 100);
+    } else {
+      // If no history, navigate directly
+      navigate(fromReadingQueue ? '/reading-queue' : '/inbox', { replace: true });
+    }
+  }, [navigate, location.state, id]);
   const { updateNewsletterTags } = useTags();
   const { 
     markAsRead, 
@@ -279,7 +317,7 @@ const NewsletterDetail = () => {
     return (
       <div className="max-w-6xl w-full mx-auto px-4 py-8">
         <button
-          onClick={() => navigate(isFromReadingQueue ? '/reading-queue' : '/inbox')}
+          onClick={handleBack}
           className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -295,15 +333,14 @@ const NewsletterDetail = () => {
   return (
     <div className="max-w-6xl w-full mx-auto px-4 py-8">
       <button
-        onClick={() => navigate(isFromReadingQueue ? '/reading-queue' : '/inbox')}
+        onClick={handleBack}
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
       >
         <ArrowLeft className="h-4 w-4" />
         {isFromReadingQueue ? 'Back to Reading Queue' : 'Back to Inbox'}
       </button>
       
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Main Content */}
+      <div className="flex flex-col lg:flex-row gap-6">        {/* Main Content */}
         <div className="flex-1">
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             {/* Tags and Action Buttons Row */}

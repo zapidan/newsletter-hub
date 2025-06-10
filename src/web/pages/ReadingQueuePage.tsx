@@ -118,11 +118,13 @@ const ReadingQueuePage = () => {
   }
 
   const handleNewsletterClick = useCallback((newsletter: Newsletter | { id: string }) => {
-    navigate(`/newsletters/${newsletter.id}`, { 
-      state: { 
-        from: '/reading-queue'
-      } 
-    });
+    const state = { 
+      from: '/reading-queue',
+      fromReadingQueue: true,
+      timestamp: Date.now() // Add timestamp to ensure state is fresh
+    };
+    console.log('Navigating to newsletter with state:', state);
+    navigate(`/newsletters/${newsletter.id}`, { state });
   }, [navigate]);
 
   const handleRemoveFromQueue = useCallback(async (e: React.MouseEvent, newsletterId: string) => {
