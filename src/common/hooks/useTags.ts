@@ -1,12 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useContext } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@common/services/supabaseClient';
 import { AuthContext } from '@common/contexts/AuthContext';
-import { useContext } from 'react';
 import { Tag, TagCreate, TagUpdate } from '@common/types';
 
 export const useTags = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +47,13 @@ export const useTags = () => {
         .single();
 
       if (error) throw error;
+      
+      // Invalidate relevant queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] })
+      ]);
+      
       return data;
     } catch (err: any) {
       console.error('Error creating tag:', err);
@@ -54,7 +62,7 @@ export const useTags = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, queryClient]);
 
   // Update an existing tag
   const updateTag = useCallback(async (tag: TagUpdate): Promise<Tag | null> => {
@@ -72,6 +80,14 @@ export const useTags = () => {
         .single();
 
       if (error) throw error;
+      
+      // Invalidate relevant queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+      ]);
+      
       return data;
     } catch (err: any) {
       console.error('Error updating tag:', err);
@@ -80,7 +96,7 @@ export const useTags = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, queryClient]);
 
   // Delete a tag
   const deleteTag = useCallback(async (tagId: string): Promise<boolean> => {
@@ -95,6 +111,14 @@ export const useTags = () => {
         .eq('user_id', user.id);
 
       if (error) throw error;
+      
+      // Invalidate relevant queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+      ]);
+      
       return true;
     } catch (err: any) {
       console.error('Error deleting tag:', err);
@@ -103,7 +127,7 @@ export const useTags = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, queryClient]);
 
   // Get tags for a specific newsletter
   interface NewsletterTagJoin {
@@ -177,6 +201,14 @@ export const useTags = () => {
           if (removeError) throw removeError;
         }
 
+        // Invalidate relevant queries
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
+          queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
+          queryClient.invalidateQueries({ queryKey: ['tags'] }),
+          queryClient.invalidateQueries({ queryKey: ['newsletter', newsletterId] })
+        ]);
+        
         return true;
       } catch (err: any) {
         console.error('Error updating newsletter tags:', err);
@@ -185,7 +217,7 @@ export const useTags = () => {
       } finally {
         setLoading(false);
       }
-    }, [user]
+    }, [user, queryClient]
   );
 
   return {
