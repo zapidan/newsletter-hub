@@ -124,9 +124,15 @@ const Sidebar = () => {
             <NavLink
               key={link.to}
               to={link.to}
-              className={({ isActive }) => 
-                `sidebar-link ${isActive ? 'active' : ''}`
-              }
+              className={({ isActive }) => {
+                const isNewsletterDetailPage = window.location.pathname.startsWith('/newsletters/');
+                // For Inbox link, check if we're on inbox or newsletter detail page
+                if (link.to === '/inbox') {
+                  return `sidebar-link ${isActive || isNewsletterDetailPage ? 'active' : ''}`;
+                }
+                // For all other links, only use default isActive behavior if not on a newsletter detail page
+                return `sidebar-link ${!isNewsletterDetailPage && isActive ? 'active' : ''}`;
+              }}
               onClick={(e) => {
                 setIsOpen(false);
                 // If already on inbox, clear filters and refresh
