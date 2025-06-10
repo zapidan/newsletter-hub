@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@common/services/supabaseClient';
 import { AuthContext } from '@common/contexts/AuthContext';
 import { useContext, useCallback } from 'react';
-import type { Tag } from '@common/types';
 import type { Newsletter } from '@common/types';
 
 export interface ReadingQueueItem {
@@ -31,6 +30,14 @@ interface NewsletterFromDB {
   newsletter_source_id: string | null;
   word_count: number;
   estimated_read_time: number;
+  tags?: Array<{
+    id: string;
+    name: string;
+    color: string;
+    user_id: string;
+    created_at: string;
+    updated_at: string;
+  }>;
   newsletter_sources?: Array<{
     id: string;
     name: string;
@@ -54,10 +61,11 @@ interface QueueItemFromDB {
 // Helper function to transform queue item from DB to our format
 const transformQueueItem = (item: QueueItemFromDB): ReadingQueueItem | null => {
   try {
-    // Handle both array and direct object cases
-    const newsletter = Array.isArray(item.newsletters) 
-      ? item.newsletters[0] 
-      : item.newsletters;
+    // Handle both array and direct object cases for newsletters
+    const newsletter = (() => {
+      if (!item.newsletters) return null;
+      return Array.isArray(item.newsletters) ? item.newsletters[0] : item.newsletters;
+    })();
       
     if (!newsletter) {
       console.warn('No newsletter found for queue item:', item.id);
@@ -73,10 +81,10 @@ const transformQueueItem = (item: QueueItemFromDB): ReadingQueueItem | null => {
     // Handle both array and direct object cases for newsletter_sources
     const source = (() => {
       if (!newsletter.newsletter_sources) return undefined;
-      const sources = Array.isArray(newsletter.newsletter_sources) 
-        ? newsletter.newsletter_sources[0] 
-        : newsletter.newsletter_sources;
-      return sources || undefined;
+      if (Array.isArray(newsletter.newsletter_sources)) {
+        return newsletter.newsletter_sources[0];
+      }
+      return newsletter.newsletter_sources;
     })();
     
     // Create the newsletter object with all required fields
@@ -104,7 +112,8 @@ const transformQueueItem = (item: QueueItemFromDB): ReadingQueueItem | null => {
         created_at: source.created_at,
         updated_at: source.updated_at
       } : undefined,
-      tags: []
+      // Include tags if they exist in the newsletter data
+      tags: newsletter.tags || []
     };
 
     return {
@@ -131,6 +140,7 @@ export const useReadingQueue = () => {
   const fetchReadingQueue = useCallback(async (userId: string): Promise<ReadingQueueItem[]> => {
     try {
       // First, get queue items with joined newsletter and source data
+      // First, fetch the queue items with newsletter data
       const { data: queueItems, error: queueError } = await supabase
         .from('reading_queue')
         .select(`
@@ -145,21 +155,60 @@ export const useReadingQueue = () => {
         .eq('user_id', userId)
         .order('position', { ascending: true });
 
+      if (!queueItems?.length) return [];
+
+      // Fetch tags for all newsletters in the queue
+      const newsletterIds = queueItems.map(item => item.newsletter_id);
+      const { data: newsletterTags } = await supabase
+        .from('newsletter_tags')
+        .select('newsletter_id, tags(*)')
+        .in('newsletter_id', newsletterIds);
+
+      // Create a map of newsletter_id to tags
+      const tagsByNewsletterId = newsletterTags?.reduce((acc, { newsletter_id, tags }) => {
+        if (!acc[newsletter_id]) {
+          acc[newsletter_id] = [];
+        }
+        acc[newsletter_id].push(tags);
+        return acc;
+      }, {} as Record<string, any[]>);
+
+      // Add tags to newsletters, handling both array and single object cases
+      const queueItemsWithTags = queueItems.map(item => {
+        const newsletters = Array.isArray(item.newsletters) 
+          ? item.newsletters.map((newsletter: any) => ({
+              ...newsletter,
+              tags: tagsByNewsletterId?.[newsletter.id] || []
+            }))
+          : item.newsletters 
+            ? {
+                ...item.newsletters,
+                tags: tagsByNewsletterId?.[item.newsletters.id] || []
+              }
+            : null;
+            
+        return {
+          ...item,
+          newsletters: newsletters ? [newsletters].flat() : []
+        };
+      });
+
       if (queueError) {
         console.error('Error fetching reading queue:', queueError);
         throw queueError;
       }
-      if (!queueItems?.length) return [];
 
-      // Transform the queue items and filter out nulls
-      const validItems = queueItems
+      if (!queueItemsWithTags.length) return [];
+
+      // Transform the queue items with tags and filter out nulls
+      const validItems = queueItemsWithTags
         .map(transformQueueItem)
         .filter((item): item is ReadingQueueItem => item !== null);
 
       // Clean up any orphaned queue items (where the newsletter doesn't exist)
-      if (validItems.length < queueItems.length) {
+      if (validItems.length < queueItemsWithTags.length) {
         // Find items that failed to transform (orphaned)
-        const orphanedIds = queueItems
+        const orphanedIds = queueItemsWithTags
           .filter(item => !validItems.some(valid => valid.newsletter_id === item.newsletter_id))
           .map(item => item.id);
 

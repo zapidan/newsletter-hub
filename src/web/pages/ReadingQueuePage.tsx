@@ -53,6 +53,7 @@ const ReadingQueuePage: React.FC = () => {
 
   const [sortByDate, setSortByDate] = useState(false);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
 
   // Set up drag and drop sensors
   const sensors = useSensors(
@@ -320,9 +321,32 @@ const ReadingQueuePage: React.FC = () => {
                 onToggleArchive={handleToggleArchive}
                 onToggleQueue={toggleInQueue}
                 onTrash={() => {}}
-                onUpdateTags={async () => {}}
-                onTagClick={() => {}}
-                onToggleTagVisibility={() => {}}
+                onUpdateTags={async (newsletterId, tagIds) => {
+                  try {
+                    // Implement tag update logic here if needed
+                    console.log('Updating tags for newsletter:', newsletterId, tagIds);
+                  } catch (error) {
+                    console.error('Error updating tags:', error);
+                    toast.error('Failed to update tags');
+                  }
+                }}
+                onTagClick={(tag, e) => {
+                  e.stopPropagation();
+                  // Handle tag click (e.g., filter by tag)
+                  console.log('Tag clicked:', tag);
+                }}
+                onToggleTagVisibility={(id, e) => {
+                  e.stopPropagation();
+                  setVisibleTags(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(id)) {
+                      newSet.delete(id);
+                    } else {
+                      newSet.add(id);
+                    }
+                    return newSet;
+                  });
+                }}
                 onRemoveFromQueue={async (e, id) => {
                   e.stopPropagation();
                   await toggleInQueue(id);
@@ -335,7 +359,7 @@ const ReadingQueuePage: React.FC = () => {
                 isDraggable={!sortByDate}
                 showCheckbox={false}
                 showTags={true}
-                visibleTags={new Set<string>()}
+                visibleTags={visibleTags}
                 readingQueue={readingQueue}
                 isDeletingNewsletter={false}
                 isInReadingQueue={true}
