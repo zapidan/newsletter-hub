@@ -127,7 +127,18 @@ const Sidebar = () => {
               className={({ isActive }) => 
                 `sidebar-link ${isActive ? 'active' : ''}`
               }
-              onClick={() => setIsOpen(false)}
+              onClick={(e) => {
+                setIsOpen(false);
+                // If already on inbox, clear filters and refresh
+                if (link.to === '/inbox' && window.location.pathname === '/inbox') {
+                  e.preventDefault();
+                  // Clear URL params
+                  window.history.replaceState({}, '', '/inbox');
+                  // Dispatch events to clear filters and refresh
+                  window.dispatchEvent(new Event('inbox:clear-filters'));
+                  window.dispatchEvent(new Event('inbox:refresh-newsletters'));
+                }
+              }}
             >
               {link.icon}
               <span className="flex-1">{link.label}</span>

@@ -301,6 +301,31 @@ const Inbox: React.FC = () => {
     });
   }, []);
 
+  // Handle inbox cleared and refresh events
+  useEffect(() => {
+    const handleClearFilters = () => {
+      setFilter('all');
+      setTimeRange('all');
+      setSourceFilter(null);
+      clearTagFilters();
+      setSearchParams(new URLSearchParams(), { replace: true });
+    };
+
+    const handleRefreshNewsletters = () => {
+      refetchNewsletters();
+    };
+
+    // Set up event listeners
+    window.addEventListener('inbox:clear-filters', handleClearFilters);
+    window.addEventListener('inbox:refresh-newsletters', handleRefreshNewsletters);
+
+    // Clean up event listeners on unmount
+    return () => {
+      window.removeEventListener('inbox:clear-filters', handleClearFilters);
+      window.removeEventListener('inbox:refresh-newsletters', handleRefreshNewsletters);
+    };
+  }, [clearTagFilters, refetchNewsletters, setSearchParams]);
+
   // Initialize pendingTagUpdates from URL on mount
   useEffect(() => {
     if (tagIds.length > 0) {

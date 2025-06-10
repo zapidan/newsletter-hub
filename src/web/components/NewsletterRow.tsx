@@ -52,10 +52,33 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const handleRowClick = (e: React.MouseEvent) => {
-    // Only navigate if the click wasn't on a button or link
+  const handleRowClick = async (e: React.MouseEvent) => {
+    // Only proceed if the click wasn't on a button or link
     const target = e.target as HTMLElement;
-    if (!target.closest('button') && !target.closest('a')) {
+    if (target.closest('button') || target.closest('a')) {
+      return;
+    }
+
+    try {
+      // Mark as read if unread
+      if (!newsletter.is_read && onToggleRead) {
+        await onToggleRead(newsletter.id);
+      }
+
+      // Archive the newsletter
+      if (onToggleArchive) {
+        await onToggleArchive(newsletter.id);
+      }
+
+      // Proceed with navigation
+      if (onNewsletterClick) {
+        onNewsletterClick(newsletter);
+      } else {
+        navigate(`/newsletters/${newsletter.id}`);
+      }
+    } catch (error) {
+      console.error('Error handling newsletter click:', error);
+      // Still navigate even if archiving fails
       if (onNewsletterClick) {
         onNewsletterClick(newsletter);
       } else {
