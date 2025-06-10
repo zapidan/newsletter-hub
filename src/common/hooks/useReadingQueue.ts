@@ -53,57 +53,73 @@ interface QueueItemFromDB {
 
 // Helper function to transform queue item from DB to our format
 const transformQueueItem = (item: QueueItemFromDB): ReadingQueueItem | null => {
-  // Get the first newsletter from the array (should only be one per queue item)
-  const newsletter = item.newsletters?.[0];
-  if (!newsletter) {
-    console.warn('No newsletter found for queue item:', item.id);
-    
-    // If we're in development, log the full item for debugging
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Queue item with missing newsletter:', item);
+  try {
+    // Handle both array and direct object cases
+    const newsletter = Array.isArray(item.newsletters) 
+      ? item.newsletters[0] 
+      : item.newsletters;
+      
+    if (!newsletter) {
+      console.warn('No newsletter found for queue item:', item.id);
+      
+      // If we're in development, log the full item for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Queue item with missing newsletter:', item);
+      }
+      
+      return null;
     }
     
+    // Handle both array and direct object cases for newsletter_sources
+    const source = (() => {
+      if (!newsletter.newsletter_sources) return undefined;
+      const sources = Array.isArray(newsletter.newsletter_sources) 
+        ? newsletter.newsletter_sources[0] 
+        : newsletter.newsletter_sources;
+      return sources || undefined;
+    })();
+    
+    // Create the newsletter object with all required fields
+    const newsletterData = {
+      id: newsletter.id,
+      title: newsletter.title || '',
+      content: newsletter.content || '',
+      summary: newsletter.summary || '',
+      image_url: newsletter.image_url || '',
+      received_at: newsletter.received_at,
+      updated_at: newsletter.updated_at,
+      user_id: newsletter.user_id,
+      is_read: newsletter.is_read || false,
+      is_liked: newsletter.is_liked || false,
+      is_archived: newsletter.is_archived || false,
+      is_bookmarked: true, // Always true for items in the reading queue
+      newsletter_source_id: newsletter.newsletter_source_id ?? null,
+      word_count: newsletter.word_count || 0,
+      estimated_read_time: newsletter.estimated_read_time || 0,
+      source: source ? {
+        id: source.id,
+        name: source.name,
+        domain: source.domain,
+        user_id: source.user_id,
+        created_at: source.created_at,
+        updated_at: source.updated_at
+      } : undefined,
+      tags: []
+    };
+
+    return {
+      id: item.id,
+      position: item.position,
+      user_id: item.user_id,
+      newsletter_id: item.newsletter_id,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
+      newsletter: newsletterData
+    } as ReadingQueueItem;
+  } catch (error) {
+    console.error('Error transforming queue item:', error, item);
     return null;
   }
-  // Get the first source from the array (if any)
-  const source = newsletter.newsletter_sources?.[0];
-  
-  // Create the newsletter object with all required fields
-  const newsletterData = {
-    id: newsletter.id,
-    title: newsletter.title || '',
-    content: newsletter.content || '',
-    summary: newsletter.summary || '',
-    image_url: newsletter.image_url || '',
-    received_at: newsletter.received_at,
-    updated_at: newsletter.updated_at,
-    user_id: newsletter.user_id,
-    is_read: newsletter.is_read || false,
-    is_liked: newsletter.is_liked || false,
-    is_archived: newsletter.is_archived || false,
-    newsletter_source_id: newsletter.newsletter_source_id ?? null, // Use nullish coalescing
-    word_count: newsletter.word_count || 0,
-    estimated_read_time: newsletter.estimated_read_time || 0,
-    source: source ? {
-      id: source.id,
-      name: source.name,
-      domain: source.domain,
-      user_id: source.user_id,
-      created_at: source.created_at,
-      updated_at: source.updated_at
-    } : undefined,
-    tags: []
-  };
-
-  return {
-    id: item.id,
-    position: item.position,
-    user_id: item.user_id,
-    newsletter_id: item.newsletter_id,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
-    newsletter: newsletterData
-  } as ReadingQueueItem;
 };
 
 export const useReadingQueue = () => {
@@ -119,15 +135,20 @@ export const useReadingQueue = () => {
         .from('reading_queue')
         .select(`
           *,
-          newsletters!inner(
+          newsletters (
             *,
-            newsletter_sources!left(*)
+            newsletter_sources (
+              *
+            )
           )
         `)
         .eq('user_id', userId)
         .order('position', { ascending: true });
 
-      if (queueError) throw queueError;
+      if (queueError) {
+        console.error('Error fetching reading queue:', queueError);
+        throw queueError;
+      }
       if (!queueItems?.length) return [];
 
       // Transform the queue items and filter out nulls
@@ -184,76 +205,86 @@ export const useReadingQueue = () => {
     mutationFn: async (newsletterId: string) => {
       if (!user?.id) throw new Error('User not authenticated');
       
-      // First check if the newsletter is already in the queue
-      const { data: existingItem } = await supabase
-        .from('reading_queue')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('newsletter_id', newsletterId)
-        .maybeSingle();
-
-      if (existingItem) {
-        console.log('Newsletter already in queue');
-        return; // Already in queue
-      }
-
-      // Get the current max position with proper error handling
-      let nextPosition = 0;
       try {
-        const { data: maxPosition, error: positionError } = await supabase
+        // First check if the newsletter is already in the queue
+        const { data: existingItem } = await supabase
           .from('reading_queue')
-          .select('position')
+          .select('id, position')
           .eq('user_id', user.id)
-          .order('position', { ascending: false })
-          .limit(1)
+          .eq('newsletter_id', newsletterId)
+          .maybeSingle();
+
+        if (existingItem) {
+          console.log('Newsletter already in queue at position:', existingItem.position);
+          return existingItem; // Already in queue
+        }
+
+        // Get the current max position with proper error handling
+        let nextPosition = 0;
+        try {
+          const { data: maxPosition, error: positionError } = await supabase
+            .from('reading_queue')
+            .select('position')
+            .eq('user_id', user.id)
+            .order('position', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (positionError && positionError.code !== 'PGRST116') { // PGRST116 is 'no rows found'
+            console.error('Error getting max position:', positionError);
+            throw positionError;
+          }
+
+
+          nextPosition = (maxPosition?.position ?? -1) + 1;
+        } catch (error) {
+          console.error('Error in position calculation:', error);
+          // Default to 0 if there's an error getting the max position
+          nextPosition = 0;
+        }
+
+
+        // Insert the new item
+        const { data: insertedData, error: insertError } = await supabase
+          .from('reading_queue')
+          .insert({
+            user_id: user.id,
+            newsletter_id: newsletterId,
+            position: nextPosition,
+          })
+          .select('*')
           .single();
 
-        if (positionError && positionError.code !== 'PGRST116') { // PGRST116 is 'no rows found'
-          console.error('Error getting max position:', positionError);
-          throw positionError;
-        }
-
-        nextPosition = (maxPosition?.position ?? -1) + 1;
-      } catch (error) {
-        console.error('Error in position calculation:', error);
-        // Default to 0 if there's an error getting the max position
-        nextPosition = 0;
-      }
-
-      // First try to insert the item
-      const { data: insertedData, error: insertError } = await supabase
-        .from('reading_queue')
-        .insert({
-          user_id: user.id,
-          newsletter_id: newsletterId,
-          position: nextPosition,
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        if (insertError.code === '23505') { // Unique violation
-          // Item already exists in queue, fetch the existing one
-          const { data: existing, error: fetchError } = await supabase
-            .from('reading_queue')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('newsletter_id', newsletterId)
-            .single();
-          
-          if (fetchError) {
-            console.error('Error fetching existing queue item:', fetchError);
-            throw fetchError;
+        if (insertError) {
+          // If it's a unique violation, the item might have been added by another request
+          if (insertError.code === '23505') {
+            // Fetch the existing item
+            const { data: existing, error: fetchError } = await supabase
+              .from('reading_queue')
+              .select('*')
+              .eq('user_id', user.id)
+              .eq('newsletter_id', newsletterId)
+              .single();
+            
+            if (fetchError) {
+              console.error('Error fetching existing queue item after conflict:', fetchError);
+              throw fetchError;
+            }
+            
+            console.log('Resolved queue item conflict, using existing item');
+            return existing;
           }
           
-          return existing;
+          console.error('Error inserting into reading queue:', insertError);
+          throw insertError;
         }
-        console.error('Error inserting into reading queue:', insertError);
-        throw insertError;
+        
+        console.log('Successfully added to reading queue:', insertedData);
+        return insertedData;
+      } catch (error) {
+        console.error('Error in addToQueue:', error);
+        throw error;
       }
-      
-      // If we get here, the insert was successful
-      return insertedData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['readingQueue', user?.id] });
@@ -263,15 +294,29 @@ export const useReadingQueue = () => {
   // Remove from reading queue
   const removeFromQueue = useMutation({
     mutationFn: async (queueItemId: string) => {
-      const { error } = await supabase
-        .from('reading_queue')
-        .delete()
-        .eq('id', queueItemId);
+      try {
+        const { error } = await supabase
+          .from('reading_queue')
+          .delete()
+          .eq('id', queueItemId);
 
-      if (error) throw error;
+        if (error) {
+          console.error('Error removing from queue:', error);
+          throw error;
+        }
+        
+        console.log('Successfully removed from queue:', queueItemId);
+      } catch (error) {
+        console.error('Error in removeFromQueue:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['readingQueue', user?.id] });
+      // Invalidate and refetch the reading queue
+      queryClient.invalidateQueries({ 
+        queryKey: ['readingQueue', user?.id],
+        refetchType: 'active',
+      });
     },
   });
 
@@ -280,23 +325,37 @@ export const useReadingQueue = () => {
     mutationFn: async (updates: { id: string; position: number }[]) => {
       if (!user?.id) throw new Error('User not authenticated');
       
-      const { data, error } = await supabase
-        .from('reading_queue')
-        .upsert(
-          updates.map(({ id, position }) => ({
-            id,
-            position,
-            updated_at: new Date().toISOString(),
-          })),
-          { onConflict: 'id' }
-        )
-        .select();
+      try {
+        const { data, error } = await supabase
+          .from('reading_queue')
+          .upsert(
+            updates.map(({ id, position }) => ({
+              id,
+              position,
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: 'id' }
+          )
+          .select();
 
-      if (error) throw error;
-      return data;
+        if (error) {
+          console.error('Error reordering queue:', error);
+          throw error;
+        }
+        
+        console.log('Successfully reordered queue');
+        return data;
+      } catch (error) {
+        console.error('Error in reorderQueue:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['readingQueue', user?.id] });
+      // Invalidate and refetch the reading queue
+      queryClient.invalidateQueries({ 
+        queryKey: ['readingQueue', user?.id],
+        refetchType: 'active',
+      });
     },
   });
 

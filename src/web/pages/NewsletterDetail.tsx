@@ -73,7 +73,7 @@ const NewsletterDetail = memo(() => {
   } = useNewsletters(undefined, 'all', undefined, []);
   
   const { user } = useAuth();
-  const { readingQueue } = useReadingQueue();
+  const { readingQueue, refetch: refetchReadingQueue } = useReadingQueue();
   
   const [newsletter, setNewsletter] = useState<NewsletterWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
@@ -282,18 +282,57 @@ const NewsletterDetail = memo(() => {
   }, [newsletter, isTogglingReadStatus, markAsRead, markAsUnread]);
 
   const handleToggleBookmark = useCallback(async () => {
-    if (!newsletter?.id || isBookmarking || isTogglingInQueue || !toggleInQueue) return;
+    if (!newsletter?.id || isBookmarking || isTogglingInQueue || !toggleInQueue) {
+      console.log('Skipping bookmark toggle - condition not met', { 
+        hasId: !!newsletter?.id, 
+        isBookmarking, 
+        isTogglingInQueue, 
+        hasToggleFn: !!toggleInQueue 
+      });
+      return;
+    }
     
+    console.log('Toggling bookmark for newsletter:', newsletter.id);
     setIsBookmarking(true);
+    
     try {
-      await toggleInQueue(newsletter.id);
+      // Optimistically update the UI
+      const newBookmarkState = !newsletter.is_bookmarked;
+      setNewsletter(prev => prev ? { ...prev, is_bookmarked: newBookmarkState } : null);
+      
+      // Toggle in queue
+      const result = await toggleInQueue(newsletter.id);
+      console.log('Toggle queue result:', result);
+      
       // The is_bookmarked state will be updated by the useEffect above
+      // when the reading queue updates
+      console.log('Successfully toggled bookmark');
+      
+      // Force a refetch of the reading queue to ensure consistency
+      try {
+        if (refetchReadingQueue) {
+          console.log('Refreshing reading queue...');
+          await refetchReadingQueue();
+          console.log('Reading queue refreshed');
+        }
+      } catch (refetchError) {
+        console.error('Error refreshing reading queue:', refetchError);
+        // Don't fail the entire operation if just the refetch fails
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error toggling bookmark:', error);
+      // Revert optimistic update on error
+      setNewsletter(prev => prev ? { ...prev, is_bookmarked: !prev.is_bookmarked } : null);
+      
+      // Show error to user
+      alert('Failed to update bookmark. Please try again.');
+      throw error; // Re-throw to allow error handling by the caller if needed
     } finally {
       setIsBookmarking(false);
     }
-  }, [newsletter, isBookmarking, isTogglingInQueue, toggleInQueue]);
+  }, [newsletter, isBookmarking, isTogglingInQueue, toggleInQueue, refetchReadingQueue]);
 
   // Load newsletter data when component mounts or id changes
   useEffect(() => {

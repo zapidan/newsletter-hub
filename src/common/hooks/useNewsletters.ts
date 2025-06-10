@@ -876,9 +876,93 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     errorBulkUnarchiving: bulkUnarchiveMutation.error,
     
     // Queue mutations
-    toggleInQueue: async (_id: string) => {
-      console.warn('toggleInQueue not implemented');
-      return false;
+    toggleInQueue: async (newsletterId: string) => {
+      if (!user?.id) {
+        console.error('Cannot toggle queue: User not authenticated');
+        throw new Error('User not authenticated');
+      }
+
+      // Check if the newsletter is already in the queue
+      const { data: existingItem, error: checkError } = await supabase
+        .from('reading_queue')
+        .select('id, newsletter_id, position')
+        .eq('user_id', user.id)
+        .eq('newsletter_id', newsletterId)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error('Error checking queue status:', checkError);
+        throw checkError;
+      }
+
+      if (existingItem) {
+        // Remove from queue
+        const { error: deleteError } = await supabase
+          .from('reading_queue')
+          .delete()
+          .eq('id', existingItem.id)
+          .eq('user_id', user.id);
+
+        if (deleteError) {
+          console.error('Error removing from queue:', deleteError);
+          throw deleteError;
+        }
+        
+        console.log('Removed from reading queue:', newsletterId);
+        return false;
+      } else {
+        // Add to queue - get the current max position
+        const { data: maxPosition, error: positionError } = await supabase
+          .from('reading_queue')
+          .select('position')
+          .eq('user_id', user.id)
+          .order('position', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (positionError && positionError.code !== 'PGRST116') { // PGRST116 is 'no rows found'
+          console.error('Error getting max position:', positionError);
+          throw positionError;
+        }
+
+        const nextPosition = (maxPosition?.position ?? -1) + 1;
+
+        // Add to queue
+        const { data: insertedItem, error: insertError } = await supabase
+          .from('reading_queue')
+          .insert({
+            user_id: user.id,
+            newsletter_id: newsletterId,
+            position: nextPosition,
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          // If it's a unique violation, the item might have been added by another request
+          if (insertError.code === '23505') {
+            console.log('Queue item already exists, fetching existing item');
+            const { data: existing } = await supabase
+              .from('reading_queue')
+              .select('*')
+              .eq('user_id', user.id)
+              .eq('newsletter_id', newsletterId)
+              .single();
+            
+            if (!existing) {
+              throw new Error('Failed to resolve queue item conflict');
+            }
+            
+            return true;
+          }
+          
+          console.error('Error adding to queue:', insertError);
+          throw insertError;
+        }
+        
+        console.log('Added to reading queue:', insertedItem);
+        return true;
+      }
     },
     isTogglingInQueue: false,
     errorTogglingInQueue: null,
