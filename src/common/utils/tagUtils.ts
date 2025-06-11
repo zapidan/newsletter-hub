@@ -47,7 +47,7 @@ export const updateNewsletterTags = async (
 export const toggleTagFilter = <T extends { id: string }>(
   tag: string | T,
   currentTagIds: string[] | null
-): string[] | null => {
+): string[] => {
   const tagId = typeof tag === 'string' ? tag : tag.id;
   
   const currentTags = currentTagIds || [];
@@ -55,7 +55,7 @@ export const toggleTagFilter = <T extends { id: string }>(
     ? currentTags.filter(id => id !== tagId)
     : [...currentTags, tagId];
     
-  return updatedTagIds.length > 0 ? updatedTagIds : null;
+  return updatedTagIds;
 };
 
 /**
@@ -64,12 +64,11 @@ export const toggleTagFilter = <T extends { id: string }>(
  * @param currentTagIds - Currently selected tag IDs
  * @param setTagIds - State setter function for updating selected tag IDs
  * @param event - Optional React mouse event to stop propagation
- * @returns Updated array of selected tag IDs or null if no tags are selected
  */
 export const handleTagClick = <T extends { id: string }>(
   tag: string | T,
   currentTagIds: string[] | null,
-  setTagIds: (ids: string[] | null) => void,
+  setTagIds: (ids: string[]) => void,
   event?: React.MouseEvent
 ): void => {
   event?.stopPropagation();

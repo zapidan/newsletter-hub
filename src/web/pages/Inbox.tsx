@@ -36,6 +36,14 @@ const Inbox: React.FC = () => {
     const tagsParam = searchParams.get('tags');
     return tagsParam ? tagsParam.split(',').filter(Boolean) : [];
   }, [searchParams]);
+  
+  // Initialize pendingTagUpdates with tagIds from URL
+  const [pendingTagUpdates, setPendingTagUpdates] = useState<string[]>(tagIds);
+  
+  // Sync pendingTagUpdates with URL changes
+  useEffect(() => {
+    setPendingTagUpdates(tagIds);
+  }, [tagIds.toString()]);
 
   // Local state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -46,7 +54,7 @@ const Inbox: React.FC = () => {
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
   const [loadingStates, setLoadingStates] = useState<Record<string, string>>({});
   const [errorTogglingLike, setErrorTogglingLike] = useState<Error | null>(null);
-  const [pendingTagUpdates, setPendingTagUpdates] = useState<string[] | null>(null);
+
 
   // Hooks
   const { getTags } = useTags();
@@ -90,7 +98,6 @@ const Inbox: React.FC = () => {
 
   // Handle URL updates when tag filters change
   useEffect(() => {
-    if (pendingTagUpdates === null) return;
     setSearchParams(prev => {
       const newParams = new URLSearchParams(prev);
       if (pendingTagUpdates.length > 0) {
@@ -110,16 +117,16 @@ const Inbox: React.FC = () => {
     handleTagClick(tag, pendingTagUpdates, setPendingTagUpdates, e);
   }, [pendingTagUpdates]);
 
-  // Get selected tag IDs, defaulting to an empty array if null
-  const selectedTagIds = useMemo(() => pendingTagUpdates || [], [pendingTagUpdates]);
+  // Alias for consistency
+  const selectedTagIds = pendingTagUpdates;
 
   // Clear all filters (including tags)
   const clearAllFilters = useCallback(() => {
     setFilter('all');
     setTimeRange('all');
     setSourceFilter(null);
-    setPendingTagUpdates(null);
-    setSearchParams(new URLSearchParams(), { replace: false });
+    setPendingTagUpdates([]);
+    setSearchParams(new URLSearchParams(), { replace: true });
   }, [setSearchParams]);
 
   // Handle trash action
@@ -271,7 +278,7 @@ const Inbox: React.FC = () => {
       setFilter('all');
       setTimeRange('all');
       setSourceFilter(null);
-      setPendingTagUpdates(null);
+      setPendingTagUpdates([]);
       setSearchParams(new URLSearchParams(), { replace: true });
     };
 
