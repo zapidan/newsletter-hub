@@ -390,9 +390,10 @@ export const useNewsletters = (
     return filtered;
   }, [allNewsletters, filterNewsletters, normalizedTagId, groupSourceIds]);
 
-  // Helper: update newsletter in cache with proper typing
+  // Helper function to update newsletter in cache (exported for potential future use)
   const updateNewsletterInCache = useCallback((id: string, updates: Partial<NewsletterWithRelations>) => {
-    queryClient.setQueryData<NewsletterWithRelations[]>(buildQueryKey({ scope: 'list' }), (old = []) => {
+    const listKey = buildQueryKey({ scope: 'list' });
+    queryClient.setQueryData<NewsletterWithRelations[]>(listKey, (old = []) => {
       return old.map(item => {
         if (item.id === id) {
           const now = new Date().toISOString();
@@ -411,6 +412,17 @@ export const useNewsletters = (
         return item;
       });
     });
+    
+    // Also update the detail cache if it exists
+    const detailKey = buildQueryKey({ scope: 'detail', id });
+    const currentDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+    if (currentDetail) {
+      queryClient.setQueryData(detailKey, {
+        ...currentDetail,
+        ...updates,
+        updated_at: updates.updated_at || new Date().toISOString()
+      });
+    }
   }, [queryClient]);
 
   // Mark as read mutation
@@ -419,7 +431,8 @@ export const useNewsletters = (
       const { error } = await supabase
         .from('newsletters')
         .update({ 
-          is_read: true
+          is_read: true,
+          updated_at: new Date().toISOString()
         })
         .eq('id', newsletterId);
       
@@ -428,8 +441,17 @@ export const useNewsletters = (
     },
     onMutate: async (newsletterId) => {
       const listKey = buildQueryKey({ scope: 'list' });
-      await queryClient.cancelQueries({ queryKey: listKey });
+      const detailKey = buildQueryKey({ scope: 'detail', id: newsletterId });
+      
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: listKey }),
+        queryClient.cancelQueries({ queryKey: detailKey })
+      ]);
+      
+      // Snapshot the previous values
       const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
+      const previousDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
       
       // Find the newsletter to check if it's archived
       const newsletter = previousNewsletters.find(n => n.id === newsletterId);
@@ -439,26 +461,30 @@ export const useNewsletters = (
         return { previousNewsletters };
       }
       
-      // Update cache optimistically - only update is_read, preserve all other fields
-      queryClient.setQueryData(
-        buildQueryKey({ scope: 'list' }), // Use buildQueryKey to generate the correct key
-        previousNewsletters.map(n => 
-          n.id === newsletterId 
-            ? { ...n, is_read: true } 
-            : n
-        )
+      // Optimistically update the list cache
+      queryClient.setQueryData<NewsletterWithRelations[]>(
+        listKey,
+        (old = []) => old.map(n => n.id === newsletterId ? { ...n, is_read: true } : n)
       );
+      
+      // Also update the individual newsletter cache
+      if (previousDetail) {
+        queryClient.setQueryData(detailKey, { ...previousDetail, is_read: true });
+      }
       
       return { previousNewsletters };
     },
-    onError: (err, _newsletterId, context) => {
+    onError: (err, newsletterId, context) => {
       console.error('Error marking as read:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, newsletterId) => {
+      // Invalidate both list and detail queries
       queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'detail', id: newsletterId }) });
     },
   });
 
@@ -467,7 +493,9 @@ export const useNewsletters = (
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_read: false })
+        .update({ 
+          is_read: false
+        })
         .eq('id', id);
       
       if (error) throw error;
@@ -475,8 +503,17 @@ export const useNewsletters = (
     },
     onMutate: async (id: string) => {
       const listKey = buildQueryKey({ scope: 'list' });
-      await queryClient.cancelQueries({ queryKey: listKey });
+      const detailKey = buildQueryKey({ scope: 'detail', id });
+      
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: listKey }),
+        queryClient.cancelQueries({ queryKey: detailKey })
+      ]);
+      
+      // Snapshot the previous values
       const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
+      const previousDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
       
       // Find the newsletter to check if it's archived
       const newsletter = previousNewsletters.find(n => n.id === id);
@@ -486,26 +523,30 @@ export const useNewsletters = (
         return { previousNewsletters };
       }
       
-      // Update cache optimistically - only update is_read, preserve all other fields
-      queryClient.setQueryData(
+      // Optimistically update the list cache
+      queryClient.setQueryData<NewsletterWithRelations[]>(
         listKey,
-        previousNewsletters.map(n => 
-          n.id === id 
-            ? { ...n, is_read: false } 
-            : n
-        )
+        (old = []) => old.map(n => n.id === id ? { ...n, is_read: false } : n)
       );
+      
+      // Also update the individual newsletter cache
+      if (previousDetail) {
+        queryClient.setQueryData(detailKey, { ...previousDetail, is_read: false });
+      }
       
       return { previousNewsletters };
     },
-    onError: (err, _id, context) => {
+    onError: (err, id, context) => {
       console.error('Error marking as unread:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, id) => {
+      // Invalidate both list and detail queries
       queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'detail', id }) });
     },
   });
 
@@ -522,70 +563,104 @@ export const useNewsletters = (
     },
     onMutate: async (newsletterId) => {
       const listKey = buildQueryKey({ scope: 'list' });
-      await queryClient.cancelQueries({ queryKey: listKey });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey);
+      const detailKey = buildQueryKey({ scope: 'detail', id: newsletterId });
       
-      queryClient.setQueryData(
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: listKey }),
+        queryClient.cancelQueries({ queryKey: detailKey })
+      ]);
+      
+      // Snapshot the previous values
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
+      
+      // Optimistically update the list cache by removing the deleted newsletter
+      queryClient.setQueryData<NewsletterWithRelations[]>(
         listKey,
-        previousNewsletters?.filter(n => n.id !== newsletterId) || []
+        (old = []) => old.filter(n => n.id !== newsletterId)
       );
+      
+      // Remove the individual newsletter cache
+      queryClient.removeQueries({ queryKey: detailKey, exact: true });
       
       return { previousNewsletters };
     },
-    onError: (err, _newsletterId, context) => {
+    onError: (err, newsletterId, context) => {
       console.error('Error deleting newsletter:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
+        const listKey = buildQueryKey({ scope: 'list' });
+        queryClient.setQueryData(listKey, context.previousNewsletters);
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
+    onSettled: (_data, _error, newsletterId) => {
+      // Invalidate both list and detail queries
+      const listKey = buildQueryKey({ scope: 'list' });
+      const detailKey = buildQueryKey({ scope: 'detail', id: newsletterId });
+      
+      queryClient.invalidateQueries({ queryKey: listKey });
+      queryClient.invalidateQueries({ 
+        queryKey: detailKey,
+        refetchType: 'none' // Don't refetch if the item was deleted
+      });
     },
   });
 
   // Toggle like mutation
   const toggleLikeMutation = useMutation<boolean, Error, { id: string; isLiked: boolean }, PreviousNewslettersState>({
-    mutationFn: async ({ id }) => {
-      const newsletter = allNewsletters.find(n => n.id === id);
-      if (!newsletter) throw new Error('Newsletter not found');
-      
+    mutationFn: async ({ id, isLiked }) => {
       const { error } = await supabase
         .from('newsletters')
         .update({ 
-          is_liked: !newsletter.is_liked,
-          updated_at: new Date().toISOString() 
+          is_liked: isLiked
         })
         .eq('id', id);
       
       if (error) throw error;
-      return !newsletter.is_liked;
+      return isLiked;
     },
-    onMutate: async ({ id }) => {
+    onMutate: async ({ id, isLiked }) => {
       const listKey = buildQueryKey({ scope: 'list' });
-      await queryClient.cancelQueries({ queryKey: listKey });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey);
+      const detailKey = buildQueryKey({ scope: 'detail', id });
       
-      if (previousNewsletters) {
-        queryClient.setQueryData(
-          listKey,
-          previousNewsletters.map(n => 
-            n.id === id 
-              ? { ...n, is_liked: !n.is_liked }
-              : n
-          )
-        );
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: listKey }),
+        queryClient.cancelQueries({ queryKey: detailKey })
+      ]);
+      
+      // Snapshot the previous values
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
+      const previousDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+      
+      // Optimistically update the list cache
+      queryClient.setQueryData<NewsletterWithRelations[]>(
+        listKey,
+        (old = []) => old.map(n => n.id === id ? { ...n, is_liked: isLiked } : n)
+      );
+      
+      // Also update the individual newsletter cache
+      if (previousDetail) {
+        queryClient.setQueryData(detailKey, { ...previousDetail, is_liked: isLiked });
       }
       
       return { previousNewsletters };
     },
-    onError: (err, _variables, context) => {
+    onError: (err, { id }, context) => {
       console.error('Error toggling like:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
+        const listKey = buildQueryKey({ scope: 'list' });
+        queryClient.setQueryData(listKey, context.previousNewsletters);
       }
     },
-    onSettled: (): void => {
-      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
+    onSettled: (_data, _error, { id }) => {
+      // Invalidate both list and detail queries
+      const listKey = buildQueryKey({ scope: 'list' });
+      const detailKey = buildQueryKey({ scope: 'detail', id });
+      
+      queryClient.invalidateQueries({ queryKey: listKey });
+      queryClient.invalidateQueries({ queryKey: detailKey });
     },
   });
 
@@ -605,19 +680,20 @@ export const useNewsletters = (
       return transformNewsletterData([data])[0];
     },
     onMutate: async ({ id, isArchived }) => {
-      // Cancel any outgoing refetches for all relevant query keys
-      await Promise.all([
-        queryClient.cancelQueries({ queryKey: buildQueryKey({ scope: 'list' }) }),
-        queryClient.cancelQueries({ queryKey: buildQueryKey({ scope: 'detail', id }) })
-      ]);
-      
-      // Snapshot the previous values
       const listKey = buildQueryKey({ scope: 'list' });
       const detailKey = buildQueryKey({ scope: 'detail', id });
       
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: listKey }),
+        queryClient.cancelQueries({ queryKey: detailKey })
+      ]);
+      
+      // Snapshot the previous values
       const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(
         listKey
       ) || [];
+      const previousDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
       
       // Optimistically update the list cache
       queryClient.setQueryData<NewsletterWithRelations[]>(
@@ -626,34 +702,43 @@ export const useNewsletters = (
       );
 
       // Also update the individual newsletter cache
-      const previousDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
       if (previousDetail) {
-        queryClient.setQueryData(detailKey, { ...previousDetail, is_archived: isArchived });
+        queryClient.setQueryData(detailKey, { 
+          ...previousDetail, 
+          is_archived: isArchived,
+          updated_at: new Date().toISOString()
+        });
       }
 
       return { previousNewsletters };
     },
-    onError: (err, _, context) => {
+    onError: (err, { id }, context) => {
       console.error('Error toggling archive status:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
-    onSettled: (_, __, { id }) => {
+    onSettled: (_data, _error, { id }) => {
       // Invalidate both list and detail queries
-      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
-      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'detail', id }) });
+      queryClient.invalidateQueries({ 
+        queryKey: buildQueryKey({ scope: 'list' }),
+        refetchType: 'active'
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: buildQueryKey({ scope: 'detail', id }),
+        refetchType: 'active'
+      });
     },
   });
 
-  // Unarchive mutation
+  // Unarchive mutation (now handled by toggleArchive with isArchived: false)
   const unarchiveMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('newsletters')
         .update({ 
-          is_archived: false,
-          updated_at: new Date().toISOString() 
+          is_archived: false  
         })
         .eq('id', id);
       
@@ -662,21 +747,52 @@ export const useNewsletters = (
     },
     onMutate: async (id) => {
       const listKey = buildQueryKey({ scope: 'list' });
-      await queryClient.cancelQueries({ queryKey: listKey });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey);
+      const detailKey = buildQueryKey({ scope: 'detail', id });
       
-      updateNewsletterInCache(id, { is_archived: false });
+      // Cancel any outgoing refetches
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: listKey }),
+        queryClient.cancelQueries({ queryKey: detailKey })
+      ]);
+      
+      // Snapshot the previous values
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
+      const previousDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+      
+      // Optimistically update the list cache
+      queryClient.setQueryData<NewsletterWithRelations[]>(
+        listKey,
+        (old = []) => old.map(n => n.id === id ? { ...n, is_archived: false } : n)
+      );
+      
+      // Also update the individual newsletter cache
+      if (previousDetail) {
+        queryClient.setQueryData(detailKey, { 
+          ...previousDetail, 
+          is_archived: false,
+          updated_at: new Date().toISOString()
+        });
+      }
       
       return { previousNewsletters };
     },
-    onError: (err, _id, context) => {
+    onError: (err, id, context) => {
       console.error('Error unarchiving newsletter:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
         queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
+    onSettled: (_data, _error, id) => {
+      // Invalidate both list and detail queries
+      queryClient.invalidateQueries({ 
+        queryKey: buildQueryKey({ scope: 'list' }),
+        refetchType: 'active'
+      });
+      queryClient.invalidateQueries({ 
+        queryKey: buildQueryKey({ scope: 'detail', id }),
+        refetchType: 'active'
+      });
     },
   });
 
@@ -839,13 +955,11 @@ export const useNewsletters = (
     if (isArchived) {
       return unarchiveMutation.mutateAsync(newsletterId, options);
     } else {
-      // Explicitly return true after successful archive
-      await toggleArchiveMutation.mutateAsync({ id: newsletterId, isArchived: true }, options);
-      return true;
+      const result = await toggleArchiveMutation.mutateAsync({ id: newsletterId, isArchived: false }, options);
+      return !!result; // Ensure we return a boolean
     }
-  }, [toggleArchiveMutation, unarchiveMutation]);
+  }, [unarchiveMutation, toggleArchiveMutation]);
 
-  // Bulk mark as read
   const bulkMarkAsReadMutation = useMutation<boolean, Error, string[], PreviousNewslettersState>({
     mutationFn: async (ids: string[]) => {
       const { error } = await supabase
@@ -859,8 +973,7 @@ export const useNewsletters = (
       if (error) throw error;
       return true;
     },
-    onMutate: async (newsletterIds) => {
-      // Build the query key for the current list view
+    onMutate: async (ids) => {
       const listQueryKey = buildQueryKey({
         scope: 'list',
         userId: user?.id,
@@ -871,34 +984,41 @@ export const useNewsletters = (
         timeRange
       });
       
+      // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: listQueryKey });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey);
       
-      if (previousNewsletters) {
-        // Update the list view
-        queryClient.setQueryData(
-          listQueryKey,
-          previousNewsletters.map(n => 
-            newsletterIds.includes(n.id) 
-              ? { ...n, is_read: true }
-              : n
-          )
-        );
-        
-        // Update individual newsletter caches
-        newsletterIds.forEach(id => {
-          const detailKey = buildQueryKey({ scope: 'detail', id, userId: user?.id });
-          const previous = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
-          if (previous) {
-            queryClient.setQueryData(detailKey, { ...previous, is_read: true });
-          }
-        });
-      }
+      // Snapshot the previous values
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey) || [];
+      const updatedAt = new Date().toISOString();
+      
+      // Optimistically update the list cache
+      queryClient.setQueryData<NewsletterWithRelations[]>(
+        listQueryKey,
+        (old = []) => old.map(n => 
+          ids.includes(n.id) && !n.is_archived
+            ? { ...n, is_read: true, updated_at: updatedAt }
+            : n
+        )
+      );
+      
+      // Also update individual newsletter caches
+      ids.forEach(id => {
+        const detailKey = buildQueryKey({ scope: 'detail', id });
+        const previous = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+        if (previous && !previous.is_archived) {
+          queryClient.setQueryData(detailKey, { 
+            ...previous, 
+            is_read: true,
+            updated_at: updatedAt
+          });
+        }
+      });
       
       return { previousNewsletters };
     },
     onError: (err, _ids, context) => {
       console.error('Error bulk marking as read:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
         const listQueryKey = buildQueryKey({
           scope: 'list',
@@ -922,7 +1042,11 @@ export const useNewsletters = (
         groupSourceIds,
         timeRange
       });
-      queryClient.invalidateQueries({ queryKey: listQueryKey });
+      // Force a refetch to ensure cache is in sync
+      queryClient.invalidateQueries({ 
+        queryKey: listQueryKey,
+        refetchType: 'active'
+      });
     },
   });
 
@@ -940,8 +1064,7 @@ export const useNewsletters = (
       if (error) throw error;
       return true;
     },
-    onMutate: async (newsletterIds) => {
-      // Build the query key for the current list view
+    onMutate: async (ids) => {
       const listQueryKey = buildQueryKey({
         scope: 'list',
         userId: user?.id,
@@ -952,25 +1075,41 @@ export const useNewsletters = (
         timeRange
       });
       
+      // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: listQueryKey });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey);
       
-      if (previousNewsletters) {
-        // Update the list view
-        queryClient.setQueryData(
-          listQueryKey,
-          previousNewsletters.map(n => 
-            newsletterIds.includes(n.id) 
-              ? { ...n, is_read: false }
-              : n
-          )
-        );
-      }
+      // Snapshot the previous values
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey) || [];
+      const updatedAt = new Date().toISOString();
+      
+      // Optimistically update the list cache
+      queryClient.setQueryData<NewsletterWithRelations[]>(
+        listQueryKey,
+        (old = []) => old.map(n => 
+          ids.includes(n.id) && !n.is_archived
+            ? { ...n, is_read: false, updated_at: updatedAt }
+            : n
+        )
+      );
+      
+      // Also update individual newsletter caches
+      ids.forEach(id => {
+        const detailKey = buildQueryKey({ scope: 'detail', id });
+        const previous = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+        if (previous && !previous.is_archived) {
+          queryClient.setQueryData(detailKey, { 
+            ...previous, 
+            is_read: false,
+            updated_at: updatedAt
+          });
+        }
+      });
       
       return { previousNewsletters };
     },
     onError: (err, _ids, context) => {
       console.error('Error bulk marking as unread:', err);
+      // Revert on error
       if (context?.previousNewsletters) {
         const listQueryKey = buildQueryKey({
           scope: 'list',
@@ -994,7 +1133,11 @@ export const useNewsletters = (
         groupSourceIds,
         timeRange
       });
-      queryClient.invalidateQueries({ queryKey: listQueryKey });
+      // Force a refetch to ensure cache is in sync
+      queryClient.invalidateQueries({ 
+        queryKey: listQueryKey,
+        refetchType: 'active'
+      });
     },
   });
 
@@ -1003,8 +1146,7 @@ export const useNewsletters = (
       const { error } = await supabase
         .from('newsletters')
         .update({ 
-          is_archived: true,
-          updated_at: new Date().toISOString() 
+          is_archived: true      
         })
         .in('id', ids);
       
@@ -1091,8 +1233,7 @@ export const useNewsletters = (
       const { error } = await supabase
         .from('newsletters')
         .update({ 
-          is_archived: false,
-          updated_at: new Date().toISOString() 
+          is_archived: false       
         })
         .in('id', ids);
       
