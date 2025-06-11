@@ -5,8 +5,42 @@ import {
   useQueryClient, 
   QueryObserverResult, 
   RefetchOptions,
-  UseMutateAsyncFunction
+  UseMutateAsyncFunction,
+  QueryKey
 } from '@tanstack/react-query';
+
+type NewsletterFilter = 'all' | 'unread' | 'liked' | 'archived';
+
+const buildQueryKey = (params: {
+  scope: 'list' | 'detail' | 'tags';
+  userId?: string;
+  id?: string;
+  filter?: NewsletterFilter;
+  tagId?: string;
+  sourceId?: string | null;
+  groupSourceIds?: string[];
+  timeRange?: string;
+}): QueryKey => {
+  const { scope, userId, id, filter, tagId, sourceId, groupSourceIds, timeRange } = params;
+  
+  const queryKey: unknown[] = ['newsletters', scope];
+  
+  // Add filter parameters
+  const filters: Record<string, unknown> = {};
+  if (userId) filters.userId = userId;
+  if (id) filters.id = id;
+  if (filter) filters.filter = filter;
+  if (tagId) filters.tagId = tagId;
+  if (sourceId !== undefined) filters.sourceId = sourceId;
+  if (groupSourceIds?.length) filters.groupSourceIds = groupSourceIds;
+  if (timeRange) filters.timeRange = timeRange;
+  
+  if (Object.keys(filters).length > 0) {
+    queryKey.push(filters);
+  }
+  
+  return queryKey;
+};
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { NewsletterWithRelations, Tag } from '../types';
@@ -124,19 +158,34 @@ const transformNewsletterData = (data: any[] | null): NewsletterWithRelations[] 
 
 
 
-export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?: string | null, groupSourceIds: string[] = []): UseNewslettersReturn => {
+export const useNewsletters = (
+  tagId?: string, 
+  filter: NewsletterFilter = 'all', 
+  sourceId?: string | null, 
+  groupSourceIds: string[] = [],
+  timeRange?: string
+): UseNewslettersReturn => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
-  if (!user) {
+  if (!user?.id) {
     throw new Error('useNewsletters must be used within an AuthProvider with a logged-in user');
-  }  
-  // Define CACHE_KEY with all dependencies that affect the query
-  const CACHE_KEY = useMemo(
-    () => ['newsletters', { userId: user?.id, tagId, filter, sourceId, groupSourceIds }],
-    [user?.id, tagId, filter, sourceId, groupSourceIds]
+  }
+
+  // Build query key with all filter parameters
+  const queryKey = useMemo(
+    () => buildQueryKey({
+      scope: 'list',
+      userId: user.id,
+      tagId,
+      filter,
+      sourceId,
+      groupSourceIds: groupSourceIds.length ? groupSourceIds : undefined,
+      timeRange
+    }),
+    [user.id, tagId, filter, sourceId, groupSourceIds, timeRange]
   );
-  
+
   // Helper function to fetch all newsletters with proper typing
   const fetchAllNewsletters = useCallback(async (): Promise<NewsletterWithRelations[]> => {
     if (!user?.id) {
@@ -145,39 +194,134 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     }
     
     try {
-      const { data, error } = await supabase
-        .from('newsletters')
-        .select(`
-          *,
-          source:newsletter_sources(*),
-          newsletter_tags!left(
-            tag:tags(*)
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      // First, ensure we have a valid session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        console.error('No active session found or session error:', sessionError);
+        // Attempt to refresh the session
+        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshedSession) {
+          console.error('Failed to refresh session:', refreshError);
+          throw new Error('Session expired. Please sign in again.');
+        }
+      }
+      
+      console.log('Fetching newsletters with user ID:', user.id);
+      
+      // Add a timeout to the request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      try {
+        const response = await supabase
+          .from('newsletters')
+          .select(`
+            *,
+            source:newsletter_sources(*),
+            newsletter_tags!left(
+              tag:tags(*)
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .abortSignal(controller.signal);
+          
+        clearTimeout(timeoutId);
+        
+        // Check if we got a response with an error
+        if (response.error) {
+          console.error('Supabase error fetching newsletters:', {
+            message: response.error.message,
+            details: response.error.details,
+            hint: response.error.hint,
+            code: response.error.code
+          });
+          
+          // If we get an auth error, try to refresh the session and retry once
+          if (response.error.code === 'PGRST301' || response.error.message.includes('JWT')) {
+            console.log('Auth error detected, attempting to refresh session...');
+            const { data: { session: newSession }, error: refreshError } = await supabase.auth.refreshSession();
+            
+            if (refreshError || !newSession) {
+              console.error('Failed to refresh session:', refreshError);
+              throw new Error('Session expired. Please sign in again.');
+            }
+            
+            // Retry the request with the new session
+            console.log('Session refreshed, retrying request...');
+            const retryResponse = await supabase
+              .from('newsletters')
+              .select(`
+                *,
+                source:newsletter_sources(*),
+                newsletter_tags!left(
+                  tag:tags(*)
+                )
+              `)
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false });
+              
+            if (retryResponse.error) {
+              console.error('Error on retry after session refresh:', retryResponse.error);
+              throw retryResponse.error;
+            }
+            
+            return transformNewsletterData(retryResponse.data || []);
+          }
+          
+          throw response.error;
+        }
 
-      if (error) {
-        console.error('Error fetching newsletters:', error);
+        return transformNewsletterData(response.data || []);
+      } catch (error) {
+        clearTimeout(timeoutId);
         throw error;
       }
-
-      return transformNewsletterData(data || []);
     } catch (error) {
-      console.error('Error in fetchAllNewsletters:', error);
-      throw error;
+      // Handle different types of errors
+      if (error instanceof Error) {
+        // Check for network errors
+        if (error.name === 'AbortError') {
+          console.error('Request timed out');
+          throw new Error('Request timed out. Please check your connection and try again.');
+        }
+        
+        // Check for HTML response errors
+        if (error.message.includes('Unexpected token') && error.message.includes('<!doctype')) {
+          console.error('Received HTML response instead of JSON. This usually indicates an authentication or server error.');
+          throw new Error('Server error: Received invalid response. The server might be experiencing issues.');
+        }
+        
+        // Check for network connectivity issues
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          console.error('Network error:', error);
+          throw new Error('Network error: Unable to connect to the server. Please check your internet connection.');
+        }
+      }
+      
+      // Log the full error for debugging
+      console.error('Error in fetchAllNewsletters:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'UnknownError',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      // Re-throw with a user-friendly message
+      throw new Error('Failed to load newsletters. Please try again later.');
     }
   }, [user?.id]);
   
   // Main query for newsletters
   const { 
     data: allNewsletters = [], 
-    isLoading: isLoadingNewsletters, 
-    isError: isErrorNewsletters, 
+    isLoading, 
+    isError, 
     error: errorNewsletters, 
     refetch: refetchNewsletters 
-  } = useQuery<NewsletterWithRelations[]>({
-    queryKey: CACHE_KEY,
+  } = useQuery<NewsletterWithRelations[], Error>({
+    queryKey,
     queryFn: fetchAllNewsletters,
     staleTime: CACHE_DURATION,
     gcTime: CACHE_DURATION,
@@ -248,7 +392,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
 
   // Helper: update newsletter in cache with proper typing
   const updateNewsletterInCache = useCallback((id: string, updates: Partial<NewsletterWithRelations>) => {
-    queryClient.setQueryData<NewsletterWithRelations[]>(CACHE_KEY, (old = []) => {
+    queryClient.setQueryData<NewsletterWithRelations[]>(buildQueryKey({ scope: 'list' }), (old = []) => {
       return old.map(item => {
         if (item.id === id) {
           const now = new Date().toISOString();
@@ -267,7 +411,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
         return item;
       });
     });
-  }, [queryClient, CACHE_KEY]);
+  }, [queryClient]);
 
   // Mark as read mutation
   const markAsReadMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
@@ -283,8 +427,9 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return true;
     },
     onMutate: async (newsletterId) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY) || [];
+      const listKey = buildQueryKey({ scope: 'list' });
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
       
       // Find the newsletter to check if it's archived
       const newsletter = previousNewsletters.find(n => n.id === newsletterId);
@@ -296,7 +441,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       
       // Update cache optimistically - only update is_read, preserve all other fields
       queryClient.setQueryData(
-        CACHE_KEY,
+        buildQueryKey({ scope: 'list' }), // Use buildQueryKey to generate the correct key
         previousNewsletters.map(n => 
           n.id === newsletterId 
             ? { ...n, is_read: true } 
@@ -309,11 +454,11 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     onError: (err, _newsletterId, context) => {
       console.error('Error marking as read:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
     },
   });
 
@@ -329,8 +474,9 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return true;
     },
     onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY) || [];
+      const listKey = buildQueryKey({ scope: 'list' });
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
       
       // Find the newsletter to check if it's archived
       const newsletter = previousNewsletters.find(n => n.id === id);
@@ -342,7 +488,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       
       // Update cache optimistically - only update is_read, preserve all other fields
       queryClient.setQueryData(
-        CACHE_KEY,
+        listKey,
         previousNewsletters.map(n => 
           n.id === id 
             ? { ...n, is_read: false } 
@@ -355,11 +501,11 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     onError: (err, _id, context) => {
       console.error('Error marking as unread:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
     },
   });
 
@@ -375,11 +521,12 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return true;
     },
     onMutate: async (newsletterId) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      const listKey = buildQueryKey({ scope: 'list' });
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey);
       
       queryClient.setQueryData(
-        CACHE_KEY,
+        listKey,
         previousNewsletters?.filter(n => n.id !== newsletterId) || []
       );
       
@@ -388,11 +535,11 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     onError: (err, _newsletterId, context) => {
       console.error('Error deleting newsletter:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
     },
   });
 
@@ -414,12 +561,13 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return !newsletter.is_liked;
     },
     onMutate: async ({ id }) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      const listKey = buildQueryKey({ scope: 'list' });
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey);
       
       if (previousNewsletters) {
         queryClient.setQueryData(
-          CACHE_KEY,
+          listKey,
           previousNewsletters.map(n => 
             n.id === id 
               ? { ...n, is_liked: !n.is_liked }
@@ -433,44 +581,68 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     onError: (err, _variables, context) => {
       console.error('Error toggling like:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    onSettled: (): void => {
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
     },
   });
 
   // Archive mutation
-  const archiveMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
+  const toggleArchiveMutation = useMutation<NewsletterWithRelations, Error, { id: string; isArchived: boolean }, PreviousNewslettersState>({
+    mutationFn: async ({ id, isArchived }) => {
+      const { data, error } = await supabase
         .from('newsletters')
         .update({ 
-          is_archived: true,
-          updated_at: new Date().toISOString() 
+          is_archived: isArchived
         })
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       
       if (error) throw error;
-      return true;
+      return transformNewsletterData([data])[0];
     },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+    onMutate: async ({ id, isArchived }) => {
+      // Cancel any outgoing refetches for all relevant query keys
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: buildQueryKey({ scope: 'list' }) }),
+        queryClient.cancelQueries({ queryKey: buildQueryKey({ scope: 'detail', id }) })
+      ]);
       
-      updateNewsletterInCache(id, { is_archived: true });
+      // Snapshot the previous values
+      const listKey = buildQueryKey({ scope: 'list' });
+      const detailKey = buildQueryKey({ scope: 'detail', id });
       
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(
+        listKey
+      ) || [];
+      
+      // Optimistically update the list cache
+      queryClient.setQueryData<NewsletterWithRelations[]>(
+        listKey,
+        (old = []) => old.map(n => n.id === id ? { ...n, is_archived: isArchived } : n)
+      );
+
+      // Also update the individual newsletter cache
+      const previousDetail = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+      if (previousDetail) {
+        queryClient.setQueryData(detailKey, { ...previousDetail, is_archived: isArchived });
+      }
+
       return { previousNewsletters };
     },
-    onError: (err, _id, context) => {
-      console.error('Error archiving newsletter:', err);
+    onError: (err, _, context) => {
+      console.error('Error toggling archive status:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+    onSettled: (_, __, { id }) => {
+      // Invalidate both list and detail queries
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'detail', id }) });
     },
   });
 
@@ -489,8 +661,9 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return true;
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      const listKey = buildQueryKey({ scope: 'list' });
+      await queryClient.cancelQueries({ queryKey: listKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listKey);
       
       updateNewsletterInCache(id, { is_archived: false });
       
@@ -499,11 +672,11 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     onError: (err, _id, context) => {
       console.error('Error unarchiving newsletter:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        queryClient.setQueryData(buildQueryKey({ scope: 'list' }), context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      queryClient.invalidateQueries({ queryKey: buildQueryKey({ scope: 'list' }) });
     },
   });
 
@@ -593,7 +766,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
   }, [user?.id]); // Only depends on user.id
 
   // Filter newsletters based on current filters
-  const filteredNewsletters = useMemo(() => {
+  const filteredNewsletters: NewsletterWithRelations[] = useMemo(() => {
     if (!allNewsletters) return [];
     let filtered = [...allNewsletters];
     
@@ -634,16 +807,17 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     }
     
     // Sort by received_at descending
-    return [...filtered].sort((a, b) => 
+    return filtered.sort((a, b) => 
       new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
     );
   }, [allNewsletters, filter, tagId, sourceId, groupSourceIds]);
 
-  const deleteNewsletter = useCallback(async (id: string, options?: Parameters<typeof deleteNewsletterMutation.mutateAsync>[1]) => {
+  // Define missing mutation callbacks
+  const deleteNewsletter = useCallback(async (id: string, options?: any) => {
     return deleteNewsletterMutation.mutateAsync(id, options);
   }, [deleteNewsletterMutation]);
 
-  const markAsRead = useCallback(async (id: string, options?: Parameters<typeof markAsReadMutation.mutateAsync>[1]) => {
+  const markAsRead = useCallback(async (id: string, options?: any) => {
     return markAsReadMutation.mutateAsync(id, options);
   }, [markAsReadMutation]);
 
@@ -651,7 +825,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     return markAsUnreadMutation.mutateAsync(id, options);
   }, [markAsUnreadMutation]);
 
-  const toggleLike = useCallback(async (id: string, isLikedParam?: boolean, options?: Parameters<typeof toggleLikeMutation.mutateAsync>[1]) => {
+  const toggleLike: (id: string, isLikedParam?: boolean, options?: any) => Promise<boolean> = useCallback(async (id: string, isLikedParam?: boolean, options?: any) => {
     // If isLiked is not provided, we'll toggle the current state
     let isLiked = isLikedParam;
     if (isLiked === undefined) {
@@ -661,10 +835,15 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     return toggleLikeMutation.mutateAsync({ id, isLiked: isLiked ?? false }, options);
   }, [toggleLikeMutation, allNewsletters]);
 
-  const toggleArchive = useCallback(async (newsletterId: string, isArchived: boolean, options?: any) => {
-    const mutation = isArchived ? unarchiveMutation : archiveMutation;
-    return mutation.mutateAsync(newsletterId, options);
-  }, [archiveMutation, unarchiveMutation]);
+  const toggleArchive = useCallback(async (newsletterId: string, isArchived: boolean, options?: any): Promise<boolean> => {
+    if (isArchived) {
+      return unarchiveMutation.mutateAsync(newsletterId, options);
+    } else {
+      // Explicitly return true after successful archive
+      await toggleArchiveMutation.mutateAsync({ id: newsletterId, isArchived: true }, options);
+      return true;
+    }
+  }, [toggleArchiveMutation, unarchiveMutation]);
 
   // Bulk mark as read
   const bulkMarkAsReadMutation = useMutation<boolean, Error, string[], PreviousNewslettersState>({
@@ -681,18 +860,39 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return true;
     },
     onMutate: async (newsletterIds) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      // Build the query key for the current list view
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      
+      await queryClient.cancelQueries({ queryKey: listQueryKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey);
       
       if (previousNewsletters) {
+        // Update the list view
         queryClient.setQueryData(
-          CACHE_KEY,
+          listQueryKey,
           previousNewsletters.map(n => 
             newsletterIds.includes(n.id) 
               ? { ...n, is_read: true }
               : n
           )
         );
+        
+        // Update individual newsletter caches
+        newsletterIds.forEach(id => {
+          const detailKey = buildQueryKey({ scope: 'detail', id, userId: user?.id });
+          const previous = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+          if (previous) {
+            queryClient.setQueryData(detailKey, { ...previous, is_read: true });
+          }
+        });
       }
       
       return { previousNewsletters };
@@ -700,11 +900,29 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     onError: (err, _ids, context) => {
       console.error('Error bulk marking as read:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        const listQueryKey = buildQueryKey({
+          scope: 'list',
+          userId: user?.id,
+          filter,
+          tagId,
+          sourceId,
+          groupSourceIds,
+          timeRange
+        });
+        queryClient.setQueryData(listQueryKey, context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      queryClient.invalidateQueries({ queryKey: listQueryKey });
     },
   });
 
@@ -723,12 +941,24 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return true;
     },
     onMutate: async (newsletterIds) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      // Build the query key for the current list view
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      
+      await queryClient.cancelQueries({ queryKey: listQueryKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey);
       
       if (previousNewsletters) {
+        // Update the list view
         queryClient.setQueryData(
-          CACHE_KEY,
+          listQueryKey,
           previousNewsletters.map(n => 
             newsletterIds.includes(n.id) 
               ? { ...n, is_read: false }
@@ -742,11 +972,29 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     onError: (err, _ids, context) => {
       console.error('Error bulk marking as unread:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        const listQueryKey = buildQueryKey({
+          scope: 'list',
+          userId: user?.id,
+          filter,
+          tagId,
+          sourceId,
+          groupSourceIds,
+          timeRange
+        });
+        queryClient.setQueryData(listQueryKey, context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      queryClient.invalidateQueries({ queryKey: listQueryKey });
     },
   });
 
@@ -760,34 +1008,81 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
         })
         .in('id', ids);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error archiving newsletters:', error);
+        throw error;
+      }
       return true;
     },
-    onMutate: async (_ids) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+    onMutate: async (ids) => {
+      // Build the query key for the current list view
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      
+      await queryClient.cancelQueries({ queryKey: listQueryKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey);
       
       if (previousNewsletters) {
+        // Update the list view
+        // Update the list view cache
         queryClient.setQueryData(
-          CACHE_KEY,
+          listQueryKey,
           previousNewsletters.map(n => 
-            _ids.includes(n.id) 
+            ids.includes(n.id) 
               ? { ...n, is_archived: true }
               : n
           )
         );
+        
+        // Update individual newsletter caches
+        ids.forEach(id => {
+          const detailKey = buildQueryKey({ scope: 'detail', id, userId: user?.id });
+          const previous = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+          if (previous) {
+            queryClient.setQueryData(detailKey, { ...previous, is_archived: true });
+          }
+        });
       }
       
       return { previousNewsletters };
     },
-    onError: (_err, _ids, context) => {
-      console.error('Error bulk archiving newsletters:', _err);
+    onError: (err, _ids, context) => {
+      console.error('Error bulk archiving newsletters:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        const listQueryKey = buildQueryKey({
+          scope: 'list',
+          userId: user?.id,
+          filter,
+          tagId,
+          sourceId,
+          groupSourceIds,
+          timeRange
+        });
+        queryClient.setQueryData(listQueryKey, context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      // Force a refetch to ensure cache is in sync
+      queryClient.invalidateQueries({ 
+        queryKey: listQueryKey,
+        refetchType: 'active' 
+      });
     },
   });
 
@@ -801,34 +1096,80 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
         })
         .in('id', ids);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error unarchiving newsletters:', error);
+        throw error;
+      }
       return true;
     },
-    onMutate: async (_ids) => {
-      await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+    onMutate: async (ids) => {
+      // Build the query key for the current list view
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      
+      await queryClient.cancelQueries({ queryKey: listQueryKey });
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(listQueryKey);
       
       if (previousNewsletters) {
+        // Update the list view cache
         queryClient.setQueryData(
-          CACHE_KEY,
+          listQueryKey,
           previousNewsletters.map(n => 
-            _ids.includes(n.id) 
+            ids.includes(n.id) 
               ? { ...n, is_archived: false }
               : n
           )
         );
+        
+        // Update individual newsletter caches
+        ids.forEach(id => {
+          const detailKey = buildQueryKey({ scope: 'detail', id, userId: user?.id });
+          const previous = queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+          if (previous) {
+            queryClient.setQueryData(detailKey, { ...previous, is_archived: false });
+          }
+        });
       }
       
       return { previousNewsletters };
     },
-    onError: (_err, _ids, context) => {
-      console.error('Error bulk unarchiving newsletters:', _err);
+    onError: (err, _ids, context) => {
+      console.error('Error bulk unarchiving newsletters:', err);
       if (context?.previousNewsletters) {
-        queryClient.setQueryData(CACHE_KEY, context.previousNewsletters);
+        const listQueryKey = buildQueryKey({
+          scope: 'list',
+          userId: user?.id,
+          filter,
+          tagId,
+          sourceId,
+          groupSourceIds,
+          timeRange
+        });
+        queryClient.setQueryData(listQueryKey, context.previousNewsletters);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: CACHE_KEY });
+      const listQueryKey = buildQueryKey({
+        scope: 'list',
+        userId: user?.id,
+        filter,
+        tagId,
+        sourceId,
+        groupSourceIds,
+        timeRange
+      });
+      // Force a refetch to ensure cache is in sync
+      queryClient.invalidateQueries({ 
+        queryKey: listQueryKey,
+        refetchType: 'active' 
+      });
     },
   });
 
@@ -857,13 +1198,13 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     
     // Newsletter list and query
     newsletters: filteredNewsletters,
-    isLoadingNewsletters,
-    isErrorNewsletters,
+    isLoadingNewsletters: isLoading,
+    isErrorNewsletters: !!errorNewsletters,
     errorNewsletters,
     refetchNewsletters,
     
     // Read status mutations
-    markAsRead,
+    markAsRead: markAsRead as UseMutateAsyncFunction<boolean, Error, string, PreviousNewslettersState>,
     markAsUnread,
     bulkMarkAsRead,
     bulkMarkAsUnread,
@@ -885,8 +1226,8 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     toggleArchive,
     bulkArchive,
     bulkUnarchive,
-    isArchiving: archiveMutation.isPending,
-    errorArchiving: archiveMutation.error,
+    isArchiving: toggleArchiveMutation.isPending,
+    errorArchiving: toggleArchiveMutation.error,
     isUnarchiving: unarchiveMutation.isPending,
     errorUnarchiving: unarchiveMutation.error,
     isBulkArchiving: bulkArchiveMutation.isPending,
@@ -992,6 +1333,6 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       return false;
     },
     isBulkDeletingNewsletters: false,
-    errorBulkDeletingNewsletters: null
-  };
+    errorBulkDeletingNewsletters: null,
+  } as const;
 };
