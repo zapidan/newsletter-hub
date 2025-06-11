@@ -1,16 +1,25 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useContext } from 'react';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useNavigate } from 'react-router-dom';
 import { ReadingQueueItem } from '@common/types';
 import { toast } from 'react-hot-toast';
+import { useTags } from '@common/hooks/useTags';
+
+import { useQueryClient } from '@tanstack/react-query';
+import { AuthContext } from '@common/contexts/AuthContext';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsletterRow';
 import { useNewsletters } from '@common/hooks/useNewsletters';
+
 import { ArrowUp, ArrowDown } from 'lucide-react';
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
+  
   const { 
     readingQueue = [], 
     isLoading, 
@@ -21,7 +30,27 @@ const ReadingQueuePage: React.FC = () => {
     reorderQueue,
     toggleRead,
     toggleArchive,
+    updateTags
   } = useReadingQueue();
+  
+  const { getTags } = useTags();
+  const [allTags, setAllTags] = useState<any[]>([]);
+
+  
+  // Load all tags when component mounts
+  useEffect(() => {
+    const loadTags = async () => {
+      try {
+        const tags = await getTags();
+        setAllTags(tags);
+      } catch (error) {
+        console.error('Error loading tags:', error);
+        toast.error('Failed to load tags');
+      }
+    };
+    
+    loadTags();
+  }, [getTags]);
   const { toggleLike: toggleNewsletterLike } = useNewsletters();
   
   // Check if a newsletter is in the reading queue
@@ -321,19 +350,54 @@ const ReadingQueuePage: React.FC = () => {
                 onToggleArchive={handleToggleArchive}
                 onToggleQueue={toggleInQueue}
                 onTrash={() => {}}
+
                 onUpdateTags={async (newsletterId, tagIds) => {
                   try {
-                    // Implement tag update logic here if needed
-                    console.log('Updating tags for newsletter:', newsletterId, tagIds);
+                    const newsletter = readingQueue.find(item => item.newsletter.id === newsletterId)?.newsletter;
+                    if (!newsletter) {
+                      toast.error('Newsletter not found');
+                      return;
+                    }
+                    
+                    // Optimistically update the UI with the new tags
+                    const updatedTags = allTags.filter(tag => tagIds.includes(tag.id));
+                    
+                    // Update the cache with the new tags
+                    queryClient.setQueryData(['readingQueue', user?.id], (old: ReadingQueueItem[] = []) => 
+                      old.map(item => {
+                        if (item.newsletter.id === newsletterId) {
+                          return {
+                            ...item,
+                            newsletter: {
+                              ...item.newsletter,
+                              tags: updatedTags
+                            }
+                          };
+                        }
+                        return item;
+                      })
+                    );
+                    
+                    // Update tags in the database using the updateTags mutation
+                    if (updateTags) {
+                      await updateTags({ newsletterId, tagIds });
+                    }
+                    
+                    // Refresh the queue to get the latest data
+                    await refetch();
+                    
                   } catch (error) {
                     console.error('Error updating tags:', error);
                     toast.error('Failed to update tags');
+                    // Revert optimistic update on error
+                    await refetch();
                   }
                 }}
                 onTagClick={(tag, e) => {
                   e.stopPropagation();
-                  // Handle tag click (e.g., filter by tag)
-                  console.log('Tag clicked:', tag);
+                  // Navigate to Inbox with the tag filter
+                  const tagId = typeof tag === 'string' ? tag : tag.id;
+                  navigate(`/inbox?tags=${tagId}`);
                 }}
                 onToggleTagVisibility={(id, e) => {
                   e.stopPropagation();

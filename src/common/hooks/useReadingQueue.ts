@@ -1,5 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@common/services/supabaseClient';
+import { updateNewsletterTags } from '@common/utils/tagUtils';
 import { AuthContext } from '@common/contexts/AuthContext';
 import { useContext, useCallback } from 'react';
 import type { Newsletter } from '@common/types';
@@ -484,6 +485,74 @@ export const useReadingQueue = () => {
     },
   });
 
+// Update tags for a newsletter
+const updateTags = useMutation({
+  mutationFn: async ({ 
+    newsletterId, 
+    tagIds 
+  }: { 
+    newsletterId: string; 
+    tagIds: string[] 
+  }) => {
+    if (!user?.id) throw new Error('User not authenticated');
+    
+    // Get current tag IDs for the newsletter
+    const currentTags = readingQueue.find(item => item.newsletter.id === newsletterId)?.newsletter.tags || [];
+    const currentTagIds = currentTags.map(tag => tag.id);
+    
+    // Use the utility function to update tags
+    return updateNewsletterTags(newsletterId, tagIds, currentTagIds, user.id);
+  },
+  onMutate: async ({ newsletterId, tagIds }) => {
+    // Cancel any outgoing refetches
+    await queryClient.cancelQueries({ queryKey: ['readingQueue', user?.id] });
+
+    // Snapshot the previous value
+    const previousQueue = queryClient.getQueryData<ReadingQueueItem[]>(['readingQueue', user?.id]) || [];
+
+    // Optimistically update the cache
+    queryClient.setQueryData<ReadingQueueItem[]>(['readingQueue', user?.id], (old = []) => 
+      old.map(item => {
+        if (item.newsletter.id === newsletterId) {
+          // Get the full tag objects for the selected tag IDs
+          const updatedTags = tagIds.map(tagId => {
+            const existingTag = item.newsletter.tags?.find(t => t.id === tagId);
+            return existingTag || {
+              id: tagId,
+              name: '',
+              color: '#808080',
+              user_id: user?.id || '',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          });
+          
+          return {
+            ...item,
+            newsletter: {
+              ...item.newsletter,
+              tags: updatedTags
+            }
+          };
+        }
+        return item;
+      })
+    );
+
+    return { previousQueue };
+  },
+  onError: (err, variables, context) => {
+    // Rollback on error
+    if (context?.previousQueue) {
+      queryClient.setQueryData(['readingQueue', user?.id], context.previousQueue);
+    }
+  },
+  onSettled: () => {
+    // Always refetch after error or success
+    queryClient.invalidateQueries({ queryKey: ['readingQueue', user?.id] });
+  }
+});
+
   return {
     readingQueue,
     isLoading,
@@ -501,6 +570,8 @@ export const useReadingQueue = () => {
     isTogglingRead: toggleRead.isPending,
     isTogglingLike: toggleLike.isPending,
     isTogglingArchive: toggleArchive.isPending,
+    updateTags: updateTags.mutateAsync,
+    isUpdatingTags: updateTags.isPending,
   };
 };
 
