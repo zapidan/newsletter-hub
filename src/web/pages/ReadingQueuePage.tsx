@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ReadingQueueItem } from '@common/types';
 import { toast } from 'react-hot-toast';
 import { useTags } from '@common/hooks/useTags';
+import { updateNewsletterTags } from '@common/utils/tagUtils';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthContext } from '@common/contexts/AuthContext';
@@ -30,8 +31,7 @@ const ReadingQueuePage: React.FC = () => {
     removeFromQueue,
     reorderQueue,
     toggleRead,
-    toggleArchive,
-    updateTags
+    toggleArchive
   } = useReadingQueue();
   
   const { getTags } = useTags();
@@ -354,9 +354,9 @@ const ReadingQueuePage: React.FC = () => {
 
                 onUpdateTags={async (newsletterId, tagIds) => {
                   try {
-                    const newsletter = readingQueue.find(item => item.newsletter.id === newsletterId)?.newsletter;
-                    if (!newsletter) {
-                      toast.error('Newsletter not found');
+                    const queueItem = readingQueue.find(item => item.newsletter.id === newsletterId);
+                    if (!queueItem) {
+                      toast.error('Newsletter not found in queue');
                       return;
                     }
                     
@@ -371,7 +371,15 @@ const ReadingQueuePage: React.FC = () => {
                             ...item,
                             newsletter: {
                               ...item.newsletter,
-                              tags: updatedTags
+                              tags: updatedTags,
+                              // Update the user_newsletter_tags array if it exists
+                              user_newsletter_tags: updatedTags.map(tag => ({
+                                id: `${newsletterId}-${tag.id}`,
+                                newsletter_id: newsletterId,
+                                tag_id: tag.id,
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString()
+                              }))
                             }
                           };
                         }
@@ -379,13 +387,39 @@ const ReadingQueuePage: React.FC = () => {
                       })
                     );
                     
-                    // Update tags in the database using the updateTags mutation
-                    if (updateTags) {
-                      await updateTags({ newsletterId, tagIds });
-                    }
+                    // Get current tag IDs for the newsletter
+                    const currentTagIds = queueItem.newsletter.tags?.map((tag: any) => tag.id) || [];
                     
-                    // Refresh the queue to get the latest data
-                    await refetch();
+                    // Update tags in the database
+                    if (user) {
+                      try {
+                        const result = await updateNewsletterTags(
+                          newsletterId,
+                          tagIds,
+                          currentTagIds,
+                          user.id
+                        );
+                        
+                        // Show success message with details
+                        const message = [
+                          result.added > 0 && `${result.added} tag${result.added !== 1 ? 's' : ''} added`,
+                          result.removed > 0 && `${result.removed} tag${result.removed !== 1 ? 's' : ''} removed`
+                        ].filter(Boolean).join(', ');
+                        
+                        toast.success(`Tags updated: ${message || 'No changes'}`);
+                        
+                        // Refresh the queue to ensure we have the latest data
+                        await refetch();
+                        
+                      } catch (error) {
+                        console.error('Error updating tags:', error);
+                        toast.error(error instanceof Error ? error.message : 'Failed to update tags');
+                        // Revert optimistic update on error
+                        await refetch();
+                      }
+                    } else {
+                      throw new Error('User not authenticated');
+                    }
                     
                   } catch (error) {
                     console.error('Error updating tags:', error);

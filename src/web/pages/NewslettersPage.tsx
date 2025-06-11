@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@common/services/supabaseClient';
+import { updateNewsletterTags, handleTagClickWithNavigation } from '@common/utils/tagUtils';
 import { 
   useNewsletters, 
   useNewsletterSources, 
@@ -241,12 +242,9 @@ const NewslettersPage: React.FC = () => {
     }
   }, [fetchedNewsletters]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleTagClick = useCallback(async (tag: Tag, e: React.MouseEvent) => {
-    // Handle tag click logic here
-    e.stopPropagation();
-    console.log('Tag clicked:', tag.id);
-    return Promise.resolve();
-  }, []);
+  const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
+    handleTagClickWithNavigation(tag, navigate, '/inbox', e);
+  }, [navigate]);
   
   // Mock handlers for now - implement these as needed
   const handleToggleLike = useCallback(async (newsletter: NewsletterWithRelations) => {
@@ -380,27 +378,31 @@ const NewslettersPage: React.FC = () => {
   
   const handleUpdateTags = useCallback(async (newsletterId: string, tagIds: string[]): Promise<void> => {
     try {
-      // First, remove all existing tags for this newsletter
-      const { error: deleteError } = await supabase
-        .from('newsletter_tags')
-        .delete()
-        .eq('newsletter_id', newsletterId);
+      // Get the current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
       
-      if (deleteError) throw deleteError;
-      
-      // If there are tags to add, insert them
-      if (tagIds.length > 0) {
-        const tagInserts = tagIds.map(tagId => ({
-          newsletter_id: newsletterId,
-          tag_id: tagId
-        }));
-        
-        const { error: insertError } = await supabase
-          .from('newsletter_tags')
-          .insert(tagInserts);
-          
-        if (insertError) throw insertError;
+      if (userError || !user) {
+        console.error('User not authenticated');
+        toast.error('You must be logged in to update tags');
+        return;
       }
+
+      // Get current tags for the newsletter to calculate what changed
+      const { data: currentTags } = await supabase
+        .from('newsletter_tags')
+        .select('tag_id')
+        .eq('newsletter_id', newsletterId)
+        .eq('user_id', user.id);
+      
+      const currentTagIds = currentTags?.map(t => t.tag_id) || [];
+      
+      // Use the updateNewsletterTags utility function to handle the update
+      await updateNewsletterTags(
+        newsletterId,
+        tagIds,
+        currentTagIds,
+        user.id
+      );
       
       // Invalidate the newsletters query to refresh the UI
       await queryClient.invalidateQueries({ queryKey: ['newsletters'] });
