@@ -244,20 +244,20 @@ const NewsletterDetail = memo(() => {
     }
   }, [id, toggleLike, user?.id, newsletter]);
 
-  const handleArchiveToggle = useCallback(async () => {
-    if (!newsletter?.id || isArchiving || isUnarchiving) return;
+  const handleArchive = useCallback(async () => {
+    if (!newsletter?.id || isArchiving || newsletter.is_archived) return;
     
     try {
-      await toggleArchive(newsletter.id, !newsletter.is_archived);
+      await toggleArchive(newsletter.id, true);
       // Update local state to reflect the change
       setNewsletter(prev => prev ? { 
         ...prev, 
-        is_archived: !prev.is_archived 
+        is_archived: true 
       } : null);
     } catch (error) {
-      console.error('Error toggling archive status:', error);
+      console.error('Error archiving newsletter:', error);
     }
-  }, [newsletter, isArchiving, isUnarchiving, toggleArchive]);
+  }, [newsletter, isArchiving, toggleArchive]);
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!newsletter?.id || isTogglingReadStatus) return;
@@ -337,28 +337,33 @@ const NewsletterDetail = memo(() => {
   // Load newsletter data when component mounts or id changes
   useEffect(() => {
     const fetchData = async () => {
-    if (!id || !user?.id) return;
-    
-    try {
-      setLoading(true);
-      const data = await getNewsletter(id);
-      if (data) {
-        setNewsletter(data as unknown as NewsletterWithRelations);
-        
-        // Mark as read if not already read
-        if (!data.is_read) {
-          await markAsRead(id);
+      if (!id || !user?.id) return;
+
+      try {
+        setLoading(true);
+        const data = await getNewsletter(id);
+        if (data) {
+          setNewsletter(data as unknown as NewsletterWithRelations);
+          
+          // Only mark as read if not already read and not archived
+          if (!data.is_read && !data.is_archived) {
+            try {
+              await markAsRead(id);
+            } catch (err) {
+              console.error('Failed to mark as read:', err);
+              // Continue even if marking as read fails
+            }
+          }
+        } else {
+          setError('Newsletter not found');
         }
-      } else {
-        setError('Newsletter not found');
+      } catch (err) {
+        console.error('Failed to load newsletter:', err);
+        setError('Failed to load newsletter. Please try again.');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to load newsletter or update status:', err);
-      setError('Failed to load newsletter. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
   fetchData();
   // Only depend on id and getNewsletter, not on newsletter state
@@ -489,22 +494,16 @@ const NewsletterDetail = memo(() => {
                   <span>{newsletter?.is_bookmarked ? 'Saved' : 'Save for later'}</span>
                 </button>
                 
-                <button
-                  onClick={handleArchiveToggle}
-                  disabled={isArchiving}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    newsletter?.is_archived
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                      : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                  }`}
-                >
-                  {newsletter?.is_archived ? (
-                    <ArchiveX className="h-4 w-4" />
-                  ) : (
+                {!newsletter?.is_archived && (
+                  <button
+                    onClick={handleArchive}
+                    disabled={isArchiving}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200"
+                  >
                     <Archive className="h-4 w-4" />
-                  )}
-                  <span>{newsletter?.is_archived ? 'Unarchive' : 'Archive'}</span>
-                </button>
+                    <span>Archive</span>
+                  </button>
+                )}
                 {/* Trash button for archived newsletters */}
                 {newsletter?.is_archived && (
                   <button

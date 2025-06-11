@@ -65,8 +65,8 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
         await onToggleRead(newsletter.id);
       }
 
-      // Archive the newsletter
-      if (onToggleArchive) {
+      // Archive the newsletter when opened from the inbox
+      if (onToggleArchive && !newsletter.is_archived) {
         await onToggleArchive(newsletter.id);
       }
 
@@ -78,7 +78,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
       }
     } catch (error) {
       console.error('Error handling newsletter click:', error);
-      // Still navigate even if archiving fails
+      // Still navigate even if marking as read or archiving fails
       if (onNewsletterClick) {
         onNewsletterClick(newsletter);
       } else {

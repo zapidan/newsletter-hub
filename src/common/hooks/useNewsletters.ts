@@ -107,12 +107,15 @@ const transformNewsletterData = (data: any[] | null): NewsletterWithRelations[] 
 
     const source = item.source || item.newsletter_source || null;
 
+    // Explicitly check if is_archived exists on the item before setting a default
+    const isArchived = 'is_archived' in item ? item.is_archived : false;
+    
     return {
       ...item,
       newsletter_source_id: item.newsletter_source_id || null,
       source,
       tags,
-      is_archived: item.is_archived || false,
+      is_archived: isArchived,
       is_read: item.is_read || false,
       is_liked: item.is_liked || false,
     } as NewsletterWithRelations;
@@ -272,8 +275,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       const { error } = await supabase
         .from('newsletters')
         .update({ 
-          is_read: true,
-          updated_at: new Date().toISOString() 
+          is_read: true
         })
         .eq('id', newsletterId);
       
@@ -284,12 +286,20 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
       await queryClient.cancelQueries({ queryKey: CACHE_KEY });
       const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY) || [];
       
-      // Update cache optimistically
+      // Find the newsletter to check if it's archived
+      const newsletter = previousNewsletters.find(n => n.id === newsletterId);
+      
+      // Don't update read status for archived newsletters
+      if (newsletter?.is_archived) {
+        return { previousNewsletters };
+      }
+      
+      // Update cache optimistically - only update is_read, preserve all other fields
       queryClient.setQueryData(
         CACHE_KEY,
         previousNewsletters.map(n => 
           n.id === newsletterId 
-            ? { ...n, is_read: true, updated_at: new Date().toISOString() }
+            ? { ...n, is_read: true } 
             : n
         )
       );
@@ -312,7 +322,7 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('newsletters')
-        .update({ is_read: false, updated_at: new Date().toISOString() })
+        .update({ is_read: false })
         .eq('id', id);
       
       if (error) throw error;
@@ -320,15 +330,24 @@ export const useNewsletters = (tagId?: string, filter: string = 'all', sourceId?
     },
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: CACHE_KEY });
-      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY);
+      const previousNewsletters = queryClient.getQueryData<NewsletterWithRelations[]>(CACHE_KEY) || [];
       
+      // Find the newsletter to check if it's archived
+      const newsletter = previousNewsletters.find(n => n.id === id);
+      
+      // Don't update read status for archived newsletters
+      if (newsletter?.is_archived) {
+        return { previousNewsletters };
+      }
+      
+      // Update cache optimistically - only update is_read, preserve all other fields
       queryClient.setQueryData(
         CACHE_KEY,
-        previousNewsletters?.map(newsletter => 
-          newsletter.id === id 
-            ? { ...newsletter, is_read: false, updated_at: new Date().toISOString() } 
-            : newsletter
-        ) || []
+        previousNewsletters.map(n => 
+          n.id === id 
+            ? { ...n, is_read: false } 
+            : n
+        )
       );
       
       return { previousNewsletters };
