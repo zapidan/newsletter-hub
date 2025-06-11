@@ -1,20 +1,20 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, X } from 'lucide-react';
-import { subDays, subWeeks, subMonths } from 'date-fns';
-import { InboxFilters } from '@web/components/InboxFilters';
-import BulkSelectionActions from '@web/components/BulkSelectionActions';
-import { useNewsletters } from '@common/hooks/useNewsletters';
-import { useTags } from '@common/hooks/useTags';
-import { useNewsletterSources } from '@common/hooks/useNewsletterSources';
-import { useReadingQueue } from '@common/hooks/useReadingQueue';
-import { toggleTagFilter, handleTagClick } from '@common/utils/tagUtils';
-import type { NewsletterWithRelations, Tag } from '@common/types';
-import { supabase } from '@common/services/supabaseClient';
-import LoadingScreen from '@common/components/common/LoadingScreen';
-import NewsletterRow from '@web/components/NewsletterRow';
-import { TimeRange } from '@web/components/TimeFilter';
-import { useAuth } from '@common/contexts';
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Mail, X } from "lucide-react";
+import { subDays, subWeeks, subMonths } from "date-fns";
+import { InboxFilters } from "@web/components/InboxFilters";
+import BulkSelectionActions from "@web/components/BulkSelectionActions";
+import { useNewsletters } from "@common/hooks/useNewsletters";
+import { useTags } from "@common/hooks/useTags";
+import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
+import { useReadingQueue } from "@common/hooks/useReadingQueue";
+import { toggleTagFilter, handleTagClick } from "@common/utils/tagUtils";
+import type { NewsletterWithRelations, Tag } from "@common/types";
+import { supabase } from "@common/services/supabaseClient";
+import LoadingScreen from "@common/components/common/LoadingScreen";
+import NewsletterRow from "@web/components/NewsletterRow";
+import { TimeRange } from "@web/components/TimeFilter";
+import { useAuth } from "@common/contexts";
 
 const Inbox: React.FC = () => {
   // Router and URL state
@@ -22,39 +22,82 @@ const Inbox: React.FC = () => {
   const navigate = useNavigate();
 
   // Get initial values from URL
-  const urlFilter = searchParams.get('filter') as 'all' | 'unread' | 'liked' | 'archived' | null;
-  const urlSource = searchParams.get('source');
-  const urlTimeRange = (searchParams.get('time') as TimeRange) || 'all';
+  const urlFilter = searchParams.get("filter") as
+    | "all"
+    | "unread"
+    | "liked"
+    | "archived"
+    | null;
+  const urlSource = searchParams.get("source");
+  const urlTimeRange = (searchParams.get("time") as TimeRange) || "all";
 
   // Filter state
-  const [filter, setFilter] = useState<'all' | 'unread' | 'liked' | 'archived'>(urlFilter || 'all');
+  const [filter, setFilter] = useState<"all" | "unread" | "liked" | "archived">(
+    urlFilter || "all",
+  );
   const [sourceFilter, setSourceFilter] = useState<string | null>(urlSource);
   const [timeRange, setTimeRange] = useState<TimeRange>(urlTimeRange);
 
   // Get tag IDs from URL
   const tagIds = useMemo(() => {
-    const tagsParam = searchParams.get('tags');
-    return tagsParam ? tagsParam.split(',').filter(Boolean) : [];
+    const tagsParam = searchParams.get("tags");
+    return tagsParam ? tagsParam.split(",").filter(Boolean) : [];
   }, [searchParams]);
-  
+
   // Initialize pendingTagUpdates with tagIds from URL
   const [pendingTagUpdates, setPendingTagUpdates] = useState<string[]>(tagIds);
-  
+
+  // Debounced filter state for preventing rapid refetches
+  const [debouncedFilter, setDebouncedFilter] = useState(filter);
+  const [debouncedSourceFilter, setDebouncedSourceFilter] =
+    useState(sourceFilter);
+  const [debouncedTimeRange, setDebouncedTimeRange] = useState(timeRange);
+  const [debouncedTagUpdates, setDebouncedTagUpdates] =
+    useState(pendingTagUpdates);
+
+  // Cache for filtered results to share between filter states
+  const filterCacheRef = useRef<Map<string, NewsletterWithRelations[]>>(
+    new Map(),
+  );
+  const debounceTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Custom debounce effect for filter changes
+  useEffect(() => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    debounceTimeoutRef.current = setTimeout(() => {
+      setDebouncedFilter(filter);
+      setDebouncedSourceFilter(sourceFilter);
+      setDebouncedTimeRange(timeRange);
+      setDebouncedTagUpdates([...pendingTagUpdates]);
+    }, 300); // 300ms debounce delay
+
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, [filter, sourceFilter, timeRange, pendingTagUpdates]);
+
   // Sync pendingTagUpdates with URL changes
   useEffect(() => {
     setPendingTagUpdates(tagIds);
-  }, [tagIds.toString()]);
+  }, [tagIds]);
 
   // Local state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<Tag[]>([]);
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
-  const [loadingStates, setLoadingStates] = useState<Record<string, string>>({});
-  const [errorTogglingLike, setErrorTogglingLike] = useState<Error | null>(null);
-
+  const [loadingStates] = useState<Record<string, string>>({});
+  const [errorTogglingLike] = useState<Error | null>(null);
 
   // Hooks
   const { getTags } = useTags();
@@ -75,8 +118,12 @@ const Inbox: React.FC = () => {
     bulkMarkAsUnread,
     refetchNewsletters,
     bulkArchive,
-    bulkUnarchive
-  } = useNewsletters(tagIds.length > 0 ? tagIds[0] : undefined, filter, sourceFilter);
+    bulkUnarchive,
+  } = useNewsletters(
+    tagIds.length > 0 ? tagIds[0] : undefined,
+    filter,
+    sourceFilter,
+  );
   const { user } = useAuth();
 
   // Handle source filter change with proper type
@@ -84,63 +131,74 @@ const Inbox: React.FC = () => {
     setSourceFilter(sourceId);
   }, []);
 
-  // Update URL when filters change
+  // Update URL when debounced filters change
   useEffect(() => {
     const newParams = new URLSearchParams();
-    if (filter !== 'all') newParams.set('filter', filter);
-    if (sourceFilter) newParams.set('source', sourceFilter);
-    if (timeRange !== 'all') newParams.set('time', timeRange);
-    if (tagIds.length > 0) newParams.set('tags', tagIds.join(','));
+    if (debouncedFilter !== "all") newParams.set("filter", debouncedFilter);
+    if (debouncedSourceFilter) newParams.set("source", debouncedSourceFilter);
+    if (debouncedTimeRange !== "all") newParams.set("time", debouncedTimeRange);
+    if (debouncedTagUpdates.length > 0)
+      newParams.set("tags", debouncedTagUpdates.join(","));
     if (newParams.toString() !== searchParams.toString()) {
       setSearchParams(newParams, { replace: true });
     }
-  }, [filter, sourceFilter, timeRange, tagIds, searchParams, setSearchParams]);
+  }, [
+    debouncedFilter,
+    debouncedSourceFilter,
+    debouncedTimeRange,
+    debouncedTagUpdates,
+    searchParams,
+    setSearchParams,
+  ]);
 
   // Handle URL updates when tag filters change
   useEffect(() => {
-    setSearchParams(prev => {
+    setSearchParams((prev) => {
       const newParams = new URLSearchParams(prev);
       if (pendingTagUpdates.length > 0) {
-        newParams.set('tags', pendingTagUpdates.join(','));
+        newParams.set("tags", pendingTagUpdates.join(","));
       } else {
-        newParams.delete('tags');
+        newParams.delete("tags");
       }
-      newParams.delete('page');
+      newParams.delete("page");
       return newParams;
     });
   }, [pendingTagUpdates, setSearchParams]);
 
-  const showArchived = filter === 'archived';
+  const showArchived = filter === "archived";
 
   // Handle clicking on a tag
-  const handleTagClickWrapper = useCallback((tag: Tag, e: React.MouseEvent) => {
-    handleTagClick(tag, pendingTagUpdates, setPendingTagUpdates, e);
-  }, [pendingTagUpdates]);
-
-  // Alias for consistency
-  const selectedTagIds = pendingTagUpdates;
+  const handleTagClickWrapper = useCallback(
+    (tag: Tag, e: React.MouseEvent) => {
+      handleTagClick(tag, pendingTagUpdates, setPendingTagUpdates, e);
+    },
+    [pendingTagUpdates],
+  );
 
   // Clear all filters (including tags)
   const clearAllFilters = useCallback(() => {
-    setFilter('all');
-    setTimeRange('all');
+    setFilter("all");
+    setTimeRange("all");
     setSourceFilter(null);
     setPendingTagUpdates([]);
     setSearchParams(new URLSearchParams(), { replace: true });
   }, [setSearchParams]);
 
   // Handle trash action
-  const handleTrash = useCallback(async (id: string) => {
-    try {
-      await deleteNewsletter(id);
-      setToast({ type: 'success', message: 'Newsletter deleted' });
-      await refetchNewsletters();
-    } catch (error) {
-      console.error('Error deleting newsletter:', error);
-      setToast({ type: 'error', message: 'Failed to delete newsletter' });
-      throw error;
-    }
-  }, [deleteNewsletter, refetchNewsletters]);
+  const handleTrash = useCallback(
+    async (id: string) => {
+      try {
+        await deleteNewsletter(id);
+        setToast({ type: "success", message: "Newsletter deleted" });
+        await refetchNewsletters();
+      } catch (error) {
+        console.error("Error deleting newsletter:", error);
+        setToast({ type: "error", message: "Failed to delete newsletter" });
+        throw error;
+      }
+    },
+    [deleteNewsletter, refetchNewsletters],
+  );
 
   // Load tags on mount
   useEffect(() => {
@@ -152,109 +210,133 @@ const Inbox: React.FC = () => {
   }, [getTags]);
 
   // Newsletter row handlers
-  const handleToggleLike = useCallback(async (newsletter: NewsletterWithRelations) => {
-    if (!toggleLike) return;
-    try {
-      await toggleLike(newsletter.id);
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      setToast({ type: 'error', message: 'Failed to update like status' });
-    }
-  }, [toggleLike]);
-
-  const handleToggleArchive = useCallback(async (id: string) => {
-    try {
-      const newsletter = newsletters.find(n => n.id === id);
-      if (!newsletter) return;
-      if (newsletter.is_archived) {
-        await bulkUnarchive([id]);
-        setToast({ type: 'success', message: 'Newsletter unarchived' });
-      } else {
-        await bulkArchive([id]);
-        setToast({ type: 'success', message: 'Newsletter archived' });
+  const handleToggleLike = useCallback(
+    async (newsletter: NewsletterWithRelations) => {
+      if (!toggleLike) return;
+      try {
+        await toggleLike(newsletter.id);
+      } catch (error) {
+        console.error("Error toggling like:", error);
+        setToast({ type: "error", message: "Failed to update like status" });
       }
-    } catch (error) {
-      console.error('Error toggling archive status:', error);
-      setToast({ type: 'error', message: 'Failed to update archive status' });
-    }
-  }, [bulkArchive, bulkUnarchive, newsletters]);
+    },
+    [toggleLike],
+  );
 
-  const handleToggleRead = useCallback(async (id: string) => {
-    try {
-      const newsletter = newsletters.find(n => n.id === id);
-      if (!newsletter) return;
-      if (newsletter.is_read) {
-        await markAsUnread(id);
-      } else {
-        await markAsRead(id);
+  const handleToggleArchive = useCallback(
+    async (id: string) => {
+      try {
+        const newsletter = newsletters.find((n) => n.id === id);
+        if (!newsletter) return;
+        if (newsletter.is_archived) {
+          await bulkUnarchive([id]);
+          setToast({ type: "success", message: "Newsletter unarchived" });
+        } else {
+          await bulkArchive([id]);
+          setToast({ type: "success", message: "Newsletter archived" });
+        }
+      } catch (error) {
+        console.error("Error toggling archive status:", error);
+        setToast({ type: "error", message: "Failed to update archive status" });
       }
-    } catch (error) {
-      console.error('Error toggling read status:', error);
-      setToast({ type: 'error', message: 'Failed to update read status' });
-    }
-  }, [markAsRead, markAsUnread, newsletters]);
+    },
+    [bulkArchive, bulkUnarchive, newsletters],
+  );
 
-  const handleToggleQueue = useCallback(async (newsletterId: string) => {
-    try {
-      const queueItem = readingQueue.find(item => item.newsletter_id === newsletterId);
-      if (queueItem) {
-        await removeFromQueue(queueItem.id);
-      } else {
-        await addToQueue(newsletterId);
+  const handleToggleRead = useCallback(
+    async (id: string) => {
+      try {
+        const newsletter = newsletters.find((n) => n.id === id);
+        if (!newsletter) return;
+        if (newsletter.is_read) {
+          await markAsUnread(id);
+        } else {
+          await markAsRead(id);
+        }
+      } catch (error) {
+        console.error("Error toggling read status:", error);
+        setToast({ type: "error", message: "Failed to update read status" });
       }
-      await refetchNewsletters();
-    } catch (error) {
-      console.error('Error toggling queue:', error);
-      setToast({ type: 'error', message: 'Failed to update reading queue' });
-    }
-  }, [readingQueue, addToQueue, removeFromQueue, refetchNewsletters]);
+    },
+    [markAsRead, markAsUnread, newsletters],
+  );
 
-  const handleUpdateTags = useCallback(async (newsletterId: string, tagIds: string[]) => {
-    if (!user) {
-      setToast({ type: 'error', message: 'You must be logged in to update tags' });
-      return;
-    }
-    try {
-      const newsletter = newsletters.find(n => n.id === newsletterId);
-      if (!newsletter) {
-        setToast({ type: 'error', message: 'Newsletter not found' });
+  const handleToggleQueue = useCallback(
+    async (newsletterId: string) => {
+      try {
+        const queueItem = readingQueue.find(
+          (item) => item.newsletter_id === newsletterId,
+        );
+        if (queueItem) {
+          await removeFromQueue(queueItem.id);
+        } else {
+          await addToQueue(newsletterId);
+        }
+        await refetchNewsletters();
+      } catch (error) {
+        console.error("Error toggling queue:", error);
+        setToast({ type: "error", message: "Failed to update reading queue" });
+      }
+    },
+    [readingQueue, addToQueue, removeFromQueue, refetchNewsletters],
+  );
+
+  const handleUpdateTags = useCallback(
+    async (newsletterId: string, tagIds: string[]) => {
+      if (!user) {
+        setToast({
+          type: "error",
+          message: "You must be logged in to update tags",
+        });
         return;
       }
-      const currentTagIds = (newsletter.tags || []).map((tag: Tag) => tag.id);
-      const tagsToAdd = tagIds.filter((id: string) => !currentTagIds.includes(id));
-      const tagsToRemove = currentTagIds.filter((id: string) => !tagIds.includes(id));
-      const addPromises = tagsToAdd.map(async (tagId: string) => {
-        const { error } = await supabase
-          .from('newsletter_tags')
-          .insert([{
-            newsletter_id: newsletterId,
-            tag_id: tagId,
-            user_id: user.id
-          }]);
-        if (error) throw error;
-      });
-      const removePromises = tagsToRemove.map(async (tagId: string) => {
-        const { error } = await supabase
-          .from('newsletter_tags')
-          .delete()
-          .eq('newsletter_id', newsletterId)
-          .eq('tag_id', tagId)
-          .eq('user_id', user.id);
-        if (error) throw error;
-      });
-      await Promise.all([...addPromises, ...removePromises]);
-      setVisibleTags(prev => {
-        const newVisibleTags = new Set(prev);
-        newVisibleTags.delete(newsletterId);
-        return newVisibleTags;
-      });
-      await refetchNewsletters();
-      setToast({ type: 'success', message: 'Tags updated successfully' });
-    } catch (error) {
-      console.error('Error updating tags:', error);
-      setToast({ type: 'error', message: 'Failed to update tags' });
-    }
-  }, [user, newsletters, refetchNewsletters]);
+      try {
+        const newsletter = newsletters.find((n) => n.id === newsletterId);
+        if (!newsletter) {
+          setToast({ type: "error", message: "Newsletter not found" });
+          return;
+        }
+        const currentTagIds = (newsletter.tags || []).map((tag: Tag) => tag.id);
+        const tagsToAdd = tagIds.filter(
+          (id: string) => !currentTagIds.includes(id),
+        );
+        const tagsToRemove = currentTagIds.filter(
+          (id: string) => !tagIds.includes(id),
+        );
+        const addPromises = tagsToAdd.map(async (tagId: string) => {
+          const { error } = await supabase.from("newsletter_tags").insert([
+            {
+              newsletter_id: newsletterId,
+              tag_id: tagId,
+              user_id: user.id,
+            },
+          ]);
+          if (error) throw error;
+        });
+        const removePromises = tagsToRemove.map(async (tagId: string) => {
+          const { error } = await supabase
+            .from("newsletter_tags")
+            .delete()
+            .eq("newsletter_id", newsletterId)
+            .eq("tag_id", tagId)
+            .eq("user_id", user.id);
+          if (error) throw error;
+        });
+        await Promise.all([...addPromises, ...removePromises]);
+        setVisibleTags((prev) => {
+          const newVisibleTags = new Set(prev);
+          newVisibleTags.delete(newsletterId);
+          return newVisibleTags;
+        });
+        await refetchNewsletters();
+        setToast({ type: "success", message: "Tags updated successfully" });
+      } catch (error) {
+        console.error("Error updating tags:", error);
+        setToast({ type: "error", message: "Failed to update tags" });
+      }
+    },
+    [user, newsletters, refetchNewsletters],
+  );
 
   // Toggle tag visibility
   const toggleTagVisibility = useCallback((id: string, e: React.MouseEvent) => {
@@ -275,8 +357,8 @@ const Inbox: React.FC = () => {
   useEffect(() => {
     const handleClearFilters = (event?: Event) => {
       event?.preventDefault();
-      setFilter('all');
-      setTimeRange('all');
+      setFilter("all");
+      setTimeRange("all");
       setSourceFilter(null);
       setPendingTagUpdates([]);
       setSearchParams(new URLSearchParams(), { replace: true });
@@ -287,12 +369,24 @@ const Inbox: React.FC = () => {
       refetchNewsletters();
     };
 
-    window.addEventListener('inbox:clear-filters', handleClearFilters as EventListener);
-    window.addEventListener('inbox:refresh-newsletters', handleRefreshNewsletters as EventListener);
+    window.addEventListener(
+      "inbox:clear-filters",
+      handleClearFilters as EventListener,
+    );
+    window.addEventListener(
+      "inbox:refresh-newsletters",
+      handleRefreshNewsletters as EventListener,
+    );
 
     return () => {
-      window.removeEventListener('inbox:clear-filters', handleClearFilters as EventListener);
-      window.removeEventListener('inbox:refresh-newsletters', handleRefreshNewsletters as EventListener);
+      window.removeEventListener(
+        "inbox:clear-filters",
+        handleClearFilters as EventListener,
+      );
+      window.removeEventListener(
+        "inbox:refresh-newsletters",
+        handleRefreshNewsletters as EventListener,
+      );
     };
   }, [refetchNewsletters, setSearchParams]);
 
@@ -323,61 +417,116 @@ const Inbox: React.FC = () => {
 
   // Get selected tag objects
   const selectedTags = useMemo(() => {
-    return selectedTagIds
+    return debouncedTagUpdates
       .map((id: string) => allUniqueTags.get(id))
       .filter((tag): tag is Tag => tag !== undefined);
-  }, [selectedTagIds, allUniqueTags]);
+  }, [debouncedTagUpdates, allUniqueTags]);
 
-  // Filter newsletters based on time range, tags, and other filters
-  const filteredNewsletters = useMemo(() => {
+  // Memoized base filtered newsletters by time range for cache sharing
+  const timeFilteredNewsletters = useMemo(() => {
     if (!newsletters) return [];
-    let filtered = [...newsletters];
-    if (timeRange && timeRange !== 'all') {
-      const now = new Date();
-      let startDate: Date;
-      switch (timeRange) {
-        case 'day':
-          startDate = subDays(now, 1);
-          break;
-        case '2days':
-          startDate = subDays(now, 2);
-          break;
-        case 'week':
-          startDate = subWeeks(now, 1);
-          break;
-        case 'month':
-          startDate = subMonths(now, 1);
-          break;
-        default:
-          startDate = new Date(0);
-      }
-      filtered = filtered.filter((newsletter: NewsletterWithRelations) => {
+    if (!debouncedTimeRange || debouncedTimeRange === "all") return newsletters;
+
+    const cacheKey = `time-${debouncedTimeRange}`;
+    const cached = filterCacheRef.current.get(cacheKey);
+    if (cached && cached.length > 0) return cached;
+
+    const now = new Date();
+    let startDate: Date;
+    switch (debouncedTimeRange) {
+      case "day":
+        startDate = subDays(now, 1);
+        break;
+      case "2days":
+        startDate = subDays(now, 2);
+        break;
+      case "week":
+        startDate = subWeeks(now, 1);
+        break;
+      case "month":
+        startDate = subMonths(now, 1);
+        break;
+      default:
+        startDate = new Date(0);
+    }
+
+    const filtered = newsletters.filter(
+      (newsletter: NewsletterWithRelations) => {
         const receivedDate = new Date(newsletter.received_at);
         return receivedDate >= startDate;
-      });
-    }
-    if (filter === 'unread') {
-      filtered = filtered.filter((newsletter: NewsletterWithRelations) => !newsletter.is_read);
-    } else if (filter === 'liked') {
-      filtered = filtered.filter((newsletter: NewsletterWithRelations) => newsletter.is_liked);
-    } else if (filter === 'archived') {
-      filtered = filtered.filter((newsletter: NewsletterWithRelations) => newsletter.is_archived);
+      },
+    );
+
+    filterCacheRef.current.set(cacheKey, filtered);
+    return filtered;
+  }, [newsletters, debouncedTimeRange]);
+
+  // Memoized status filtered newsletters
+  const statusFilteredNewsletters = useMemo(() => {
+    const cacheKey = `status-${debouncedFilter}-time-${debouncedTimeRange}`;
+    const cached = filterCacheRef.current.get(cacheKey);
+    if (cached) return cached;
+
+    let filtered: NewsletterWithRelations[];
+    if (debouncedFilter === "unread") {
+      filtered = timeFilteredNewsletters.filter(
+        (newsletter: NewsletterWithRelations) => !newsletter.is_read,
+      );
+    } else if (debouncedFilter === "liked") {
+      filtered = timeFilteredNewsletters.filter(
+        (newsletter: NewsletterWithRelations) => newsletter.is_liked,
+      );
+    } else if (debouncedFilter === "archived") {
+      filtered = timeFilteredNewsletters.filter(
+        (newsletter: NewsletterWithRelations) => newsletter.is_archived,
+      );
     } else {
-      filtered = filtered.filter((newsletter: NewsletterWithRelations) => !newsletter.is_archived);
+      filtered = timeFilteredNewsletters.filter(
+        (newsletter: NewsletterWithRelations) => !newsletter.is_archived,
+      );
     }
+
+    filterCacheRef.current.set(cacheKey, filtered);
+    return filtered;
+  }, [timeFilteredNewsletters, debouncedFilter, debouncedTimeRange]);
+
+  // Final filtered newsletters with tag filtering and sorting
+  const filteredNewsletters = useMemo(() => {
+    const selectedTagIds = debouncedTagUpdates;
+    const cacheKey = `final-${debouncedFilter}-${debouncedTimeRange}-${selectedTagIds.join(",")}`;
+    const cached = filterCacheRef.current.get(cacheKey);
+    if (cached) return cached;
+
+    let filtered = [...statusFilteredNewsletters];
+
     if (selectedTagIds.length > 0) {
       filtered = filtered.filter((newsletter: NewsletterWithRelations) =>
         selectedTagIds.every((tagId: string) =>
-          (newsletter.tags || []).some((tag: Tag) => tag?.id === tagId)
-        )
+          (newsletter.tags || []).some((tag: Tag) => tag?.id === tagId),
+        ),
       );
     }
-    return filtered.sort((a, b) => {
-      const dateDiff = new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
+
+    const sorted = filtered.sort((a, b) => {
+      const dateDiff =
+        new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
       if (dateDiff !== 0) return dateDiff;
       return a.id.localeCompare(b.id);
     });
-  }, [newsletters, filter, selectedTagIds, timeRange]);
+
+    filterCacheRef.current.set(cacheKey, sorted);
+    return sorted;
+  }, [
+    statusFilteredNewsletters,
+    debouncedFilter,
+    debouncedTimeRange,
+    debouncedTagUpdates,
+  ]);
+
+  // Clear cache when newsletters data changes
+  useEffect(() => {
+    filterCacheRef.current.clear();
+  }, [newsletters]);
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -390,14 +539,19 @@ const Inbox: React.FC = () => {
   // Bulk trash handler
   const handleBulkTrash = useCallback(async () => {
     if (!bulkDeleteNewsletters || selectedIds.size === 0) return;
-    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
+    if (
+      !window.confirm(
+        "Are you sure? This action is final and cannot be undone.",
+      )
+    )
+      return;
     try {
       await bulkDeleteNewsletters(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
       await refetchNewsletters();
     } catch (error) {
-      console.error('Error deleting newsletters:', error);
+      console.error("Error deleting newsletters:", error);
       throw error;
     }
   }, [bulkDeleteNewsletters, selectedIds, refetchNewsletters]);
@@ -408,10 +562,10 @@ const Inbox: React.FC = () => {
     setIsBulkActionLoading(true);
     try {
       await bulkArchive(Array.from(selectedIds));
-      setToast({ type: 'success', message: 'Newsletters archived.' });
+      setToast({ type: "success", message: "Newsletters archived." });
     } catch (error) {
-      setToast({ type: 'error', message: 'Failed to archive newsletters.' });
-      console.error('Error archiving:', error);
+      setToast({ type: "error", message: "Failed to archive newsletters." });
+      console.error("Error archiving:", error);
     } finally {
       setSelectedIds(new Set());
       setIsSelecting(false);
@@ -426,10 +580,10 @@ const Inbox: React.FC = () => {
     setIsBulkActionLoading(true);
     try {
       await bulkUnarchive(Array.from(selectedIds));
-      setToast({ type: 'success', message: 'Newsletters unarchived.' });
+      setToast({ type: "success", message: "Newsletters unarchived." });
     } catch (error) {
-      setToast({ type: 'error', message: 'Failed to unarchive newsletters.' });
-      console.error('Error unarchiving:', error);
+      setToast({ type: "error", message: "Failed to unarchive newsletters." });
+      console.error("Error unarchiving:", error);
     } finally {
       setSelectedIds(new Set());
       setIsSelecting(false);
@@ -440,7 +594,7 @@ const Inbox: React.FC = () => {
 
   // Toggle selection of a single newsletter
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
         newSet.delete(id);
@@ -459,22 +613,22 @@ const Inbox: React.FC = () => {
     if (selectedIds.size === filteredNewsletters.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredNewsletters.map(n => n.id)));
+      setSelectedIds(new Set(filteredNewsletters.map((n) => n.id)));
     }
   }, [filteredNewsletters, selectedIds.size]);
 
   // Select all read or unread newsletters
   const selectRead = useCallback(() => {
     const readIds = filteredNewsletters
-      .filter(n => n.is_read)
-      .map(n => n.id);
+      .filter((n) => n.is_read)
+      .map((n) => n.id);
     setSelectedIds(new Set(readIds));
   }, [filteredNewsletters]);
 
   const selectUnread = useCallback(() => {
     const unreadIds = filteredNewsletters
-      .filter(n => !n.is_read)
-      .map(n => n.id);
+      .filter((n) => !n.is_read)
+      .map((n) => n.id);
     setSelectedIds(new Set(unreadIds));
   }, [filteredNewsletters]);
 
@@ -486,7 +640,7 @@ const Inbox: React.FC = () => {
       setSelectedIds(new Set());
       setIsSelecting(false);
     } catch (error) {
-      console.error('Error marking as read:', error);
+      console.error("Error marking as read:", error);
     }
   }, [selectedIds, bulkMarkAsRead]);
 
@@ -497,32 +651,40 @@ const Inbox: React.FC = () => {
       setSelectedIds(new Set());
       setIsSelecting(false);
     } catch (error) {
-      console.error('Error marking as unread:', error);
-      setToast({ type: 'error', message: 'Failed to mark as unread' });
+      console.error("Error marking as unread:", error);
+      setToast({ type: "error", message: "Failed to mark as unread" });
     }
   }, [selectedIds, bulkMarkAsUnread]);
 
   // Handle newsletter click
-  const handleNewsletterClick = useCallback((newsletter: NewsletterWithRelations) => {
-    navigate(`/newsletters/${newsletter.id}`);
-  }, [navigate]);
+  const handleNewsletterClick = useCallback(
+    (newsletter: NewsletterWithRelations) => {
+      navigate(`/newsletters/${newsletter.id}`);
+    },
+    [navigate],
+  );
 
   // Handle remove from queue
-  const handleRemoveFromQueue = useCallback(async (e: React.MouseEvent, newsletterId: string) => {
-    e.stopPropagation();
-    try {
-      const queueItem = readingQueue.find(item => item.newsletter_id === newsletterId);
-      if (queueItem) {
-        await removeFromQueue(queueItem.id);
-        await refetchNewsletters();
-      } else {
-        setToast({ type: 'error', message: 'Failed to find item in queue' });
+  const handleRemoveFromQueue = useCallback(
+    async (e: React.MouseEvent, newsletterId: string) => {
+      e.stopPropagation();
+      try {
+        const queueItem = readingQueue.find(
+          (item) => item.newsletter_id === newsletterId,
+        );
+        if (queueItem) {
+          await removeFromQueue(queueItem.id);
+          await refetchNewsletters();
+        } else {
+          setToast({ type: "error", message: "Failed to find item in queue" });
+        }
+      } catch (error) {
+        console.error("Error removing from queue:", error);
+        setToast({ type: "error", message: "Failed to remove from queue" });
       }
-    } catch (error) {
-      console.error('Error removing from queue:', error);
-      setToast({ type: 'error', message: 'Failed to remove from queue' });
-    }
-  }, [readingQueue, removeFromQueue, refetchNewsletters]);
+    },
+    [readingQueue, removeFromQueue, refetchNewsletters],
+  );
 
   if (isLoadingNewsletters) {
     return <LoadingScreen />;
@@ -534,9 +696,12 @@ const Inbox: React.FC = () => {
         <div className="flex flex-col items-center justify-center h-screen bg-neutral-50 p-4">
           <div className="text-center">
             <Mail className="mx-auto h-16 w-16 text-red-500 mb-4" />
-            <h2 className="text-2xl font-semibold text-neutral-800 mb-2">Error Loading Newsletters</h2>
+            <h2 className="text-2xl font-semibold text-neutral-800 mb-2">
+              Error Loading Newsletters
+            </h2>
             <p className="text-neutral-600 mb-6">
-              {errorNewsletters?.message || 'Something went wrong. Please try again later.'}
+              {errorNewsletters?.message ||
+                "Something went wrong. Please try again later."}
             </p>
             <button
               onClick={() => refetchNewsletters()}
@@ -602,7 +767,10 @@ const Inbox: React.FC = () => {
             onArchive={handleBulkArchive}
             onUnarchive={handleBulkUnarchive}
             onDelete={handleBulkTrash}
-            onCancel={() => { setIsSelecting(false); setSelectedIds(new Set()); }}
+            onCancel={() => {
+              setIsSelecting(false);
+              setSelectedIds(new Set());
+            }}
           />
         </div>
       )}
@@ -610,7 +778,7 @@ const Inbox: React.FC = () => {
       {selectedTags.length > 0 && (
         <div className="px-6 pt-6">
           <div className="flex flex-wrap items-center gap-2">
-            {selectedTags.map(tag => (
+            {selectedTags.map((tag) => (
               <span
                 key={tag.id}
                 className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
@@ -620,7 +788,9 @@ const Inbox: React.FC = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setPendingTagUpdates(toggleTagFilter(tag.id, pendingTagUpdates));
+                    setPendingTagUpdates(
+                      toggleTagFilter(tag.id, pendingTagUpdates),
+                    );
                   }}
                   className="ml-1 text-gray-400 hover:text-gray-600"
                   title="Remove tag filter"
@@ -645,27 +815,31 @@ const Inbox: React.FC = () => {
       {toast && (
         <div
           className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded shadow-lg text-white text-sm
-            ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}
+            ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}
           role="alert"
         >
           {toast.message}
         </div>
       )}
 
-      <div className={`${selectedTags.length > 0 ? 'pt-2' : 'pt-6'} px-6 pb-6 overflow-auto`}>
+      <div
+        className={`${selectedTags.length > 0 ? "pt-2" : "pt-6"} px-6 pb-6 overflow-auto`}
+      >
         {filteredNewsletters.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
             <Mail className="mx-auto h-14 w-14 mb-4 text-blue-300" />
             <h2 className="text-xl font-semibold mb-2">
-              {filter === 'unread'
-                ? 'No unread newsletters'
-                : filter === 'liked'
-                ? 'No liked newsletters'
-                : filter === 'archived'
-                ? 'No archived newsletters'
-                : 'No newsletters found'}
+              {filter === "unread"
+                ? "No unread newsletters"
+                : filter === "liked"
+                  ? "No liked newsletters"
+                  : filter === "archived"
+                    ? "No archived newsletters"
+                    : "No newsletters found"}
             </h2>
-            <p className="text-base text-neutral-400">Try adjusting your filters or check back later.</p>
+            <p className="text-base text-neutral-400">
+              Try adjusting your filters or check back later.
+            </p>
           </div>
         ) : (
           filteredNewsletters.map((newsletter) => {
@@ -674,7 +848,7 @@ const Inbox: React.FC = () => {
               newsletter_source_id: newsletter.newsletter_source_id || null,
               source: newsletter.source || null,
               tags: newsletter.tags || [],
-              is_archived: newsletter.is_archived || false
+              is_archived: newsletter.is_archived || false,
             };
             return (
               <NewsletterRow
@@ -692,7 +866,9 @@ const Inbox: React.FC = () => {
                 onTagClick={handleTagClickWrapper}
                 onRemoveFromQueue={handleRemoveFromQueue}
                 onNewsletterClick={handleNewsletterClick}
-                isInReadingQueue={readingQueue.some(item => item.newsletter_id === newsletter.id)}
+                isInReadingQueue={readingQueue.some(
+                  (item) => item.newsletter_id === newsletter.id,
+                )}
                 showCheckbox={isSelecting}
                 showTags
                 visibleTags={visibleTags}
