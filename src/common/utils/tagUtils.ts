@@ -77,6 +77,24 @@ export const handleTagClick = <T extends { id: string }>(
   setTagIds(newTagIds);
 };
 
+/**
+ * Handles tag click with navigation to a specific route
+ * @param tag - The tag that was clicked (can be a tag ID or Tag object)
+ * @param navigate - Navigation function from react-router
+ * @param basePath - Base path to navigate to (e.g., '/inbox')
+ * @param event - Mouse event to stop propagation
+ */
+export const handleTagClickWithNavigation = <T extends { id: string }>(
+  tag: string | T,
+  navigate: (to: string) => void,
+  basePath: string = '/inbox',
+  event?: React.MouseEvent
+): void => {
+  event?.stopPropagation();
+  const tagId = typeof tag === 'string' ? tag : tag.id;
+  navigate(`${basePath}?tags=${tagId}`);
+};
+
 export const getOptimisticTags = (tagIds: string[], userId: string, allTags: any[]) => {
   return tagIds.map((tagId) => {
     const existingTag = allTags.find((t) => t.id === tagId);

@@ -5,9 +5,10 @@ import { subDays, subWeeks, subMonths } from 'date-fns';
 import { InboxFilters } from '@web/components/InboxFilters';
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
 import { useNewsletters } from '@common/hooks/useNewsletters';
-import { useReadingQueue } from '@common/hooks/useReadingQueue';
-import { useNewsletterSources } from '@common/hooks/useNewsletterSources';
 import { useTags } from '@common/hooks/useTags';
+import { useNewsletterSources } from '@common/hooks/useNewsletterSources';
+import { useReadingQueue } from '@common/hooks/useReadingQueue';
+import { toggleTagFilter, handleTagClick } from '@common/utils/tagUtils';
 import type { NewsletterWithRelations, Tag } from '@common/types';
 import { supabase } from '@common/services/supabaseClient';
 import LoadingScreen from '@common/components/common/LoadingScreen';
@@ -45,7 +46,8 @@ const Inbox: React.FC = () => {
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
   const [loadingStates, setLoadingStates] = useState<Record<string, string>>({});
   const [errorTogglingLike, setErrorTogglingLike] = useState<Error | null>(null);
-  
+  const [pendingTagUpdates, setPendingTagUpdates] = useState<string[] | null>(null);
+
   // Hooks
   const { getTags } = useTags();
   const { readingQueue, addToQueue, removeFromQueue } = useReadingQueue();
@@ -68,7 +70,6 @@ const Inbox: React.FC = () => {
     bulkUnarchive
   } = useNewsletters(tagIds.length > 0 ? tagIds[0] : undefined, filter, sourceFilter);
   const { user } = useAuth();
-  const [pendingTagUpdates, setPendingTagUpdates] = useState<string[] | null>(null);
 
   // Handle source filter change with proper type
   const handleSourceFilterChange = useCallback((sourceId: string | null) => {
@@ -78,12 +79,10 @@ const Inbox: React.FC = () => {
   // Update URL when filters change
   useEffect(() => {
     const newParams = new URLSearchParams();
-
     if (filter !== 'all') newParams.set('filter', filter);
     if (sourceFilter) newParams.set('source', sourceFilter);
     if (timeRange !== 'all') newParams.set('time', timeRange);
     if (tagIds.length > 0) newParams.set('tags', tagIds.join(','));
-
     if (newParams.toString() !== searchParams.toString()) {
       setSearchParams(newParams, { replace: true });
     }
@@ -92,7 +91,6 @@ const Inbox: React.FC = () => {
   // Handle URL updates when tag filters change
   useEffect(() => {
     if (pendingTagUpdates === null) return;
-    
     setSearchParams(prev => {
       const newParams = new URLSearchParams(prev);
       if (pendingTagUpdates.length > 0) {
@@ -107,40 +105,22 @@ const Inbox: React.FC = () => {
 
   const showArchived = filter === 'archived';
 
-  // Toggle tag filter
-  const toggleTagFilter = useCallback((tag: string | Tag) => {
-    const tagId = typeof tag === 'string' ? tag : tag.id;
-    setPendingTagUpdates(prevTagIds => {
-      const currentTags = prevTagIds || [];
-      const updatedTagIds = currentTags.includes(tagId)
-        ? currentTags.filter(id => id !== tagId)
-        : [...currentTags, tagId];
-      return updatedTagIds.length > 0 ? updatedTagIds : null;
-    });
-  }, []);
-  
   // Handle clicking on a tag
-  const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleTagFilter(tag);
-  }, [toggleTagFilter]);
-  
+  const handleTagClickWrapper = useCallback((tag: Tag, e: React.MouseEvent) => {
+    handleTagClick(tag, pendingTagUpdates, setPendingTagUpdates, e);
+  }, [pendingTagUpdates]);
+
   // Get selected tag IDs, defaulting to an empty array if null
   const selectedTagIds = useMemo(() => pendingTagUpdates || [], [pendingTagUpdates]);
-  
-  // Clear tag filters only
-  const clearTagFilters = useCallback(() => {
-    setPendingTagUpdates(null);
-  }, []);
-  
-  // Clear all filters
+
+  // Clear all filters (including tags)
   const clearAllFilters = useCallback(() => {
     setFilter('all');
     setTimeRange('all');
     setSourceFilter(null);
-    clearTagFilters();
+    setPendingTagUpdates(null);
     setSearchParams(new URLSearchParams(), { replace: false });
-  }, [clearTagFilters, setSearchParams]);
+  }, [setSearchParams]);
 
   // Handle trash action
   const handleTrash = useCallback(async (id: string) => {
@@ -211,13 +191,10 @@ const Inbox: React.FC = () => {
     try {
       const queueItem = readingQueue.find(item => item.newsletter_id === newsletterId);
       if (queueItem) {
-        // If item is in queue, remove it using the queue item ID
         await removeFromQueue(queueItem.id);
       } else {
-        // If item is not in queue, add it
         await addToQueue(newsletterId);
       }
-      // Invalidate the newsletters query to refresh the UI
       await refetchNewsletters();
     } catch (error) {
       console.error('Error toggling queue:', error);
@@ -259,14 +236,11 @@ const Inbox: React.FC = () => {
         if (error) throw error;
       });
       await Promise.all([...addPromises, ...removePromises]);
-      
-      // Close the tag selector after updating tags
       setVisibleTags(prev => {
         const newVisibleTags = new Set(prev);
         newVisibleTags.delete(newsletterId);
         return newVisibleTags;
       });
-      
       await refetchNewsletters();
       setToast({ type: 'success', message: 'Tags updated successfully' });
     } catch (error) {
@@ -275,64 +249,52 @@ const Inbox: React.FC = () => {
     }
   }, [user, newsletters, refetchNewsletters]);
 
-  // Log visibleTags changes for debugging
-  useEffect(() => {
-    console.log('visibleTags updated:', Array.from(visibleTags));
-  }, [visibleTags]);
-
   // Toggle tag visibility
   const toggleTagVisibility = useCallback((id: string, e: React.MouseEvent) => {
-    console.log('toggleTagVisibility called with id:', id);
     e.stopPropagation();
     setVisibleTags((prev: Set<string>) => {
-      console.log('Previous visibleTags:', Array.from(prev));
       const newVisibleTags = new Set(prev);
       if (newVisibleTags.has(id)) {
-        console.log('Removing tag with id:', id);
         newVisibleTags.delete(id);
       } else {
-        // Close all other tag selectors when opening a new one
-        console.log('Adding tag with id:', id, 'and clearing others');
         newVisibleTags.clear();
         newVisibleTags.add(id);
       }
-      console.log('New visibleTags:', Array.from(newVisibleTags));
       return newVisibleTags;
     });
   }, []);
 
   // Handle inbox cleared and refresh events
   useEffect(() => {
-    const handleClearFilters = () => {
+    const handleClearFilters = (event?: Event) => {
+      event?.preventDefault();
       setFilter('all');
       setTimeRange('all');
       setSourceFilter(null);
-      clearTagFilters();
+      setPendingTagUpdates(null);
       setSearchParams(new URLSearchParams(), { replace: true });
     };
 
-    const handleRefreshNewsletters = () => {
+    const handleRefreshNewsletters = (event?: Event) => {
+      event?.preventDefault();
       refetchNewsletters();
     };
 
-    // Set up event listeners
-    window.addEventListener('inbox:clear-filters', handleClearFilters);
-    window.addEventListener('inbox:refresh-newsletters', handleRefreshNewsletters);
+    window.addEventListener('inbox:clear-filters', handleClearFilters as EventListener);
+    window.addEventListener('inbox:refresh-newsletters', handleRefreshNewsletters as EventListener);
 
-    // Clean up event listeners on unmount
     return () => {
-      window.removeEventListener('inbox:clear-filters', handleClearFilters);
-      window.removeEventListener('inbox:refresh-newsletters', handleRefreshNewsletters);
+      window.removeEventListener('inbox:clear-filters', handleClearFilters as EventListener);
+      window.removeEventListener('inbox:refresh-newsletters', handleRefreshNewsletters as EventListener);
     };
-  }, [clearTagFilters, refetchNewsletters, setSearchParams]);
+  }, [refetchNewsletters, setSearchParams]);
 
   // Initialize pendingTagUpdates from URL on mount
   useEffect(() => {
     if (tagIds.length > 0) {
       setPendingTagUpdates([...tagIds]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tagIds]);
 
   // Get unique tags from all available tags and newsletters
   const allUniqueTags = useMemo(() => {
@@ -366,7 +328,6 @@ const Inbox: React.FC = () => {
     if (timeRange && timeRange !== 'all') {
       const now = new Date();
       let startDate: Date;
-
       switch (timeRange) {
         case 'day':
           startDate = subDays(now, 1);
@@ -548,7 +509,6 @@ const Inbox: React.FC = () => {
         await removeFromQueue(queueItem.id);
         await refetchNewsletters();
       } else {
-        console.warn('Could not find queue item for newsletter:', newsletterId);
         setToast({ type: 'error', message: 'Failed to find item in queue' });
       }
     } catch (error) {
@@ -653,7 +613,7 @@ const Inbox: React.FC = () => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleTagFilter(tag.id);
+                    setPendingTagUpdates(toggleTagFilter(tag.id, pendingTagUpdates));
                   }}
                   className="ml-1 text-gray-400 hover:text-gray-600"
                   title="Remove tag filter"
@@ -702,7 +662,6 @@ const Inbox: React.FC = () => {
           </div>
         ) : (
           filteredNewsletters.map((newsletter) => {
-            // Ensure the newsletter has the required fields for NewsletterWithRelations
             const newsletterWithRelations: NewsletterWithRelations = {
               ...newsletter,
               newsletter_source_id: newsletter.newsletter_source_id || null,
@@ -723,7 +682,7 @@ const Inbox: React.FC = () => {
                 onToggleQueue={handleToggleQueue}
                 onToggleTagVisibility={toggleTagVisibility}
                 onUpdateTags={handleUpdateTags}
-                onTagClick={handleTagClick}
+                onTagClick={handleTagClickWrapper}
                 onRemoveFromQueue={handleRemoveFromQueue}
                 onNewsletterClick={handleNewsletterClick}
                 isInReadingQueue={readingQueue.some(item => item.newsletter_id === newsletter.id)}

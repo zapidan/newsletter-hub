@@ -13,6 +13,7 @@ import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsl
 import { useNewsletters } from '@common/hooks/useNewsletters';
 
 import { ArrowUp, ArrowDown } from 'lucide-react';
+import { handleTagClickWithNavigation } from '@common/utils/tagUtils';
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
@@ -394,10 +395,7 @@ const ReadingQueuePage: React.FC = () => {
                   }
                 }}
                 onTagClick={(tag, e) => {
-                  e.stopPropagation();
-                  // Navigate to Inbox with the tag filter
-                  const tagId = typeof tag === 'string' ? tag : tag.id;
-                  navigate(`/inbox?tags=${tagId}`);
+                  handleTagClickWithNavigation(tag, navigate, '/inbox', e);
                 }}
                 onToggleTagVisibility={(id, e) => {
                   e.stopPropagation();
