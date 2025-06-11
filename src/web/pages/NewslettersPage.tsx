@@ -214,7 +214,8 @@ const NewslettersPage: React.FC = () => {
     errorTogglingLike,
     markAsRead,
     toggleLike,
-    markAsUnread
+    markAsUnread,
+    toggleArchive
   } = useNewsletters(
     undefined, 
     selectedSourceId ? 'source' : 'inbox', 
@@ -229,6 +230,7 @@ const NewslettersPage: React.FC = () => {
     markAsRead: (id: string) => Promise<boolean>;
     toggleLike: (id: string) => Promise<boolean>;
     markAsUnread: (id: string) => Promise<boolean>;
+    toggleArchive: (id: string, isArchived: boolean) => Promise<boolean>;
   };
   
   const [newsletters, setNewsletters] = useState<NewsletterWithRelations[]>(fetchedNewsletters || []);
@@ -262,32 +264,46 @@ const NewslettersPage: React.FC = () => {
   
   const handleToggleArchive = useCallback(async (id: string) => {
     try {
-      // Toggle the archive status
       // Find the newsletter to check its current archive status
       const newsletter = newsletters.find(n => n.id === id);
       if (!newsletter) return;
       
-      const { error } = await supabase
-        .from('newsletters')
-        .update({ is_archived: !newsletter.is_archived })
-        .eq('id', id);
-        
-      if (error) throw error;
-      
-      // Invalidate the newsletters query to refresh the UI
-      await queryClient.invalidateQueries({ queryKey: ['newsletters'] });
-      
-      toast.success(
-        newsletter.is_archived 
-          ? 'Newsletter unarchived successfully' 
-          : 'Newsletter archived successfully'
+      // Optimistically update the UI
+      setNewsletters(prev => 
+        prev.map(n => 
+          n.id === id 
+            ? { ...n, is_archived: !n.is_archived } 
+            : n
+        )
       );
+      
+      // Toggle the archive status using the hook's function
+      const newArchiveStatus = newsletter.is_archived;
+      await toggleArchive(id, newArchiveStatus);
+      
+      // Show success message
+      toast.success(
+        newArchiveStatus 
+          ? 'Newsletter archived successfully' 
+          : 'Newsletter unarchived successfully'
+      );
+      
+      // Invalidate the queries to refresh the data
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletterSources'] }),
+        queryClient.invalidateQueries({ queryKey: ['inbox'] })
+      ]);
     } catch (error) {
+      // Revert the optimistic update on error
+      setNewsletters(fetchedNewsletters || []);
+      
       console.error('Error toggling archive status:', error);
-      toast.error('Failed to update archive status');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update archive status';
+      toast.error(errorMessage);
       throw error;
     }
-  }, [queryClient]);
+  }, [queryClient, newsletters, fetchedNewsletters, toggleArchive, setNewsletters]);
   
   const handleToggleRead = useCallback(async (id: string) => {
     try {
