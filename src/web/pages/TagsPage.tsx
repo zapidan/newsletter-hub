@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import { Plus, Tag as TagIcon, X, Edit2, Trash2, Check, ArrowLeft } from 'lucide-react';
+import { handleTagClickWithNavigation } from '@common/utils/tagUtils';
 import { useTags } from '@common/hooks/useTags';
 import type { Tag, TagCreate, TagWithCount, Newsletter } from '@common/types';
 import LoadingScreen from '@common/components/common/LoadingScreen';
@@ -9,16 +11,31 @@ import { supabase } from '@common/services/supabaseClient';
 
 const TagsPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { getTags, createTag, updateTag, deleteTag } = useTags();
   const [tags, setTags] = useState<TagWithCount[]>([]);
   const [tagNewsletters, setTagNewsletters] = useState<Record<string, Newsletter[]>>({});
 
-  // Fetch all tags (cached)
-  const { data: tagsData = [], isLoading: loadingTags, error: errorTags } = useQuery({
-  queryKey: ['tags'],
-  queryFn: getTags,
-  staleTime: 5 * 60 * 1000
-});
+  // Fetch all tags with cache invalidation on mount
+  const { data: tagsData = [], isLoading: loadingTags, error: errorTags, refetch: refetchTags } = useQuery({
+    queryKey: ['tags'],
+    queryFn: getTags,
+    staleTime: 5 * 60 * 1000
+  });
+
+  // Invalidate and refetch all queries on component mount to ensure fresh data
+  useEffect(() => {
+    const refreshData = async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+      ]);
+      await refetchTags();
+    };
+    
+    refreshData();
+  }, [queryClient, refetchTags]);
 
   // Fetch all newsletter_tags join rows (cached)
   const { data: newsletterTagsData = [], isLoading: loadingNewsletterTags, error: errorNewsletterTags } = useQuery({
@@ -125,10 +142,20 @@ const TagsPage: React.FC = () => {
       });
       setNewTag({ name: '', color: '#3b82f6' });
       setIsCreating(false);
-      // Optionally, trigger a refetch here if needed
-      // queryClient.invalidateQueries(['tags']);
+      
+      // Invalidate all relevant queries to ensure UI consistency
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
+        queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+        queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
+      ]);
+      
+      toast.success('Tag created successfully');
     } catch (err) {
       console.error('Error creating tag:', err);
+      toast.error('Failed to create tag');
     }
   };
 
@@ -146,10 +173,20 @@ const TagsPage: React.FC = () => {
       });
       setEditingTagId(null);
       setEditTagData({});
-      // Optionally, trigger a refetch here if needed
-      // queryClient.invalidateQueries(['tags']);
+      
+      // Invalidate all relevant queries to ensure UI consistency
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
+        queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
+        queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+        queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
+      ]);
+      
+      toast.success('Tag updated successfully');
     } catch (err) {
       console.error('Error updating tag:', err);
+      toast.error('Failed to update tag');
     }
   };
 
@@ -157,10 +194,20 @@ const TagsPage: React.FC = () => {
     if (window.confirm('Are you sure you want to delete this tag? This will remove it from all newsletters.')) {
       try {
         await deleteTag(tagId);
-        // Optionally, trigger a refetch here if needed
-        // queryClient.invalidateQueries(['tags']);
+        
+        // Invalidate all relevant queries to ensure UI consistency
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['tags'] }),
+          queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
+          queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
+          queryClient.invalidateQueries({ queryKey: ['inbox'] }),
+          queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
+        ]);
+        
+        toast.success('Tag deleted successfully');
       } catch (err) {
         console.error('Error deleting tag:', err);
+        toast.error('Failed to delete tag');
       }
     }
   };
@@ -250,6 +297,24 @@ const TagsPage: React.FC = () => {
               <li key={tag.id} className="p-4 hover:bg-neutral-50">
                 {editingTagId === tag.id ? (
                   <div className="flex items-center gap-2">
+                    <div 
+                      className="flex items-center gap-2 w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTagClickWithNavigation(tag, navigate, '/inbox', e);
+                      }}
+                    >
+                      <div className="flex-1 flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full flex-shrink-0" 
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        <span className="font-medium">{tag.name}</span>
+                        <span className="text-xs bg-neutral-100 px-2 py-0.5 rounded-full">
+                          {tag.newsletter_count}
+                        </span>
+                      </div>
+                    </div>
                     <div className="flex-1">
                       <input
                         type="text"
@@ -257,6 +322,7 @@ const TagsPage: React.FC = () => {
                         onChange={(e) => setEditTagData({ ...editTagData, name: e.target.value })}
                         className="w-full px-3 py-1 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         autoFocus
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </div>
                     <div className="flex items-center gap-2">
@@ -293,7 +359,15 @@ const TagsPage: React.FC = () => {
                           className="inline-block w-4 h-4 rounded-full"
                           style={{ backgroundColor: tag.color }}
                         />
-                        <span className="font-medium cursor-pointer text-primary-700 hover:underline" onClick={() => navigate(`/inbox?tag=${tag.id}`)}>{tag.name}</span>
+                        <span 
+                          className="font-medium cursor-pointer text-primary-700 hover:underline" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTagClickWithNavigation(tag, navigate, '/inbox', e);
+                          }}
+                        >
+                          {tag.name}
+                        </span>
                         <span className="text-sm text-neutral-500">
                           Used in {(tagNewsletters[tag.id] || []).length} {(tagNewsletters[tag.id] || []).length === 1 ? 'newsletter' : 'newsletters'}
                         </span>
