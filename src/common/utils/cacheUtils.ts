@@ -1,5 +1,5 @@
 import { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { NewsletterWithRelations } from "../types";
+import type { NewsletterWithRelations, Tag } from "../types";
 import type {
   NewsletterFilter,
   NewsletterCacheUpdate,
@@ -249,6 +249,144 @@ export class NewsletterCacheManager {
         refetchType: "active",
       });
     }
+  }
+
+  // Tag-specific cache operations
+  updateTagInCache(
+    tagUpdate: { id: string; updates: Partial<Tag> },
+    options: CacheUpdateOptions = {},
+  ): void {
+    this.startPerformanceTimer(`updateTag-${tagUpdate.id}`);
+
+    // Update tag in all tag list queries
+    this.queryClient.setQueriesData<Tag[]>(
+      { queryKey: queryKeyFactory.newsletters.tags() },
+      (oldData) => {
+        if (!oldData) return oldData;
+        return oldData.map((tag) =>
+          tag.id === tagUpdate.id ? { ...tag, ...tagUpdate.updates } : tag,
+        );
+      },
+    );
+
+    // Update individual tag query if it exists
+    const tagQueryKey = queryKeyFactory.newsletters.tag(tagUpdate.id);
+    this.queryClient.setQueryData<Tag>(tagQueryKey, (oldData) => {
+      if (!oldData) return oldData;
+      return { ...oldData, ...tagUpdate.updates };
+    });
+
+    // Update newsletters that have this tag
+    this.queryClient.setQueriesData<NewsletterWithRelations[]>(
+      { queryKey: queryKeyFactory.newsletters.lists() },
+      (oldData) => {
+        if (!oldData) return oldData;
+        return oldData.map((newsletter) => {
+          if (newsletter.tags?.some((tag) => tag.id === tagUpdate.id)) {
+            return {
+              ...newsletter,
+              tags: newsletter.tags.map((tag) =>
+                tag.id === tagUpdate.id
+                  ? { ...tag, ...tagUpdate.updates }
+                  : tag,
+              ),
+            };
+          }
+          return newsletter;
+        });
+      },
+    );
+
+    if (options.invalidateRelated) {
+      this.invalidateTagQueries([tagUpdate.id]);
+    }
+
+    this.endPerformanceTimer(`updateTag-${tagUpdate.id}`);
+  }
+
+  invalidateTagQueries(tagIds?: string[]): void {
+    this.startPerformanceTimer("invalidateTagQueries");
+
+    const invalidationPromises: Promise<void>[] = [];
+
+    if (tagIds && tagIds.length > 0) {
+      // Invalidate specific tag queries
+      tagIds.forEach((tagId) => {
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.tag(tagId),
+            refetchType: "active",
+          }),
+        );
+
+        // Invalidate newsletter lists that filter by this tag
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            predicate: (query) => {
+              return queryKeyFactory.matchers.hasTags(
+                query.queryKey as unknown[],
+                [tagId],
+              );
+            },
+            refetchType: "active",
+          }),
+        );
+      });
+    } else {
+      // Invalidate all tag-related queries
+      invalidationPromises.push(
+        this.queryClient.invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.tags(),
+          refetchType: "active",
+        }),
+      );
+    }
+
+    // Always invalidate newsletter lists as tags might affect filtering
+    invalidationPromises.push(
+      this.queryClient.invalidateQueries({
+        queryKey: queryKeyFactory.newsletters.lists(),
+        refetchType: "active",
+      }),
+    );
+
+    Promise.all(invalidationPromises).catch((error) => {
+      console.error("Error invalidating tag queries:", error);
+    });
+
+    this.endPerformanceTimer("invalidateTagQueries");
+  }
+
+  // Cross-feature cache synchronization
+  handleTagUpdate(
+    tagId: string,
+    updates: Partial<Tag>,
+    options: CacheUpdateOptions = {},
+  ): void {
+    this.startPerformanceTimer(`handleTagUpdate-${tagId}`);
+
+    // Update the tag in cache
+    this.updateTagInCache({ id: tagId, updates }, options);
+
+    // Cross-feature synchronization
+    if (this.config.enableCrossFeatureSync) {
+      // Invalidate related newsletter queries
+      this.queryClient.invalidateQueries({
+        predicate: (query) => {
+          const queryKey = query.queryKey as unknown[];
+          return queryKeyFactory.matchers.hasTags(queryKey, [tagId]);
+        },
+        refetchType: "active",
+      });
+
+      // Invalidate tag-newsletter relationship queries
+      this.queryClient.invalidateQueries({
+        queryKey: queryKeyFactory.related.tagNewsletters(tagId),
+        refetchType: "active",
+      });
+    }
+
+    this.endPerformanceTimer(`handleTagUpdate-${tagId}`);
   }
 
   private syncNewsletterQueueStatus(

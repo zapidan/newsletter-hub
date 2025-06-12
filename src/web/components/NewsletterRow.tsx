@@ -1,8 +1,16 @@
-import React, { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Heart, BookmarkIcon, Tag as TagIcon, Archive, ArchiveX, Trash } from 'lucide-react';
-import { NewsletterWithRelations, Tag } from '@common/types';
-import TagSelector from './TagSelector';
+import React, { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Heart,
+  BookmarkIcon,
+  Tag as TagIcon,
+  Archive,
+  ArchiveX,
+  Trash,
+} from "lucide-react";
+import { NewsletterWithRelations, Tag } from "@common/types";
+import { usePrefetchNewsletterDetail } from "@common/hooks/useNewsletterDetail";
+import TagSelector from "./TagSelector";
 
 interface NewsletterRowProps {
   newsletter: NewsletterWithRelations;
@@ -51,11 +59,12 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   errorTogglingLike,
 }) => {
   const navigate = useNavigate();
+  const { prefetchNewsletter } = usePrefetchNewsletterDetail();
 
   const handleRowClick = async (e: React.MouseEvent) => {
     // Only proceed if the click wasn't on a button or link
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('a')) {
+    if (target.closest("button") || target.closest("a")) {
       return;
     }
 
@@ -77,7 +86,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
         navigate(`/newsletters/${newsletter.id}`);
       }
     } catch (error) {
-      console.error('Error handling newsletter click:', error);
+      console.error("Error handling newsletter click:", error);
       // Still navigate even if marking as read or archiving fails
       if (onNewsletterClick) {
         onNewsletterClick(newsletter);
@@ -87,41 +96,71 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     }
   };
 
-  const handleTagClick = useCallback((tag: Tag, e: React.MouseEvent) => {
-    e.stopPropagation();
-    onTagClick(tag, e);
-  }, [onTagClick]);
+  const handleTagClick = useCallback(
+    (tag: Tag, e: React.MouseEvent) => {
+      e.stopPropagation();
+      onTagClick(tag, e);
+    },
+    [onTagClick],
+  );
 
-  const handleToggleQueue = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      if (isInReadingQueue && onRemoveFromQueue) {
-        onRemoveFromQueue(e, newsletter.id);
-      } else if (onToggleQueue) {
-        await onToggleQueue(newsletter.id);
+  const handleToggleQueue = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        if (isInReadingQueue && onRemoveFromQueue) {
+          onRemoveFromQueue(e, newsletter.id);
+        } else if (onToggleQueue) {
+          await onToggleQueue(newsletter.id);
+        }
+      } catch (error) {
+        console.error("Error toggling queue status:", error);
       }
-    } catch (error) {
-      console.error('Error toggling queue status:', error);
-    }
-  }, [onToggleQueue, onRemoveFromQueue, isInReadingQueue, newsletter.id]);
+    },
+    [onToggleQueue, onRemoveFromQueue, isInReadingQueue, newsletter.id],
+  );
 
-  const handleUpdateTags = useCallback(async (tagIds: string[]) => {
-    try {
-      await onUpdateTags(newsletter.id, tagIds);
-    } catch (error) {
-      console.error('Error updating tags:', error);
-      throw error;
+  const handleUpdateTags = useCallback(
+    async (tagIds: string[]) => {
+      try {
+        await onUpdateTags(newsletter.id, tagIds);
+      } catch (error) {
+        console.error("Error updating tags:", error);
+        throw error;
+      }
+    },
+    [onUpdateTags, newsletter.id],
+  );
+
+  // Prefetch newsletter details on hover for better performance
+  const handleMouseEnter = useCallback(() => {
+    // Only prefetch if the newsletter is unread (more likely to be opened)
+    // or if it's not archived (archived newsletters are less likely to be opened)
+    if (!newsletter.is_read || !newsletter.is_archived) {
+      prefetchNewsletter(newsletter.id, { priority: !newsletter.is_read });
     }
-  }, [onUpdateTags, newsletter.id]);
+  }, [
+    prefetchNewsletter,
+    newsletter.id,
+    newsletter.is_read,
+    newsletter.is_archived,
+  ]);
+
+  const handleMouseLeave = useCallback(() => {
+    // Could implement cleanup logic here if needed
+    // For now, we let the cache handle cleanup based on its own policies
+  }, []);
 
   return (
     <div
       onClick={handleRowClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${
-        !newsletter.is_read 
-          ? 'bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200' 
-          : 'bg-white border border-neutral-200 hover:bg-neutral-50'
-      } ${isSelected ? 'ring-2 ring-primary-400' : ''}`}
+        !newsletter.is_read
+          ? "bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200"
+          : "bg-white border border-neutral-200 hover:bg-neutral-50"
+      } ${isSelected ? "ring-2 ring-primary-400" : ""}`}
     >
       {showCheckbox && onToggleSelect && (
         <input
@@ -139,18 +178,22 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-3 mb-1">
           <img
-            src={newsletter.image_url || '/newsletter-icon.svg'}
+            src={newsletter.image_url || "/newsletter-icon.svg"}
             alt={newsletter.title}
             className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-base truncate">{newsletter.title || 'No subject'}</div>
+                <div className="font-semibold text-base truncate">
+                  {newsletter.title || "No subject"}
+                </div>
                 <div className="text-sm text-gray-500 truncate">
-                  {newsletter.source?.name || 'Unknown Source'}
+                  {newsletter.source?.name || "Unknown Source"}
                   {newsletter.source?.domain && (
-                    <span className="text-gray-400 ml-2">• {newsletter.source.domain}</span>
+                    <span className="text-gray-400 ml-2">
+                      • {newsletter.source.domain}
+                    </span>
                   )}
                 </div>
               </div>
@@ -158,16 +201,16 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 <button
                   type="button"
                   className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-                    newsletter.is_read 
-                      ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' 
-                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    newsletter.is_read
+                      ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                      : "bg-green-100 text-green-700 hover:bg-green-200"
                   }`}
                   onClick={async (e) => {
                     e.stopPropagation();
                     await onToggleRead(newsletter.id);
                   }}
                 >
-                  {newsletter.is_read ? 'Mark as Unread' : 'Mark as Read'}
+                  {newsletter.is_read ? "Mark as Unread" : "Mark as Read"}
                 </button>
               </div>
             </div>
@@ -177,22 +220,26 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               <button
                 type="button"
                 className={`p-1.5 transition-colors ${
-                  newsletter.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'
-                } ${errorTogglingLike ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  newsletter.is_liked
+                    ? "text-red-500"
+                    : "text-gray-400 hover:text-red-500"
+                } ${errorTogglingLike ? "opacity-50 cursor-not-allowed" : ""}`}
                 onClick={async (e) => {
                   e.stopPropagation();
                   await onToggleLike(newsletter);
                 }}
-                disabled={!!errorTogglingLike || loadingStates[newsletter.id] === 'like'}
-                title={newsletter.is_liked ? 'Unlike' : 'Like'}
+                disabled={
+                  !!errorTogglingLike || loadingStates[newsletter.id] === "like"
+                }
+                title={newsletter.is_liked ? "Unlike" : "Like"}
               >
-                {loadingStates[newsletter.id] === 'like' ? (
+                {loadingStates[newsletter.id] === "like" ? (
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
                 ) : (
                   <Heart
                     className="h-4 w-4"
-                    fill={newsletter.is_liked ? '#EF4444' : 'none'}
-                    stroke={newsletter.is_liked ? '#EF4444' : '#9CA3AF'}
+                    fill={newsletter.is_liked ? "#EF4444" : "none"}
+                    stroke={newsletter.is_liked ? "#EF4444" : "#9CA3AF"}
                     strokeWidth={1.5}
                   />
                 )}
@@ -202,20 +249,29 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 type="button"
                 className="p-1 rounded hover:bg-gray-200"
                 onClick={(e) => {
-                  console.log('Tag icon clicked for newsletter:', newsletter.id);
+                  console.log(
+                    "Tag icon clicked for newsletter:",
+                    newsletter.id,
+                  );
                   e.preventDefault();
                   e.stopPropagation();
                   onToggleTagVisibility(newsletter.id, e);
                 }}
-                title={visibleTags.has(newsletter.id) ? 'Hide tags' : 'Edit tags'}
+                title={
+                  visibleTags.has(newsletter.id) ? "Hide tags" : "Edit tags"
+                }
               >
                 <TagIcon
                   size={16}
                   className={`${
-                    visibleTags.has(newsletter.id) ? 'text-primary-600' : 'text-gray-500'
+                    visibleTags.has(newsletter.id)
+                      ? "text-primary-600"
+                      : "text-gray-500"
                   } hover:text-primary-600`}
                 />
-                {visibleTags.has(newsletter.id) && <span className="sr-only">(Active)</span>}
+                {visibleTags.has(newsletter.id) && (
+                  <span className="sr-only">(Active)</span>
+                )}
               </button>
               {/* Reading queue button */}
               <button
@@ -223,14 +279,16 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 className="p-1 rounded-full hover:bg-gray-200 transition-colors"
                 onClick={handleToggleQueue}
                 title={
-                  readingQueue.some((item) => item.newsletter_id === newsletter.id)
-                    ? 'Remove from reading queue'
-                    : 'Add to reading queue'
+                  readingQueue.some(
+                    (item) => item.newsletter_id === newsletter.id,
+                  )
+                    ? "Remove from reading queue"
+                    : "Add to reading queue"
                 }
               >
                 <BookmarkIcon
                   className="h-4 w-4"
-                  fill={isInReadingQueue ? '#9CA3AF' : 'none'}
+                  fill={isInReadingQueue ? "#9CA3AF" : "none"}
                   stroke="#9CA3AF"
                   strokeWidth={1.5}
                 />
@@ -243,7 +301,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                   e.stopPropagation();
                   await onToggleArchive(newsletter.id);
                 }}
-                title={newsletter.is_archived ? 'Unarchive' : 'Archive'}
+                title={newsletter.is_archived ? "Unarchive" : "Archive"}
               >
                 {newsletter.is_archived ? (
                   <ArchiveX className="h-4 w-4 text-green-700" />
@@ -267,15 +325,17 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 </button>
               )}
             </div>
-            <div className="text-sm text-gray-700 mb-2 line-clamp-2">{newsletter.summary}</div>
-            
+            <div className="text-sm text-gray-700 mb-2 line-clamp-2">
+              {newsletter.summary}
+            </div>
+
             {/* Tags display */}
             {visibleTags.has(newsletter.id) && (
-              <div className="w-full mt-2" onClick={e => e.stopPropagation()}>
+              <div className="w-full mt-2" onClick={(e) => e.stopPropagation()}>
                 <TagSelector
                   selectedTags={newsletter.tags || []}
                   onTagsChange={async (newTags) => {
-                    const tagIds = newTags.map(tag => tag.id);
+                    const tagIds = newTags.map((tag) => tag.id);
                     await handleUpdateTags(tagIds);
                   }}
                   onTagClick={handleTagClick}
@@ -286,14 +346,17 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 />
               </div>
             )}
-            
+
             <div className="flex items-center justify-between mt-2">
               <div className="flex flex-wrap gap-1">
                 {newsletter.tags?.map((tag) => (
                   <span
                     key={tag.id}
                     className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer"
-                    style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                    style={{
+                      backgroundColor: `${tag.color}20`,
+                      color: tag.color,
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleTagClick(tag, e);
@@ -304,10 +367,10 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 ))}
               </div>
               <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
-{new Date(newsletter.received_at).toLocaleDateString()} · {newsletter.estimated_read_time} min read
+                {new Date(newsletter.received_at).toLocaleDateString()} ·{" "}
+                {newsletter.estimated_read_time} min read
               </span>
             </div>
-
           </div>
         </div>
       </div>

@@ -49,6 +49,16 @@ export const queryKeyFactory = {
     tags: () => [...queryKeyFactory.newsletters.all(), "tags"] as const,
     tag: (tagId: string) =>
       [...queryKeyFactory.newsletters.tags(), tagId] as const,
+    tagLists: () => [...queryKeyFactory.newsletters.tags(), "list"] as const,
+    tagList: (userId?: string) => {
+      const baseKey = [...queryKeyFactory.newsletters.tagLists()] as const;
+      return userId ? ([...baseKey, userId] as const) : baseKey;
+    },
+    tagDetails: () =>
+      [...queryKeyFactory.newsletters.tags(), "detail"] as const,
+    tagDetail: (tagId: string) =>
+      [...queryKeyFactory.newsletters.tagDetails(), tagId] as const,
+    tagCounts: () => [...queryKeyFactory.newsletters.tags(), "counts"] as const,
     sources: () => [...queryKeyFactory.newsletters.all(), "sources"] as const,
     source: (sourceId: string) =>
       [...queryKeyFactory.newsletters.sources(), sourceId] as const,
@@ -76,6 +86,17 @@ export const queryKeyFactory = {
     // Keys for tag-newsletter relationships
     tagNewsletters: (tagId: string) =>
       [...queryKeyFactory.newsletters.tags(), tagId, "newsletters"] as const,
+
+    // Keys for newsletter-tag relationships
+    newsletterTags: (newsletterId: string) =>
+      [...queryKeyFactory.newsletters.details(), newsletterId, "tags"] as const,
+
+    // Keys for tag operations
+    tagOperations: (tagId: string) =>
+      [...queryKeyFactory.newsletters.tags(), tagId, "operations"] as const,
+
+    // Keys for tag statistics and counts
+    tagStats: () => [...queryKeyFactory.newsletters.tags(), "stats"] as const,
 
     // Keys for source-newsletter relationships
     sourceNewsletters: (sourceId: string) =>
@@ -116,6 +137,37 @@ export const queryKeyFactory = {
       return isDetailKey && queryKey[2] === newsletterId;
     },
 
+    // Check if a query key is tag-related
+    isTagKey: (queryKey: unknown[]): boolean => {
+      return (
+        queryKey.length >= 2 &&
+        queryKey[0] === "newsletters" &&
+        queryKey[1] === "tags"
+      );
+    },
+
+    // Check if a query key is for a specific tag
+    isTagDetailKey: (queryKey: unknown[], tagId?: string): boolean => {
+      const isTagKey =
+        queryKey.length >= 4 &&
+        queryKey[0] === "newsletters" &&
+        queryKey[1] === "tags" &&
+        queryKey[2] === "detail";
+
+      if (!tagId) return isTagKey;
+      return isTagKey && queryKey[3] === tagId;
+    },
+
+    // Check if a query key is for tag lists
+    isTagListKey: (queryKey: unknown[]): boolean => {
+      return (
+        queryKey.length >= 3 &&
+        queryKey[0] === "newsletters" &&
+        queryKey[1] === "tags" &&
+        queryKey[2] === "list"
+      );
+    },
+
     // Check if a query key involves a specific filter
     hasFilter: (queryKey: unknown[], filter: NewsletterFilter): boolean => {
       if (!queryKeyFactory.matchers.isNewsletterListKey(queryKey)) return false;
@@ -142,6 +194,39 @@ export const queryKeyFactory = {
         keyTagIds.length === tagIds.length &&
         keyTagIds.every((id) => tagIds.includes(id))
       );
+    },
+
+    // Check if a query key involves any of the specified tags
+    hasAnyTags: (queryKey: unknown[], tagIds: string[]): boolean => {
+      if (!queryKeyFactory.matchers.isNewsletterListKey(queryKey)) return false;
+
+      const filtersObj = queryKey[2];
+      if (typeof filtersObj !== "object" || !filtersObj) return false;
+
+      const keyTagIds = (filtersObj as Record<string, unknown>).tagIds;
+      if (!Array.isArray(keyTagIds)) return false;
+
+      return keyTagIds.some((id) => tagIds.includes(id));
+    },
+
+    // Check if a query key is affected by tag changes
+    isAffectedByTagChange: (queryKey: unknown[], tagId: string): boolean => {
+      // Tag-related queries
+      if (queryKeyFactory.matchers.isTagKey(queryKey)) {
+        return queryKey.includes(tagId);
+      }
+
+      // Newsletter queries that might be filtered by tags
+      if (queryKeyFactory.matchers.isNewsletterListKey(queryKey)) {
+        return queryKeyFactory.matchers.hasAnyTags(queryKey, [tagId]);
+      }
+
+      // Newsletter detail queries might have tag relationships
+      if (queryKeyFactory.matchers.isNewsletterDetailKey(queryKey)) {
+        return true; // Tags might be part of the newsletter details
+      }
+
+      return false;
     },
 
     // Check if a query key involves a specific source

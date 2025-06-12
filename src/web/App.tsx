@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-
 import { Toaster } from "react-hot-toast";
 import { Layout } from "@common/components/layout";
 import { ProtectedRoute } from "@common/components/ProtectedRoute";
+import { CacheInitializer } from "@common/components/CacheInitializer";
 import ErrorBoundary from "@web/components/ErrorBoundary";
 import InboxPage from "@web/pages/Inbox";
 import NewsletterDetailPage from "@web/pages/NewsletterDetail";
@@ -71,11 +72,13 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary fallback={errorFallback}>
-      <Toaster
-        position="bottom-right"
-        toastOptions={{
+      <CacheInitializer>
+        <div className="min-h-screen bg-gray-50">
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
           duration: 5000,
-          style: {
+              style: {
             background: '#fff',
             color: '#1f2937',
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
@@ -94,115 +97,117 @@ const App: React.FC = () => {
               primary: '#EF4444',
               secondary: '#fff',
             },
-          },
-        }}
-      />
-      <Layout>
-        <Routes>
-        {/* Redirect root to login or inbox based on auth status */}
-        <Route 
-          path="/" 
-          element={user ? 
-            <Navigate to="/inbox" replace /> : 
-            <Navigate to="/login" state={{ from: location }} replace />} 
-        />
-        
-        {/* Public routes */}
+              },
+            }}
+          />
+          <Layout>
+            <Routes>
+              {/* Redirect root to login or inbox based on auth status */}
+              <Route 
+                path="/" 
+                element={user ? 
+                  <Navigate to="/inbox" replace /> : 
+                  <Navigate to="/login" state={{ from: location }} replace />} 
+              />
+              
+              {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        
-        {/* Protected routes */}
-        <Route 
-          path="/inbox" 
-          element={
-            <ProtectedRoute>
-              <InboxPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/newsletters" 
-          element={
-            <ProtectedRoute>
-              <NewslettersPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/newsletters/:id" 
-          element={
-            <ProtectedRoute>
-              <NewsletterDetailPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/trending" 
-          element={
-            <ProtectedRoute>
-              <TrendingTopicsPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/search" 
-          element={
-            <ProtectedRoute>
-              <SearchPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/tags" 
-          element={
-            <ProtectedRoute>
-              <TagsPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/queue" 
-          element={
-            <ProtectedRoute>
-              <ReadingQueuePage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/settings" 
-          element={
-            <ProtectedRoute>
-              <SettingsPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/profile" 
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/daily" 
-          element={
-            <ProtectedRoute>
-              <DailySummary />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* 404 route - keep this last */}
-        <Route 
-          path="*" 
-          element={
-            <Navigate to={user ? "/inbox" : "/login"} state={{ from: location }} replace />
-          } 
-        />
-        </Routes>
-      </Layout>
+              
+              {/* Protected routes */}
+              <Route 
+                path="/inbox" 
+                element={
+                  <ProtectedRoute>
+                    <InboxPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/newsletters" 
+                element={
+                  <ProtectedRoute>
+                    <NewslettersPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/newsletters/:id" 
+                element={
+                  <ProtectedRoute>
+                    <NewsletterDetailPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/trending" 
+                element={
+                  <ProtectedRoute>
+                    <TrendingTopicsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/search" 
+                element={
+                  <ProtectedRoute>
+                    <SearchPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/tags" 
+                element={
+                  <ProtectedRoute>
+                    <TagsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/queue" 
+                element={
+                  <ProtectedRoute>
+                    <ReadingQueuePage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/settings" 
+                element={
+                  <ProtectedRoute>
+                    <SettingsPage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/profile" 
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/daily" 
+                element={
+                  <ProtectedRoute>
+                    <DailySummary />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* 404 route - keep this last */}
+              <Route 
+                path="*" 
+                element={
+                  <Navigate to={user ? "/inbox" : "/login"} state={{ from: location }} replace />
+                } 
+              />
+            </Routes>
+          </Layout>
+        </div>
+      </CacheInitializer>
     </ErrorBoundary>
   );
 };

@@ -205,7 +205,9 @@ export const useReadingQueue = () => {
             if (!acc[newsletter_id]) {
               acc[newsletter_id] = [];
             }
-            acc[newsletter_id].push(...tags);
+            if (Array.isArray(tags)) {
+              acc[newsletter_id].push(...tags);
+            }
             return acc;
           },
           {} as Record<string, Tag[]>,
