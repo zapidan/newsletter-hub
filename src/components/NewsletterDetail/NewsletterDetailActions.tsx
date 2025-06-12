@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import {
   Heart,
   Bookmark as BookmarkIcon,
@@ -35,6 +35,10 @@ export const NewsletterDetailActions: React.FC<
 
   const { refetch: refetchReadingQueue } = useReadingQueue();
 
+  // Local optimistic state to ensure UI consistency
+  const [localNewsletter, setLocalNewsletter] =
+    useState<NewsletterWithRelations>(newsletter);
+
   // Local loading states for better UX
   const [isLiking, setIsLiking] = useState(false);
   const [isBookmarking, setIsBookmarking] = useState(false);
@@ -43,202 +47,179 @@ export const NewsletterDetailActions: React.FC<
 
   // Get cache manager for optimistic updates
   const cacheManager = React.useMemo(() => {
-    try {
-      return getCacheManager();
-    } catch {
-      return null;
-    }
+    return getCacheManager();
   }, []);
 
+  // Sync local state with props when newsletter changes
+  useEffect(() => {
+    setLocalNewsletter(newsletter);
+  }, [newsletter]);
+
   const handleToggleReadStatus = useCallback(async () => {
-    if (!newsletter?.id || isTogglingReadStatus) return;
+    if (!localNewsletter?.id || isTogglingReadStatus) return;
 
     setIsTogglingReadStatus(true);
 
-    // Optimistic update
+    // Optimistic update to local state
     const optimisticNewsletter = {
-      ...newsletter,
-      is_read: !newsletter.is_read,
+      ...localNewsletter,
+      is_read: !localNewsletter.is_read,
     };
+    setLocalNewsletter(optimisticNewsletter);
     onNewsletterUpdate(optimisticNewsletter);
 
-    // Update cache optimistically
-    if (cacheManager) {
-      cacheManager.optimisticUpdate(
-        newsletter.id,
-        { is_read: !newsletter.is_read },
-        "read-status-toggle",
-      );
-    }
-
     try {
-      if (newsletter.is_read) {
-        await markAsUnread(newsletter.id);
+      if (localNewsletter.is_read) {
+        await markAsUnread(localNewsletter.id);
       } else {
-        await markAsRead(newsletter.id);
+        await markAsRead(localNewsletter.id);
       }
 
       // Refresh from server to ensure consistency
-      const updated = await getNewsletter(newsletter.id);
+      const updated = await getNewsletter(localNewsletter.id);
       if (updated) {
+        setLocalNewsletter(updated);
         onNewsletterUpdate(updated);
       }
 
-      toast.success(newsletter.is_read ? "Marked as unread" : "Marked as read");
+      toast.success(
+        localNewsletter.is_read ? "Marked as unread" : "Marked as read",
+      );
     } catch (error) {
       console.error("Error toggling read status:", error);
       // Revert optimistic update
+      setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      if (cacheManager) {
-        cacheManager.updateNewsletterInCache(
-          { id: newsletter.id, updates: newsletter },
-          { optimistic: true },
-        );
-      }
       toast.error("Failed to update read status");
     } finally {
       setIsTogglingReadStatus(false);
     }
   }, [
-    newsletter,
+    localNewsletter,
     isTogglingReadStatus,
     markAsRead,
     markAsUnread,
     onNewsletterUpdate,
     getNewsletter,
-    cacheManager,
+    newsletter,
   ]);
 
   const handleToggleLike = useCallback(async () => {
-    if (!newsletter?.id || isLiking) return;
+    if (!localNewsletter?.id || isLiking) return;
 
     setIsLiking(true);
 
-    // Optimistic update
+    // Optimistic update to local state
     const optimisticNewsletter = {
-      ...newsletter,
-      is_liked: !newsletter.is_liked,
+      ...localNewsletter,
+      is_liked: !localNewsletter.is_liked,
     };
+    setLocalNewsletter(optimisticNewsletter);
     onNewsletterUpdate(optimisticNewsletter);
 
-    // Update cache optimistically
-    if (cacheManager) {
-      cacheManager.optimisticUpdate(
-        newsletter.id,
-        { is_liked: !newsletter.is_liked },
-        "like-toggle",
-      );
-    }
-
     try {
-      await toggleLike(newsletter.id);
+      await toggleLike(localNewsletter.id);
 
       // Refresh from server to ensure consistency
-      const updated = await getNewsletter(newsletter.id);
+      const updated = await getNewsletter(localNewsletter.id);
       if (updated) {
+        setLocalNewsletter(updated);
         onNewsletterUpdate(updated);
       }
 
       toast.success(
-        newsletter.is_liked ? "Removed from liked" : "Added to liked",
+        localNewsletter.is_liked ? "Removed from liked" : "Added to liked",
       );
     } catch (error) {
       console.error("Failed to update like status:", error);
       // Revert optimistic update
+      setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      if (cacheManager) {
-        cacheManager.updateNewsletterInCache(
-          { id: newsletter.id, updates: newsletter },
-          { optimistic: true },
-        );
-      }
       toast.error("Failed to update like status");
     } finally {
       setIsLiking(false);
     }
   }, [
-    newsletter,
+    localNewsletter,
     isLiking,
     toggleLike,
     onNewsletterUpdate,
     getNewsletter,
-    cacheManager,
+    newsletter,
   ]);
 
   const handleToggleBookmark = useCallback(async () => {
-    if (!newsletter?.id || isBookmarking) return;
+    if (!localNewsletter?.id || isBookmarking) return;
 
     setIsBookmarking(true);
 
-    // Optimistic update
+    // Optimistic update to local state
     const optimisticNewsletter = {
-      ...newsletter,
-      is_bookmarked: !newsletter.is_bookmarked,
+      ...localNewsletter,
+      is_bookmarked: !localNewsletter.is_bookmarked,
     };
+    setLocalNewsletter(optimisticNewsletter);
     onNewsletterUpdate(optimisticNewsletter);
 
     try {
-      await toggleInQueue(newsletter.id);
+      await toggleInQueue(localNewsletter.id);
 
       // Refresh reading queue and newsletter data
       if (refetchReadingQueue) {
         await refetchReadingQueue();
       }
 
-      const updated = await getNewsletter(newsletter.id);
+      const updated = await getNewsletter(localNewsletter.id);
       if (updated) {
+        setLocalNewsletter(updated);
         onNewsletterUpdate(updated);
       }
 
       toast.success(
-        newsletter.is_bookmarked
+        localNewsletter.is_bookmarked
           ? "Removed from reading queue"
           : "Added to reading queue",
       );
     } catch (error) {
       console.error("Error toggling bookmark:", error);
       // Revert optimistic update
+      setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
       toast.error("Failed to update reading queue");
     } finally {
       setIsBookmarking(false);
     }
   }, [
-    newsletter,
+    localNewsletter,
     isBookmarking,
     toggleInQueue,
     onNewsletterUpdate,
     refetchReadingQueue,
     getNewsletter,
+    newsletter,
   ]);
 
   const handleArchive = useCallback(async () => {
-    if (!newsletter?.id || isArchiving || newsletter.is_archived) return;
+    if (!localNewsletter?.id || isArchiving || localNewsletter.is_archived)
+      return;
 
     setIsArchiving(true);
 
-    // Optimistic update
+    // Optimistic update to local state
     const optimisticNewsletter = {
-      ...newsletter,
+      ...localNewsletter,
       is_archived: true,
     };
+    setLocalNewsletter(optimisticNewsletter);
     onNewsletterUpdate(optimisticNewsletter);
 
-    // Update cache optimistically
-    if (cacheManager) {
-      cacheManager.optimisticUpdate(
-        newsletter.id,
-        { is_archived: true },
-        "archive",
-      );
-    }
-
     try {
-      await toggleArchive(newsletter.id, true);
+      await toggleArchive(localNewsletter.id, true);
 
       // Refresh from server to ensure consistency
-      const updated = await getNewsletter(newsletter.id);
+      const updated = await getNewsletter(localNewsletter.id);
       if (updated) {
+        setLocalNewsletter(updated);
         onNewsletterUpdate(updated);
       }
 
@@ -246,53 +227,42 @@ export const NewsletterDetailActions: React.FC<
     } catch (error) {
       console.error("Error archiving newsletter:", error);
       // Revert optimistic update
+      setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      if (cacheManager) {
-        cacheManager.updateNewsletterInCache(
-          { id: newsletter.id, updates: newsletter },
-          { optimistic: true },
-        );
-      }
       toast.error("Failed to archive newsletter");
     } finally {
       setIsArchiving(false);
     }
   }, [
-    newsletter,
+    localNewsletter,
     isArchiving,
     toggleArchive,
     onNewsletterUpdate,
     getNewsletter,
-    cacheManager,
+    newsletter,
   ]);
 
   const handleUnarchive = useCallback(async () => {
-    if (!newsletter?.id || isArchiving || !newsletter.is_archived) return;
+    if (!localNewsletter?.id || isArchiving || !localNewsletter.is_archived)
+      return;
 
     setIsArchiving(true);
 
-    // Optimistic update
+    // Optimistic update to local state
     const optimisticNewsletter = {
-      ...newsletter,
+      ...localNewsletter,
       is_archived: false,
     };
+    setLocalNewsletter(optimisticNewsletter);
     onNewsletterUpdate(optimisticNewsletter);
 
-    // Update cache optimistically
-    if (cacheManager) {
-      cacheManager.optimisticUpdate(
-        newsletter.id,
-        { is_archived: false },
-        "unarchive",
-      );
-    }
-
     try {
-      await toggleArchive(newsletter.id, false);
+      await toggleArchive(localNewsletter.id, false);
 
       // Refresh from server to ensure consistency
-      const updated = await getNewsletter(newsletter.id);
+      const updated = await getNewsletter(localNewsletter.id);
       if (updated) {
+        setLocalNewsletter(updated);
         onNewsletterUpdate(updated);
       }
 
@@ -300,28 +270,23 @@ export const NewsletterDetailActions: React.FC<
     } catch (error) {
       console.error("Error unarchiving newsletter:", error);
       // Revert optimistic update
+      setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      if (cacheManager) {
-        cacheManager.updateNewsletterInCache(
-          { id: newsletter.id, updates: newsletter },
-          { optimistic: true },
-        );
-      }
       toast.error("Failed to unarchive newsletter");
     } finally {
       setIsArchiving(false);
     }
   }, [
-    newsletter,
+    localNewsletter,
     isArchiving,
     toggleArchive,
     onNewsletterUpdate,
     getNewsletter,
-    cacheManager,
+    newsletter,
   ]);
 
   const handleTrash = useCallback(async () => {
-    if (!newsletter?.id) return;
+    if (!localNewsletter?.id) return;
 
     if (
       !window.confirm(
@@ -332,7 +297,7 @@ export const NewsletterDetailActions: React.FC<
     }
 
     try {
-      await deleteNewsletter(newsletter.id);
+      await deleteNewsletter(localNewsletter.id);
       toast.success("Newsletter deleted permanently");
 
       // Navigate back after deletion
@@ -345,7 +310,7 @@ export const NewsletterDetailActions: React.FC<
       console.error("Error deleting newsletter:", error);
       toast.error("Failed to delete newsletter");
     }
-  }, [newsletter?.id, deleteNewsletter, isFromReadingQueue]);
+  }, [localNewsletter?.id, deleteNewsletter, isFromReadingQueue]);
 
   return (
     <div className="flex items-center gap-2">
@@ -354,16 +319,18 @@ export const NewsletterDetailActions: React.FC<
         onClick={handleToggleReadStatus}
         disabled={isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread}
         className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          newsletter?.is_read
+          localNewsletter?.is_read
             ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
             : "bg-purple-100 text-purple-700 hover:bg-purple-200"
         }`}
-        aria-label={newsletter?.is_read ? "Mark as unread" : "Mark as read"}
+        aria-label={
+          localNewsletter?.is_read ? "Mark as unread" : "Mark as read"
+        }
       >
         {(isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread) && (
           <div className="w-4 h-4 mr-1 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
-        <span>{newsletter?.is_read ? "Mark Unread" : "Mark Read"}</span>
+        <span>{localNewsletter?.is_read ? "Mark Unread" : "Mark Read"}</span>
       </button>
 
       {/* Like Toggle */}
@@ -371,20 +338,22 @@ export const NewsletterDetailActions: React.FC<
         onClick={handleToggleLike}
         disabled={isLiking}
         className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          newsletter?.is_liked
+          localNewsletter?.is_liked
             ? "bg-red-100 text-red-600 hover:bg-red-200"
             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
         }`}
-        aria-label={newsletter?.is_liked ? "Unlike" : "Like"}
+        aria-label={localNewsletter?.is_liked ? "Unlike" : "Like"}
       >
         {isLiking && (
           <div className="w-4 h-4 mr-1 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
         <Heart
-          className={`h-4 w-4 ${newsletter?.is_liked ? "fill-red-500" : "fill-none"}`}
-          stroke={newsletter?.is_liked ? "currentColor" : "currentColor"}
+          className={`h-4 w-4 ${localNewsletter?.is_liked ? "fill-red-500" : "fill-none"}`}
+          stroke={localNewsletter?.is_liked ? "currentColor" : "currentColor"}
         />
-        <span className="ml-1">{newsletter?.is_liked ? "Liked" : "Like"}</span>
+        <span className="ml-1">
+          {localNewsletter?.is_liked ? "Liked" : "Like"}
+        </span>
       </button>
 
       {/* Bookmark Toggle */}
@@ -392,26 +361,28 @@ export const NewsletterDetailActions: React.FC<
         onClick={handleToggleBookmark}
         disabled={isBookmarking}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          newsletter?.is_bookmarked
+          localNewsletter?.is_bookmarked
             ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
         }`}
         aria-label={
-          newsletter?.is_bookmarked ? "Remove from queue" : "Add to queue"
+          localNewsletter?.is_bookmarked ? "Remove from queue" : "Add to queue"
         }
       >
         {isBookmarking && (
           <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
         <BookmarkIcon
-          className={`h-4 w-4 ${newsletter?.is_bookmarked ? "fill-yellow-500" : "fill-none"}`}
+          className={`h-4 w-4 ${localNewsletter?.is_bookmarked ? "fill-yellow-500" : "fill-none"}`}
           stroke="currentColor"
         />
-        <span>{newsletter?.is_bookmarked ? "Saved" : "Save for later"}</span>
+        <span>
+          {localNewsletter?.is_bookmarked ? "Saved" : "Save for later"}
+        </span>
       </button>
 
       {/* Archive/Unarchive Toggle */}
-      {!newsletter?.is_archived ? (
+      {!localNewsletter?.is_archived ? (
         <button
           onClick={handleArchive}
           disabled={isArchiving}

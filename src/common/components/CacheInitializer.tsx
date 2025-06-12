@@ -1,28 +1,30 @@
-import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { createCacheManager, getCacheManager } from '../utils/cacheUtils';
+import { useMemo, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { createCacheManager, getCacheManagerSafe } from "../utils/cacheUtils";
 
 type CacheInitializerProps = {
   children?: React.ReactNode;
 };
 
-export const CacheInitializer: React.FC<CacheInitializerProps> = ({ children }) => {
+export const CacheInitializer: React.FC<CacheInitializerProps> = ({
+  children,
+}) => {
   const queryClient = useQueryClient();
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  useEffect(() => {
-    try {
-      // Try to get the cache manager first to avoid re-initialization
-      getCacheManager();
-      setIsInitialized(true);
-    } catch (error) {
+  // Initialize cache manager synchronously
+  const isInitialized = useMemo(() => {
+    // Try to get the cache manager first to avoid re-initialization
+    const existingManager = getCacheManagerSafe();
+    if (existingManager) {
+      return true;
+    } else {
       // If not initialized, create a new cache manager
       createCacheManager(queryClient, {
         enableOptimisticUpdates: true,
         enableCrossFeatureSync: true,
-        enablePerformanceLogging: process.env.NODE_ENV === 'development',
+        enablePerformanceLogging: process.env.NODE_ENV === "development",
       });
-      setIsInitialized(true);
+      return true;
     }
   }, [queryClient]);
 
@@ -39,12 +41,8 @@ export const useIsCacheInitialized = (): boolean => {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    try {
-      getCacheManager();
-      setIsInitialized(true);
-    } catch (error) {
-      setIsInitialized(false);
-    }
+    const manager = getCacheManagerSafe();
+    setIsInitialized(!!manager);
   }, []);
 
   return isInitialized;

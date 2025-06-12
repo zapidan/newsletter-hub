@@ -49,8 +49,8 @@ const ReadingQueuePage: React.FC = () => {
     addToQueue,
     removeFromQueue,
     reorderQueue,
-    toggleRead,
-    toggleArchive,
+    markAsRead,
+    markAsUnread,
   } = useReadingQueue();
 
   const { getTags } = useTags();
@@ -218,17 +218,17 @@ const ReadingQueuePage: React.FC = () => {
         );
         if (!item) return;
 
-        await toggleRead({
-          newsletterId,
-          isRead: !item.newsletter.is_read,
-        });
+        if (item.newsletter.is_read) {
+          await markAsUnread(newsletterId);
+        } else {
+          await markAsRead(newsletterId);
+        }
         await refetch();
       } catch (error) {
-        console.error("Failed to toggle read status:", error);
-        toast.error("Failed to update read status");
+        console.error("Error toggling read status:", error);
       }
     },
-    [toggleRead, refetch, validQueueItems],
+    [markAsRead, markAsUnread, refetch, validQueueItems],
   );
 
   // Handle toggling like status
@@ -261,17 +261,16 @@ const ReadingQueuePage: React.FC = () => {
         const item = validQueueItems.find((item) => item.newsletter.id === id);
         if (!item) return;
 
-        await toggleArchive({
-          newsletterId: id,
-          isArchived: !item.newsletter.is_archived,
-        });
+        // Note: Archive functionality not implemented in useReadingQueue
+        // This would need to be added to the hook
+        console.warn("Archive functionality not yet implemented");
+
         await refetch();
       } catch (error) {
-        console.error("Failed to toggle archive status:", error);
-        toast.error("Failed to update archive status");
+        console.error("Error toggling archive status:", error);
       }
     },
-    [validQueueItems, toggleArchive, refetch],
+    [validQueueItems, refetch],
   );
 
   // Toggle sort mode between manual and date

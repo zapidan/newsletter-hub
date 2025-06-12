@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useContext, useCallback } from "react";
+import { useContext, useCallback, useMemo } from "react";
 import { supabase } from "@common/services/supabaseClient";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { NewsletterWithRelations } from "@common/types";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { getCacheManager } from "@common/utils/cacheUtils";
+import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 
 export interface UseNewsletterDetailOptions {
   enabled?: boolean;
@@ -68,10 +68,15 @@ interface SupabaseNewsletterResponse {
 export const useNewsletterDetail = (
   newsletterId: string,
   options: UseNewsletterDetailOptions = {},
-): UseNewsletterDetailResult => {
+) => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const queryClient = useQueryClient();
+
+  // Initialize cache manager safely
+  const cacheManager = useMemo(() => {
+    return getCacheManagerSafe();
+  }, []);
 
   const {
     enabled = true,
@@ -338,16 +343,16 @@ export const useNewsletterDetail = (
     const refetchPromise = query.refetch();
 
     // Update cache manager performance metrics
-    const cacheManager = getCacheManager();
     if (cacheManager && user) {
-      // Warm the cache after refetch
+      // Note: warmCache method not available in SimpleCacheManager
+      // This is for future enhancement
       refetchPromise.then(() => {
-        cacheManager.warmCache(user.id, "medium");
+        // Could add cache warming functionality here in the future
       });
     }
 
     return refetchPromise;
-  }, [query, user]);
+  }, [query, user, cacheManager]);
 
   return {
     newsletter: query.data,

@@ -1,9 +1,9 @@
-import { useState, useCallback, useContext } from "react";
+import { useState, useCallback, useContext, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@common/services/supabaseClient";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { Tag, TagCreate, TagUpdate } from "@common/types";
-import { getCacheManager } from "@common/utils/cacheUtils";
+import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 export const useTags = () => {
@@ -12,7 +12,21 @@ export const useTags = () => {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cacheManager = getCacheManager();
+
+  // Initialize cache manager safely
+  const cacheManager = useMemo(() => {
+    return getCacheManagerSafe();
+  }, []);
+
+  // Safe cache manager helper
+  const safeCacheCall = useCallback(
+    (fn: (manager: any) => void) => {
+      if (cacheManager) {
+        fn(cacheManager);
+      }
+    },
+    [cacheManager],
+  );
 
   // Get all tags for the current user
   const getTags = useCallback(async (): Promise<Tag[]> => {
@@ -54,9 +68,10 @@ export const useTags = () => {
         if (error) throw error;
 
         // Use cache manager for better tag cache management
-        if (cacheManager) {
-          cacheManager.invalidateTagQueries();
-        } else {
+        safeCacheCall((manager) =>
+          manager.invalidateTagQueries([], "tag-create"),
+        );
+        if (!cacheManager) {
           // Fallback to manual invalidation
           await Promise.all([
             queryClient.invalidateQueries({
@@ -98,11 +113,10 @@ export const useTags = () => {
         if (error) throw error;
 
         // Use cache manager for cross-feature cache synchronization
-        if (cacheManager) {
-          cacheManager.handleTagUpdate(data.id, data, {
-            invalidateRelated: true,
-          });
-        } else {
+        safeCacheCall((manager) =>
+          manager.handleTagUpdate(data.id, data, "tag-update"),
+        );
+        if (!cacheManager) {
           // Fallback to manual invalidation
           await Promise.all([
             queryClient.invalidateQueries({
@@ -144,14 +158,18 @@ export const useTags = () => {
         if (error) throw error;
 
         // Use cache manager for comprehensive tag deletion cache management
-        if (cacheManager) {
-          cacheManager.invalidateTagQueries([tagId]);
+        safeCacheCall((manager) =>
+          manager.invalidateTagQueries([tagId], "tag-delete"),
+        );
+        if (!cacheManager) {
           // Also invalidate any newsletter lists that might have been filtered by this tag
           queryClient.invalidateQueries({
             predicate: (query) => {
-              return queryKeyFactory.matchers.isAffectedByTagChange(
-                query.queryKey as unknown[],
-                tagId,
+              return (
+                queryKeyFactory.matchers?.isAffectedByTagChange?.(
+                  query.queryKey as unknown[],
+                  tagId,
+                ) || false
               );
             },
             refetchType: "active",
@@ -270,16 +288,18 @@ export const useTags = () => {
         }
 
         // Use cache manager for newsletter-tag relationship updates
-        if (cacheManager) {
+        safeCacheCall((manager) => {
           // Update the specific newsletter in cache with new tags
-          cacheManager.updateNewsletterInCache({
+          manager.updateNewsletterInCache({
             id: newsletterId,
             updates: { tags },
           });
 
           // Invalidate tag-related queries
-          cacheManager.invalidateTagQueries();
+          manager.invalidateTagQueries([], "newsletter-tag-update");
+        });
 
+        if (!cacheManager) {
           // Invalidate newsletter detail if it exists
           queryClient.invalidateQueries({
             queryKey: queryKeyFactory.newsletters.detail(newsletterId),

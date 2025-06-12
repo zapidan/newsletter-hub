@@ -23,6 +23,8 @@ import { createCacheManager, getCacheManager } from "../utils/cacheUtils";
 
 type PreviousNewslettersState = {
   previousNewsletters?: NewsletterWithRelations[];
+  previousNewsletter?: NewsletterWithRelations;
+  deletedIds?: string[];
 };
 
 // Legacy query keys - maintained for backward compatibility
@@ -526,62 +528,31 @@ export const useNewsletters = (
       }
     },
     onMutate: async (newsletterId) => {
-      // Cancel any outgoing refetches for this newsletter
-      await queryClient.cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          queryKeyFactory.matchers.isNewsletterDetailKey(
-            query.queryKey as unknown[],
-            newsletterId,
-          ),
-      });
-
-      // Snapshot the previous values
-      const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
-
-      // Find the newsletter to check if it's archived
-      const newsletter = previousNewsletters.find((n) => n.id === newsletterId);
-
-      // Don't update read status for archived newsletters
-      if (newsletter?.is_archived) {
-        return { previousNewsletters };
-      }
-
       // Use cache manager for optimistic update
-      cacheManager.updateNewsletterInCache(
-        {
-          id: newsletterId,
-          updates: { is_read: true },
-        },
-        { optimistic: true },
+      const originalData = await cacheManager.optimisticUpdate(
+        newsletterId,
+        { is_read: true },
+        "mark-read",
       );
 
-      return { previousNewsletters };
+      return { previousNewsletter: originalData || undefined };
     },
     onError: (err, newsletterId, context) => {
       console.error("Error marking as read:", err);
-      // Revert on error using cache manager
-      if (context?.previousNewsletters) {
-        const newsletter = context.previousNewsletters!.find(
-          (n) => n.id === newsletterId,
+      // Revert optimistic update using cache manager
+      if (context?.previousNewsletter) {
+        cacheManager.updateNewsletterInCache(
+          {
+            id: newsletterId,
+            updates: context.previousNewsletter,
+          },
+          { optimistic: true },
         );
-        if (newsletter) {
-          cacheManager.updateNewsletterInCache(
-            {
-              id: newsletterId,
-              updates: { is_read: newsletter.is_read },
-            },
-            { optimistic: true },
-          );
-        }
       }
     },
     onSettled: (_data, _error, newsletterId) => {
       // Use cache manager for smart invalidation
-      cacheManager.invalidateRelatedQueries(newsletterId, { is_read: true });
+      cacheManager.invalidateRelatedQueries([newsletterId], "mark-read");
     },
   });
 
@@ -646,25 +617,20 @@ export const useNewsletters = (
     },
     onError: (err, id, context) => {
       console.error("Error marking as unread:", err);
-      // Revert on error using cache manager
-      if (context?.previousNewsletters) {
-        const newsletter = context.previousNewsletters!.find(
-          (n) => n.id === id,
+      // Revert optimistic update using cache manager
+      if (context?.previousNewsletter) {
+        cacheManager.updateNewsletterInCache(
+          {
+            id,
+            updates: context.previousNewsletter,
+          },
+          { optimistic: true },
         );
-        if (newsletter) {
-          cacheManager.updateNewsletterInCache(
-            {
-              id,
-              updates: { is_read: newsletter.is_read },
-            },
-            { optimistic: true },
-          );
-        }
       }
     },
     onSettled: (_data, _error, id) => {
       // Use cache manager for smart invalidation
-      cacheManager.invalidateRelatedQueries(id, { is_read: false });
+      cacheManager.invalidateRelatedQueries([id], "mark-unread");
     },
   });
 
@@ -690,68 +656,22 @@ export const useNewsletters = (
       }
     },
     onMutate: async (ids) => {
-      // Cancel any outgoing refetches for newsletter queries
-      await queryClient.cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          ids.some((id) =>
-            queryKeyFactory.matchers.isNewsletterDetailKey(
-              query.queryKey as unknown[],
-              id,
-            ),
-          ),
-      });
-
-      // Snapshot the previous value
-      const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
-
-      // Optimistically remove newsletters from all caches
-      queryClient.setQueriesData<NewsletterWithRelations[]>(
-        { queryKey: queryKeyFactory.newsletters.lists() },
-        (old = []) => old.filter((n) => !ids.includes(n.id)),
+      // Use cache manager for batch optimistic updates
+      await cacheManager.batchUpdateNewsletters(
+        ids.map((id) => ({ id, updates: { is_archived: true } })),
+        { optimistic: true },
       );
 
-      // Remove individual newsletter caches
-      ids.forEach((id) => {
-        queryClient.removeQueries({
-          queryKey: queryKeyFactory.newsletters.detail(id),
-          exact: true,
-        });
-      });
-
-      // Cross-feature sync: remove from reading queue if present
-      queryClient.setQueriesData<Array<{ newsletter_id: string }>>(
-        { queryKey: queryKeyFactory.queue.lists() },
-        (old = []) => old.filter((item) => !ids.includes(item.newsletter_id)),
-      );
-
-      return { previousNewsletters };
+      return { deletedIds: ids };
     },
-    onError: (err, _ids, context) => {
+    onError: (err, ids, context) => {
       console.error("Error bulk deleting newsletters:", err);
-      // Revert on error by restoring the newsletters to cache
-      if (context?.previousNewsletters) {
-        queryClient.setQueriesData<NewsletterWithRelations[]>(
-          { queryKey: queryKeyFactory.newsletters.lists() },
-          context.previousNewsletters,
-        );
-      }
+      // Revert by invalidating affected queries
+      cacheManager.invalidateRelatedQueries(ids, "bulk-delete-error");
     },
-    onSettled: () => {
+    onSettled: (data, error, ids) => {
       // Use cache manager for comprehensive invalidation
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.newsletters.lists(),
-        refetchType: "active",
-      });
-
-      // Also invalidate reading queue as newsletters might have been removed
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.queue.lists(),
-        refetchType: "active",
-      });
+      cacheManager.invalidateRelatedQueries(ids, "bulk-delete");
     },
   });
 
@@ -908,14 +828,11 @@ export const useNewsletters = (
         { optimistic: false, invalidateRelated: true },
       );
     },
-    onSettled: () => {
+    onSettled: (data, error, newsletterId) => {
       if (!user?.id) return;
 
-      // Invalidate both newsletter and queue caches
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.queue.list(user.id),
-        refetchType: "active",
-      });
+      // Use cache manager for comprehensive invalidation
+      cacheManager.invalidateRelatedQueries([newsletterId], "toggle-queue");
     },
   });
 
@@ -941,75 +858,31 @@ export const useNewsletters = (
       }
     },
     onMutate: async (newsletterId) => {
-      // Cancel any outgoing refetches for this newsletter
-      await queryClient.cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          queryKeyFactory.matchers.isNewsletterDetailKey(
-            query.queryKey as unknown[],
-            newsletterId,
-          ),
-      });
-
-      // Snapshot the previous values
-      const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
-
-      // Snapshot newsletter for potential rollback
-      previousNewsletters.find((n) => n.id === newsletterId);
-
-      // Optimistically remove the newsletter from all caches
-      queryClient.setQueriesData<NewsletterWithRelations[]>(
-        { queryKey: queryKeyFactory.newsletters.lists() },
-        (old = []) => old.filter((n) => n.id !== newsletterId),
+      // Use cache manager for optimistic delete
+      const originalData = await cacheManager.optimisticUpdate(
+        newsletterId,
+        { is_archived: true },
+        "delete",
       );
 
-      // Remove the individual newsletter cache
-      queryClient.removeQueries({
-        queryKey: queryKeyFactory.newsletters.detail(newsletterId),
-        exact: true,
-      });
-
-      // Cross-feature sync: remove from reading queue if present
-      queryClient.setQueriesData<Array<{ newsletter_id: string }>>(
-        { queryKey: queryKeyFactory.queue.lists() },
-        (old = []) => old.filter((item) => item.newsletter_id !== newsletterId),
-      );
-
-      return { previousNewsletters };
+      return { previousNewsletter: originalData || undefined };
     },
     onError: (err, newsletterId, context) => {
       console.error("Error deleting newsletter:", err);
-      // Revert on error by restoring the newsletter to cache
-      if (context?.previousNewsletters) {
-        const deletedNewsletter = context.previousNewsletters!.find(
-          (n) => n.id === newsletterId,
+      // Revert optimistic update using cache manager
+      if (context?.previousNewsletter) {
+        cacheManager.updateNewsletterInCache(
+          {
+            id: newsletterId,
+            updates: context.previousNewsletter,
+          },
+          { optimistic: true },
         );
-        if (deletedNewsletter) {
-          queryClient.setQueriesData<NewsletterWithRelations[]>(
-            { queryKey: queryKeyFactory.newsletters.lists() },
-            context.previousNewsletters,
-          );
-        }
       }
     },
     onSettled: (_data, _error, newsletterId) => {
       // Use cache manager for comprehensive invalidation
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.newsletters.lists(),
-        refetchType: "active",
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.newsletters.detail(newsletterId),
-        refetchType: "none", // Don't refetch if the item was deleted
-      });
-      // Also invalidate reading queue as newsletter might have been removed
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.queue.lists(),
-        refetchType: "active",
-      });
+      cacheManager.invalidateRelatedQueries([newsletterId], "delete");
     },
   });
 
@@ -1037,54 +910,31 @@ export const useNewsletters = (
       }
     },
     onMutate: async ({ id, isLiked }) => {
-      // Cancel any outgoing refetches for this newsletter
-      await queryClient.cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          queryKeyFactory.matchers.isNewsletterDetailKey(
-            query.queryKey as unknown[],
-            id,
-          ),
-      });
-
-      // Snapshot the previous values
-      const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
-
       // Use cache manager for optimistic update
-      cacheManager.updateNewsletterInCache(
-        {
-          id,
-          updates: { is_liked: isLiked },
-        },
-        { optimistic: true },
+      const originalData = await cacheManager.optimisticUpdate(
+        id,
+        { is_liked: isLiked },
+        "toggle-like",
       );
 
-      return { previousNewsletters };
+      return { previousNewsletter: originalData || undefined };
     },
     onError: (err, { id }, context) => {
       console.error("Error toggling like:", err);
-      // Revert on error using cache manager
-      if (context?.previousNewsletters) {
-        const newsletter = context.previousNewsletters!.find(
-          (n) => n.id === id,
+      // Revert optimistic update using cache manager
+      if (context?.previousNewsletter) {
+        cacheManager.updateNewsletterInCache(
+          {
+            id,
+            updates: context.previousNewsletter,
+          },
+          { optimistic: true },
         );
-        if (newsletter) {
-          cacheManager.updateNewsletterInCache(
-            {
-              id,
-              updates: { is_liked: newsletter.is_liked },
-            },
-            { optimistic: true },
-          );
-        }
       }
     },
-    onSettled: (_data, _error, { id, isLiked }) => {
+    onSettled: (_data, _error, { id }) => {
       // Use cache manager for smart invalidation
-      cacheManager.invalidateRelatedQueries(id, { is_liked: isLiked });
+      cacheManager.invalidateRelatedQueries([id], "toggle-like");
     },
   });
 
@@ -1114,60 +964,34 @@ export const useNewsletters = (
       }
     },
     onMutate: async ({ id, isArchived }) => {
-      // Cancel any outgoing refetches for this newsletter
-      await queryClient.cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          queryKeyFactory.matchers.isNewsletterDetailKey(
-            query.queryKey as unknown[],
-            id,
-          ),
-      });
-
-      // Snapshot the previous values
-      const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
-
       // Use cache manager for optimistic update
-      cacheManager.updateNewsletterInCache(
-        {
-          id,
-          updates: {
-            is_archived: isArchived,
-            updated_at: new Date().toISOString(),
-          },
-        },
-        { optimistic: true },
+      const originalData = await cacheManager.optimisticUpdate(
+        id,
+        { is_archived: isArchived },
+        isArchived ? "archive" : "unarchive",
       );
 
-      return { previousNewsletters };
+      return { previousNewsletter: originalData || undefined };
     },
     onError: (err, { id }, context) => {
       console.error("Error toggling archive status:", err);
-      // Revert on error using cache manager
-      if (context?.previousNewsletters) {
-        const newsletter = context.previousNewsletters!.find(
-          (n) => n.id === id,
+      // Revert optimistic update using cache manager
+      if (context?.previousNewsletter) {
+        cacheManager.updateNewsletterInCache(
+          {
+            id,
+            updates: context.previousNewsletter,
+          },
+          { optimistic: true },
         );
-        if (newsletter) {
-          cacheManager.updateNewsletterInCache(
-            {
-              id,
-              updates: {
-                is_archived: newsletter.is_archived,
-                updated_at: newsletter.updated_at,
-              },
-            },
-            { optimistic: true },
-          );
-        }
       }
     },
     onSettled: (_data, _error, { id, isArchived }) => {
       // Use cache manager for smart invalidation
-      cacheManager.invalidateRelatedQueries(id, { is_archived: isArchived });
+      cacheManager.invalidateRelatedQueries(
+        [id],
+        isArchived ? "archive" : "unarchive",
+      );
     },
   });
 
@@ -1234,14 +1058,14 @@ export const useNewsletters = (
       if (context?.previousNewsletters) {
         // Revert using cache manager for consistency
         if (context.previousNewsletters) {
-          cacheManager.warmCache(user?.id || "", "high");
+          // Cache warming functionality - could be implemented later
+          // cacheManager.warmCache(user.id, "high");
         }
       }
     },
     onSettled: (_data, _error, id) => {
-      // Invalidate both list and detail queries
       // Use cache manager for smart invalidation
-      cacheManager.invalidateRelatedQueries(id, { is_archived: false });
+      cacheManager.invalidateRelatedQueries([id], "unarchive");
     },
   });
 
@@ -1517,18 +1341,20 @@ export const useNewsletters = (
         queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
-      cacheManager.bulkUpdateNewslettersInCache(
-        {
-          ids: ids.filter((id) => {
+      cacheManager.batchUpdateNewsletters(
+        ids
+          .filter((id) => {
             // Only update non-archived newsletters
             const newsletter = previousNewsletters.find((n) => n.id === id);
             return newsletter && !newsletter.is_archived;
-          }),
-          updates: {
-            is_read: true,
-            updated_at: new Date().toISOString(),
-          },
-        },
+          })
+          .map((id) => ({
+            id,
+            updates: {
+              is_read: true,
+              updated_at: new Date().toISOString(),
+            },
+          })),
         { optimistic: true },
       );
 
@@ -1558,9 +1384,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       // Use cache manager for smart invalidation
-      ids.forEach((id) => {
-        cacheManager.invalidateRelatedQueries(id, { is_read: true });
-      });
+      cacheManager.invalidateRelatedQueries(ids, "bulk-mark-read");
     },
   });
 
@@ -1608,18 +1432,20 @@ export const useNewsletters = (
         queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
-      cacheManager.bulkUpdateNewslettersInCache(
-        {
-          ids: ids.filter((id) => {
+      cacheManager.batchUpdateNewsletters(
+        ids
+          .filter((id) => {
             // Only update non-archived newsletters
             const newsletter = previousNewsletters.find((n) => n.id === id);
             return newsletter && !newsletter.is_archived;
-          }),
-          updates: {
-            is_read: false,
-            updated_at: new Date().toISOString(),
-          },
-        },
+          })
+          .map((id) => ({
+            id,
+            updates: {
+              is_read: false,
+              updated_at: new Date().toISOString(),
+            },
+          })),
         { optimistic: true },
       );
 
@@ -1649,9 +1475,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       // Use cache manager for smart invalidation
-      ids.forEach((id) => {
-        cacheManager.invalidateRelatedQueries(id, { is_read: false });
-      });
+      cacheManager.invalidateRelatedQueries(ids, "bulk-mark-unread");
     },
   });
 
@@ -1697,14 +1521,14 @@ export const useNewsletters = (
         queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
-      cacheManager.bulkUpdateNewslettersInCache(
-        {
-          ids,
+      cacheManager.batchUpdateNewsletters(
+        ids.map((id) => ({
+          id,
           updates: {
             is_archived: true,
             updated_at: new Date().toISOString(),
           },
-        },
+        })),
         { optimistic: true },
       );
 
@@ -1734,9 +1558,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       // Use cache manager for smart invalidation
-      ids.forEach((id) => {
-        cacheManager.invalidateRelatedQueries(id, { is_archived: true });
-      });
+      cacheManager.invalidateRelatedQueries(ids, "bulk-archive");
     },
   });
 
@@ -1782,14 +1604,14 @@ export const useNewsletters = (
         queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
-      cacheManager.bulkUpdateNewslettersInCache(
-        {
-          ids,
+      cacheManager.batchUpdateNewsletters(
+        ids.map((id) => ({
+          id,
           updates: {
             is_archived: false,
             updated_at: new Date().toISOString(),
           },
-        },
+        })),
         { optimistic: true },
       );
 
@@ -1819,9 +1641,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       // Use cache manager for smart invalidation
-      ids.forEach((id) => {
-        cacheManager.invalidateRelatedQueries(id, { is_archived: false });
-      });
+      cacheManager.invalidateRelatedQueries(ids, "bulk-unarchive");
     },
   });
 

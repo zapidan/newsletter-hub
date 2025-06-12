@@ -1,44 +1,20 @@
-import { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { NewsletterWithRelations, Tag, Newsletter } from "../types";
-import type {
-  NewsletterFilter,
-  NewsletterCacheUpdate,
-  NewsletterBulkUpdate,
-} from "../types/cache";
+import { QueryClient } from "@tanstack/react-query";
 import { queryKeyFactory } from "./queryKeyFactory";
-import type { ReadingQueueItem } from "../types";
+import type { NewsletterWithRelations, ReadingQueueItem } from "@common/types";
 
-export interface CacheUpdateOptions {
-  optimistic?: boolean;
-  invalidateRelated?: boolean;
-  refetchActive?: boolean;
+interface CacheManagerConfig {
+  enableOptimisticUpdates?: boolean;
+  enableCrossFeatureSync?: boolean;
+  enablePerformanceLogging?: boolean;
 }
 
-export interface CacheManagerConfig {
-  defaultStaleTime: number;
-  defaultCacheTime: number;
-  enableOptimisticUpdates: boolean;
-  enableCrossFeatureSync: boolean;
-  enablePerformanceLogging: boolean;
-}
-
-/**
- * Enhanced cache management utility with optimistic updates and cross-feature synchronization
- */
-export class NewsletterCacheManager {
+export class SimpleCacheManager {
   private queryClient: QueryClient;
   private config: CacheManagerConfig;
-  private performanceMetrics: Map<string, { start: number; end?: number }> =
-    new Map();
 
-  constructor(
-    queryClient: QueryClient,
-    config: Partial<CacheManagerConfig> = {},
-  ) {
+  constructor(queryClient: QueryClient, config: CacheManagerConfig = {}) {
     this.queryClient = queryClient;
     this.config = {
-      defaultStaleTime: 2 * 60 * 1000, // 2 minutes
-      defaultCacheTime: 10 * 60 * 1000, // 10 minutes
       enableOptimisticUpdates: true,
       enableCrossFeatureSync: true,
       enablePerformanceLogging: false,
@@ -46,32 +22,12 @@ export class NewsletterCacheManager {
     };
   }
 
-  // Performance monitoring
-  private startPerformanceTimer(operation: string): void {
-    if (!this.config.enablePerformanceLogging) return;
-    this.performanceMetrics.set(operation, { start: performance.now() });
-  }
-
-  private endPerformanceTimer(operation: string): number | null {
-    if (!this.config.enablePerformanceLogging) return null;
-    const metric = this.performanceMetrics.get(operation);
-    if (!metric) return null;
-
-    const duration = performance.now() - metric.start;
-    metric.end = performance.now();
-
-    console.log(`[CacheManager] ${operation} took ${duration.toFixed(2)}ms`);
-    return duration;
-  }
-
-  // Newsletter cache operations
-  updateNewsletterInCache(
-    update: NewsletterCacheUpdate,
-    options: CacheUpdateOptions = {},
-  ): void {
-    this.startPerformanceTimer(`updateNewsletter-${update.id}`);
-
-    // Update all newsletter list queries
+  // Update newsletter in cache
+  updateNewsletterInCache(update: {
+    id: string;
+    updates: Partial<NewsletterWithRelations>;
+  }): void {
+    // Update in all newsletter list queries
     this.queryClient.setQueriesData<NewsletterWithRelations[]>(
       { queryKey: queryKeyFactory.newsletters.lists() },
       (oldData) => {
@@ -84,7 +40,7 @@ export class NewsletterCacheManager {
       },
     );
 
-    // Update newsletter detail query if it exists
+    // Update individual newsletter query if it exists
     const detailQueryKey = queryKeyFactory.newsletters.detail(update.id);
     this.queryClient.setQueryData<NewsletterWithRelations>(
       detailQueryKey,
@@ -94,712 +50,339 @@ export class NewsletterCacheManager {
       },
     );
 
-    // Cross-feature synchronization
+    // Cross-feature sync: update newsletter in reading queue
     if (this.config.enableCrossFeatureSync) {
-      this.syncWithReadingQueue(update);
-      this.syncWithTagQueries(update);
-      this.syncWithSourceQueries(update);
-    }
-
-    // Invalidate related queries if requested
-    if (options.invalidateRelated) {
-      this.invalidateRelatedQueries(update.id, update.updates);
-    }
-
-    this.endPerformanceTimer(`updateNewsletter-${update.id}`);
-  }
-
-  bulkUpdateNewslettersInCache(
-    updates: NewsletterBulkUpdate,
-    options: CacheUpdateOptions = {},
-  ): void {
-    this.startPerformanceTimer(`bulkUpdateNewsletters-${updates.ids.length}`);
-
-    const updatesMap = new Map(updates.ids.map((id) => [id, updates.updates]));
-
-    // Update all newsletter list queries
-    this.queryClient.setQueriesData<NewsletterWithRelations[]>(
-      { queryKey: queryKeyFactory.newsletters.lists() },
-      (oldData) => {
-        if (!oldData) return oldData;
-        return oldData.map((newsletter) =>
-          updatesMap.has(newsletter.id)
-            ? { ...newsletter, ...updates.updates }
-            : newsletter,
-        );
-      },
-    );
-
-    // Update individual detail queries
-    updates.ids.forEach((id) => {
-      const detailQueryKey = queryKeyFactory.newsletters.detail(id);
-      this.queryClient.setQueryData<NewsletterWithRelations>(
-        detailQueryKey,
+      this.queryClient.setQueriesData<ReadingQueueItem[]>(
+        { queryKey: queryKeyFactory.queue.lists() },
         (oldData) => {
           if (!oldData) return oldData;
-          return { ...oldData, ...updates.updates };
+          return oldData.map((queueItem) =>
+            queueItem.newsletter.id === update.id
+              ? {
+                  ...queueItem,
+                  newsletter: { ...queueItem.newsletter, ...update.updates },
+                }
+              : queueItem,
+          );
         },
       );
+    }
+  }
+
+  // Bulk update newsletters
+  async batchUpdateNewsletters(
+    updates: { id: string; updates: Partial<NewsletterWithRelations> }[],
+  ): Promise<void> {
+    updates.forEach((update) => {
+      this.updateNewsletterInCache(update);
     });
-
-    // Cross-feature synchronization for bulk updates
-    if (this.config.enableCrossFeatureSync) {
-      updates.ids.forEach((id) => {
-        this.syncWithReadingQueue({ id, updates: updates.updates });
-      });
-    }
-
-    // Invalidate related queries if requested
-    if (options.invalidateRelated) {
-      updates.ids.forEach((id) => {
-        this.invalidateRelatedQueries(id, updates.updates);
-      });
-    }
-
-    this.endPerformanceTimer(`bulkUpdateNewsletters-${updates.ids.length}`);
   }
 
-  // Reading queue cache operations
-  updateReadingQueueInCache(
-    queueUpdate: {
-      action: "add" | "remove" | "reorder";
-      items: ReadingQueueItem[] | string[];
-    },
-    userId: string,
-  ): void {
-    this.startPerformanceTimer(`updateReadingQueue-${queueUpdate.action}`);
+  // Reading queue operations
+  updateReadingQueueInCache(operation: {
+    type: "add" | "remove" | "reorder" | "updateTags" | "revert";
+    newsletterId?: string;
+    queueItemId?: string;
+    updates?: { id: string; position: number }[];
+    tagIds?: string[];
+    queueItems?: ReadingQueueItem[];
+    userId: string;
+  }): void {
+    const queueQueryKey = queryKeyFactory.queue.list(operation.userId);
 
-    const queueQueryKey = queryKeyFactory.queue.list(userId);
+    switch (operation.type) {
+      case "add":
+        // For add operations, we'll just invalidate to refetch
+        // since we need full newsletter data
+        this.queryClient.invalidateQueries({ queryKey: queueQueryKey });
+        break;
 
-    if (queueUpdate.action === "add" && Array.isArray(queueUpdate.items)) {
-      // Add items to queue
-      this.queryClient.setQueryData<ReadingQueueItem[]>(
-        queueQueryKey,
-        (oldData = []) => {
-          const newItems = queueUpdate.items as ReadingQueueItem[];
-          return [...oldData, ...newItems];
-        },
-      );
-    } else if (
-      queueUpdate.action === "remove" &&
-      Array.isArray(queueUpdate.items)
-    ) {
-      // Remove items from queue
-      const itemIds = queueUpdate.items as string[];
-      this.queryClient.setQueryData<ReadingQueueItem[]>(
-        queueQueryKey,
-        (oldData = []) => oldData.filter((item) => !itemIds.includes(item.id)),
-      );
-    } else if (
-      queueUpdate.action === "reorder" &&
-      Array.isArray(queueUpdate.items)
-    ) {
-      // Reorder queue items
-      this.queryClient.setQueryData<ReadingQueueItem[]>(
-        queueQueryKey,
-        () => queueUpdate.items as ReadingQueueItem[],
-      );
-    }
+      case "remove":
+        if (operation.queueItemId) {
+          this.queryClient.setQueryData<ReadingQueueItem[]>(
+            queueQueryKey,
+            (oldData = []) =>
+              oldData.filter((item) => item.id !== operation.queueItemId),
+          );
+        }
+        break;
 
-    // Sync newsletter cache to reflect queue status changes
-    if (this.config.enableCrossFeatureSync) {
-      this.syncNewsletterQueueStatus(queueUpdate, userId);
-    }
+      case "reorder":
+        if (operation.updates) {
+          this.queryClient.setQueryData<ReadingQueueItem[]>(
+            queueQueryKey,
+            (oldData = []) => {
+              const reorderedData = [...oldData];
+              operation.updates!.forEach(({ id, position }) => {
+                const itemIndex = reorderedData.findIndex(
+                  (item) => item.id === id,
+                );
+                if (itemIndex !== -1) {
+                  reorderedData[itemIndex] = {
+                    ...reorderedData[itemIndex],
+                    position,
+                  };
+                }
+              });
+              return reorderedData.sort((a, b) => a.position - b.position);
+            },
+          );
+        }
+        break;
 
-    this.endPerformanceTimer(`updateReadingQueue-${queueUpdate.action}`);
-  }
-
-  // Cross-feature synchronization methods
-  private syncWithReadingQueue(newsletterUpdate: NewsletterCacheUpdate): void {
-    // Update newsletter data within reading queue items
-    this.queryClient.setQueriesData<ReadingQueueItem[]>(
-      { queryKey: queryKeyFactory.queue.lists() },
-      (oldData) => {
-        if (!oldData) return oldData;
-        return oldData.map((queueItem) =>
-          queueItem.newsletter.id === newsletterUpdate.id
-            ? {
-                ...queueItem,
-                newsletter: {
-                  ...queueItem.newsletter,
-                  ...newsletterUpdate.updates,
-                },
-              }
-            : queueItem,
-        );
-      },
-    );
-  }
-
-  private syncWithTagQueries(newsletterUpdate: NewsletterCacheUpdate): void {
-    // If tags were updated, invalidate tag-related queries
-    if (newsletterUpdate.updates.tags !== undefined) {
-      this.queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.newsletters.tags(),
-        refetchType: "active",
-      });
-    }
-  }
-
-  private syncWithSourceQueries(newsletterUpdate: NewsletterCacheUpdate): void {
-    // If source was updated, invalidate source-related queries
-    if (newsletterUpdate.updates.newsletter_source_id !== undefined) {
-      this.queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.newsletters.sources(),
-        refetchType: "active",
-      });
-    }
-  }
-
-  // Tag-specific cache operations
-  updateTagInCache(
-    tagUpdate: { id: string; updates: Partial<Tag> },
-    options: CacheUpdateOptions = {},
-  ): void {
-    this.startPerformanceTimer(`updateTag-${tagUpdate.id}`);
-
-    // Update tag in all tag list queries
-    this.queryClient.setQueriesData<Tag[]>(
-      { queryKey: queryKeyFactory.newsletters.tags() },
-      (oldData) => {
-        if (!oldData) return oldData;
-        return oldData.map((tag) =>
-          tag.id === tagUpdate.id ? { ...tag, ...tagUpdate.updates } : tag,
-        );
-      },
-    );
-
-    // Update individual tag query if it exists
-    const tagQueryKey = queryKeyFactory.newsletters.tag(tagUpdate.id);
-    this.queryClient.setQueryData<Tag>(tagQueryKey, (oldData) => {
-      if (!oldData) return oldData;
-      return { ...oldData, ...tagUpdate.updates };
-    });
-
-    // Update newsletters that have this tag
-    this.queryClient.setQueriesData<NewsletterWithRelations[]>(
-      { queryKey: queryKeyFactory.newsletters.lists() },
-      (oldData) => {
-        if (!oldData) return oldData;
-        return oldData.map((newsletter) => {
-          if (newsletter.tags?.some((tag) => tag.id === tagUpdate.id)) {
-            return {
-              ...newsletter,
-              tags: newsletter.tags.map((tag) =>
-                tag.id === tagUpdate.id
-                  ? { ...tag, ...tagUpdate.updates }
-                  : tag,
+      case "updateTags":
+        if (operation.newsletterId && operation.tagIds) {
+          this.queryClient.setQueryData<ReadingQueueItem[]>(
+            queueQueryKey,
+            (oldData = []) =>
+              oldData.map((item) =>
+                item.newsletter_id === operation.newsletterId
+                  ? {
+                      ...item,
+                      newsletter: {
+                        ...item.newsletter,
+                        tags: operation.tagIds!.map((tagId) => ({
+                          id: tagId,
+                          name: "",
+                          color: "#808080",
+                          user_id: operation.userId,
+                          created_at: new Date().toISOString(),
+                          updated_at: new Date().toISOString(),
+                        })),
+                      },
+                    }
+                  : item,
               ),
-            };
-          }
-          return newsletter;
-        });
-      },
-    );
+          );
+        }
+        break;
 
-    if (options.invalidateRelated) {
-      this.invalidateTagQueries([tagUpdate.id]);
+      case "revert":
+        if (operation.queueItems) {
+          this.queryClient.setQueryData<ReadingQueueItem[]>(
+            queueQueryKey,
+            operation.queueItems,
+          );
+        }
+        break;
     }
-
-    this.endPerformanceTimer(`updateTag-${tagUpdate.id}`);
   }
 
-  invalidateTagQueries(tagIds?: string[]): void {
-    this.startPerformanceTimer("invalidateTagQueries");
-
+  // Smart invalidation with operation types
+  invalidateRelatedQueries(
+    newsletterIds: string[],
+    operationType: string,
+  ): void {
     const invalidationPromises: Promise<void>[] = [];
 
-    if (tagIds && tagIds.length > 0) {
-      // Invalidate specific tag queries
-      tagIds.forEach((tagId) => {
+    switch (operationType) {
+      case "mark-read":
+      case "mark-unread":
+      case "bulk-mark-read":
+      case "bulk-mark-unread":
         invalidationPromises.push(
           this.queryClient.invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.tag(tagId),
+            queryKey: ["unreadCount"],
             refetchType: "active",
           }),
         );
+        break;
 
-        // Invalidate newsletter lists that filter by this tag
+      case "archive":
+      case "unarchive":
+      case "bulk-archive":
+      case "bulk-unarchive":
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: ["unreadCount"],
+            refetchType: "active",
+          }),
+        );
+        break;
+
+      case "delete":
+      case "bulk-delete":
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+            refetchType: "active",
+          }),
+          this.queryClient.invalidateQueries({
+            queryKey: ["unreadCount"],
+            refetchType: "active",
+          }),
+        );
+        // Remove individual newsletter caches
+        newsletterIds.forEach((id) => {
+          this.queryClient.removeQueries({
+            queryKey: queryKeyFactory.newsletters.detail(id),
+            exact: true,
+          });
+        });
+        break;
+
+      case "toggle-like":
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+            refetchType: "active",
+          }),
+        );
+        break;
+
+      case "toggle-queue":
+      case "queue-add":
+      case "queue-remove":
+      case "queue-reorder":
+      case "queue-clear":
+      case "queue-mark-read":
+      case "queue-mark-unread":
+      case "queue-update-tags":
+      case "queue-cleanup":
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.queue.lists(),
+            refetchType: "active",
+          }),
+        );
+        break;
+
+      case "tag-update":
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.tags(),
+            refetchType: "active",
+          }),
+        );
+        break;
+
+      case "newsletter-sources":
+      case "source-update-optimistic":
+      case "source-update-error":
+      case "source-archive-optimistic":
+      case "source-unarchive-optimistic":
+      case "source-archive-error":
         invalidationPromises.push(
           this.queryClient.invalidateQueries({
             predicate: (query) => {
-              return queryKeyFactory.matchers.hasTags(
-                query.queryKey as unknown[],
-                [tagId],
-              );
+              return query.queryKey[0] === "newsletterSources";
             },
             refetchType: "active",
           }),
         );
-      });
-    } else {
-      // Invalidate all tag-related queries
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          queryKey: queryKeyFactory.newsletters.tags(),
-          refetchType: "active",
-        }),
-      );
-    }
+        break;
 
-    // Always invalidate newsletter lists as tags might affect filtering
-    invalidationPromises.push(
-      this.queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.newsletters.lists(),
-        refetchType: "active",
-      }),
-    );
-
-    Promise.all(invalidationPromises).catch((error) => {
-      console.error("Error invalidating tag queries:", error);
-    });
-
-    this.endPerformanceTimer("invalidateTagQueries");
-  }
-
-  // Cross-feature cache synchronization
-  handleTagUpdate(
-    tagId: string,
-    updates: Partial<Tag>,
-    options: CacheUpdateOptions = {},
-  ): void {
-    this.startPerformanceTimer(`handleTagUpdate-${tagId}`);
-
-    // Update the tag in cache
-    this.updateTagInCache({ id: tagId, updates }, options);
-
-    // Cross-feature synchronization
-    if (this.config.enableCrossFeatureSync) {
-      // Invalidate related newsletter queries
-      this.queryClient.invalidateQueries({
-        predicate: (query) => {
-          const queryKey = query.queryKey as unknown[];
-          return queryKeyFactory.matchers.hasTags(queryKey, [tagId]);
-        },
-        refetchType: "active",
-      });
-
-      // Invalidate tag-newsletter relationship queries
-      this.queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.related.tagNewsletters(tagId),
-        refetchType: "active",
-      });
-    }
-
-    this.endPerformanceTimer(`handleTagUpdate-${tagId}`);
-  }
-
-  private syncNewsletterQueueStatus(
-    queueUpdate: {
-      action: "add" | "remove" | "reorder";
-      items: ReadingQueueItem[] | string[];
-    },
-    userId: string,
-  ): void {
-    if (queueUpdate.action === "add") {
-      // Mark newsletters as bookmarked in all newsletter caches
-      const items = queueUpdate.items as ReadingQueueItem[];
-      items.forEach((item) => {
-        this.updateNewsletterInCache({
-          id: item.newsletter.id,
-          updates: { is_bookmarked: true },
-        });
-      });
-    } else if (queueUpdate.action === "remove") {
-      // Mark newsletters as not bookmarked
-      const itemIds = queueUpdate.items as string[];
-      // We need to get the current queue to find newsletter IDs
-      const currentQueue = this.queryClient.getQueryData<ReadingQueueItem[]>(
-        queryKeyFactory.queue.list(userId),
-      );
-
-      if (currentQueue) {
-        const removedItems = currentQueue.filter((item) =>
-          itemIds.includes(item.id),
+      case "unread-count-change":
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: ["unreadCount"],
+            refetchType: "active",
+          }),
         );
-        removedItems.forEach((item) => {
-          this.updateNewsletterInCache({
-            id: item.newsletter.id,
-            updates: { is_bookmarked: false },
-          });
-        });
-      }
-    }
-  }
+        break;
 
-  // Smart invalidation strategies
-  invalidateRelatedQueries(
-    newsletterId: string,
-    updates: Partial<NewsletterWithRelations> | Record<string, boolean>,
-  ): void {
-    this.startPerformanceTimer(`invalidateRelated-${newsletterId}`);
-
-    const invalidationPromises: Promise<void>[] = [];
-
-    // If read status changed, invalidate filtered queries and unread count
-    if (
-      updates.is_read !== undefined ||
-      (updates as Record<string, boolean>).unreadCount
-    ) {
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          predicate: (query) => {
-            return queryKeyFactory.matchers.hasFilter(
-              query.queryKey as unknown[],
-              "unread",
-            );
-          },
-          refetchType: "active",
-        }),
-      );
-
-      // Invalidate unread count cache
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          queryKey: ["unreadCount"],
-          refetchType: "active",
-        }),
-      );
+      default:
+        // Fallback: invalidate general newsletter queries
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+            refetchType: "active",
+          }),
+        );
+        break;
     }
 
-    // If archive status changed, invalidate archived queries and unread count
-    if (updates.is_archived !== undefined) {
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          predicate: (query) => {
-            return queryKeyFactory.matchers.hasFilter(
-              query.queryKey as unknown[],
-              "archived",
-            );
-          },
-          refetchType: "active",
-        }),
-      );
-
-      // Invalidate unread count cache when archiving/unarchiving
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          queryKey: ["unreadCount"],
-          refetchType: "active",
-        }),
-      );
-    }
-
-    // If like status changed, invalidate liked queries
-    if (updates.is_liked !== undefined) {
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          predicate: (query) => {
-            return queryKeyFactory.matchers.hasFilter(
-              query.queryKey as unknown[],
-              "liked",
-            );
-          },
-          refetchType: "active",
-        }),
-      );
-    }
-
-    // If tags changed, invalidate tag-specific queries
-    if (updates.tags !== undefined) {
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          queryKey: queryKeyFactory.newsletters.tags(),
-          refetchType: "active",
-        }),
-      );
-    }
-
-    // Wait for all invalidations to complete
     Promise.all(invalidationPromises).catch((error) => {
       console.error("Error invalidating related queries:", error);
     });
-
-    this.endPerformanceTimer(`invalidateRelated-${newsletterId}`);
   }
 
-  // Optimistic update with rollback
+  // Optimistic update with rollback support
   async optimisticUpdate(
     newsletterId: string,
-    updates: Partial<Newsletter>,
+    updates: Partial<NewsletterWithRelations>,
     operation: string,
-  ): Promise<void> {
-    this.startPerformanceTimer("optimisticUpdate");
+  ): Promise<NewsletterWithRelations | null> {
+    // Get the current newsletter data before update for potential rollback
+    const currentData =
+      this.queryClient
+        .getQueryData<
+          NewsletterWithRelations[]
+        >(queryKeyFactory.newsletters.lists())
+        ?.find((n) => n.id === newsletterId) || null;
 
-    try {
-      // Update newsletter in all relevant caches
-      this.updateNewsletterInCache(
-        { id: newsletterId, updates },
-        { optimistic: true },
-      );
+    // Update newsletter in all relevant caches
+    this.updateNewsletterInCache({ id: newsletterId, updates });
 
-      // Invalidate related queries to ensure consistency
-      await this.invalidateRelatedQueries(newsletterId, {
-        newsletters: true,
-        readingQueue: true,
-        tags: true,
-        sources: false,
-        unreadCount: true,
-      });
-    } catch (error) {
-      console.error(`Error in optimistic update for ${operation}:`, error);
-      throw error;
-    } finally {
-      this.endPerformanceTimer("optimisticUpdate");
-    }
+    // Invalidate related queries to ensure consistency
+    this.invalidateRelatedQueries([newsletterId], operation);
+
+    return currentData;
   }
 
-  async optimisticUpdateLegacy<T>(
-    queryKey: QueryKey,
-    updateFn: (oldData: T) => T,
-    mutationFn: () => Promise<void>,
-    rollbackData?: T,
-  ): Promise<void> {
-    this.startPerformanceTimer("optimisticUpdateLegacy");
-
-    // Store the previous data for potential rollback
-    const previousData = this.queryClient.getQueryData<T>(queryKey);
-
-    try {
-      // Apply optimistic update
-      this.queryClient.setQueryData<T>(queryKey, (oldData) => {
-        if (oldData === undefined) return oldData;
-        return updateFn(oldData);
-      });
-
-      // Execute the actual mutation
-      await mutationFn();
-    } catch (error) {
-      // Rollback on error
-      this.queryClient.setQueryData<T>(
-        queryKey,
-        rollbackData !== undefined ? rollbackData : previousData,
-      );
-
-      // Re-throw the error
-      throw error;
-    } finally {
-      this.endPerformanceTimer("optimisticUpdateLegacy");
-    }
-  }
-
-  // Batch operations for better performance
-  batchCacheUpdates(updates: (() => void)[]): void {
-    this.startPerformanceTimer(`batchUpdates-${updates.length}`);
-
-    // Temporarily disable cache notifications
-    const originalNotifyOnChangeProps =
-      this.queryClient.getDefaultOptions().queries?.notifyOnChangeProps;
-
-    this.queryClient.setDefaultOptions({
-      queries: {
-        ...this.queryClient.getDefaultOptions().queries,
-        notifyOnChangeProps: [],
-      },
-    });
-
-    try {
-      // Execute all updates
-      updates.forEach((update) => update());
-    } finally {
-      // Restore original notification settings
-      this.queryClient.setDefaultOptions({
-        queries: {
-          ...this.queryClient.getDefaultOptions().queries,
-          notifyOnChangeProps: originalNotifyOnChangeProps,
-        },
-      });
-
-      this.endPerformanceTimer(`batchUpdates-${updates.length}`);
-    }
-  }
-
-  // Batch newsletter operations for UI components
-  async batchUpdateNewsletters(config: {
-    operations: Array<{
-      id: string;
-      updates: Partial<NewsletterWithRelations>;
-      type: "read" | "unread" | "archive" | "unarchive" | "delete" | "like";
-    }>;
-    optimistic?: boolean;
-  }): Promise<void> {
-    this.startPerformanceTimer(
-      `batchNewsletterUpdates-${config.operations.length}`,
-    );
-
-    const { operations, optimistic = true } = config;
-
-    // Group operations by type for efficiency
-    const operationsByType = operations.reduce(
-      (acc, op) => {
-        if (!acc[op.type]) acc[op.type] = [];
-        acc[op.type].push(op);
-        return acc;
-      },
-      {} as Record<string, typeof operations>,
-    );
-
-    try {
-      // Use cache manager's bulk update for each operation type
-      for (const [type, ops] of Object.entries(operationsByType)) {
-        const ids = ops.map((op) => op.id);
-        const updates = ops[0].updates; // All operations of same type should have same updates
-
-        if (type === "delete") {
-          // Handle deletions specially
-          this.queryClient.setQueriesData<NewsletterWithRelations[]>(
-            { queryKey: queryKeyFactory.newsletters.lists() },
-            (old = []) => old.filter((n) => !ids.includes(n.id)),
-          );
-
-          // Remove individual caches
-          ids.forEach((id) => {
-            this.queryClient.removeQueries({
-              queryKey: queryKeyFactory.newsletters.detail(id),
-            });
-          });
-        } else {
-          // Use existing bulk update method
-          this.bulkUpdateNewslettersInCache({ ids, updates }, { optimistic });
-        }
-      }
-
-      // Cross-feature synchronization
-      if (this.config.enableCrossFeatureSync) {
-        operations.forEach(({ id, updates }) => {
-          this.syncWithReadingQueue({ id, updates });
-        });
-      }
-    } catch (error) {
-      console.error("Error in batch newsletter updates:", error);
-      throw error;
-    } finally {
-      this.endPerformanceTimer(
-        `batchNewsletterUpdates-${config.operations.length}`,
-      );
-    }
-  }
-
-  // Cache warming for anticipated queries
+  // Warm cache by prefetching common queries
   warmCache(
     userId: string,
     priority: "high" | "medium" | "low" = "medium",
   ): void {
-    const staleTime = priority === "high" ? 0 : this.config.defaultStaleTime;
+    if (!userId) return;
 
-    // Pre-fetch common newsletter queries
+    const prefetchOptions = {
+      staleTime: priority === "high" ? 10 * 60 * 1000 : 5 * 60 * 1000, // 10 min for high, 5 min for others
+    };
+
+    // Prefetch newsletters
     this.queryClient.prefetchQuery({
-      queryKey: queryKeyFactory.newsletters.list({ userId, filter: "unread" }),
-      staleTime,
+      queryKey: queryKeyFactory.newsletters.list({ userId }),
+      queryFn: () => Promise.resolve([]), // Would be actual fetch function
+      ...prefetchOptions,
     });
 
-    this.queryClient.prefetchQuery({
-      queryKey: queryKeyFactory.queue.list(userId),
-      staleTime,
-    });
-
+    // Prefetch reading queue if high priority
     if (priority === "high") {
-      // Pre-fetch additional high-priority data
       this.queryClient.prefetchQuery({
-        queryKey: queryKeyFactory.newsletters.list({ userId, filter: "liked" }),
-        staleTime,
+        queryKey: queryKeyFactory.queue.list(userId),
+        queryFn: () => Promise.resolve([]), // Would be actual fetch function
+        ...prefetchOptions,
       });
     }
+
+    // Prefetch unread count
+    this.queryClient.prefetchQuery({
+      queryKey: ["unreadCount", userId],
+      queryFn: () => Promise.resolve(0), // Would be actual fetch function
+      ...prefetchOptions,
+    });
   }
 
-  // Cache statistics and debugging
-  getCacheStats(): {
-    totalQueries: number;
-    newsletterQueries: number;
-    queueQueries: number;
-    staleQueries: number;
-  } {
-    const cache = this.queryClient.getQueryCache();
-    const queries = cache.getAll();
-
-    const newsletterQueries = queries.filter(
-      (query) =>
-        queryKeyFactory.matchers.isNewsletterListKey(
-          query.queryKey as unknown[],
-        ) ||
-        queryKeyFactory.matchers.isNewsletterDetailKey(
-          query.queryKey as unknown[],
-        ),
-    );
-
-    const queueQueries = queries.filter((query) =>
-      queryKeyFactory.matchers.isReadingQueueKey(query.queryKey as unknown[]),
-    );
-
-    const staleQueries = queries.filter((query) => query.isStale());
-
-    return {
-      totalQueries: queries.length,
-      newsletterQueries: newsletterQueries.length,
-      queueQueries: queueQueries.length,
-      staleQueries: staleQueries.length,
-    };
-  }
-
-  // Clear specific cache segments
+  // Clear specific cache sections
   clearNewsletterCache(): void {
-    this.queryClient.removeQueries({
-      queryKey: queryKeyFactory.newsletters.all(),
+    this.queryClient.invalidateQueries({
+      queryKey: queryKeyFactory.newsletters.lists(),
+      refetchType: "active",
     });
   }
 
   clearReadingQueueCache(): void {
-    this.queryClient.removeQueries({
-      queryKey: queryKeyFactory.queue.all(),
-    });
-  }
-
-  // Error boundary and retry logic
-  setupErrorBoundaries(): void {
-    // Set up default retry logic for network errors
-    this.queryClient.setDefaultOptions({
-      queries: {
-        retry: (failureCount, error) => {
-          // Don't retry on 4xx errors (client errors)
-          if (error instanceof Error && error.message.includes("4")) {
-            return false;
-          }
-          // Retry up to 3 times for other errors
-          return failureCount < 3;
-        },
-        retryDelay: (attemptIndex: number) =>
-          Math.min(1000 * Math.pow(2, attemptIndex), 30000),
-      },
-      mutations: {
-        retry: (failureCount, error) => {
-          // More conservative retry for mutations
-          if (error instanceof Error && error.message.includes("4")) {
-            return false;
-          }
-          return failureCount < 2;
-        },
-        retryDelay: (attemptIndex: number) =>
-          Math.min(2000 * Math.pow(2, attemptIndex), 15000),
-      },
+    this.queryClient.invalidateQueries({
+      queryKey: queryKeyFactory.queue.lists(),
+      refetchType: "active",
     });
   }
 }
 
-// Singleton instance for global access
-let cacheManagerInstance: NewsletterCacheManager | null = null;
+// Singleton instance
+let cacheManagerInstance: SimpleCacheManager | null = null;
 
 export const createCacheManager = (
   queryClient: QueryClient,
-  config?: Partial<CacheManagerConfig>,
-): NewsletterCacheManager => {
-  if (!cacheManagerInstance) {
-    cacheManagerInstance = new NewsletterCacheManager(queryClient, config);
-    cacheManagerInstance.setupErrorBoundaries();
-  }
+  config?: CacheManagerConfig,
+): SimpleCacheManager => {
+  cacheManagerInstance = new SimpleCacheManager(queryClient, config);
   return cacheManagerInstance;
 };
 
-export const getCacheManager = (): NewsletterCacheManager => {
+export const getCacheManager = (): SimpleCacheManager => {
   if (!cacheManagerInstance) {
     throw new Error(
       "Cache manager not initialized. Call createCacheManager first.",
@@ -808,61 +391,30 @@ export const getCacheManager = (): NewsletterCacheManager => {
   return cacheManagerInstance;
 };
 
-// Utility functions for backward compatibility
-export const updateCachedNewsletter = <T extends { id: string }>(
-  queryClient: QueryClient,
-  id: string,
-  updates: Partial<T>,
-  queryKey: QueryKey = queryKeyFactory.newsletters.lists(),
-) => {
-  queryClient.setQueriesData<T[]>({ queryKey }, (oldData = []) =>
-    oldData.map((item) => (item.id === id ? { ...item, ...updates } : item)),
-  );
+export const getCacheManagerSafe = (): SimpleCacheManager | null => {
+  return cacheManagerInstance;
 };
 
-export const updateMultipleCachedNewsletters = <T extends { id: string }>(
-  queryClient: QueryClient,
-  updates: Array<{ id: string; updates: Partial<T> }>,
-  queryKey: QueryKey = queryKeyFactory.newsletters.lists(),
+// Utility functions for backward compatibility
+export const updateCachedNewsletter = (
+  newsletterId: string,
+  updates: Partial<NewsletterWithRelations>,
 ) => {
-  const updatesMap = new Map(updates.map(({ id, updates }) => [id, updates]));
+  const manager = getCacheManager();
+  manager.updateNewsletterInCache({ id: newsletterId, updates });
+};
 
-  queryClient.setQueriesData<T[]>({ queryKey }, (oldData = []) =>
-    oldData.map((item) =>
-      updatesMap.has(item.id) ? { ...item, ...updatesMap.get(item.id) } : item,
-    ),
-  );
+export const updateMultipleCachedNewsletters = async (
+  updates: { id: string; updates: Partial<NewsletterWithRelations> }[],
+) => {
+  const manager = getCacheManager();
+  await manager.batchUpdateNewsletters(updates);
 };
 
 export const invalidateNewsletterQueries = (
-  queryClient: QueryClient,
-  filters: {
-    scope?: "list" | "detail" | "tags";
-    filter?: NewsletterFilter;
-    tagIds?: string[];
-    sourceId?: string | null;
-  } = {},
+  newsletterIds: string[],
+  operationType: string,
 ) => {
-  if (filters.scope === "list") {
-    queryClient.invalidateQueries({
-      queryKey: queryKeyFactory.newsletters.lists(),
-      refetchType: "active",
-    });
-  } else if (filters.scope === "detail") {
-    queryClient.invalidateQueries({
-      queryKey: queryKeyFactory.newsletters.details(),
-      refetchType: "active",
-    });
-  } else if (filters.scope === "tags") {
-    queryClient.invalidateQueries({
-      queryKey: queryKeyFactory.newsletters.tags(),
-      refetchType: "active",
-    });
-  } else {
-    // Invalidate all newsletter queries
-    queryClient.invalidateQueries({
-      queryKey: queryKeyFactory.newsletters.all(),
-      refetchType: "active",
-    });
-  }
+  const manager = getCacheManager();
+  manager.invalidateRelatedQueries(newsletterIds, operationType);
 };

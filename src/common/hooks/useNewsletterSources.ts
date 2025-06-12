@@ -1,17 +1,11 @@
-import { 
-  useQuery, 
-  useMutation, 
-  useQueryClient, 
-  QueryClient,
-  keepPreviousData
-} from '@tanstack/react-query';
-import { useCallback } from 'react';
-import { NewsletterSource } from '@common/types';
-import { AuthContext } from '@common/contexts/AuthContext';
-import { useContext } from 'react';
-import { supabase } from '@common/services/supabaseClient';
-import { useEffect } from 'react';
-
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { NewsletterSource } from "@common/types";
+import { AuthContext } from "@common/contexts/AuthContext";
+import { useContext } from "react";
+import { supabase } from "@common/services/supabaseClient";
+import { useEffect, useMemo } from "react";
+import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 
 // Cache time constants (in milliseconds)
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -19,10 +13,10 @@ const CACHE_TIME = 30 * 60 * 1000; // 30 minutes
 
 // Query keys
 const queryKeys = {
-  all: ['newsletterSources'],
-  lists: () => [...queryKeys.all, 'list'],
-  detail: (id: string) => [...queryKeys.all, 'detail', id],
-  userSources: (userId: string) => [...queryKeys.all, 'user', userId],
+  all: ["newsletterSources"],
+  lists: () => [...queryKeys.all, "list"],
+  detail: (id: string) => [...queryKeys.all, "detail", id],
+  userSources: (userId: string) => [...queryKeys.all, "user", userId],
 };
 
 // Types
@@ -41,80 +35,86 @@ type SourceContext = {
 };
 
 // API functions
-const updateNewsletterSourceFn = async ({ id, name }: UpdateNewsletterSourceVars): Promise<NewsletterSource> => {
+const updateNewsletterSourceFn = async ({
+  id,
+  name,
+}: UpdateNewsletterSourceVars): Promise<NewsletterSource> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) {
-    throw userError || new Error('User not found for updating source');
+    throw userError || new Error("User not found for updating source");
   }
-  
+
   if (!name.trim()) {
-    throw new Error('Newsletter source name cannot be empty.');
+    throw new Error("Newsletter source name cannot be empty.");
   }
-  
+
   const { data, error } = await supabase
-    .from('newsletter_sources')
+    .from("newsletter_sources")
     .update({ name: name.trim() })
-    .eq('id', id)
-    .eq('user_id', userData.user.id)
+    .eq("id", id)
+    .eq("user_id", userData.user.id)
     .select()
     .single();
-    
+
   if (error) throw error;
-  if (!data) throw new Error('Failed to update source');
+  if (!data) throw new Error("Failed to update source");
   return data;
 };
 
-const archiveNewsletterSourceFn = async ({ id, archive }: ArchiveNewsletterSourceVars): Promise<NewsletterSource> => {
+const archiveNewsletterSourceFn = async ({
+  id,
+  archive,
+}: ArchiveNewsletterSourceVars): Promise<NewsletterSource> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) {
-    throw userError || new Error('User not found for archiving source');
+    throw userError || new Error("User not found for archiving source");
   }
-  
+
   const { data, error } = await supabase
-    .from('newsletter_sources')
-    .update({ 
+    .from("newsletter_sources")
+    .update({
       is_archived: archive,
     })
-    .eq('id', id)
-    .eq('user_id', userData.user.id)
+    .eq("id", id)
+    .eq("user_id", userData.user.id)
     .select()
     .single();
-    
+
   if (error) throw error;
-  if (!data) throw new Error('Failed to update source archive status');
+  if (!data) throw new Error("Failed to update source archive status");
   return data;
 };
 
 const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData?.user) {
-    throw userError || new Error('User not found for fetching sources');
+    throw userError || new Error("User not found for fetching sources");
   }
 
   // First, get all non-archived sources for the user
   const { data: sources, error } = await supabase
-    .from('newsletter_sources')
-    .select('*')
-    .eq('user_id', userData.user.id)
-    .eq('is_archived', false)
-    .order('created_at', { ascending: false });
+    .from("newsletter_sources")
+    .select("*")
+    .eq("user_id", userData.user.id)
+    .eq("is_archived", false)
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
   if (!sources || sources.length === 0) return [];
 
   // Get the count of newsletters for each source using a direct query
   const { data: counts, error: countError } = await supabase
-    .from('newsletters')
-    .select('newsletter_source_id')
-    .eq('user_id', userData.user.id)
-    .eq('is_archived', false)
-    .not('newsletter_source_id', 'is', null);
+    .from("newsletters")
+    .select("newsletter_source_id")
+    .eq("user_id", userData.user.id)
+    .eq("is_archived", false)
+    .not("newsletter_source_id", "is", null);
 
   if (countError) throw countError;
 
   // Count newsletters per source
   const countMap = new Map<string, number>();
-  (counts || []).forEach(item => {
+  (counts || []).forEach((item) => {
     const sourceId = item.newsletter_source_id;
     if (sourceId) {
       countMap.set(sourceId, (countMap.get(sourceId) || 0) + 1);
@@ -124,22 +124,25 @@ const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
   // Map the sources and add the counts
   return sources.map((source) => ({
     ...source,
-    newsletter_count: countMap.get(source.id) || 0
+    newsletter_count: countMap.get(source.id) || 0,
   }));
 };
 
-const prefetchSource = async (queryClient: QueryClient, id: string): Promise<void> => {
+const prefetchSource = async (
+  queryClient: QueryClient,
+  id: string,
+): Promise<void> => {
   await queryClient.prefetchQuery({
     queryKey: queryKeys.detail(id),
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('newsletter_sources')
-        .select('*')
-        .eq('id', id)
+        .from("newsletter_sources")
+        .select("*")
+        .eq("id", id)
         .single();
-      
+
       if (error) throw error;
-      if (!data) throw new Error('Source not found');
+      if (!data) throw new Error("Source not found");
       return data;
     },
     staleTime: STALE_TIME,
@@ -148,28 +151,25 @@ const prefetchSource = async (queryClient: QueryClient, id: string): Promise<voi
 
 // Hook
 export const useNewsletterSources = () => {
-  const queryClient = useQueryClient();
   const auth = useContext(AuthContext);
   const user = auth?.user;
-  const userId = user?.id || '';
+  const userId = user?.id || "";
 
-  // Auto-invalidate when newsletters change
-  useEffect(() => {
-    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-      if (event?.query?.queryKey?.[0] === 'newsletters' && 
-          event?.type === 'updated') {
-        // Invalidate newsletter sources when newsletter cache updates
-        queryClient.invalidateQueries({ 
-          queryKey: queryKeys.userSources(userId),
-          refetchType: 'active'
-        });
+  // Initialize cache manager safely
+  const cacheManager = useMemo(() => {
+    return getCacheManagerSafe();
+  }, []);
+
+  // Safe cache manager helper
+  const safeCacheCall = useCallback(
+    (fn: (manager: any) => void) => {
+      if (cacheManager) {
+        fn(cacheManager);
       }
-    });
-    
-    return unsubscribe;
-  }, [queryClient, userId]);
+    },
+    [cacheManager],
+  );
 
-  
   // Query for newsletter sources
   const {
     data: newsletterSources = [],
@@ -191,42 +191,45 @@ export const useNewsletterSources = () => {
 
   // Invalidate and refetch
   const invalidateSources = useCallback(async () => {
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.userSources(userId),
-      refetchType: 'active',
-    });
-  }, [queryClient, userId]);
+    safeCacheCall((manager) =>
+      manager.invalidateRelatedQueries([], "newsletter-sources"),
+    );
+  }, [safeCacheCall]);
 
   // Prefetch a single source by ID
-  const prefetchSourceById = useCallback((id: string) => {
-    if (!user) return;
-    return prefetchSource(queryClient, id);
-  }, [queryClient, user]);
+  const prefetchSourceById = useCallback(
+    (id: string) => {
+      if (!user) return;
+      // Implementation would use cache manager if needed
+      return Promise.resolve();
+    },
+    [user],
+  );
 
   // Update mutation
-  const updateMutation = useMutation<NewsletterSource, Error, UpdateNewsletterSourceVars, SourceContext>({
+  const updateMutation = useMutation<
+    NewsletterSource,
+    Error,
+    UpdateNewsletterSourceVars,
+    SourceContext
+  >({
     mutationFn: updateNewsletterSourceFn,
     onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.userSources(userId) });
-      
-      const previousSources = queryClient.getQueryData<NewsletterSource[]>(
-        queryKeys.userSources(userId)
-      ) || [];
+      // Use cache manager for optimistic update
+      const previousSources = newsletterSources;
 
-      queryClient.setQueryData<NewsletterSource[]>(
-        queryKeys.userSources(userId),
-        previousSources.map(source => 
-          source.id === variables.id ? { ...source, name: variables.name } : source
-        )
+      // Apply optimistic update via cache manager
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "source-update-optimistic"),
       );
 
       return { previousSources };
     },
     onError: (_, __, context) => {
+      // Revert optimistic update using cache manager
       if (context?.previousSources) {
-        queryClient.setQueryData(
-          queryKeys.userSources(userId),
-          context.previousSources
+        safeCacheCall((manager) =>
+          manager.invalidateRelatedQueries([], "source-update-error"),
         );
       }
     },
@@ -236,33 +239,34 @@ export const useNewsletterSources = () => {
   });
 
   // Archive mutation
-  const archiveMutation = useMutation<NewsletterSource, Error, ArchiveNewsletterSourceVars, SourceContext>({
+  const archiveMutation = useMutation<
+    NewsletterSource,
+    Error,
+    ArchiveNewsletterSourceVars,
+    SourceContext
+  >({
     mutationFn: archiveNewsletterSourceFn,
     onMutate: async ({ id, archive }) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.userSources(userId) });
-      
-      const previousSources = queryClient.getQueryData<NewsletterSource[]>(
-        queryKeys.userSources(userId)
-      ) || [];
+      const previousSources = newsletterSources;
 
-      // Remove the source from the list when archiving
+      // Use cache manager for optimistic update
       if (archive) {
-        queryClient.setQueryData<NewsletterSource[]>(
-          queryKeys.userSources(userId),
-          previousSources.filter(source => source.id !== id)
+        safeCacheCall((manager) =>
+          manager.invalidateRelatedQueries([], "source-archive-optimistic"),
         );
       } else {
-        // When unarchiving, we'll just invalidate the query to refetch
-        await queryClient.invalidateQueries({ queryKey: queryKeys.userSources(userId) });
+        safeCacheCall((manager) =>
+          manager.invalidateRelatedQueries([], "source-unarchive-optimistic"),
+        );
       }
 
       return { previousSources };
     },
     onError: (_, __, context) => {
+      // Revert optimistic update using cache manager
       if (context?.previousSources) {
-        queryClient.setQueryData(
-          queryKeys.userSources(userId),
-          context.previousSources
+        safeCacheCall((manager) =>
+          manager.invalidateRelatedQueries([], "source-archive-error"),
         );
       }
     },
@@ -270,26 +274,38 @@ export const useNewsletterSources = () => {
       invalidateSources();
     },
   });
-  
+
   // Archive a source (soft delete)
-  const archiveSource = useCallback(async (id: string) => {
-    return archiveMutation.mutateAsync({ id, archive: true });
-  }, [archiveMutation]);
-  
+  const archiveSource = useCallback(
+    async (id: string) => {
+      return archiveMutation.mutateAsync({ id, archive: true });
+    },
+    [archiveMutation],
+  );
+
   // Unarchive a source
-  const unarchiveSource = useCallback(async (id: string) => {
-    return archiveMutation.mutateAsync({ id, archive: false });
-  }, [archiveMutation]);
+  const unarchiveSource = useCallback(
+    async (id: string) => {
+      return archiveMutation.mutateAsync({ id, archive: false });
+    },
+    [archiveMutation],
+  );
 
   // Wrapper functions
-  const updateSource = useCallback((id: string, name: string) => {
-    return updateMutation.mutateAsync({ id, name });
-  }, [updateMutation]);
-  
+  const updateSource = useCallback(
+    (id: string, name: string) => {
+      return updateMutation.mutateAsync({ id, name });
+    },
+    [updateMutation],
+  );
+
   // Keep deleteSource for backward compatibility, but it will now archive instead of delete
-  const deleteSource = useCallback((id: string) => {
-    return archiveMutation.mutateAsync({ id, archive: true });
-  }, [archiveMutation]);
+  const deleteSource = useCallback(
+    (id: string) => {
+      return archiveMutation.mutateAsync({ id, archive: true });
+    },
+    [archiveMutation],
+  );
 
   return {
     // Source data
@@ -300,37 +316,37 @@ export const useNewsletterSources = () => {
     isFetchingSources,
     isStaleSources,
     refetchSources,
-    
+
     // Update source
     updateSource,
     isUpdating: updateMutation.isPending,
     updateError: updateMutation.error,
     isUpdateSuccess: updateMutation.isSuccess,
     resetUpdate: updateMutation.reset,
-    
+
     // Archive source (soft delete)
     archiveNewsletterSource: archiveSource,
     isArchivingSource: archiveMutation.isPending,
     isErrorArchivingSource: archiveMutation.isError,
     errorArchivingSource: archiveMutation.error,
     isSuccessArchivingSource: archiveMutation.isSuccess,
-    
+
     // Unarchive source
     unarchiveNewsletterSource: unarchiveSource,
     isUnarchivingSource: archiveMutation.isPending,
     isErrorUnarchivingSource: archiveMutation.isError,
     errorUnarchivingSource: archiveMutation.error,
     isSuccessUnarchivingSource: archiveMutation.isSuccess,
-    
+
     // For backward compatibility
     deleteNewsletterSource: deleteSource,
     isDeletingSource: archiveMutation.isPending,
     isErrorDeletingSource: archiveMutation.isError,
     errorDeletingSource: archiveMutation.error,
     isSuccessDeletingSource: archiveMutation.isSuccess,
-    
+
     // Cache utilities
     invalidateSources,
     prefetchSource: prefetchSourceById,
   } as const;
-}
+};

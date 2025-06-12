@@ -8,6 +8,7 @@ import { useNewsletters } from "@common/hooks/useNewsletters";
 import { useTags } from "@common/hooks/useTags";
 import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
 import { useReadingQueue } from "@common/hooks/useReadingQueue";
+import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import { toggleTagFilter, handleTagClick } from "@common/utils/tagUtils";
 import type { NewsletterWithRelations, Tag } from "@common/types";
 import { supabase } from "@common/services/supabaseClient";
@@ -96,36 +97,56 @@ const Inbox: React.FC = () => {
   } | null>(null);
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<Tag[]>([]);
-  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
+
   const [loadingStates] = useState<Record<string, string>>({});
   const [errorTogglingLike] = useState<Error | null>(null);
 
   // Hooks
   const { getTags } = useTags();
-  const { readingQueue, addToQueue, removeFromQueue } = useReadingQueue();
+  const { readingQueue, removeFromQueue } = useReadingQueue();
   const { newsletterSources = [] } = useNewsletterSources();
   const {
     newsletters = [],
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    deleteNewsletter,
-    isDeletingNewsletter,
-    bulkDeleteNewsletters,
-    bulkMarkAsRead,
-    bulkMarkAsUnread,
     refetchNewsletters,
-    bulkArchive,
-    bulkUnarchive,
   } = useNewsletters(
     tagIds.length > 0 ? tagIds[0] : undefined,
     filter,
     sourceFilter,
   );
   const { user } = useAuth();
+
+  // Shared newsletter action handlers
+  const {
+    handleToggleLike,
+    handleToggleArchive,
+    handleToggleRead,
+    handleDeleteNewsletter,
+    handleToggleInQueue,
+    handleBulkMarkAsRead,
+    handleBulkMarkAsUnread,
+    handleBulkArchive,
+    handleBulkUnarchive,
+    handleBulkDelete,
+    isDeletingNewsletter,
+    isBulkMarkingAsRead,
+    isBulkMarkingAsUnread,
+    isBulkArchiving,
+    isBulkUnarchiving,
+    isBulkDeletingNewsletters,
+  } = useSharedNewsletterActions({
+    showToasts: true,
+    optimisticUpdates: true,
+    onSuccess: () => {
+      // Clear toast after successful action
+      setTimeout(() => setToast(null), 3000);
+    },
+    onError: (error) => {
+      setToast({ type: "error", message: error.message });
+    },
+  });
 
   // Initialize cache manager for advanced operations
   const cacheManager = useMemo(() => {
@@ -227,22 +248,6 @@ const Inbox: React.FC = () => {
     setSearchParams(new URLSearchParams(), { replace: true });
   }, [setSearchParams]);
 
-  // Handle trash action
-  const handleTrash = useCallback(
-    async (id: string) => {
-      try {
-        await deleteNewsletter(id);
-        setToast({ type: "success", message: "Newsletter deleted" });
-        await refetchNewsletters();
-      } catch (error) {
-        console.error("Error deleting newsletter:", error);
-        setToast({ type: "error", message: "Failed to delete newsletter" });
-        throw error;
-      }
-    },
-    [deleteNewsletter, refetchNewsletters],
-  );
-
   // Load tags on mount
   useEffect(() => {
     const loadTags = async () => {
@@ -252,93 +257,67 @@ const Inbox: React.FC = () => {
     loadTags();
   }, [getTags]);
 
-  // Newsletter row handlers
-  const handleToggleLike = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      if (!toggleLike) return;
-      try {
-        await toggleLike(newsletter.id);
-      } catch (error) {
-        console.error("Error toggling like:", error);
-        setToast({ type: "error", message: "Failed to update like status" });
-      }
+  // Newsletter row action handlers (using shared handlers)
+  const handleToggleArchiveWrapper = useCallback(
+    async (id: string) => {
+      const newsletter = newsletters.find((n) => n.id === id);
+      if (!newsletter) return;
+      await handleToggleArchive(newsletter);
     },
-    [toggleLike],
+    [handleToggleArchive, newsletters],
   );
 
-  const handleToggleArchive = useCallback(
+  const handleToggleReadWrapper = useCallback(
     async (id: string) => {
-      try {
-        const newsletter = newsletters.find((n) => n.id === id);
-        if (!newsletter) return;
-        if (newsletter.is_archived) {
-          await bulkUnarchive([id]);
-          setToast({ type: "success", message: "Newsletter unarchived" });
-        } else {
-          await bulkArchive([id]);
-          setToast({ type: "success", message: "Newsletter archived" });
-        }
-      } catch (error) {
-        console.error("Error toggling archive status:", error);
-        setToast({ type: "error", message: "Failed to update archive status" });
-      }
+      const newsletter = newsletters.find((n) => n.id === id);
+      if (!newsletter) return;
+      await handleToggleRead(newsletter);
     },
-    [bulkArchive, bulkUnarchive, newsletters],
+    [handleToggleRead, newsletters],
   );
 
-  const handleToggleRead = useCallback(
+  const handleTrash = useCallback(
     async (id: string) => {
-      try {
-        const newsletter = newsletters.find((n) => n.id === id);
-        if (!newsletter) return;
-        if (newsletter.is_read) {
-          await markAsUnread(id);
-        } else {
-          await markAsRead(id);
-        }
-      } catch (error) {
-        console.error("Error toggling read status:", error);
-        setToast({ type: "error", message: "Failed to update read status" });
-      }
+      await handleDeleteNewsletter(id);
     },
-    [markAsRead, markAsUnread, newsletters],
+    [handleDeleteNewsletter],
   );
 
   const handleToggleQueue = useCallback(
-    async (newsletterId: string) => {
-      try {
-        const queueItem = readingQueue.find(
-          (item) => item.newsletter_id === newsletterId,
-        );
-        if (queueItem) {
-          await removeFromQueue(queueItem.id);
-        } else {
-          await addToQueue(newsletterId);
-        }
-        await refetchNewsletters();
-      } catch (error) {
-        console.error("Error toggling queue:", error);
-        setToast({ type: "error", message: "Failed to update reading queue" });
-      }
+    async (id: string) => {
+      const newsletter = newsletters.find((n) => n.id === id);
+      if (!newsletter) return;
+      await handleToggleInQueue(newsletter);
     },
-    [readingQueue, addToQueue, removeFromQueue, refetchNewsletters],
+    [handleToggleInQueue, newsletters],
+  );
+
+  const handleToggleLikeWrapper = useCallback(
+    async (newsletter: NewsletterWithRelations) => {
+      await handleToggleLike(newsletter);
+    },
+    [handleToggleLike],
   );
 
   const handleUpdateTags = useCallback(
     async (newsletterId: string, tagIds: string[]) => {
-      if (!user) {
-        setToast({
-          type: "error",
-          message: "You must be logged in to update tags",
-        });
-        return;
-      }
       try {
+        // Using the tag update from shared handlers would need to be implemented
+        // For now, keeping the existing implementation but with proper cleanup
+        if (!user) {
+          setToast({
+            type: "error",
+            message: "You must be logged in to update tags",
+          });
+          return;
+        }
+
         const newsletter = newsletters.find((n) => n.id === newsletterId);
         if (!newsletter) {
           setToast({ type: "error", message: "Newsletter not found" });
           return;
         }
+
         const currentTagIds = (newsletter.tags || []).map((tag: Tag) => tag.id);
         const tagsToAdd = tagIds.filter(
           (id: string) => !currentTagIds.includes(id),
@@ -346,6 +325,7 @@ const Inbox: React.FC = () => {
         const tagsToRemove = currentTagIds.filter(
           (id: string) => !tagIds.includes(id),
         );
+
         const addPromises = tagsToAdd.map(async (tagId: string) => {
           const { error } = await supabase.from("newsletter_tags").insert([
             {
@@ -356,6 +336,7 @@ const Inbox: React.FC = () => {
           ]);
           if (error) throw error;
         });
+
         const removePromises = tagsToRemove.map(async (tagId: string) => {
           const { error } = await supabase
             .from("newsletter_tags")
@@ -365,12 +346,15 @@ const Inbox: React.FC = () => {
             .eq("user_id", user.id);
           if (error) throw error;
         });
+
         await Promise.all([...addPromises, ...removePromises]);
+
         setVisibleTags((prev) => {
           const newVisibleTags = new Set(prev);
           newVisibleTags.delete(newsletterId);
           return newVisibleTags;
         });
+
         await refetchNewsletters();
         setToast({ type: "success", message: "Tags updated successfully" });
       } catch (error) {
@@ -579,9 +563,9 @@ const Inbox: React.FC = () => {
     }
   }, [toast]);
 
-  // Bulk trash handler with cache optimization
+  // Bulk actions using shared handlers
   const handleBulkTrash = useCallback(async () => {
-    if (!bulkDeleteNewsletters || selectedIds.size === 0) return;
+    if (selectedIds.size === 0) return;
     if (
       !window.confirm(
         "Are you sure? This action is final and cannot be undone.",
@@ -589,99 +573,36 @@ const Inbox: React.FC = () => {
     )
       return;
 
-    setIsBulkActionLoading(true);
     try {
-      // Use cache manager for batch operations if available
-      if (cacheManager && user?.id) {
-        await cacheManager.batchUpdateNewsletters({
-          operations: Array.from(selectedIds).map((id) => ({
-            id,
-            updates: {},
-            type: "delete",
-          })),
-          optimistic: true,
-        });
-      }
-
-      await bulkDeleteNewsletters(Array.from(selectedIds));
+      await handleBulkDelete(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
-      setToast({
-        type: "success",
-        message: `${selectedIds.size} newsletters deleted`,
-      });
     } catch (error) {
       console.error("Error deleting newsletters:", error);
-      setToast({ type: "error", message: "Failed to delete newsletters" });
-      throw error;
-    } finally {
-      setIsBulkActionLoading(false);
     }
-  }, [bulkDeleteNewsletters, selectedIds, cacheManager, user?.id]);
+  }, [handleBulkDelete, selectedIds]);
 
-  // Handle bulk archive with cache optimization
-  const handleBulkArchive = useCallback(async () => {
+  const handleBulkArchiveWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    setIsBulkActionLoading(true);
     try {
-      // Use cache manager for batch operations if available
-      if (cacheManager && user?.id) {
-        await cacheManager.batchUpdateNewsletters({
-          operations: Array.from(selectedIds).map((id) => ({
-            id,
-            updates: { is_archived: true },
-            type: "archive",
-          })),
-          optimistic: true,
-        });
-      }
-
-      await bulkArchive(Array.from(selectedIds));
-      setToast({
-        type: "success",
-        message: `${selectedIds.size} newsletters archived`,
-      });
+      await handleBulkArchive(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setIsSelecting(false);
     } catch (error) {
       console.error("Error archiving newsletters:", error);
-      setToast({ type: "error", message: "Failed to archive newsletters" });
-    } finally {
-      setIsBulkActionLoading(false);
+    }
+  }, [handleBulkArchive, selectedIds]);
+
+  const handleBulkUnarchiveWrapper = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      await handleBulkUnarchive(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
-    }
-  }, [selectedIds, bulkArchive, cacheManager, user?.id]);
-
-  // Handle bulk unarchive with cache optimization
-  const handleBulkUnarchive = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    setIsBulkActionLoading(true);
-    try {
-      // Use cache manager for batch operations if available
-      if (cacheManager && user?.id) {
-        await cacheManager.batchUpdateNewsletters({
-          operations: Array.from(selectedIds).map((id) => ({
-            id,
-            updates: { is_archived: false },
-            type: "unarchive",
-          })),
-          optimistic: true,
-        });
-      }
-
-      await bulkUnarchive(Array.from(selectedIds));
-      setToast({
-        type: "success",
-        message: `${selectedIds.size} newsletters unarchived`,
-      });
     } catch (error) {
       console.error("Error unarchiving newsletters:", error);
-      setToast({ type: "error", message: "Failed to unarchive newsletters" });
-    } finally {
-      setIsBulkActionLoading(false);
-      setSelectedIds(new Set());
-      setIsSelecting(false);
     }
-  }, [selectedIds, bulkUnarchive, cacheManager, user?.id]);
+  }, [handleBulkUnarchive, selectedIds]);
 
   // Toggle selection of a single newsletter
   const toggleSelect = useCallback((id: string) => {
@@ -723,68 +644,27 @@ const Inbox: React.FC = () => {
     setSelectedIds(new Set(unreadIds));
   }, [filteredNewsletters]);
 
-  // Handle bulk mark as read with cache optimization
-  const handleBulkMarkAsRead = useCallback(async () => {
+  const handleBulkMarkAsReadWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    setIsBulkActionLoading(true);
     try {
-      // Use cache manager for batch operations if available
-      if (cacheManager && user?.id) {
-        await cacheManager.batchUpdateNewsletters({
-          operations: Array.from(selectedIds).map((id) => ({
-            id,
-            updates: { is_read: true },
-            type: "read",
-          })),
-          optimistic: true,
-        });
-      }
-
-      await bulkMarkAsRead(Array.from(selectedIds));
+      await handleBulkMarkAsRead(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
-      setToast({
-        type: "success",
-        message: `${selectedIds.size} newsletters marked as read`,
-      });
     } catch (error) {
-      console.error("Error marking as read:", error);
-      setToast({ type: "error", message: "Failed to mark as read" });
-    } finally {
-      setIsBulkActionLoading(false);
+      console.error("Error marking newsletters as read:", error);
     }
-  }, [selectedIds, bulkMarkAsRead, cacheManager, user?.id]);
+  }, [handleBulkMarkAsRead, selectedIds]);
 
-  const handleBulkMarkAsUnread = useCallback(async () => {
+  const handleBulkMarkAsUnreadWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    setIsBulkActionLoading(true);
     try {
-      // Use cache manager for batch operations if available
-      if (cacheManager && user?.id) {
-        await cacheManager.batchUpdateNewsletters({
-          operations: Array.from(selectedIds).map((id) => ({
-            id,
-            updates: { is_read: false },
-            type: "unread",
-          })),
-          optimistic: true,
-        });
-      }
-
-      await bulkMarkAsUnread(Array.from(selectedIds));
+      await handleBulkMarkAsUnread(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
-      setToast({
-        type: "success",
-        message: `${selectedIds.size} newsletters marked as unread`,
-      });
     } catch (error) {
-      console.error("Error marking as unread:", error);
-      setToast({ type: "error", message: "Failed to mark as unread" });
-    } finally {
-      setIsBulkActionLoading(false);
+      console.error("Error marking newsletters as unread:", error);
     }
-  }, [selectedIds, bulkMarkAsUnread, cacheManager, user?.id]);
+  }, [handleBulkMarkAsUnread, selectedIds]);
 
   // Handle newsletter click
   const handleNewsletterClick = useCallback(
@@ -888,14 +768,20 @@ const Inbox: React.FC = () => {
             selectedCount={selectedIds.size}
             totalCount={filteredNewsletters.length}
             showArchived={showArchived}
-            isBulkActionLoading={isBulkActionLoading}
+            isBulkActionLoading={
+              isBulkMarkingAsRead ||
+              isBulkMarkingAsUnread ||
+              isBulkArchiving ||
+              isBulkUnarchiving ||
+              isBulkDeletingNewsletters
+            }
             onSelectAll={toggleSelectAll}
             onSelectRead={selectRead}
             onSelectUnread={selectUnread}
-            onMarkAsRead={handleBulkMarkAsRead}
-            onMarkAsUnread={handleBulkMarkAsUnread}
-            onArchive={handleBulkArchive}
-            onUnarchive={handleBulkUnarchive}
+            onMarkAsRead={handleBulkMarkAsReadWrapper}
+            onMarkAsUnread={handleBulkMarkAsUnreadWrapper}
+            onArchive={handleBulkArchiveWrapper}
+            onUnarchive={handleBulkUnarchiveWrapper}
             onDelete={handleBulkTrash}
             onCancel={() => {
               setIsSelecting(false);
@@ -986,9 +872,9 @@ const Inbox: React.FC = () => {
                 newsletter={newsletterWithRelations}
                 isSelected={isSelecting && selectedIds.has(newsletter.id)}
                 onToggleSelect={toggleSelect}
-                onToggleLike={handleToggleLike}
-                onToggleArchive={handleToggleArchive}
-                onToggleRead={handleToggleRead}
+                onToggleLike={handleToggleLikeWrapper}
+                onToggleArchive={handleToggleArchiveWrapper}
+                onToggleRead={handleToggleReadWrapper}
                 onTrash={handleTrash}
                 onToggleQueue={handleToggleQueue}
                 onToggleTagVisibility={toggleTagVisibility}

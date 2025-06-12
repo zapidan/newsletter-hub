@@ -19,6 +19,7 @@ import {
   useNewsletterSourceGroups,
   useReadingQueue,
 } from "@common/hooks";
+import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import {
   NewsletterSource,
   NewsletterSourceGroup,
@@ -281,10 +282,6 @@ const NewslettersPage: React.FC = () => {
     isErrorNewsletters,
     errorNewsletters,
     errorTogglingLike,
-    markAsRead,
-    toggleLike,
-    markAsUnread,
-    toggleArchive,
   } = useNewsletters(
     undefined,
     selectedSourceId ? "all" : "all",
@@ -296,11 +293,25 @@ const NewslettersPage: React.FC = () => {
     isErrorNewsletters: boolean;
     errorNewsletters: Error | null;
     errorTogglingLike: Error | null;
-    markAsRead: (id: string) => Promise<boolean>;
-    toggleLike: (id: string) => Promise<boolean>;
-    markAsUnread: (id: string) => Promise<boolean>;
-    toggleArchive: (id: string, isArchived: boolean) => Promise<boolean>;
   };
+
+  // Shared newsletter action handlers
+  const {
+    handleToggleLike,
+    handleToggleArchive,
+    handleToggleRead,
+    handleDeleteNewsletter,
+    handleToggleInQueue,
+  } = useSharedNewsletterActions({
+    showToasts: true,
+    optimisticUpdates: true,
+    onSuccess: () => {
+      // Success handled by shared handlers
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
 
   const [newsletters, setNewsletters] = useState<NewsletterWithRelations[]>(
     fetchedNewsletters || [],
@@ -324,183 +335,67 @@ const NewslettersPage: React.FC = () => {
     [navigate],
   );
 
-  // Mock handlers for now - implement these as needed
-  const handleToggleLike = useCallback(
+  // Newsletter action wrapper handlers
+  const handleToggleLikeWrapper = useCallback(
     async (newsletter: NewsletterWithRelations) => {
-      try {
-        await toggleLike(newsletter.id);
-      } catch (error) {
-        console.error("Error toggling like status:", error);
-        throw error;
-      }
+      await handleToggleLike(newsletter);
     },
-    [toggleLike],
+    [handleToggleLike],
   );
 
   const handleToggleSelect = useCallback(async () => {
     // Implementation
   }, []);
 
-  const handleToggleArchive = useCallback(
+  const handleToggleArchiveWrapper = useCallback(
     async (id: string) => {
+      const newsletter = newsletters.find((n) => n.id === id);
+      if (!newsletter) return;
+
+      // For source view, always archive (since we only show unarchived)
+      const willArchive = selectedSourceId ? true : !newsletter.is_archived;
+
+      // Optimistically update local state
+      setNewsletters((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_archived: willArchive } : n)),
+      );
+
       try {
-        // Find the newsletter to check its current archive status
-        const newsletter = newsletters.find((n) => n.id === id);
-        if (!newsletter) return;
-
-        // For source view, always archive (since we only show unarchived)
-        const willArchive = selectedSourceId ? true : !newsletter.is_archived;
-
-        // Optimistically update the UI
-        setNewsletters((prev) =>
-          prev.map((n) =>
-            n.id === id ? { ...n, is_archived: willArchive } : n,
-          ),
-        );
-
-        // Toggle the archive status using the hook's function
-        await toggleArchive(id, willArchive);
-
-        // Show success message
-        toast.success(
-          willArchive
-            ? "Newsletter archived successfully"
-            : "Newsletter unarchived successfully",
-        );
-
-        // Invalidate the queries to refresh the data
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["newsletters"] }),
-          queryClient.invalidateQueries({ queryKey: ["newsletterSources"] }),
-          queryClient.invalidateQueries({ queryKey: ["inbox"] }),
-          queryClient.invalidateQueries({ queryKey: ["unreadCount"] }),
-        ]);
+        await handleToggleArchive(newsletter, willArchive);
       } catch (error) {
-        // Revert the optimistic update on error
+        // Revert optimistic update on error
         setNewsletters(fetchedNewsletters || []);
-
-        console.error("Error toggling archive status:", error);
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Failed to update archive status";
-        toast.error(errorMessage);
         throw error;
       }
     },
     [
-      queryClient,
+      handleToggleArchive,
       newsletters,
-      fetchedNewsletters,
-      toggleArchive,
-      setNewsletters,
       selectedSourceId,
+      setNewsletters,
+      fetchedNewsletters,
     ],
   );
 
-  const handleToggleRead = useCallback(
+  const handleToggleReadWrapper = useCallback(
     async (id: string) => {
-      try {
-        // Check if the newsletter is read or unread and call the appropriate function
-        const newsletter = newsletters.find((n) => n.id === id);
-        if (!newsletter) return;
-
-        if (newsletter.is_read) {
-          await markAsUnread(id);
-        } else {
-          await markAsRead(id);
-        }
-      } catch (error) {
-        console.error("Error toggling read status:", error);
-        throw error;
-      }
+      const newsletter = newsletters.find((n) => n.id === id);
+      if (!newsletter) return;
+      await handleToggleRead(newsletter);
     },
-    [markAsRead, markAsUnread, newsletters],
+    [handleToggleRead, newsletters],
   );
 
-  const handleToggleQueue = useCallback(
+  const handleToggleQueueWrapper = useCallback(
     async (newsletterId: string) => {
-      try {
-        // Get the current user
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          throw new Error("User not authenticated");
-        }
-
-        // Check if the newsletter is already in the reading queue
-        const isInQueue = readingQueue.some(
-          (item) => item.newsletter_id === newsletterId,
-        );
-
-        if (isInQueue) {
-          // Remove from queue
-          const { error } = await supabase
-            .from("reading_queue")
-            .delete()
-            .eq("newsletter_id", newsletterId)
-            .eq("user_id", user.id);
-
-          if (error) throw error;
-          toast.success("Removed from reading queue");
-        } else {
-          // First, verify the newsletter exists
-          const { data: newsletter, error: newsletterError } = await supabase
-            .from("newsletters")
-            .select("id")
-            .eq("id", newsletterId)
-            .single();
-
-          if (newsletterError || !newsletter) {
-            throw new Error("Newsletter not found");
-          }
-
-          // Get the current max position for the user's queue
-          const { data: maxPosition } = await supabase
-            .from("reading_queue")
-            .select("position")
-            .eq("user_id", user.id)
-            .order("position", { ascending: false })
-            .limit(1);
-
-          // Handle the case where there are no items in the queue
-          const nextPosition =
-            maxPosition && maxPosition.length > 0
-              ? maxPosition[0].position + 1
-              : 0;
-
-          // Add to queue with user_id and position
-          const { error } = await supabase.from("reading_queue").insert({
-            user_id: user.id,
-            newsletter_id: newsletterId,
-            position: nextPosition,
-          });
-
-          if (error) {
-            console.error("Error adding to reading queue:", error);
-            throw error;
-          }
-
-          toast.success("Added to reading queue");
-        }
-
-        // Invalidate the reading queue query to refresh the UI
-        queryClient.invalidateQueries({ queryKey: ["readingQueue"] });
-      } catch (error) {
-        console.error("Error toggling queue status:", error);
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to update reading queue",
-        );
-        throw error;
-      }
+      const newsletter = newsletters.find((n) => n.id === newsletterId);
+      if (!newsletter) return;
+      await handleToggleInQueue(newsletter);
     },
-    [readingQueue, queryClient],
+    [handleToggleInQueue, newsletters],
   );
 
-  const handleTrash = useCallback(
+  const handleTrashWrapper = useCallback(
     async (id: string) => {
       if (
         !window.confirm(
@@ -510,35 +405,18 @@ const NewslettersPage: React.FC = () => {
         return;
       }
 
+      // Optimistically remove from local state
+      setNewsletters((prev) => prev.filter((n) => n.id !== id));
+
       try {
-        // Remove from local state immediately for better UX
-        setNewsletters((prev) => prev.filter((n) => n.id !== id));
-
-        const { error } = await supabase
-          .from("newsletters")
-          .delete()
-          .eq("id", id);
-
-        if (error) throw error;
-
-        toast.success("Newsletter deleted permanently");
-
-        // Invalidate relevant queries
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["newsletters"] }),
-          queryClient.invalidateQueries({ queryKey: ["newsletterSources"] }),
-          queryClient.invalidateQueries({ queryKey: ["inbox"] }),
-          queryClient.invalidateQueries({ queryKey: ["unreadCount"] }),
-        ]);
+        await handleDeleteNewsletter(id);
       } catch (error) {
         // Restore newsletter on error
         setNewsletters(fetchedNewsletters || []);
-        console.error("Error deleting newsletter:", error);
-        toast.error("Failed to delete newsletter");
         throw error;
       }
     },
-    [queryClient, setNewsletters, fetchedNewsletters],
+    [handleDeleteNewsletter, setNewsletters, fetchedNewsletters],
   );
 
   const handleUpdateTags = useCallback(
@@ -1117,11 +995,11 @@ const NewslettersPage: React.FC = () => {
                     newsletter={newsletter}
                     isSelected={false}
                     onToggleSelect={handleToggleSelect}
-                    onToggleLike={handleToggleLike}
-                    onToggleArchive={handleToggleArchive}
-                    onToggleRead={handleToggleRead}
-                    onToggleQueue={handleToggleQueue}
-                    onTrash={handleTrash}
+                    onToggleLike={handleToggleLikeWrapper}
+                    onToggleArchive={handleToggleArchiveWrapper}
+                    onToggleRead={handleToggleReadWrapper}
+                    onToggleQueue={handleToggleQueueWrapper}
+                    onTrash={handleTrashWrapper}
                     onToggleTagVisibility={toggleTagVisibility}
                     onUpdateTags={handleUpdateTags}
                     onTagClick={handleTagClick}

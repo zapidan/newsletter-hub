@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@common/services/supabaseClient";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
 import { AuthContext } from "@common/contexts/AuthContext";
@@ -9,7 +9,7 @@ import type {
   ReadingQueueItem,
 } from "@common/types";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
-import { createCacheManager, getCacheManager } from "../utils/cacheUtils";
+import { getCacheManagerSafe } from "../utils/cacheUtils";
 
 interface NewsletterFromDB {
   id: string;
@@ -35,14 +35,14 @@ interface NewsletterFromDB {
     created_at: string;
     updated_at: string;
   }>;
-  newsletter_sources?: Array<{
+  newsletter_sources?: {
     id: string;
     name: string;
     domain: string;
     user_id: string;
     created_at: string;
     updated_at: string;
-  }> | null;
+  } | null;
 }
 
 interface QueueItemFromDB {
@@ -52,103 +52,79 @@ interface QueueItemFromDB {
   newsletter_id: string;
   created_at: string;
   updated_at: string;
-  newsletters: NewsletterFromDB[];
+  newsletters: NewsletterFromDB;
 }
 
-// Helper function to transform queue item from DB to our format
-const transformQueueItem = (item: QueueItemFromDB): ReadingQueueItem | null => {
-  try {
-    // Handle both array and direct object cases for newsletters
-    const newsletter = (() => {
-      if (!item.newsletters) return null;
-      return Array.isArray(item.newsletters)
-        ? item.newsletters[0]
-        : item.newsletters;
-    })();
+const transformQueueItem = (item: QueueItemFromDB): ReadingQueueItem => {
+  const newsletter = item.newsletters;
 
-    if (!newsletter) {
-      console.warn("No newsletter found for queue item:", item.id);
-
-      // If we're in development, log the full item for debugging
-      if (process.env.NODE_ENV === "development") {
-        console.warn("Queue item with missing newsletter:", item);
-      }
-
-      return null;
-    }
-
-    // Handle both array and direct object cases for newsletter_sources
-    const source = (() => {
-      if (!newsletter.newsletter_sources) return undefined;
-      if (Array.isArray(newsletter.newsletter_sources)) {
-        return newsletter.newsletter_sources[0];
-      }
-      return newsletter.newsletter_sources;
-    })();
-
-    // Create the newsletter object with all required fields
-    const newsletterData = {
-      id: newsletter.id,
-      title: newsletter.title || "",
-      content: newsletter.content || "",
-      summary: newsletter.summary || "",
-      image_url: newsletter.image_url || "",
-      received_at: newsletter.received_at,
-      updated_at: newsletter.updated_at,
-      user_id: newsletter.user_id,
-      is_read: newsletter.is_read || false,
-      is_liked: newsletter.is_liked || false,
-      is_archived: newsletter.is_archived || false,
-      is_bookmarked: true, // Always true for items in the reading queue
-      newsletter_source_id: newsletter.newsletter_source_id ?? null,
-      word_count: newsletter.word_count || 0,
-      estimated_read_time: newsletter.estimated_read_time || 0,
-      source: source
-        ? {
-            id: source.id,
-            name: source.name,
-            domain: source.domain,
-            user_id: source.user_id,
-            created_at: source.created_at,
-            updated_at: source.updated_at,
-          }
-        : undefined,
-      // Include tags if they exist in the newsletter data
-      tags: newsletter.tags || [],
-    };
-
-    return {
-      id: item.id,
-      position: item.position,
-      user_id: item.user_id,
-      newsletter_id: item.newsletter_id,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-      newsletter: newsletterData,
-    } as ReadingQueueItem;
-  } catch (error) {
-    console.error("Error transforming queue item:", error, item);
-    return null;
+  if (!newsletter) {
+    throw new Error("Newsletter data is missing from queue item");
   }
+
+  // Transform the newsletter data
+  const transformedNewsletter: NewsletterWithRelations = {
+    id: newsletter.id,
+    title: newsletter.title,
+    summary: newsletter.summary,
+    content: newsletter.content,
+    url: "", // Not available in this context
+    author: "", // Not available in this context
+    published_at: newsletter.received_at,
+    created_at: newsletter.created_at,
+    updated_at: newsletter.updated_at,
+    is_read: newsletter.is_read,
+    is_liked: newsletter.is_liked,
+    is_archived: newsletter.is_archived,
+    is_bookmarked: true, // Since it's in the reading queue
+    user_id: newsletter.user_id,
+    newsletter_source_id: newsletter.newsletter_source_id,
+    newsletter_source: newsletter.newsletter_sources
+      ? {
+          id: newsletter.newsletter_sources.id,
+          name: newsletter.newsletter_sources.name,
+          url: newsletter.newsletter_sources.domain,
+          description: "",
+          is_active: true,
+          is_archived: false,
+          last_fetched_at: null,
+          created_at: newsletter.newsletter_sources.created_at,
+          updated_at: newsletter.newsletter_sources.updated_at,
+          user_id: newsletter.newsletter_sources.user_id,
+        }
+      : null,
+    tags: newsletter.tags || [],
+  };
+
+  return {
+    id: item.id,
+    position: item.position,
+    user_id: item.user_id,
+    newsletter_id: item.newsletter_id,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    newsletter: transformedNewsletter,
+  };
 };
 
 export const useReadingQueue = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
-  const queryClient = useQueryClient();
 
-  // Initialize cache manager
+  // Initialize cache manager safely
   const cacheManager = useMemo(() => {
-    try {
-      return getCacheManager();
-    } catch {
-      return createCacheManager(queryClient, {
-        enableOptimisticUpdates: true,
-        enableCrossFeatureSync: true,
-        enablePerformanceLogging: process.env.NODE_ENV === "development",
-      });
-    }
-  }, [queryClient]);
+    return getCacheManagerSafe();
+  }, []);
+
+  // Safe cache manager helper
+  const safeCacheCall = useCallback(
+    (fn: (manager: any) => void) => {
+      if (cacheManager) {
+        fn(cacheManager);
+      }
+    },
+    [cacheManager],
+  );
 
   // Performance monitoring
   const performanceTimers = useRef<Map<string, number>>(new Map());
@@ -172,24 +148,23 @@ export const useReadingQueue = () => {
   const fetchReadingQueue = useCallback(
     async (userId: string): Promise<ReadingQueueItem[]> => {
       try {
-        // First, get queue items with joined newsletter and source data
-        // First, fetch the queue items with newsletter data
         const { data: queueItems, error: queueError } = await supabase
           .from("reading_queue")
           .select(
             `
-          *,
-          newsletters (
             *,
-            newsletter_sources (
-              *
+            newsletters (
+              *,
+              newsletter_sources (
+                *
+              )
             )
-          )
-        `,
+          `,
           )
           .eq("user_id", userId)
           .order("position", { ascending: true });
 
+        if (queueError) throw queueError;
         if (!queueItems?.length) return [];
 
         // Fetch tags for all newsletters in the queue
@@ -199,127 +174,46 @@ export const useReadingQueue = () => {
           .select("newsletter_id, tags(*)")
           .in("newsletter_id", newsletterIds);
 
-        // Create a map of newsletter_id to tags
-        const tagsByNewsletterId = newsletterTags?.reduce(
-          (acc, { newsletter_id, tags }) => {
-            if (!acc[newsletter_id]) {
-              acc[newsletter_id] = [];
-            }
-            if (Array.isArray(tags)) {
-              acc[newsletter_id].push(...tags);
-            }
-            return acc;
-          },
-          {} as Record<string, Tag[]>,
-        );
-
-        // Add tags to newsletters, handling both array and single object cases
-        const queueItemsWithTags = queueItems.map((item) => {
-          const newsletters = Array.isArray(item.newsletters)
-            ? item.newsletters.map((newsletter: NewsletterFromDB) => ({
-                ...newsletter,
-                tags: tagsByNewsletterId?.[newsletter.id] || [],
-              }))
-            : item.newsletters
-              ? {
-                  ...item.newsletters,
-                  tags: tagsByNewsletterId?.[item.newsletters.id] || [],
-                }
-              : null;
-
-          return {
-            ...item,
-            newsletters: newsletters
-              ? [newsletters].flat()
-              : ([] as NewsletterFromDB[]),
-          };
+        // Create a map of newsletter ID to tags
+        const tagsMap = new Map<string, Tag[]>();
+        newsletterTags?.forEach((nt) => {
+          if (!tagsMap.has(nt.newsletter_id)) {
+            tagsMap.set(nt.newsletter_id, []);
+          }
+          if (nt.tags) {
+            tagsMap.get(nt.newsletter_id)!.push(nt.tags);
+          }
         });
 
-        if (queueError) {
-          console.error("Error fetching reading queue:", queueError);
-          throw queueError;
-        }
-
-        if (!queueItemsWithTags.length) return [];
-
-        // Transform the queue items with tags and filter out nulls
-        const validItems = queueItemsWithTags
-          .map(transformQueueItem)
-          .filter((item): item is ReadingQueueItem => item !== null);
-
-        // Clean up any orphaned queue items (where the newsletter doesn't exist)
-        if (validItems.length < queueItemsWithTags.length) {
-          // Find items that failed to transform (orphaned)
-          const orphanedIds = queueItemsWithTags
-            .filter(
-              (item) =>
-                !validItems.some(
-                  (valid) => valid.newsletter_id === item.newsletter_id,
-                ),
-            )
-            .map((item) => item.id);
-
-          // Delete orphaned items in the background
-          if (orphanedIds.length > 0) {
-            console.log(
-              `Cleaning up ${orphanedIds.length} orphaned queue items`,
-            );
-            const { error } = await supabase
-              .from("reading_queue")
-              .delete()
-              .in("id", orphanedIds);
-
-            if (error) {
-              console.error("Error cleaning up orphaned queue items:", error);
-            } else {
-              console.log(
-                `Successfully cleaned up ${orphanedIds.length} orphaned queue items`,
-              );
-              // Invalidate the query to refresh the list
-              queryClient.invalidateQueries({
-                queryKey: ["readingQueue", userId],
-              });
-            }
-          }
-        }
-
-        return validItems;
+        return queueItems.map((item) => {
+          const transformedItem = transformQueueItem(item);
+          // Add tags to the newsletter
+          transformedItem.newsletter.tags =
+            tagsMap.get(item.newsletter_id) || [];
+          return transformedItem;
+        });
       } catch (error) {
         console.error("Error fetching reading queue:", error);
         throw error;
       }
     },
-    [queryClient],
+    [],
   );
 
-  // Main query for reading queue
+  // Query for reading queue
   const {
     data: readingQueue = [],
     isLoading,
+    isError,
     error,
     refetch,
-  } = useQuery<ReadingQueueItem[]>({
+  } = useQuery<ReadingQueueItem[], Error>({
     queryKey: queryKeyFactory.queue.list(user?.id || ""),
-    queryFn: () =>
-      user?.id ? fetchReadingQueue(user.id) : Promise.resolve([]),
+    queryFn: () => fetchReadingQueue(user?.id || ""),
     enabled: !!user?.id,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 1 * 60 * 1000, // 1 minute
+    gcTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
-    retry: (failureCount, error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      if (
-        errorMessage.includes("4") ||
-        errorMessage.includes("Session expired")
-      ) {
-        return false;
-      }
-      return failureCount < 3;
-    },
-    retryDelay: (attemptIndex: number) =>
-      Math.min(1000 * Math.pow(2, attemptIndex), 30000),
   });
 
   // Add to reading queue
@@ -329,148 +223,73 @@ export const useReadingQueue = () => {
 
       startTimer("addToQueue");
       try {
-        // First check if the newsletter is already in the queue
+        // Check if already in queue
         const { data: existingItem } = await supabase
           .from("reading_queue")
-          .select("id, position")
+          .select("id")
           .eq("user_id", user.id)
           .eq("newsletter_id", newsletterId)
           .maybeSingle();
 
         if (existingItem) {
-          console.log(
-            "Newsletter already in queue at position:",
-            existingItem.position,
-          );
-          return existingItem; // Already in queue
+          throw new Error("Newsletter is already in reading queue");
         }
 
-        // Get the current max position with proper error handling
-        let nextPosition = 0;
-        try {
-          const { data: maxPosition, error: positionError } = await supabase
-            .from("reading_queue")
-            .select("position")
-            .eq("user_id", user.id)
-            .order("position", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+        // Get the current max position
+        const { data: maxPosition } = await supabase
+          .from("reading_queue")
+          .select("position")
+          .eq("user_id", user.id)
+          .order("position", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-          if (positionError && positionError.code !== "PGRST116") {
-            // PGRST116 is 'no rows found'
-            console.error("Error getting max position:", positionError);
-            throw positionError;
-          }
+        const newPosition = (maxPosition?.position || 0) + 1;
 
-          nextPosition = (maxPosition?.position ?? -1) + 1;
-        } catch (error) {
-          console.error("Error in position calculation:", error);
-          // Default to 0 if there's an error getting the max position
-          nextPosition = 0;
-        }
-
-        // Insert the new item
-        const { data: insertedData, error: insertError } = await supabase
+        const { data: insertedData, error } = await supabase
           .from("reading_queue")
           .insert({
             user_id: user.id,
             newsletter_id: newsletterId,
-            position: nextPosition,
+            position: newPosition,
           })
-          .select("*")
+          .select()
           .single();
 
-        if (insertError) {
-          // If it's a unique violation, the item might have been added by another request
-          if (insertError.code === "23505") {
-            // Fetch the existing item
-            const { data: existing, error: fetchError } = await supabase
-              .from("reading_queue")
-              .select("*")
-              .eq("user_id", user.id)
-              .eq("newsletter_id", newsletterId)
-              .single();
-
-            if (fetchError) {
-              console.error(
-                "Error fetching existing queue item after conflict:",
-                fetchError,
-              );
-              throw fetchError;
-            }
-
-            console.log("Resolved queue item conflict, using existing item");
-            return existing;
-          }
-
-          console.error("Error inserting into reading queue:", insertError);
-          throw insertError;
-        }
-
-        console.log("Successfully added to reading queue:", insertedData);
+        if (error) throw error;
         return insertedData;
-      } catch (error) {
-        console.error("Error in addToQueue:", error);
-        throw error;
       } finally {
         endTimer("addToQueue");
       }
     },
-    onMutate: async (newsletterId: string) => {
+    onMutate: async (newsletterId) => {
       if (!user?.id) return;
 
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({
-        queryKey: queryKeyFactory.queue.list(user.id),
-      });
+      // Snapshot the previous queue
+      const previousQueue = readingQueue;
 
-      // Get newsletter data for optimistic update
-      const newsletters = queryClient.getQueriesData({
-        queryKey: queryKeyFactory.newsletters.lists(),
-      });
+      // Use cache manager for optimistic update
+      safeCacheCall((manager) =>
+        manager.updateReadingQueueInCache({
+          type: "add",
+          newsletterId,
+          userId: user.id,
+        }),
+      );
 
-      let newsletter = null;
-      for (const [, data] of newsletters) {
-        if (Array.isArray(data)) {
-          newsletter = data.find(
-            (n: NewsletterWithRelations) => n.id === newsletterId,
-          );
-          if (newsletter) break;
-        }
-      }
-
-      if (newsletter) {
-        // Create optimistic queue item
-        const optimisticItem: ReadingQueueItem = {
-          id: `temp-${Date.now()}`,
-          position: readingQueue.length,
-          user_id: user.id,
-          newsletter_id: newsletterId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          newsletter: { ...newsletter, is_bookmarked: true },
-        };
-
-        // Use cache manager for optimistic update
-        cacheManager.updateReadingQueueInCache(
-          {
-            action: "add",
-            items: [optimisticItem],
-          },
-          user.id,
-        );
-      }
-
-      return { previousQueue: readingQueue };
+      return { previousQueue };
     },
     onError: (error, _newsletterId, context) => {
       console.error("Error adding to queue:", error);
 
-      // Revert optimistic update
+      // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
-        queryClient.setQueryData(
-          queryKeyFactory.queue.list(user.id),
-          context.previousQueue,
+        safeCacheCall((manager) =>
+          manager.updateReadingQueueInCache({
+            type: "revert",
+            queueItems: context.previousQueue,
+            userId: user.id,
+          }),
         );
       }
     },
@@ -478,22 +297,22 @@ export const useReadingQueue = () => {
       if (!user?.id) return;
 
       // Update newsletter cache to reflect bookmark status
-      cacheManager.updateNewsletterInCache(
-        {
-          id: newsletterId,
-          updates: { is_bookmarked: true },
-        },
-        { optimistic: false, invalidateRelated: true },
+      safeCacheCall((manager) =>
+        manager.updateNewsletterInCache(
+          {
+            id: newsletterId,
+            updates: { is_bookmarked: true },
+          },
+          { optimistic: false, invalidateRelated: true },
+        ),
       );
     },
     onSettled: () => {
       if (!user?.id) return;
-
-      // Smart invalidation using cache manager
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.queue.list(user.id),
-        refetchType: "active",
-      });
+      // Use cache manager for smart invalidation
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-add"),
+      );
     },
   });
 
@@ -507,51 +326,40 @@ export const useReadingQueue = () => {
           .delete()
           .eq("id", queueItemId);
 
-        if (error) {
-          console.error("Error removing from queue:", error);
-          throw error;
-        }
-
-        console.log("Successfully removed from queue:", queueItemId);
-      } catch (error) {
-        console.error("Error in removeFromQueue:", error);
-        throw error;
+        if (error) throw error;
       } finally {
         endTimer("removeFromQueue");
       }
     },
-    onMutate: async (queueItemId: string) => {
+    onMutate: async (queueItemId) => {
       if (!user?.id) return;
-
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({
-        queryKey: queryKeyFactory.queue.list(user.id),
-      });
 
       // Find the item being removed
       const itemToRemove = readingQueue.find((item) => item.id === queueItemId);
+      const previousQueue = readingQueue;
 
-      if (itemToRemove) {
-        // Use cache manager for optimistic update
-        cacheManager.updateReadingQueueInCache(
-          {
-            action: "remove",
-            items: [queueItemId],
-          },
-          user.id,
-        );
-      }
+      // Use cache manager for optimistic removal
+      safeCacheCall((manager) =>
+        manager.updateReadingQueueInCache({
+          type: "remove",
+          queueItemId,
+          userId: user.id,
+        }),
+      );
 
-      return { previousQueue: readingQueue, removedItem: itemToRemove };
+      return { previousQueue, removedItem: itemToRemove };
     },
     onError: (error, _queueItemId, context) => {
       console.error("Error removing from queue:", error);
 
-      // Revert optimistic update
+      // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
-        queryClient.setQueryData(
-          queryKeyFactory.queue.list(user.id),
-          context.previousQueue,
+        safeCacheCall((manager) =>
+          manager.updateReadingQueueInCache({
+            type: "revert",
+            queueItems: context.previousQueue,
+            userId: user.id,
+          }),
         );
       }
     },
@@ -559,22 +367,22 @@ export const useReadingQueue = () => {
       if (!user?.id || !context?.removedItem) return;
 
       // Update newsletter cache to reflect bookmark status
-      cacheManager.updateNewsletterInCache(
-        {
-          id: context.removedItem.newsletter.id,
-          updates: { is_bookmarked: false },
-        },
-        { optimistic: false, invalidateRelated: true },
+      safeCacheCall((manager) =>
+        manager.updateNewsletterInCache(
+          {
+            id: context.removedItem.newsletter.id,
+            updates: { is_bookmarked: false },
+          },
+          { optimistic: false, invalidateRelated: true },
+        ),
       );
     },
     onSettled: () => {
       if (!user?.id) return;
-
-      // Smart invalidation using cache manager
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.queue.list(user.id),
-        refetchType: "active",
-      });
+      // Use cache manager for smart invalidation
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-remove"),
+      );
     },
   });
 
@@ -585,179 +393,120 @@ export const useReadingQueue = () => {
 
       startTimer("reorderQueue");
       try {
-        // First, verify all items belong to the current user
-        const { data: existingItems, error: fetchError } = await supabase
-          .from("reading_queue")
-          .select("id")
-          .in(
-            "id",
-            updates.map((u) => u.id),
-          )
-          .eq("user_id", user.id);
-
-        if (fetchError) throw fetchError;
-
-        if (existingItems.length !== updates.length) {
-          throw new Error(
-            "Some items do not exist or you do not have permission to update them",
-          );
-        }
-
-        // Then update the positions
+        // Update the positions
         const { data, error } = await supabase
           .from("reading_queue")
           .upsert(
             updates.map(({ id, position }) => ({
               id,
               position,
-              user_id: user.id, // Include user_id to satisfy RLS
+              user_id: user.id,
               updated_at: new Date().toISOString(),
             })),
             { onConflict: "id" },
           )
           .select();
 
-        if (error) {
-          console.error("Error reordering queue:", error);
-          throw error;
-        }
-
-        console.log("Successfully reordered queue");
+        if (error) throw error;
         return data;
-      } catch (error) {
-        console.error("Error reordering queue:", error);
-        throw error;
       } finally {
         endTimer("reorderQueue");
       }
     },
-    onMutate: async (updates: { id: string; position: number }[]) => {
+    onMutate: async (updates) => {
       if (!user?.id) return;
 
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({
-        queryKey: queryKeyFactory.queue.list(user.id),
-      });
+      // Snapshot the previous queue
+      const previousQueue = readingQueue;
 
-      // Create optimistically reordered queue
-      const reorderedQueue = [...readingQueue];
-
-      // Apply position updates
-      updates.forEach((update) => {
-        const itemIndex = reorderedQueue.findIndex(
-          (item) => item.id === update.id,
-        );
-        if (itemIndex !== -1) {
-          reorderedQueue[itemIndex] = {
-            ...reorderedQueue[itemIndex],
-            position: update.position,
-          };
-        }
-      });
-
-      // Sort by new positions
-      reorderedQueue.sort((a, b) => a.position - b.position);
-
-      // Use cache manager for optimistic update
-      cacheManager.updateReadingQueueInCache(
-        {
-          action: "reorder",
-          items: reorderedQueue,
-        },
-        user.id,
+      // Use cache manager for optimistic reordering
+      safeCacheCall((manager) =>
+        manager.updateReadingQueueInCache({
+          type: "reorder",
+          updates,
+          userId: user.id,
+        }),
       );
 
-      return { previousQueue: readingQueue };
+      return { previousQueue };
     },
     onError: (error, _updates, context) => {
       console.error("Error reordering queue:", error);
 
-      // Revert optimistic update
+      // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
-        queryClient.setQueryData(
-          queryKeyFactory.queue.list(user.id),
-          context.previousQueue,
+        safeCacheCall((manager) =>
+          manager.updateReadingQueueInCache({
+            type: "revert",
+            queueItems: context.previousQueue,
+            userId: user.id,
+          }),
         );
       }
     },
     onSettled: () => {
       if (!user?.id) return;
-
-      // Invalidate and refetch the reading queue
-      queryClient.invalidateQueries({
-        queryKey: queryKeyFactory.queue.list(user.id),
-        refetchType: "active",
-      });
+      // Use cache manager for smart invalidation
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-reorder"),
+      );
     },
   });
 
-  // Toggle read status
-  const toggleRead = useMutation({
-    mutationFn: async ({
-      newsletterId,
-      isRead,
-    }: {
-      newsletterId: string;
-      isRead: boolean;
-    }) => {
+  // Clear entire reading queue
+  const clearQueue = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("User not authenticated");
+
+      const { error } = await supabase
+        .from("reading_queue")
+        .delete()
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-clear"),
+      );
+    },
+  });
+
+  // Mark newsletter as read
+  const markAsRead = useMutation({
+    mutationFn: async (newsletterId: string) => {
       const { error } = await supabase
         .from("newsletters")
-        .update({ is_read: isRead, updated_at: new Date().toISOString() })
+        .update({ is_read: true })
         .eq("id", newsletterId);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["readingQueue", user?.id] });
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-mark-read"),
+      );
     },
   });
 
-  // Toggle like status
-  const toggleLike = useMutation({
-    mutationFn: async ({
-      newsletterId,
-      isLiked,
-    }: {
-      newsletterId: string;
-      isLiked: boolean;
-    }) => {
+  // Mark newsletter as unread
+  const markAsUnread = useMutation({
+    mutationFn: async (newsletterId: string) => {
       const { error } = await supabase
         .from("newsletters")
-        .update({ is_liked: isLiked, updated_at: new Date().toISOString() })
+        .update({ is_read: false })
         .eq("id", newsletterId);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["readingQueue", user?.id] });
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-mark-unread"),
+      );
     },
   });
 
-  // Toggle archive status
-  const toggleArchive = useMutation({
-    mutationFn: async ({
-      newsletterId,
-      isArchived,
-    }: {
-      newsletterId: string;
-      isArchived: boolean;
-    }) => {
-      const { error } = await supabase
-        .from("newsletters")
-        .update({
-          is_archived: isArchived,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", newsletterId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["readingQueue", user?.id] });
-    },
-  });
-
-  // Update tags for a newsletter
+  // Update tags
   const updateTags = useMutation({
     mutationFn: async ({
       newsletterId,
@@ -768,59 +517,25 @@ export const useReadingQueue = () => {
     }) => {
       if (!user?.id) throw new Error("User not authenticated");
 
-      // Get current tag IDs for the newsletter
-      const currentTags =
-        readingQueue.find((item) => item.newsletter.id === newsletterId)
-          ?.newsletter.tags || [];
-      const currentTagIds = currentTags.map((tag) => tag.id);
+      const currentTagIds =
+        readingQueue
+          .find((item) => item.newsletter.id === newsletterId)
+          ?.newsletter.tags?.map((tag) => tag.id) || [];
 
-      // Use the utility function to update tags
       return updateNewsletterTags(newsletterId, tagIds, currentTagIds, user.id);
     },
     onMutate: async ({ newsletterId, tagIds }) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["readingQueue", user?.id] });
-
       // Snapshot the previous value
-      const previousQueue =
-        queryClient.getQueryData<ReadingQueueItem[]>([
-          "readingQueue",
-          user?.id,
-        ]) || [];
+      const previousQueue = readingQueue;
 
-      // Optimistically update the cache
-      queryClient.setQueryData<ReadingQueueItem[]>(
-        ["readingQueue", user?.id],
-        (old = []) =>
-          old.map((item) => {
-            if (item.newsletter.id === newsletterId) {
-              // Get the full tag objects for the selected tag IDs
-              const updatedTags = tagIds.map((tagId) => {
-                const existingTag = item.newsletter.tags?.find(
-                  (t) => t.id === tagId,
-                );
-                return (
-                  existingTag || {
-                    id: tagId,
-                    name: "",
-                    color: "#808080",
-                    user_id: user?.id || "",
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  }
-                );
-              });
-
-              return {
-                ...item,
-                newsletter: {
-                  ...item.newsletter,
-                  tags: updatedTags,
-                },
-              };
-            }
-            return item;
-          }),
+      // Use cache manager for optimistic tag update
+      safeCacheCall((manager) =>
+        manager.updateReadingQueueInCache({
+          type: "updateTags",
+          newsletterId,
+          tagIds,
+          userId: user?.id || "",
+        }),
       );
 
       return { previousQueue };
@@ -828,38 +543,51 @@ export const useReadingQueue = () => {
     onError: (_err, _variables, context) => {
       // Rollback on error
       if (context?.previousQueue) {
-        queryClient.setQueryData(
-          ["readingQueue", user?.id],
-          context.previousQueue,
+        // Revert using cache manager
+        safeCacheCall((manager) =>
+          manager.updateReadingQueueInCache({
+            type: "revert",
+            queueItems: context.previousQueue,
+            userId: user?.id || "",
+          }),
         );
       }
     },
     onSettled: () => {
-      // Always refetch after error or success
-      queryClient.invalidateQueries({ queryKey: ["readingQueue", user?.id] });
+      // Use cache manager for smart invalidation
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-update-tags"),
+      );
     },
   });
 
   return {
+    // Data
     readingQueue,
     isLoading,
+    isError,
     error,
-    refetch,
+    isEmpty: readingQueue.length === 0,
+
+    // Actions
     addToQueue: addToQueue.mutateAsync,
     removeFromQueue: removeFromQueue.mutateAsync,
     reorderQueue: reorderQueue.mutateAsync,
-    toggleRead: toggleRead.mutateAsync,
-    toggleLike: toggleLike.mutateAsync,
-    toggleArchive: toggleArchive.mutateAsync,
+    clearQueue: clearQueue.mutateAsync,
+    markAsRead: markAsRead.mutateAsync,
+    markAsUnread: markAsUnread.mutateAsync,
+    updateTags: updateTags.mutateAsync,
+
+    // Loading states
     isAdding: addToQueue.isPending,
     isRemoving: removeFromQueue.isPending,
     isReordering: reorderQueue.isPending,
-    isTogglingRead: toggleRead.isPending,
-    isTogglingLike: toggleLike.isPending,
-    isTogglingArchive: toggleArchive.isPending,
-    updateTags: updateTags.mutateAsync,
+    isClearing: clearQueue.isPending,
+    isMarkingAsRead: markAsRead.isPending,
+    isMarkingAsUnread: markAsUnread.isPending,
     isUpdatingTags: updateTags.isPending,
+
+    // Utils
+    refetch,
   };
 };
-
-export default useReadingQueue;
