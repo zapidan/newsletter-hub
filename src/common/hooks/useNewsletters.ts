@@ -19,7 +19,11 @@ import {
 } from "../types";
 import type { NewsletterFilter } from "../types/cache";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
-import { createCacheManager, getCacheManager } from "../utils/cacheUtils";
+import {
+  createCacheManager,
+  getCacheManager,
+  SimpleCacheManager,
+} from "../utils/cacheUtils";
 
 type PreviousNewslettersState = {
   previousNewsletters?: NewsletterWithRelations[];
@@ -257,7 +261,7 @@ export const useNewsletters = (
   }
 
   // Initialize cache manager
-  const cacheManager = useMemo(() => {
+  const cacheManager = useMemo((): SimpleCacheManager => {
     try {
       return getCacheManager();
     } catch {
@@ -541,13 +545,10 @@ export const useNewsletters = (
       console.error("Error marking as read:", err);
       // Revert optimistic update using cache manager
       if (context?.previousNewsletter) {
-        cacheManager.updateNewsletterInCache(
-          {
-            id: newsletterId,
-            updates: context.previousNewsletter,
-          },
-          { optimistic: true },
-        );
+        cacheManager.updateNewsletterInCache({
+          id: newsletterId,
+          updates: context.previousNewsletter,
+        });
       }
     },
     onSettled: (_data, _error, newsletterId) => {
@@ -605,27 +606,21 @@ export const useNewsletters = (
       }
 
       // Use cache manager for optimistic update
-      cacheManager.updateNewsletterInCache(
-        {
-          id,
-          updates: { is_read: false },
-        },
-        { optimistic: true },
-      );
+      cacheManager.updateNewsletterInCache({
+        id,
+        updates: { is_read: false },
+      });
 
       return { previousNewsletters };
     },
     onError: (err, id, context) => {
       console.error("Error marking as unread:", err);
       // Revert optimistic update using cache manager
-      if (context?.previousNewsletter) {
-        cacheManager.updateNewsletterInCache(
-          {
-            id,
-            updates: context.previousNewsletter,
-          },
-          { optimistic: true },
-        );
+      if (context?.previousNewsletters) {
+        cacheManager.updateNewsletterInCache({
+          id: id,
+          updates: { is_read: true },
+        });
       }
     },
     onSettled: (_data, _error, id) => {
@@ -659,19 +654,18 @@ export const useNewsletters = (
       // Use cache manager for batch optimistic updates
       await cacheManager.batchUpdateNewsletters(
         ids.map((id) => ({ id, updates: { is_archived: true } })),
-        { optimistic: true },
       );
 
       return { deletedIds: ids };
     },
-    onError: (err, ids, context) => {
+    onError: (err, ids) => {
       console.error("Error bulk deleting newsletters:", err);
       // Revert by invalidating affected queries
-      cacheManager.invalidateRelatedQueries(ids, "bulk-delete-error");
-    },
-    onSettled: (data, error, ids) => {
-      // Use cache manager for comprehensive invalidation
       cacheManager.invalidateRelatedQueries(ids, "bulk-delete");
+    },
+    onSettled: (_data, _error, ids) => {
+      // Final invalidation to ensure consistency
+      cacheManager.invalidateRelatedQueries(ids, "bulk-archive");
     },
   });
 
@@ -788,13 +782,10 @@ export const useNewsletters = (
       );
 
       // Use cache manager for optimistic update
-      cacheManager.updateNewsletterInCache(
-        {
-          id: newsletterId,
-          updates: { is_bookmarked: !isInQueue },
-        },
-        { optimistic: true },
-      );
+      cacheManager.updateNewsletterInCache({
+        id: newsletterId,
+        updates: { is_bookmarked: !isInQueue },
+      });
 
       return { previousNewsletters, wasInQueue: isInQueue };
     },
@@ -806,13 +797,10 @@ export const useNewsletters = (
           (n) => n.id === newsletterId,
         );
         if (newsletter) {
-          cacheManager.updateNewsletterInCache(
-            {
-              id: newsletterId,
-              updates: { is_bookmarked: newsletter.is_bookmarked },
-            },
-            { optimistic: true },
-          );
+          cacheManager.updateNewsletterInCache({
+            id: newsletterId,
+            updates: { is_bookmarked: newsletter.is_bookmarked },
+          });
         }
       }
     },
@@ -820,15 +808,12 @@ export const useNewsletters = (
       if (!user?.id) return;
 
       // Update newsletter cache to reflect final queue status
-      cacheManager.updateNewsletterInCache(
-        {
-          id: newsletterId,
-          updates: { is_bookmarked: result },
-        },
-        { optimistic: false, invalidateRelated: true },
-      );
+      cacheManager.updateNewsletterInCache({
+        id: newsletterId,
+        updates: { is_bookmarked: result },
+      });
     },
-    onSettled: (data, error, newsletterId) => {
+    onSettled: (_data, _error, newsletterId) => {
       if (!user?.id) return;
 
       // Use cache manager for comprehensive invalidation
@@ -871,13 +856,10 @@ export const useNewsletters = (
       console.error("Error deleting newsletter:", err);
       // Revert optimistic update using cache manager
       if (context?.previousNewsletter) {
-        cacheManager.updateNewsletterInCache(
-          {
-            id: newsletterId,
-            updates: context.previousNewsletter,
-          },
-          { optimistic: true },
-        );
+        cacheManager.updateNewsletterInCache({
+          id: newsletterId,
+          updates: context.previousNewsletter,
+        });
       }
     },
     onSettled: (_data, _error, newsletterId) => {
@@ -923,13 +905,10 @@ export const useNewsletters = (
       console.error("Error toggling like:", err);
       // Revert optimistic update using cache manager
       if (context?.previousNewsletter) {
-        cacheManager.updateNewsletterInCache(
-          {
-            id,
-            updates: context.previousNewsletter,
-          },
-          { optimistic: true },
-        );
+        cacheManager.updateNewsletterInCache({
+          id: id,
+          updates: context.previousNewsletter,
+        });
       }
     },
     onSettled: (_data, _error, { id }) => {
@@ -977,13 +956,10 @@ export const useNewsletters = (
       console.error("Error toggling archive status:", err);
       // Revert optimistic update using cache manager
       if (context?.previousNewsletter) {
-        cacheManager.updateNewsletterInCache(
-          {
-            id,
-            updates: context.previousNewsletter,
-          },
-          { optimistic: true },
-        );
+        cacheManager.updateNewsletterInCache({
+          id: id,
+          updates: context.previousNewsletter,
+        });
       }
     },
     onSettled: (_data, _error, { id, isArchived }) => {
@@ -1341,7 +1317,7 @@ export const useNewsletters = (
         queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
-      cacheManager.batchUpdateNewsletters(
+      await cacheManager.batchUpdateNewsletters(
         ids
           .filter((id) => {
             // Only update non-archived newsletters
@@ -1355,7 +1331,6 @@ export const useNewsletters = (
               updated_at: new Date().toISOString(),
             },
           })),
-        { optimistic: true },
       );
 
       return { previousNewsletters };
@@ -1368,16 +1343,13 @@ export const useNewsletters = (
             (n) => n.id === id,
           );
           if (newsletter) {
-            cacheManager.updateNewsletterInCache(
-              {
-                id,
-                updates: {
-                  is_read: newsletter.is_read,
-                  updated_at: newsletter.updated_at,
-                },
+            cacheManager.updateNewsletterInCache({
+              id,
+              updates: {
+                is_read: newsletter.is_read,
+                updated_at: newsletter.updated_at,
               },
-              { optimistic: true },
-            );
+            });
           }
         });
       }
@@ -1432,7 +1404,7 @@ export const useNewsletters = (
         queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
-      cacheManager.batchUpdateNewsletters(
+      await cacheManager.batchUpdateNewsletters(
         ids
           .filter((id) => {
             // Only update non-archived newsletters
@@ -1446,7 +1418,6 @@ export const useNewsletters = (
               updated_at: new Date().toISOString(),
             },
           })),
-        { optimistic: true },
       );
 
       return { previousNewsletters };
@@ -1459,16 +1430,13 @@ export const useNewsletters = (
             (n) => n.id === id,
           );
           if (newsletter) {
-            cacheManager.updateNewsletterInCache(
-              {
-                id,
-                updates: {
-                  is_read: newsletter.is_read,
-                  updated_at: newsletter.updated_at,
-                },
+            cacheManager.updateNewsletterInCache({
+              id,
+              updates: {
+                is_read: newsletter.is_read,
+                updated_at: newsletter.updated_at,
               },
-              { optimistic: true },
-            );
+            });
           }
         });
       }
@@ -1529,7 +1497,6 @@ export const useNewsletters = (
             updated_at: new Date().toISOString(),
           },
         })),
-        { optimistic: true },
       );
 
       return { previousNewsletters };
@@ -1542,16 +1509,13 @@ export const useNewsletters = (
             (n) => n.id === id,
           );
           if (newsletter) {
-            cacheManager.updateNewsletterInCache(
-              {
-                id,
-                updates: {
-                  is_archived: newsletter.is_archived,
-                  updated_at: newsletter.updated_at,
-                },
+            cacheManager.updateNewsletterInCache({
+              id,
+              updates: {
+                is_archived: newsletter.is_archived,
+                updated_at: newsletter.updated_at,
               },
-              { optimistic: true },
-            );
+            });
           }
         });
       }
@@ -1612,7 +1576,6 @@ export const useNewsletters = (
             updated_at: new Date().toISOString(),
           },
         })),
-        { optimistic: true },
       );
 
       return { previousNewsletters };
@@ -1625,16 +1588,13 @@ export const useNewsletters = (
             (n) => n.id === id,
           );
           if (newsletter) {
-            cacheManager.updateNewsletterInCache(
-              {
-                id,
-                updates: {
-                  is_archived: newsletter.is_archived,
-                  updated_at: newsletter.updated_at,
-                },
+            cacheManager.updateNewsletterInCache({
+              id,
+              updates: {
+                is_archived: newsletter.is_archived,
+                updated_at: newsletter.updated_at,
               },
-              { optimistic: true },
-            );
+            });
           }
         });
       }

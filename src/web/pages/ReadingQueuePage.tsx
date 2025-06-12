@@ -11,8 +11,8 @@ import { ReadingQueueItem, Tag, NewsletterWithRelations } from "@common/types";
 import { toast } from "react-hot-toast";
 import { useTags } from "@common/hooks/useTags";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
+import { useCache } from "@common/hooks/useCache";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { AuthContext } from "@common/contexts/AuthContext";
 import {
   DndContext,
@@ -37,7 +37,7 @@ import { getCacheManager } from "@common/utils/cacheUtils";
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const { setQueryData } = useCache();
   const auth = useContext(AuthContext);
   const user = auth?.user;
 
@@ -460,7 +460,7 @@ const ReadingQueuePage: React.FC = () => {
                     );
 
                     // Update the cache with the new tags
-                    queryClient.setQueryData(
+                    setQueryData(
                       ["readingQueue", user?.id],
                       (old: ReadingQueueItem[] = []) =>
                         old.map((item) => {

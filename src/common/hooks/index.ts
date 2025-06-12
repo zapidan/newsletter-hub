@@ -1,3 +1,4 @@
+export * from "./useCache";
 export * from "./useClickOutside";
 export * from "./useEmailAlias";
 export * from "./useNewsletterDetail";

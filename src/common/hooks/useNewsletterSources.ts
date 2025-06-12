@@ -4,7 +4,7 @@ import { NewsletterSource } from "@common/types";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext } from "react";
 import { supabase } from "@common/services/supabaseClient";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 
 // Cache time constants (in milliseconds)
@@ -128,26 +128,7 @@ const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
   }));
 };
 
-const prefetchSource = async (
-  queryClient: QueryClient,
-  id: string,
-): Promise<void> => {
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.detail(id),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("newsletter_sources")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) throw error;
-      if (!data) throw new Error("Source not found");
-      return data;
-    },
-    staleTime: STALE_TIME,
-  });
-};
+// Removed unused prefetchSource function
 
 // Hook
 export const useNewsletterSources = () => {
@@ -162,7 +143,11 @@ export const useNewsletterSources = () => {
 
   // Safe cache manager helper
   const safeCacheCall = useCallback(
-    (fn: (manager: any) => void) => {
+    (
+      fn: (
+        manager: NonNullable<ReturnType<typeof getCacheManagerSafe>>,
+      ) => void,
+    ) => {
       if (cacheManager) {
         fn(cacheManager);
       }
@@ -197,14 +182,11 @@ export const useNewsletterSources = () => {
   }, [safeCacheCall]);
 
   // Prefetch a single source by ID
-  const prefetchSourceById = useCallback(
-    (id: string) => {
-      if (!user) return;
-      // Implementation would use cache manager if needed
-      return Promise.resolve();
-    },
-    [user],
-  );
+  const prefetchSourceById = useCallback(() => {
+    if (!user) return;
+    // Implementation would use cache manager if needed
+    return Promise.resolve();
+  }, [user]);
 
   // Update mutation
   const updateMutation = useMutation<
@@ -214,7 +196,7 @@ export const useNewsletterSources = () => {
     SourceContext
   >({
     mutationFn: updateNewsletterSourceFn,
-    onMutate: async (variables) => {
+    onMutate: async () => {
       // Use cache manager for optimistic update
       const previousSources = newsletterSources;
 
@@ -246,7 +228,7 @@ export const useNewsletterSources = () => {
     SourceContext
   >({
     mutationFn: archiveNewsletterSourceFn,
-    onMutate: async ({ id, archive }) => {
+    onMutate: async ({ archive }) => {
       const previousSources = newsletterSources;
 
       // Use cache manager for optimistic update
@@ -277,16 +259,16 @@ export const useNewsletterSources = () => {
 
   // Archive a source (soft delete)
   const archiveSource = useCallback(
-    async (id: string) => {
-      return archiveMutation.mutateAsync({ id, archive: true });
+    async (sourceId: string) => {
+      return archiveMutation.mutateAsync({ id: sourceId, archive: true });
     },
     [archiveMutation],
   );
 
   // Unarchive a source
   const unarchiveSource = useCallback(
-    async (id: string) => {
-      return archiveMutation.mutateAsync({ id, archive: false });
+    async (sourceId: string) => {
+      return archiveMutation.mutateAsync({ id: sourceId, archive: false });
     },
     [archiveMutation],
   );
@@ -301,8 +283,8 @@ export const useNewsletterSources = () => {
 
   // Keep deleteSource for backward compatibility, but it will now archive instead of delete
   const deleteSource = useCallback(
-    (id: string) => {
-      return archiveMutation.mutateAsync({ id, archive: true });
+    (sourceId: string) => {
+      return archiveMutation.mutateAsync({ id: sourceId, archive: true });
     },
     [archiveMutation],
   );

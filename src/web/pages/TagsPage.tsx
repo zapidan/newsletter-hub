@@ -1,18 +1,27 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
-import { Plus, Tag as TagIcon, X, Edit2, Trash2, Check, ArrowLeft } from 'lucide-react';
-import { handleTagClickWithNavigation } from '@common/utils/tagUtils';
-import { useTags } from '@common/hooks/useTags';
-import type { Tag, TagCreate, TagWithCount, Newsletter } from '@common/types';
-import LoadingScreen from '@common/components/common/LoadingScreen';
-import { supabase } from '@common/services/supabaseClient';
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
+import {
+  Plus,
+  Tag as TagIcon,
+  X,
+  Edit2,
+  Trash2,
+  Check,
+  ArrowLeft,
+} from "lucide-react";
+import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
+import { useTags } from "@common/hooks/useTags";
+import { useCache } from "@common/hooks/useCache";
+import type { Tag, TagCreate, TagWithCount, Newsletter } from "@common/types";
+import LoadingScreen from "@common/components/common/LoadingScreen";
+import { supabase } from "@common/services/supabaseClient";
 
 const TagsPage: React.FC = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { getTags, createTag, updateTag, deleteTag } = useTags();
+  const { batchInvalidate } = useCache();
   const [tags, setTags] = useState<TagWithCount[]>([]);
   const [tagNewsletters, setTagNewsletters] = useState<
     Record<string, Newsletter[]>
@@ -33,16 +42,16 @@ const TagsPage: React.FC = () => {
   // Invalidate and refetch all queries on component mount to ensure fresh data
   useEffect(() => {
     const refreshData = async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['tags'] }),
-        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
-        queryClient.invalidateQueries({ queryKey: ['newsletters'] })
+      await batchInvalidate([
+        { queryKey: ["tags"] },
+        { queryKey: ["newsletter_tags"] },
+        { queryKey: ["newsletters"] },
       ]);
       await refetchTags();
     };
 
     refreshData();
-  }, [queryClient, refetchTags]);
+  }, [batchInvalidate, refetchTags]);
 
   // Fetch all newsletter_tags join rows (cached)
   const {
@@ -89,12 +98,14 @@ const TagsPage: React.FC = () => {
       `);
       if (error) throw error;
       return Array.isArray(data)
-        ? data.map((item: any) => ({
-            ...item,
-            tags: Array.isArray(item.newsletter_tags)
-              ? item.newsletter_tags.map((nt: any) => nt.tag)
-              : [],
-          }))
+        ? data.map(
+            (item: Newsletter & { newsletter_tags?: Array<{ tag: Tag }> }) => ({
+              ...item,
+              tags: Array.isArray(item.newsletter_tags)
+                ? item.newsletter_tags.map((nt: { tag: Tag }) => nt.tag)
+                : [],
+            }),
+          )
         : [];
     },
     staleTime: 5 * 60 * 1000,
@@ -119,8 +130,13 @@ const TagsPage: React.FC = () => {
       // For each tag, find newsletters
       tagsData.forEach((tag: Tag) => {
         const relatedNewsletterIds = newsletterTagsData
-          .filter((nt: any) => nt.tag_id === tag.id)
-          .map((nt: any) => nt.newsletter_id);
+          .filter(
+            (nt: { tag_id: string; newsletter_id: string }) =>
+              nt.tag_id === tag.id,
+          )
+          .map(
+            (nt: { tag_id: string; newsletter_id: string }) => nt.newsletter_id,
+          );
         newslettersMap[tag.id] = relatedNewsletterIds
           .map((nid: string) => newsletterLookup[nid])
           .filter(Boolean);
@@ -168,12 +184,12 @@ const TagsPage: React.FC = () => {
       setIsCreating(false);
 
       // Invalidate all relevant queries to ensure UI consistency
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['tags'] }),
-        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
-        queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
-        queryClient.invalidateQueries({ queryKey: ['inbox'] }),
-        queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
+      await batchInvalidate([
+        { queryKey: ["tags"] },
+        { queryKey: ["newsletter_tags"] },
+        { queryKey: ["newsletters"] },
+        { queryKey: ["inbox"] },
+        { queryKey: ["readingQueue"] },
       ]);
 
       toast.success("Tag created successfully");
@@ -199,12 +215,12 @@ const TagsPage: React.FC = () => {
       setEditTagData({});
 
       // Invalidate all relevant queries to ensure UI consistency
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['tags'] }),
-        queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
-        queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
-        queryClient.invalidateQueries({ queryKey: ['inbox'] }),
-        queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
+      await batchInvalidate([
+        { queryKey: ["tags"] },
+        { queryKey: ["newsletter_tags"] },
+        { queryKey: ["newsletters"] },
+        { queryKey: ["inbox"] },
+        { queryKey: ["readingQueue"] },
       ]);
 
       toast.success("Tag updated successfully");
@@ -224,12 +240,12 @@ const TagsPage: React.FC = () => {
         await deleteTag(tagId);
 
         // Invalidate all relevant queries to ensure UI consistency
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['tags'] }),
-          queryClient.invalidateQueries({ queryKey: ['newsletter_tags'] }),
-          queryClient.invalidateQueries({ queryKey: ['newsletters'] }),
-          queryClient.invalidateQueries({ queryKey: ['inbox'] }),
-          queryClient.invalidateQueries({ queryKey: ['readingQueue'] })
+        await batchInvalidate([
+          { queryKey: ["tags"] },
+          { queryKey: ["newsletter_tags"] },
+          { queryKey: ["newsletters"] },
+          { queryKey: ["inbox"] },
+          { queryKey: ["readingQueue"] },
         ]);
 
         toast.success("Tag deleted successfully");

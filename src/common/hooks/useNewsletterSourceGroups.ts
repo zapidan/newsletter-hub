@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@common/services/supabaseClient";
 import { NewsletterSourceGroup, NewsletterSource } from "@common/types";
+import { useCache } from "./useCache";
 
 export const useNewsletterSourceGroups = () => {
-  const queryClient = useQueryClient();
+  const { batchInvalidate } = useCache();
 
   // Fetch all groups for the current user with source counts
   const { data: groups = [], ...query } = useQuery({
@@ -24,7 +25,10 @@ export const useNewsletterSourceGroups = () => {
       // Transform the data to match our types
       return (data || []).map((group) => ({
         ...group,
-        sources: (group as any).sources?.map((s: any) => s.source) || [],
+        sources:
+          (
+            group as unknown as { sources: { source: NewsletterSource }[] }
+          ).sources?.map((s) => s.source) || [],
       })) as NewsletterSourceGroup[];
     },
   });
@@ -71,7 +75,7 @@ export const useNewsletterSourceGroups = () => {
       return group as NewsletterSourceGroup;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["newsletterSourceGroups"] });
+      batchInvalidate([{ queryKey: ["newsletterSourceGroups"] }]);
     },
   });
 
@@ -106,7 +110,7 @@ export const useNewsletterSourceGroups = () => {
       if (membersError) throw membersError;
 
       const currentSourceIds = new Set(
-        (currentMembers || []).map((m: any) => m.source_id),
+        (currentMembers || []).map((m: { source_id: string }) => m.source_id),
       );
       const newSourceIds = new Set(sourceIds);
 
@@ -140,7 +144,7 @@ export const useNewsletterSourceGroups = () => {
       return { ...group, sourceIds } as NewsletterSourceGroup;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["newsletterSourceGroups"] });
+      batchInvalidate([{ queryKey: ["newsletterSourceGroups"] }]);
     },
   });
 
@@ -156,7 +160,7 @@ export const useNewsletterSourceGroups = () => {
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["newsletterSourceGroups"] });
+      batchInvalidate([{ queryKey: ["newsletterSourceGroups"] }]);
     },
   });
 
@@ -178,7 +182,10 @@ export const useNewsletterSourceGroups = () => {
 
       return {
         ...data,
-        sources: (data as any).sources?.map((s: any) => s.source) || [],
+        sources:
+          (
+            data as unknown as { sources: { source: NewsletterSource }[] }
+          ).sources?.map((s) => s.source) || [],
       } as NewsletterSourceGroup;
     },
   });
@@ -206,13 +213,15 @@ export const useNewsletterSourceGroups = () => {
 
       if (error) throw error;
 
-      return (data as any[]).map((d) => d.source) as NewsletterSource[];
+      return (data as unknown as { source: NewsletterSource }[]).map(
+        (d) => d.source,
+      ) as NewsletterSource[];
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["newsletterSourceGroups"] });
-      queryClient.invalidateQueries({
-        queryKey: ["newsletterSourceGroup", variables.groupId],
-      });
+      batchInvalidate([
+        { queryKey: ["newsletterSourceGroups"] },
+        { queryKey: ["newsletterSourceGroup", variables.groupId] },
+      ]);
     },
   });
 
@@ -237,10 +246,10 @@ export const useNewsletterSourceGroups = () => {
       return sourceIds;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["newsletterSourceGroups"] });
-      queryClient.invalidateQueries({
-        queryKey: ["newsletterSourceGroup", variables.groupId],
-      });
+      batchInvalidate([
+        { queryKey: ["newsletterSourceGroups"] },
+        { queryKey: ["newsletterSourceGroup", variables.groupId] },
+      ]);
     },
   });
 

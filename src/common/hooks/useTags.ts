@@ -20,7 +20,11 @@ export const useTags = () => {
 
   // Safe cache manager helper
   const safeCacheCall = useCallback(
-    (fn: (manager: any) => void) => {
+    (
+      fn: (
+        manager: NonNullable<ReturnType<typeof getCacheManagerSafe>>,
+      ) => void,
+    ) => {
       if (cacheManager) {
         fn(cacheManager);
       }
@@ -69,7 +73,7 @@ export const useTags = () => {
 
         // Use cache manager for better tag cache management
         safeCacheCall((manager) =>
-          manager.invalidateTagQueries([], "tag-create"),
+          manager.invalidateRelatedQueries([], "tag-create"),
         );
         if (!cacheManager) {
           // Fallback to manual invalidation
@@ -91,7 +95,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager],
+    [user, queryClient, cacheManager, safeCacheCall],
   );
 
   // Update an existing tag
@@ -114,7 +118,7 @@ export const useTags = () => {
 
         // Use cache manager for cross-feature cache synchronization
         safeCacheCall((manager) =>
-          manager.handleTagUpdate(data.id, data, "tag-update"),
+          manager.invalidateRelatedQueries([data.id], "tag-update"),
         );
         if (!cacheManager) {
           // Fallback to manual invalidation
@@ -139,7 +143,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager],
+    [user, queryClient, cacheManager, safeCacheCall],
   );
 
   // Delete a tag
@@ -159,7 +163,7 @@ export const useTags = () => {
 
         // Use cache manager for comprehensive tag deletion cache management
         safeCacheCall((manager) =>
-          manager.invalidateTagQueries([tagId], "tag-delete"),
+          manager.invalidateRelatedQueries([tagId], "tag-delete"),
         );
         if (!cacheManager) {
           // Also invalidate any newsletter lists that might have been filtered by this tag
@@ -197,7 +201,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager],
+    [user, queryClient, cacheManager, safeCacheCall],
   );
 
   // Get tags for a specific newsletter
@@ -296,7 +300,7 @@ export const useTags = () => {
           });
 
           // Invalidate tag-related queries
-          manager.invalidateTagQueries([], "newsletter-tag-update");
+          manager.invalidateRelatedQueries([], "newsletter-tag-update");
         });
 
         if (!cacheManager) {
@@ -330,7 +334,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager],
+    [user, queryClient, cacheManager, safeCacheCall],
   );
 
   return {

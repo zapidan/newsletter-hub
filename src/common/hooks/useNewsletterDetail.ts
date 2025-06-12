@@ -5,6 +5,7 @@ import { AuthContext } from "@common/contexts/AuthContext";
 import { NewsletterWithRelations } from "@common/types";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 import { getCacheManagerSafe } from "@common/utils/cacheUtils";
+import { useCache } from "@common/hooks/useCache";
 
 export interface UseNewsletterDetailOptions {
   enabled?: boolean;
@@ -72,6 +73,7 @@ export const useNewsletterDetail = (
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const queryClient = useQueryClient();
+  const { prefetchQuery } = useCache();
 
   // Initialize cache manager safely
   const cacheManager = useMemo(() => {
@@ -217,9 +219,9 @@ export const useNewsletterDetail = (
       // Prefetch individual tag details
       newsletter.tags.forEach((tag) => {
         prefetchPromises.push(
-          queryClient.prefetchQuery({
-            queryKey: queryKeyFactory.newsletters.tag(tag.id),
-            queryFn: async () => {
+          prefetchQuery(
+            [...queryKeyFactory.newsletters.tag(tag.id)],
+            async () => {
               const { data, error } = await supabase
                 .from("tags")
                 .select("*")
@@ -230,8 +232,8 @@ export const useNewsletterDetail = (
               if (error) throw error;
               return data;
             },
-            staleTime: 10 * 60 * 1000, // 10 minutes
-          }),
+            { staleTime: 10 * 60 * 1000 }, // 10 minutes
+          ),
         );
       });
 
@@ -239,9 +241,9 @@ export const useNewsletterDetail = (
       const tagIds = newsletter.tags.map((t) => t.id);
       if (tagIds.length > 0) {
         prefetchPromises.push(
-          queryClient.prefetchQuery({
-            queryKey: queryKeyFactory.newsletters.list({ tagIds }),
-            queryFn: async () => {
+          prefetchQuery(
+            [...queryKeyFactory.newsletters.list({ tagIds })],
+            async () => {
               const { data, error } = await supabase
                 .from("newsletters")
                 .select(
@@ -265,8 +267,8 @@ export const useNewsletterDetail = (
                 })) || []
               );
             },
-            staleTime: 2 * 60 * 1000, // 2 minutes
-          }),
+            { staleTime: 2 * 60 * 1000 }, // 2 minutes
+          ),
         );
       }
     }
@@ -274,9 +276,9 @@ export const useNewsletterDetail = (
     // Prefetch source if enabled and newsletter has a source
     if (prefetchSource && newsletter.source) {
       prefetchPromises.push(
-        queryClient.prefetchQuery({
-          queryKey: queryKeyFactory.newsletters.source(newsletter.source.id),
-          queryFn: async () => {
+        prefetchQuery(
+          [...queryKeyFactory.newsletters.source(newsletter.source.id)],
+          async () => {
             const { data, error } = await supabase
               .from("newsletter_sources")
               .select("*")
@@ -287,17 +289,19 @@ export const useNewsletterDetail = (
             if (error) throw error;
             return data;
           },
-          staleTime: 15 * 60 * 1000, // 15 minutes
-        }),
+          { staleTime: 15 * 60 * 1000 }, // 15 minutes
+        ),
       );
 
       // Prefetch other newsletters from same source
       prefetchPromises.push(
-        queryClient.prefetchQuery({
-          queryKey: queryKeyFactory.newsletters.list({
-            sourceId: newsletter.source.id,
-          }),
-          queryFn: async () => {
+        prefetchQuery(
+          [
+            ...queryKeyFactory.newsletters.list({
+              sourceId: newsletter.source.id,
+            }),
+          ],
+          async () => {
             const { data, error } = await supabase
               .from("newsletters")
               .select(
@@ -323,8 +327,8 @@ export const useNewsletterDetail = (
               })) || []
             );
           },
-          staleTime: 2 * 60 * 1000, // 2 minutes
-        }),
+          { staleTime: 2 * 60 * 1000 }, // 2 minutes
+        ),
       );
     }
 
@@ -335,7 +339,7 @@ export const useNewsletterDetail = (
       console.warn("Some prefetch operations failed:", error);
       // Don't throw - prefetching failures shouldn't break the main functionality
     }
-  }, [query.data, user, queryClient, prefetchTags, prefetchSource]);
+  }, [query.data, user, prefetchQuery, prefetchTags, prefetchSource]);
 
   // Enhanced refetch that also updates cache manager
   const refetch = useCallback(() => {
