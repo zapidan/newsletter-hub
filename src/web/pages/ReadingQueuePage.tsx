@@ -1,43 +1,89 @@
-import React, { useCallback, useMemo, useState, useEffect, useContext } from 'react';
-import { useReadingQueue } from '@common/hooks/useReadingQueue';
-import { useNavigate } from 'react-router-dom';
-import { ReadingQueueItem } from '@common/types';
-import { toast } from 'react-hot-toast';
-import { useTags } from '@common/hooks/useTags';
-import { updateNewsletterTags } from '@common/utils/tagUtils';
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+  useEffect,
+  useContext,
+} from "react";
+import { useReadingQueue } from "@common/hooks/useReadingQueue";
+import { useNavigate } from "react-router-dom";
+import { ReadingQueueItem, Tag, NewsletterWithRelations } from "@common/types";
+import { toast } from "react-hot-toast";
+import { useTags } from "@common/hooks/useTags";
+import { updateNewsletterTags } from "@common/utils/tagUtils";
 
-import { useQueryClient } from '@tanstack/react-query';
-import { AuthContext } from '@common/contexts/AuthContext';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsletterRow';
-import { useNewsletters } from '@common/hooks/useNewsletters';
+import { useQueryClient } from "@tanstack/react-query";
+import { AuthContext } from "@common/contexts/AuthContext";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { SortableNewsletterRow } from "../components/reading-queue/SortableNewsletterRow";
+import { useNewsletters } from "@common/hooks/useNewsletters";
 
-import { ArrowUp, ArrowDown } from 'lucide-react';
-import { handleTagClickWithNavigation } from '@common/utils/tagUtils';
+import { ArrowUp, ArrowDown } from "lucide-react";
+import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
+import { getCacheManager } from "@common/utils/cacheUtils";
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const auth = useContext(AuthContext);
   const user = auth?.user;
-  
-  const { 
-    readingQueue = [], 
-    isLoading, 
-    error, 
+
+  const {
+    readingQueue = [],
+    isLoading,
+    error,
     refetch,
     addToQueue,
     removeFromQueue,
     reorderQueue,
     toggleRead,
-    toggleArchive
+    toggleArchive,
   } = useReadingQueue();
-  
-  const { getTags } = useTags();
-  const [allTags, setAllTags] = useState<any[]>([]);
 
-  
+  const { getTags } = useTags();
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+
+  // Initialize cache manager for advanced operations
+  const cacheManager = useMemo(() => {
+    try {
+      return getCacheManager();
+    } catch {
+      // Cache manager not initialized yet - will be available after first hook usage
+      return null;
+    }
+  }, []);
+
+  // Cache warming on component mount and when queue changes
+  useEffect(() => {
+    if (cacheManager && user?.id) {
+      // Warm up critical caches for better performance
+      cacheManager.warmCache(user.id, "high");
+
+      // Pre-warm newsletter details for queue items
+      if (readingQueue.length > 0) {
+        readingQueue.slice(0, 5).forEach(() => {
+          // Pre-load first 5 newsletters in queue for instant access
+          setTimeout(() => {
+            cacheManager.warmCache(user.id, "medium");
+          }, 100);
+        });
+      }
+    }
+  }, [cacheManager, user?.id, readingQueue]);
+
   // Load all tags when component mounts
   useEffect(() => {
     const loadTags = async () => {
@@ -45,44 +91,52 @@ const ReadingQueuePage: React.FC = () => {
         const tags = await getTags();
         setAllTags(tags);
       } catch (error) {
-        console.error('Error loading tags:', error);
-        toast.error('Failed to load tags');
+        console.error("Error loading tags:", error);
+        toast.error("Failed to load tags");
       }
     };
-    
+
     loadTags();
-  }, [getTags]);
+  }, [getTags, readingQueue]);
   const { toggleLike: toggleNewsletterLike } = useNewsletters();
-  
+
   // Check if a newsletter is in the reading queue
-  const isInQueue = useCallback((newsletterId: string) => {
-    return readingQueue.some(item => item.newsletter_id === newsletterId);
-  }, [readingQueue]);
-  
+  const isInQueue = useCallback(
+    (newsletterId: string) => {
+      return readingQueue.some((item) => item.newsletter_id === newsletterId);
+    },
+    [readingQueue],
+  );
+
   // Toggle a newsletter in/out of the reading queue
-  const toggleInQueue = useCallback(async (newsletterId: string) => {
-    const currentlyInQueue = isInQueue(newsletterId);
-    
-    try {
-      if (currentlyInQueue) {
-        // Find the queue item to remove
-        const queueItem = readingQueue.find(item => item.newsletter_id === newsletterId);
-        if (queueItem) {
-          await removeFromQueue(queueItem.id);
-          toast.success('Removed from reading queue');
+  const toggleInQueue = useCallback(
+    async (newsletterId: string) => {
+      const currentlyInQueue = isInQueue(newsletterId);
+
+      try {
+        if (currentlyInQueue) {
+          // Find the queue item to remove
+          const queueItem = readingQueue.find(
+            (item) => item.newsletter_id === newsletterId,
+          );
+          if (queueItem) {
+            await removeFromQueue(queueItem.id);
+            toast.success("Removed from reading queue");
+          }
+        } else {
+          await addToQueue(newsletterId);
+          toast.success("Added to reading queue");
         }
-      } else {
-        await addToQueue(newsletterId);
-        toast.success('Added to reading queue');
+      } catch (error) {
+        console.error("Error toggling reading queue status:", error);
+        toast.error("Failed to update reading queue");
       }
-    } catch (error) {
-      console.error('Error toggling reading queue status:', error);
-      toast.error('Failed to update reading queue');
-    }
-  }, [readingQueue, isInQueue, addToQueue, removeFromQueue]);
+    },
+    [readingQueue, isInQueue, addToQueue, removeFromQueue],
+  );
 
   const [sortByDate, setSortByDate] = useState(false);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
 
   // Set up drag and drop sensors
@@ -94,121 +148,146 @@ const ReadingQueuePage: React.FC = () => {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   // Filter out any null items from the queue
-  const validQueueItems = useMemo(() => 
-    readingQueue.filter((item): item is ReadingQueueItem => item !== null),
-    [readingQueue]
+  const validQueueItems = useMemo(
+    () =>
+      readingQueue.filter((item): item is ReadingQueueItem => item !== null),
+    [readingQueue],
   );
-  
+
   const handleBrowseNewsletters = () => {
-    navigate('/');
+    navigate("/");
   };
 
   // Handle error state with toast notifications
   React.useEffect(() => {
     if (error) {
-      toast.error(`Error loading reading queue: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(
+        `Error loading reading queue: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }, [error]);
 
   // Handle drag end for reordering
-  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (active.id !== over?.id) {
-      const oldIndex = validQueueItems.findIndex(item => item.id === active.id);
-      const newIndex = validQueueItems.findIndex(item => item.id === over?.id);
-      
-      if (oldIndex === -1 || newIndex === -1) return;
-      
-      // Reorder the items
-      const reorderedItems = [...validQueueItems];
-      const [movedItem] = reorderedItems.splice(oldIndex, 1);
-      reorderedItems.splice(newIndex, 0, movedItem!);
-      
-      // Update positions in the database
-      const updates = reorderedItems.map((item, index) => ({
-        id: item.id,
-        position: index,
-      }));
-      
-      try {
-        await reorderQueue(updates);
-        // The query will automatically refetch due to the invalidation in the mutation
-      } catch (error) {
-        console.error('Failed to update queue order:', error);
-        toast.error('Failed to update queue order');
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (active.id !== over?.id) {
+        const oldIndex = validQueueItems.findIndex(
+          (item) => item.id === active.id,
+        );
+        const newIndex = validQueueItems.findIndex(
+          (item) => item.id === over?.id,
+        );
+
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        // Reorder the items
+        const reorderedItems = [...validQueueItems];
+        const [movedItem] = reorderedItems.splice(oldIndex, 1);
+        reorderedItems.splice(newIndex, 0, movedItem!);
+
+        // Update positions in the database
+        const updates = reorderedItems.map((item, index) => ({
+          id: item.id,
+          position: index,
+        }));
+
+        try {
+          await reorderQueue(updates);
+          // The query will automatically refetch due to the invalidation in the mutation
+        } catch (error) {
+          console.error("Failed to update queue order:", error);
+          toast.error("Failed to update queue order");
+        }
       }
-    }
-  }, [validQueueItems, reorderQueue]);
+    },
+    [validQueueItems, reorderQueue],
+  );
 
   // Handle toggling read status
-  const handleToggleRead = useCallback(async (newsletterId: string) => {
-    try {
-      const item = validQueueItems.find(item => item.newsletter.id === newsletterId);
-      if (!item) return;
-      
-      await toggleRead({ 
-        newsletterId, 
-        isRead: !item.newsletter.is_read 
-      });
-      await refetch();
-    } catch (error) {
-      console.error('Failed to toggle read status:', error);
-      toast.error('Failed to update read status');
-    }
-  }, [toggleRead, refetch, validQueueItems]);
+  const handleToggleRead = useCallback(
+    async (newsletterId: string) => {
+      try {
+        const item = validQueueItems.find(
+          (item) => item.newsletter.id === newsletterId,
+        );
+        if (!item) return;
+
+        await toggleRead({
+          newsletterId,
+          isRead: !item.newsletter.is_read,
+        });
+        await refetch();
+      } catch (error) {
+        console.error("Failed to toggle read status:", error);
+        toast.error("Failed to update read status");
+      }
+    },
+    [toggleRead, refetch, validQueueItems],
+  );
 
   // Handle toggling like status
-  const handleToggleLike = useCallback(async (newsletter: any) => {
-    try {
-      // Handle both signatures: (id: string) and (newsletter: Newsletter)
-      const newsletterId = typeof newsletter === 'string' ? newsletter : newsletter.id;
-      const isLiked = typeof newsletter === 'string' ? false : newsletter.is_liked;
-      
-      await toggleNewsletterLike(newsletterId, !isLiked);
-      await refetch();
-      toast.success(!isLiked ? 'Added to favorites' : 'Removed from favorites');
-    } catch (error) {
-      console.error('Failed to toggle like status:', error);
-      toast.error('Failed to update favorite status');
-    }
-  }, [toggleNewsletterLike, refetch]);
+  const handleToggleLike = useCallback(
+    async (newsletter: string | NewsletterWithRelations) => {
+      try {
+        // Handle both signatures: (id: string) and (newsletter: Newsletter)
+        const newsletterId =
+          typeof newsletter === "string" ? newsletter : newsletter.id;
+        const isLiked =
+          typeof newsletter === "string" ? false : newsletter.is_liked;
+
+        await toggleNewsletterLike(newsletterId, !isLiked);
+        await refetch();
+        toast.success(
+          !isLiked ? "Added to favorites" : "Removed from favorites",
+        );
+      } catch (error) {
+        console.error("Failed to toggle like status:", error);
+        toast.error("Failed to update favorite status");
+      }
+    },
+    [toggleNewsletterLike, refetch],
+  );
 
   // Handle toggling archive status
-  const handleToggleArchive = useCallback(async (id: string) => {
-    try {
-      const item = validQueueItems.find(item => item.newsletter.id === id);
-      if (!item) return;
-      
-      await toggleArchive({ 
-        newsletterId: id, 
-        isArchived: !item.newsletter.is_archived 
-      });
-      await refetch();
-    } catch (error) {
-      console.error('Failed to toggle archive status:', error);
-      toast.error('Failed to update archive status');
-    }
-  }, [validQueueItems, toggleArchive, refetch]);
+  const handleToggleArchive = useCallback(
+    async (id: string) => {
+      try {
+        const item = validQueueItems.find((item) => item.newsletter.id === id);
+        if (!item) return;
+
+        await toggleArchive({
+          newsletterId: id,
+          isArchived: !item.newsletter.is_archived,
+        });
+        await refetch();
+      } catch (error) {
+        console.error("Failed to toggle archive status:", error);
+        toast.error("Failed to update archive status");
+      }
+    },
+    [validQueueItems, toggleArchive, refetch],
+  );
 
   // Toggle sort mode between manual and date
   const toggleSortMode = useCallback(() => {
-    setSortByDate(prev => !prev);
+    setSortByDate((prev) => !prev);
   }, []);
 
   // Toggle sort direction
   const toggleSortDirection = useCallback(() => {
-    setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
   }, []);
 
   // Sort items based on sort mode
   const sortedItems = useMemo(() => {
     const items = [...validQueueItems];
-    
+
     return items.sort((a, b) => {
       if (!sortByDate) {
         // In manual sort mode, sort by position
@@ -217,7 +296,7 @@ const ReadingQueuePage: React.FC = () => {
         // In date sort mode, sort by received date
         const dateA = new Date(a.newsletter.received_at);
         const dateB = new Date(b.newsletter.received_at);
-        return sortDirection === 'asc' 
+        return sortDirection === "asc"
           ? dateA.getTime() - dateB.getTime()
           : dateB.getTime() - dateA.getTime();
       }
@@ -230,8 +309,16 @@ const ReadingQueuePage: React.FC = () => {
       <div className="p-4 bg-red-50 border-l-4 border-red-400 rounded-md">
         <div className="flex">
           <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            <svg
+              className="h-5 w-5 text-red-400"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clipRule="evenodd"
+              />
             </svg>
           </div>
           <div className="ml-3">
@@ -280,8 +367,12 @@ const ReadingQueuePage: React.FC = () => {
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
           />
         </svg>
-        <h3 className="mt-2 text-sm font-medium text-gray-900">No newsletters in queue</h3>
-        <p className="mt-1 text-sm text-gray-500">Get started by adding some newsletters to your reading queue.</p>
+        <h3 className="mt-2 text-sm font-medium text-gray-900">
+          No newsletters in queue
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Get started by adding some newsletters to your reading queue.
+        </p>
         <div className="mt-6">
           <button
             type="button"
@@ -301,26 +392,29 @@ const ReadingQueuePage: React.FC = () => {
         <h1 className="text-2xl font-bold">Reading Queue</h1>
         <div className="flex items-center space-x-4">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            {validQueueItems.length} {validQueueItems.length === 1 ? 'item' : 'items'}
+            {validQueueItems.length}{" "}
+            {validQueueItems.length === 1 ? "item" : "items"}
           </span>
           <div className="flex items-center space-x-2">
             <button
               onClick={toggleSortMode}
               className={`px-3 py-1 text-sm rounded-md ${
-                sortByDate 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'bg-gray-100 text-gray-700'
+                sortByDate
+                  ? "bg-blue-100 text-blue-700"
+                  : "bg-gray-100 text-gray-700"
               }`}
             >
-              {sortByDate ? 'Sort by Position' : 'Sort by Date'}
+              {sortByDate ? "Sort by Position" : "Sort by Date"}
             </button>
             {sortByDate && (
               <button
                 onClick={toggleSortDirection}
                 className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600"
-                title={sortDirection === 'asc' ? 'Oldest first' : 'Newest first'}
+                title={
+                  sortDirection === "asc" ? "Oldest first" : "Newest first"
+                }
               >
-                {sortDirection === 'asc' ? (
+                {sortDirection === "asc" ? (
                   <ArrowUp className="w-4 h-4" />
                 ) : (
                   <ArrowDown className="w-4 h-4" />
@@ -336,8 +430,8 @@ const ReadingQueuePage: React.FC = () => {
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext 
-          items={sortedItems.map(item => item.id)} 
+        <SortableContext
+          items={sortedItems.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-3">
@@ -351,45 +445,54 @@ const ReadingQueuePage: React.FC = () => {
                 onToggleArchive={handleToggleArchive}
                 onToggleQueue={toggleInQueue}
                 onTrash={() => {}}
-
                 onUpdateTags={async (newsletterId, tagIds) => {
                   try {
-                    const queueItem = readingQueue.find(item => item.newsletter.id === newsletterId);
+                    const queueItem = readingQueue.find(
+                      (item) => item.newsletter.id === newsletterId,
+                    );
                     if (!queueItem) {
-                      toast.error('Newsletter not found in queue');
+                      toast.error("Newsletter not found in queue");
                       return;
                     }
-                    
+
                     // Optimistically update the UI with the new tags
-                    const updatedTags = allTags.filter(tag => tagIds.includes(tag.id));
-                    
-                    // Update the cache with the new tags
-                    queryClient.setQueryData(['readingQueue', user?.id], (old: ReadingQueueItem[] = []) => 
-                      old.map(item => {
-                        if (item.newsletter.id === newsletterId) {
-                          return {
-                            ...item,
-                            newsletter: {
-                              ...item.newsletter,
-                              tags: updatedTags,
-                              // Update the user_newsletter_tags array if it exists
-                              user_newsletter_tags: updatedTags.map(tag => ({
-                                id: `${newsletterId}-${tag.id}`,
-                                newsletter_id: newsletterId,
-                                tag_id: tag.id,
-                                created_at: new Date().toISOString(),
-                                updated_at: new Date().toISOString()
-                              }))
-                            }
-                          };
-                        }
-                        return item;
-                      })
+                    const updatedTags = allTags.filter((tag) =>
+                      tagIds.includes(tag.id),
                     );
-                    
+
+                    // Update the cache with the new tags
+                    queryClient.setQueryData(
+                      ["readingQueue", user?.id],
+                      (old: ReadingQueueItem[] = []) =>
+                        old.map((item) => {
+                          if (item.newsletter.id === newsletterId) {
+                            return {
+                              ...item,
+                              newsletter: {
+                                ...item.newsletter,
+                                tags: updatedTags,
+                                // Update the user_newsletter_tags array if it exists
+                                user_newsletter_tags: updatedTags.map(
+                                  (tag) => ({
+                                    id: `${newsletterId}-${tag.id}`,
+                                    newsletter_id: newsletterId,
+                                    tag_id: tag.id,
+                                    created_at: new Date().toISOString(),
+                                    updated_at: new Date().toISOString(),
+                                  }),
+                                ),
+                              },
+                            };
+                          }
+                          return item;
+                        }),
+                    );
+
                     // Get current tag IDs for the newsletter
-                    const currentTagIds = queueItem.newsletter.tags?.map((tag: any) => tag.id) || [];
-                    
+                    const currentTagIds =
+                      queueItem.newsletter.tags?.map((tag: Tag) => tag.id) ||
+                      [];
+
                     // Update tags in the database
                     if (user) {
                       try {
@@ -397,43 +500,51 @@ const ReadingQueuePage: React.FC = () => {
                           newsletterId,
                           tagIds,
                           currentTagIds,
-                          user.id
+                          user.id,
                         );
-                        
+
                         // Show success message with details
                         const message = [
-                          result.added > 0 && `${result.added} tag${result.added !== 1 ? 's' : ''} added`,
-                          result.removed > 0 && `${result.removed} tag${result.removed !== 1 ? 's' : ''} removed`
-                        ].filter(Boolean).join(', ');
-                        
-                        toast.success(`Tags updated: ${message || 'No changes'}`);
-                        
+                          result.added > 0 &&
+                            `${result.added} tag${result.added !== 1 ? "s" : ""} added`,
+                          result.removed > 0 &&
+                            `${result.removed} tag${result.removed !== 1 ? "s" : ""} removed`,
+                        ]
+                          .filter(Boolean)
+                          .join(", ");
+
+                        toast.success(
+                          `Tags updated: ${message || "No changes"}`,
+                        );
+
                         // Refresh the queue to ensure we have the latest data
                         await refetch();
-                        
                       } catch (error) {
-                        console.error('Error updating tags:', error);
-                        toast.error(error instanceof Error ? error.message : 'Failed to update tags');
+                        console.error("Error updating tags:", error);
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : "Failed to update tags",
+                        );
                         // Revert optimistic update on error
                         await refetch();
                       }
                     } else {
-                      throw new Error('User not authenticated');
+                      throw new Error("User not authenticated");
                     }
-                    
                   } catch (error) {
-                    console.error('Error updating tags:', error);
-                    toast.error('Failed to update tags');
+                    console.error("Error updating tags:", error);
+                    toast.error("Failed to update tags");
                     // Revert optimistic update on error
                     await refetch();
                   }
                 }}
                 onTagClick={(tag, e) => {
-                  handleTagClickWithNavigation(tag, navigate, '/inbox', e);
+                  handleTagClickWithNavigation(tag, navigate, "/inbox", e);
                 }}
                 onToggleTagVisibility={(id, e) => {
                   e.stopPropagation();
-                  setVisibleTags(prev => {
+                  setVisibleTags((prev) => {
                     const newSet = new Set(prev);
                     if (newSet.has(id)) {
                       newSet.delete(id);
@@ -451,7 +562,7 @@ const ReadingQueuePage: React.FC = () => {
                 onNewsletterClick={(newsletter) => {
                   navigate(`/newsletters/${newsletter.id}`);
                 }}
-                className={`${!sortByDate ? 'cursor-grab active:cursor-grabbing' : ''} bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow`}
+                className={`${!sortByDate ? "cursor-grab active:cursor-grabbing" : ""} bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow`}
                 isDraggable={!sortByDate}
                 showCheckbox={false}
                 showTags={true}

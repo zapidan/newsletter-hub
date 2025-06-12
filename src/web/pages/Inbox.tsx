@@ -15,6 +15,7 @@ import LoadingScreen from "@common/components/common/LoadingScreen";
 import NewsletterRow from "@web/components/NewsletterRow";
 import { TimeRange } from "@web/components/TimeFilter";
 import { useAuth } from "@common/contexts";
+import { getCacheManager } from "@common/utils/cacheUtils";
 
 const Inbox: React.FC = () => {
   // Router and URL state
@@ -125,6 +126,48 @@ const Inbox: React.FC = () => {
     sourceFilter,
   );
   const { user } = useAuth();
+
+  // Initialize cache manager for advanced operations
+  const cacheManager = useMemo(() => {
+    try {
+      return getCacheManager();
+    } catch {
+      // Cache manager not initialized yet - will be available after first hook usage
+      return null;
+    }
+  }, []);
+
+  // Cache warming on component mount and filter changes
+  useEffect(() => {
+    if (cacheManager && user?.id) {
+      // Warm up critical caches for better performance
+      cacheManager.warmCache(user.id, "high");
+    }
+  }, [cacheManager, user?.id]);
+
+  // Pre-warm cache for likely filter changes
+  useEffect(() => {
+    if (cacheManager && user?.id && newsletters.length > 0) {
+      // Pre-warm common filter combinations
+      const preWarmFilters: Array<{
+        filter: string;
+        priority: "high" | "medium" | "low";
+      }> = [
+        { filter: "unread", priority: "high" },
+        { filter: "liked", priority: "medium" },
+        { filter: "all", priority: "medium" },
+      ];
+
+      preWarmFilters.forEach(({ filter: filterType, priority }) => {
+        if (filterType !== debouncedFilter) {
+          // Warm cache for other filters in background
+          setTimeout(() => {
+            cacheManager.warmCache(user.id, priority);
+          }, 100);
+        }
+      });
+    }
+  }, [cacheManager, user?.id, newsletters.length, debouncedFilter]);
 
   // Handle source filter change with proper type
   const handleSourceFilterChange = useCallback((sourceId: string | null) => {
@@ -536,7 +579,7 @@ const Inbox: React.FC = () => {
     }
   }, [toast]);
 
-  // Bulk trash handler
+  // Bulk trash handler with cache optimization
   const handleBulkTrash = useCallback(async () => {
     if (!bulkDeleteNewsletters || selectedIds.size === 0) return;
     if (
@@ -545,52 +588,100 @@ const Inbox: React.FC = () => {
       )
     )
       return;
+
+    setIsBulkActionLoading(true);
     try {
+      // Use cache manager for batch operations if available
+      if (cacheManager && user?.id) {
+        await cacheManager.batchUpdateNewsletters({
+          operations: Array.from(selectedIds).map((id) => ({
+            id,
+            updates: {},
+            type: "delete",
+          })),
+          optimistic: true,
+        });
+      }
+
       await bulkDeleteNewsletters(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
-      await refetchNewsletters();
+      setToast({
+        type: "success",
+        message: `${selectedIds.size} newsletters deleted`,
+      });
     } catch (error) {
       console.error("Error deleting newsletters:", error);
+      setToast({ type: "error", message: "Failed to delete newsletters" });
       throw error;
+    } finally {
+      setIsBulkActionLoading(false);
     }
-  }, [bulkDeleteNewsletters, selectedIds, refetchNewsletters]);
+  }, [bulkDeleteNewsletters, selectedIds, cacheManager, user?.id]);
 
-  // Handle bulk archive
+  // Handle bulk archive with cache optimization
   const handleBulkArchive = useCallback(async () => {
     if (selectedIds.size === 0) return;
     setIsBulkActionLoading(true);
     try {
+      // Use cache manager for batch operations if available
+      if (cacheManager && user?.id) {
+        await cacheManager.batchUpdateNewsletters({
+          operations: Array.from(selectedIds).map((id) => ({
+            id,
+            updates: { is_archived: true },
+            type: "archive",
+          })),
+          optimistic: true,
+        });
+      }
+
       await bulkArchive(Array.from(selectedIds));
-      setToast({ type: "success", message: "Newsletters archived." });
+      setToast({
+        type: "success",
+        message: `${selectedIds.size} newsletters archived`,
+      });
     } catch (error) {
-      setToast({ type: "error", message: "Failed to archive newsletters." });
-      console.error("Error archiving:", error);
+      console.error("Error archiving newsletters:", error);
+      setToast({ type: "error", message: "Failed to archive newsletters" });
     } finally {
+      setIsBulkActionLoading(false);
       setSelectedIds(new Set());
       setIsSelecting(false);
-      setIsBulkActionLoading(false);
-      await refetchNewsletters();
     }
-  }, [selectedIds, bulkArchive, refetchNewsletters]);
+  }, [selectedIds, bulkArchive, cacheManager, user?.id]);
 
-  // Handle bulk unarchive
+  // Handle bulk unarchive with cache optimization
   const handleBulkUnarchive = useCallback(async () => {
     if (selectedIds.size === 0) return;
     setIsBulkActionLoading(true);
     try {
+      // Use cache manager for batch operations if available
+      if (cacheManager && user?.id) {
+        await cacheManager.batchUpdateNewsletters({
+          operations: Array.from(selectedIds).map((id) => ({
+            id,
+            updates: { is_archived: false },
+            type: "unarchive",
+          })),
+          optimistic: true,
+        });
+      }
+
       await bulkUnarchive(Array.from(selectedIds));
-      setToast({ type: "success", message: "Newsletters unarchived." });
+      setToast({
+        type: "success",
+        message: `${selectedIds.size} newsletters unarchived`,
+      });
     } catch (error) {
-      setToast({ type: "error", message: "Failed to unarchive newsletters." });
-      console.error("Error unarchiving:", error);
+      console.error("Error unarchiving newsletters:", error);
+      setToast({ type: "error", message: "Failed to unarchive newsletters" });
     } finally {
+      setIsBulkActionLoading(false);
       setSelectedIds(new Set());
       setIsSelecting(false);
-      setIsBulkActionLoading(false);
-      await refetchNewsletters();
     }
-  }, [selectedIds, bulkUnarchive, refetchNewsletters]);
+  }, [selectedIds, bulkUnarchive, cacheManager, user?.id]);
 
   // Toggle selection of a single newsletter
   const toggleSelect = useCallback((id: string) => {
@@ -632,29 +723,68 @@ const Inbox: React.FC = () => {
     setSelectedIds(new Set(unreadIds));
   }, [filteredNewsletters]);
 
-  // Handle bulk mark as read
+  // Handle bulk mark as read with cache optimization
   const handleBulkMarkAsRead = useCallback(async () => {
     if (selectedIds.size === 0) return;
+    setIsBulkActionLoading(true);
     try {
+      // Use cache manager for batch operations if available
+      if (cacheManager && user?.id) {
+        await cacheManager.batchUpdateNewsletters({
+          operations: Array.from(selectedIds).map((id) => ({
+            id,
+            updates: { is_read: true },
+            type: "read",
+          })),
+          optimistic: true,
+        });
+      }
+
       await bulkMarkAsRead(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
+      setToast({
+        type: "success",
+        message: `${selectedIds.size} newsletters marked as read`,
+      });
     } catch (error) {
       console.error("Error marking as read:", error);
+      setToast({ type: "error", message: "Failed to mark as read" });
+    } finally {
+      setIsBulkActionLoading(false);
     }
-  }, [selectedIds, bulkMarkAsRead]);
+  }, [selectedIds, bulkMarkAsRead, cacheManager, user?.id]);
 
   const handleBulkMarkAsUnread = useCallback(async () => {
     if (selectedIds.size === 0) return;
+    setIsBulkActionLoading(true);
     try {
+      // Use cache manager for batch operations if available
+      if (cacheManager && user?.id) {
+        await cacheManager.batchUpdateNewsletters({
+          operations: Array.from(selectedIds).map((id) => ({
+            id,
+            updates: { is_read: false },
+            type: "unread",
+          })),
+          optimistic: true,
+        });
+      }
+
       await bulkMarkAsUnread(Array.from(selectedIds));
       setSelectedIds(new Set());
       setIsSelecting(false);
+      setToast({
+        type: "success",
+        message: `${selectedIds.size} newsletters marked as unread`,
+      });
     } catch (error) {
       console.error("Error marking as unread:", error);
       setToast({ type: "error", message: "Failed to mark as unread" });
+    } finally {
+      setIsBulkActionLoading(false);
     }
-  }, [selectedIds, bulkMarkAsUnread]);
+  }, [selectedIds, bulkMarkAsUnread, cacheManager, user?.id]);
 
   // Handle newsletter click
   const handleNewsletterClick = useCallback(
