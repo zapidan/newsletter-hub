@@ -348,20 +348,22 @@ const NewslettersPage: React.FC = () => {
         const newsletter = newsletters.find((n) => n.id === id);
         if (!newsletter) return;
 
+        // For source view, always archive (since we only show unarchived)
+        const willArchive = selectedSourceId ? true : !newsletter.is_archived;
+
         // Optimistically update the UI
         setNewsletters((prev) =>
           prev.map((n) =>
-            n.id === id ? { ...n, is_archived: !n.is_archived } : n,
+            n.id === id ? { ...n, is_archived: willArchive } : n,
           ),
         );
 
         // Toggle the archive status using the hook's function
-        const newArchiveStatus = newsletter.is_archived;
-        await toggleArchive(id, newArchiveStatus);
+        await toggleArchive(id, willArchive);
 
         // Show success message
         toast.success(
-          newArchiveStatus
+          willArchive
             ? "Newsletter archived successfully"
             : "Newsletter unarchived successfully",
         );
@@ -371,6 +373,7 @@ const NewslettersPage: React.FC = () => {
           queryClient.invalidateQueries({ queryKey: ["newsletters"] }),
           queryClient.invalidateQueries({ queryKey: ["newsletterSources"] }),
           queryClient.invalidateQueries({ queryKey: ["inbox"] }),
+          queryClient.invalidateQueries({ queryKey: ["unreadCount"] }),
         ]);
       } catch (error) {
         // Revert the optimistic update on error
@@ -391,6 +394,7 @@ const NewslettersPage: React.FC = () => {
       fetchedNewsletters,
       toggleArchive,
       setNewsletters,
+      selectedSourceId,
     ],
   );
 
@@ -494,6 +498,47 @@ const NewslettersPage: React.FC = () => {
       }
     },
     [readingQueue, queryClient],
+  );
+
+  const handleTrash = useCallback(
+    async (id: string) => {
+      if (
+        !window.confirm(
+          "Are you sure? This action is final and cannot be undone.",
+        )
+      ) {
+        return;
+      }
+
+      try {
+        // Remove from local state immediately for better UX
+        setNewsletters((prev) => prev.filter((n) => n.id !== id));
+
+        const { error } = await supabase
+          .from("newsletters")
+          .delete()
+          .eq("id", id);
+
+        if (error) throw error;
+
+        toast.success("Newsletter deleted permanently");
+
+        // Invalidate relevant queries
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["newsletters"] }),
+          queryClient.invalidateQueries({ queryKey: ["newsletterSources"] }),
+          queryClient.invalidateQueries({ queryKey: ["inbox"] }),
+          queryClient.invalidateQueries({ queryKey: ["unreadCount"] }),
+        ]);
+      } catch (error) {
+        // Restore newsletter on error
+        setNewsletters(fetchedNewsletters || []);
+        console.error("Error deleting newsletter:", error);
+        toast.error("Failed to delete newsletter");
+        throw error;
+      }
+    },
+    [queryClient, setNewsletters, fetchedNewsletters],
   );
 
   const handleUpdateTags = useCallback(
@@ -1076,7 +1121,7 @@ const NewslettersPage: React.FC = () => {
                     onToggleArchive={handleToggleArchive}
                     onToggleRead={handleToggleRead}
                     onToggleQueue={handleToggleQueue}
-                    onTrash={() => {}}
+                    onTrash={handleTrash}
                     onToggleTagVisibility={toggleTagVisibility}
                     onUpdateTags={handleUpdateTags}
                     onTagClick={handleTagClick}

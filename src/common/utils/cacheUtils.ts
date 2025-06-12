@@ -1,5 +1,5 @@
 import { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { NewsletterWithRelations, Tag } from "../types";
+import type { NewsletterWithRelations, Tag, Newsletter } from "../types";
 import type {
   NewsletterFilter,
   NewsletterCacheUpdate,
@@ -430,14 +430,17 @@ export class NewsletterCacheManager {
   // Smart invalidation strategies
   invalidateRelatedQueries(
     newsletterId: string,
-    updates: Partial<NewsletterWithRelations>,
+    updates: Partial<NewsletterWithRelations> | Record<string, boolean>,
   ): void {
     this.startPerformanceTimer(`invalidateRelated-${newsletterId}`);
 
     const invalidationPromises: Promise<void>[] = [];
 
-    // If read status changed, invalidate filtered queries
-    if (updates.is_read !== undefined) {
+    // If read status changed, invalidate filtered queries and unread count
+    if (
+      updates.is_read !== undefined ||
+      (updates as Record<string, boolean>).unreadCount
+    ) {
       invalidationPromises.push(
         this.queryClient.invalidateQueries({
           predicate: (query) => {
@@ -446,6 +449,37 @@ export class NewsletterCacheManager {
               "unread",
             );
           },
+          refetchType: "active",
+        }),
+      );
+
+      // Invalidate unread count cache
+      invalidationPromises.push(
+        this.queryClient.invalidateQueries({
+          queryKey: ["unreadCount"],
+          refetchType: "active",
+        }),
+      );
+    }
+
+    // If archive status changed, invalidate archived queries and unread count
+    if (updates.is_archived !== undefined) {
+      invalidationPromises.push(
+        this.queryClient.invalidateQueries({
+          predicate: (query) => {
+            return queryKeyFactory.matchers.hasFilter(
+              query.queryKey as unknown[],
+              "archived",
+            );
+          },
+          refetchType: "active",
+        }),
+      );
+
+      // Invalidate unread count cache when archiving/unarchiving
+      invalidationPromises.push(
+        this.queryClient.invalidateQueries({
+          queryKey: ["unreadCount"],
           refetchType: "active",
         }),
       );
@@ -459,21 +493,6 @@ export class NewsletterCacheManager {
             return queryKeyFactory.matchers.hasFilter(
               query.queryKey as unknown[],
               "liked",
-            );
-          },
-          refetchType: "active",
-        }),
-      );
-    }
-
-    // If archive status changed, invalidate archived queries
-    if (updates.is_archived !== undefined) {
-      invalidationPromises.push(
-        this.queryClient.invalidateQueries({
-          predicate: (query) => {
-            return queryKeyFactory.matchers.hasFilter(
-              query.queryKey as unknown[],
-              "archived",
             );
           },
           refetchType: "active",
@@ -500,13 +519,43 @@ export class NewsletterCacheManager {
   }
 
   // Optimistic update with rollback
-  async optimisticUpdate<T>(
+  async optimisticUpdate(
+    newsletterId: string,
+    updates: Partial<Newsletter>,
+    operation: string,
+  ): Promise<void> {
+    this.startPerformanceTimer("optimisticUpdate");
+
+    try {
+      // Update newsletter in all relevant caches
+      this.updateNewsletterInCache(
+        { id: newsletterId, updates },
+        { optimistic: true },
+      );
+
+      // Invalidate related queries to ensure consistency
+      await this.invalidateRelatedQueries(newsletterId, {
+        newsletters: true,
+        readingQueue: true,
+        tags: true,
+        sources: false,
+        unreadCount: true,
+      });
+    } catch (error) {
+      console.error(`Error in optimistic update for ${operation}:`, error);
+      throw error;
+    } finally {
+      this.endPerformanceTimer("optimisticUpdate");
+    }
+  }
+
+  async optimisticUpdateLegacy<T>(
     queryKey: QueryKey,
     updateFn: (oldData: T) => T,
     mutationFn: () => Promise<void>,
     rollbackData?: T,
   ): Promise<void> {
-    this.startPerformanceTimer("optimisticUpdate");
+    this.startPerformanceTimer("optimisticUpdateLegacy");
 
     // Store the previous data for potential rollback
     const previousData = this.queryClient.getQueryData<T>(queryKey);
@@ -530,7 +579,7 @@ export class NewsletterCacheManager {
       // Re-throw the error
       throw error;
     } finally {
-      this.endPerformanceTimer("optimisticUpdate");
+      this.endPerformanceTimer("optimisticUpdateLegacy");
     }
   }
 
