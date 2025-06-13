@@ -1,6 +1,10 @@
-import { ApiError, ApiResponse, CrudOperations } from '../types/api';
-import { setupGlobalErrorHandling } from './errorHandling';
-import supabase, { handleSupabaseError, requireAuth, withPerformanceLogging } from './supabaseClient';
+import { ApiError, ApiResponse, CrudOperations } from "../types/api";
+import { setupGlobalErrorHandling } from "./errorHandling";
+import supabase, {
+  handleSupabaseError,
+  requireAuth,
+  withPerformanceLogging,
+} from "./supabaseClient";
 
 // Core Supabase client and utilities
 export {
@@ -13,7 +17,7 @@ export {
   withPerformanceLogging,
   SupabaseError,
   default as supabaseClient,
-} from './supabaseClient';
+} from "./supabaseClient";
 
 // Newsletter API
 export {
@@ -36,7 +40,7 @@ export {
   searchNewsletters,
   getNewsletterStats,
   default as newsletterService,
-} from './newsletterApi';
+} from "./newsletterApi";
 
 // Newsletter Source API
 export {
@@ -57,7 +61,75 @@ export {
   getArchivedNewsletterSources,
   getNewsletterSourceStats,
   default as newsletterSourceService,
-} from './newsletterSourceApi';
+} from "./newsletterSourceApi";
+
+// Reading Queue API
+export {
+  readingQueueApi,
+  getReadingQueue,
+  addToReadingQueue,
+  removeFromReadingQueue,
+  reorderReadingQueue,
+  clearReadingQueue,
+  getReadingQueueItemById,
+  isNewsletterInQueue,
+  getReadingQueueStats,
+  moveQueueItemToPosition,
+  default as readingQueueService,
+} from "./readingQueueApi";
+
+// Tag API
+export {
+  tagApi,
+  getAllTags,
+  getTagById,
+  createTag,
+  updateTag,
+  deleteTag,
+  getTagsForNewsletter,
+  updateNewsletterTags,
+  addTagToNewsletter,
+  removeTagFromNewsletter,
+  getOrCreateTag,
+  bulkCreateTags,
+  getTagUsageStats,
+  searchTags,
+  getPaginatedTags,
+  default as tagService,
+} from "./tagApi";
+
+// Newsletter Source Group API
+export {
+  newsletterSourceGroupApi,
+  getAllNewsletterSourceGroups,
+  getNewsletterSourceGroupById,
+  createNewsletterSourceGroup,
+  updateNewsletterSourceGroup,
+  deleteNewsletterSourceGroup,
+  addSourcesToGroup,
+  removeSourcesFromGroup,
+  getGroupSources,
+  getSourceGroups,
+  getNewsletterSourceGroupStats,
+  searchNewsletterSourceGroups,
+  default as newsletterSourceGroupService,
+} from "./newsletterSourceGroupApi";
+
+// User API
+export {
+  userApi,
+  getUserProfile,
+  updateUserProfile,
+  generateEmailAlias,
+  getUserEmailAlias,
+  updateEmailAlias,
+  isEmailAliasAvailable,
+  deleteUserAccount,
+  getUserStats,
+  updateUserPreferences,
+  getUserPreferences,
+  default as userService,
+} from "./userApi";
 
 // Error handling
 export {
@@ -81,7 +153,7 @@ export {
   useErrorHandler,
   setupGlobalErrorHandling,
   simulateError,
-} from './errorHandling';
+} from "./errorHandling";
 
 // API types - re-export from types
 export type {
@@ -122,36 +194,40 @@ export type {
   UpdateParams,
   CreateParams,
   CrudOperations,
-} from '../types/api';
+} from "../types/api";
 
 // Convenience API factory for creating new services
 export const createApiService = <T, TCreate = any, TUpdate = any>(
-  tableName: string
+  tableName: string,
 ): CrudOperations<T, TCreate, TUpdate> => {
   return {
     async getById(id: string) {
       const user = await requireAuth();
       const { data, error } = await supabase
         .from(tableName)
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') return null;
+        if (error.code === "PGRST116") return null;
         handleSupabaseError(error);
       }
 
       return data;
     },
 
-    async getAll(params = {}) {
+    async getAll(params: Record<string, unknown> = {}) {
       const user = await requireAuth();
-      let query = supabase.from(tableName).select('*').eq('user_id', user.id);
+      let query = supabase.from(tableName).select("*").eq("user_id", user.id);
 
       if (params.limit) query = query.limit(params.limit);
-      if (params.offset) query = query.range(params.offset, params.offset + (params.limit || 50) - 1);
+      if (params.offset)
+        query = query.range(
+          params.offset,
+          params.offset + (params.limit || 50) - 1,
+        );
 
       const { data, error, count } = await query;
       if (error) handleSupabaseError(error);
@@ -162,8 +238,14 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
         page: Math.floor((params.offset || 0) / (params.limit || 50)) + 1,
         limit: params.limit || 50,
         hasMore: (data?.length || 0) === (params.limit || 50),
-        nextPage: (data?.length || 0) === (params.limit || 50) ? Math.floor((params.offset || 0) / (params.limit || 50)) + 2 : null,
-        prevPage: (params.offset || 0) > 0 ? Math.floor((params.offset || 0) / (params.limit || 50)) : null,
+        nextPage:
+          (data?.length || 0) === (params.limit || 50)
+            ? Math.floor((params.offset || 0) / (params.limit || 50)) + 2
+            : null,
+        prevPage:
+          (params.offset || 0) > 0
+            ? Math.floor((params.offset || 0) / (params.limit || 50))
+            : null,
       };
     },
 
@@ -181,12 +263,12 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
 
     async update(data: TUpdate) {
       const user = await requireAuth();
-      const { id, ...updateData } = data as any;
+      const { id, ...updateData } = data as TUpdate & { id: string };
       const { data: result, error } = await supabase
         .from(tableName)
         .update(updateData)
-        .eq('id', id)
-        .eq('user_id', user.id)
+        .eq("id", id)
+        .eq("user_id", user.id)
         .select()
         .single();
 
@@ -199,8 +281,8 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
       const { error } = await supabase
         .from(tableName)
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq("id", id)
+        .eq("user_id", user.id);
 
       if (error) handleSupabaseError(error);
       return true;
@@ -211,7 +293,10 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
       const results: (T | null)[] = [];
       const errors: (Error | null)[] = [];
 
-      const itemsWithUserId = items.map(item => ({ ...item, user_id: user.id }));
+      const itemsWithUserId = items.map((item) => ({
+        ...item,
+        user_id: user.id,
+      }));
       const { data, error } = await supabase
         .from(tableName)
         .insert(itemsWithUserId)
@@ -226,15 +311,15 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
         items.forEach((_, index) => {
           const result = data?.[index] || null;
           results.push(result);
-          errors.push(result ? null : new Error('Item not created'));
+          errors.push(result ? null : new Error("Item not created"));
         });
       }
 
       return {
         results,
         errors,
-        successCount: results.filter(r => r !== null).length,
-        errorCount: errors.filter(e => e !== null).length,
+        successCount: results.filter((r) => r !== null).length,
+        errorCount: errors.filter((e) => e !== null).length,
       };
     },
 
@@ -256,8 +341,8 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
       return {
         results,
         errors,
-        successCount: results.filter(r => r !== null).length,
-        errorCount: errors.filter(e => e !== null).length,
+        successCount: results.filter((r) => r !== null).length,
+        errorCount: errors.filter((e) => e !== null).length,
       };
     },
 
@@ -269,8 +354,8 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
       const { error } = await supabase
         .from(tableName)
         .delete()
-        .in('id', ids)
-        .eq('user_id', user.id);
+        .in("id", ids)
+        .eq("user_id", user.id);
 
       if (error) {
         ids.forEach(() => {
@@ -287,8 +372,8 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
       return {
         results,
         errors,
-        successCount: results.filter(r => r !== null).length,
-        errorCount: errors.filter(e => e !== null).length,
+        successCount: results.filter((r) => r !== null).length,
+        errorCount: errors.filter((e) => e !== null).length,
       };
     },
   };
@@ -296,29 +381,32 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
 
 // Common query builders
 export const buildPaginationQuery = (
-  query: any,
-  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {}
+  query: unknown,
+  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
 ) => {
   return query.range(offset, offset + limit - 1);
 };
 
 export const buildOrderQuery = (
-  query: any,
-  { orderBy = 'created_at', ascending = false }: { orderBy?: string; ascending?: boolean } = {}
+  query: unknown,
+  {
+    orderBy = "created_at",
+    ascending = false,
+  }: { orderBy?: string; ascending?: boolean } = {},
 ) => {
   return query.order(orderBy, { ascending });
 };
 
 export const buildSearchQuery = (
-  query: any,
+  query: unknown,
   searchTerm: string,
-  searchColumns: string[]
+  searchColumns: string[],
 ) => {
   if (!searchTerm || searchColumns.length === 0) return query;
 
   const searchConditions = searchColumns
-    .map(column => `${column}.ilike.%${searchTerm}%`)
-    .join(',');
+    .map((column) => `${column}.ilike.%${searchTerm}%`)
+    .join(",");
 
   return query.or(searchConditions);
 };
@@ -329,7 +417,10 @@ export const createSuccessResponse = <T>(data: T): ApiResponse<T> => ({
   error: null,
 });
 
-export const createErrorResponse = (message: string, code?: string): ApiError => ({
+export const createErrorResponse = (
+  message: string,
+  code?: string,
+): ApiError => ({
   data: null,
   error: {
     message,
@@ -340,7 +431,7 @@ export const createErrorResponse = (message: string, code?: string): ApiError =>
 // Performance monitoring helpers
 export const measureApiCall = async <T>(
   operationName: string,
-  operation: () => Promise<T>
+  operation: () => Promise<T>,
 ): Promise<T> => {
   return withPerformanceLogging(operationName, operation);
 };
@@ -349,22 +440,28 @@ export const measureApiCall = async <T>(
 export const getCacheKey = (
   service: string,
   method: string,
-  params?: Record<string, any>
+  params?: Record<string, unknown>,
 ): string => {
-  const paramString = params ? JSON.stringify(params) : '';
+  const paramString = params ? JSON.stringify(params) : "";
   return `api:${service}:${method}:${paramString}`;
 };
 
 // Environment-based configuration
 export const API_CONFIG = {
-  retryAttempts: parseInt(import.meta.env.VITE_API_RETRY_ATTEMPTS || '3'),
-  retryDelay: parseInt(import.meta.env.VITE_API_RETRY_DELAY || '1000'),
-  timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
-  enableLogging: import.meta.env.VITE_API_ENABLE_LOGGING === 'true',
-  enablePerformanceMonitoring: import.meta.env.VITE_API_ENABLE_PERFORMANCE_MONITORING === 'true',
+  retryAttempts: parseInt(
+    (import.meta as any).env.VITE_API_RETRY_ATTEMPTS || "3",
+  ),
+  retryDelay: parseInt((import.meta as any).env.VITE_API_RETRY_DELAY || "1000"),
+  timeout: parseInt((import.meta as any).env.VITE_API_TIMEOUT || "30000"),
+  enableLogging: (import.meta as any).env.VITE_API_ENABLE_LOGGING === "true",
+  enablePerformanceMonitoring:
+    (import.meta as any).env.VITE_API_ENABLE_PERFORMANCE_MONITORING === "true",
 } as const;
 
 // Initialize global error handling if needed
-if (typeof window !== 'undefined' && import.meta.env.MODE === 'production') {
+if (
+  typeof window !== "undefined" &&
+  (import.meta as any).env.MODE === "production"
+) {
   setupGlobalErrorHandling();
 }

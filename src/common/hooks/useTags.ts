@@ -7,6 +7,7 @@ import {
   invalidateQueries,
 } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
+import { tagApi } from "@common/api/tagApi";
 
 export const useTags = () => {
   const auth = useContext(AuthContext);
@@ -39,14 +40,7 @@ export const useTags = () => {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("tags")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("name");
-
-      if (error) throw error;
-      return data || [];
+      return await tagApi.getAll();
     } catch (err: unknown) {
       const error = err as Error;
       console.error("Error fetching tags:", error);
@@ -64,13 +58,7 @@ export const useTags = () => {
 
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from("tags")
-          .insert([{ ...tag, user_id: user.id }])
-          .select()
-          .single();
-
-        if (error) throw error;
+        const data = await tagApi.create(tag);
 
         // Use cache manager for better tag cache management
         safeCacheCall((manager) => {
@@ -105,16 +93,7 @@ export const useTags = () => {
 
       try {
         setLoading(true);
-        const { id, ...updates } = tag;
-        const { data, error } = await supabase
-          .from("tags")
-          .update(updates)
-          .eq("id", id)
-          .eq("user_id", user.id)
-          .select()
-          .single();
-
-        if (error) throw error;
+        const data = await tagApi.update(tag);
 
         // Use cache manager for cross-feature cache synchronization
         safeCacheCall((manager) => {
@@ -152,13 +131,7 @@ export const useTags = () => {
 
       try {
         setLoading(true);
-        const { error } = await supabase
-          .from("tags")
-          .delete()
-          .eq("id", tagId)
-          .eq("user_id", user.id);
-
-        if (error) throw error;
+        await tagApi.delete(tagId);
 
         // Use cache manager for comprehensive tag deletion cache management
         safeCacheCall((manager) => {
@@ -201,26 +174,13 @@ export const useTags = () => {
   );
 
   // Get tags for a specific newsletter
-  interface NewsletterTagJoin {
-    tag: Tag;
-  }
-
   const getTagsForNewsletter = useCallback(
     async (newsletterId: string): Promise<Tag[]> => {
       if (!user) return [];
 
       try {
         setLoading(true);
-        const { data, error } = (await supabase
-          .from("newsletter_tags")
-          .select("tag:tags(*)")
-          .eq("newsletter_id", newsletterId)) as {
-          data: NewsletterTagJoin[] | null;
-          error: Error | null;
-        };
-
-        if (error) throw error;
-        return data?.map((item) => item.tag) || [];
+        return await tagApi.getTagsForNewsletter(newsletterId);
       } catch (err: unknown) {
         const error = err as Error;
         console.error("Error fetching newsletter tags:", error);
@@ -240,52 +200,7 @@ export const useTags = () => {
 
       try {
         setLoading(true);
-
-        // Get current tags
-        const { data: currentTags, error: currentTagsError } = await supabase
-          .from("newsletter_tags")
-          .select("tag_id")
-          .eq("newsletter_id", newsletterId);
-
-        if (currentTagsError) throw currentTagsError;
-
-        // Compute tags to add and remove
-        const currentTagIds = (currentTags || []).map(
-          (t: { tag_id: string }) => t.tag_id,
-        );
-        const newTagIds = tags.map((tag) => tag.id);
-        const tagsToAdd = newTagIds.filter(
-          (id: string) => !currentTagIds.includes(id),
-        );
-        const tagsToRemove = currentTagIds.filter(
-          (id: string) => !newTagIds.includes(id),
-        );
-
-        // Add new tags
-        if (tagsToAdd.length > 0) {
-          const { error: addError } = await supabase
-            .from("newsletter_tags")
-            .insert(
-              tagsToAdd.map((tagId) => ({
-                newsletter_id: newsletterId,
-                tag_id: tagId,
-                user_id: user.id,
-              })),
-            );
-
-          if (addError) throw addError;
-        }
-
-        // Remove tags
-        if (tagsToRemove.length > 0) {
-          const { error: removeError } = await supabase
-            .from("newsletter_tags")
-            .delete()
-            .eq("newsletter_id", newsletterId)
-            .in("tag_id", tagsToRemove);
-
-          if (removeError) throw removeError;
-        }
+        await tagApi.updateNewsletterTags(newsletterId, tags);
 
         // Use cache manager for newsletter-tag relationship updates
         safeCacheCall((manager) => {

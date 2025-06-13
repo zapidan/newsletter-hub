@@ -3,13 +3,10 @@ import { supabase } from "@common/services/supabaseClient";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext, useCallback, useMemo, useRef } from "react";
-import type {
-  NewsletterWithRelations,
-  Tag,
-  ReadingQueueItem,
-} from "@common/types";
+import type { NewsletterWithRelations, ReadingQueueItem } from "@common/types";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
 import { getCacheManagerSafe } from "../utils/cacheUtils";
+import { readingQueueApi } from "@common/api/readingQueueApi";
 
 interface NewsletterFromDB {
   id: string;
@@ -145,60 +142,16 @@ export const useReadingQueue = () => {
   }, []);
 
   // Helper function to fetch reading queue
-  const fetchReadingQueue = useCallback(
-    async (userId: string): Promise<ReadingQueueItem[]> => {
-      try {
-        const { data: queueItems, error: queueError } = await supabase
-          .from("reading_queue")
-          .select(
-            `
-            *,
-            newsletters (
-              *,
-              newsletter_sources (
-                *
-              )
-            )
-          `,
-          )
-          .eq("user_id", userId)
-          .order("position", { ascending: true });
-
-        if (queueError) throw queueError;
-        if (!queueItems?.length) return [];
-
-        // Fetch tags for all newsletters in the queue
-        const newsletterIds = queueItems.map((item) => item.newsletter_id);
-        const { data: newsletterTags } = await supabase
-          .from("newsletter_tags")
-          .select("newsletter_id, tags(*)")
-          .in("newsletter_id", newsletterIds);
-
-        // Create a map of newsletter ID to tags
-        const tagsMap = new Map<string, Tag[]>();
-        newsletterTags?.forEach((nt) => {
-          if (!tagsMap.has(nt.newsletter_id)) {
-            tagsMap.set(nt.newsletter_id, []);
-          }
-          if (nt.tags) {
-            tagsMap.get(nt.newsletter_id)!.push(nt.tags);
-          }
-        });
-
-        return queueItems.map((item) => {
-          const transformedItem = transformQueueItem(item);
-          // Add tags to the newsletter
-          transformedItem.newsletter.tags =
-            tagsMap.get(item.newsletter_id) || [];
-          return transformedItem;
-        });
-      } catch (error) {
-        console.error("Error fetching reading queue:", error);
-        throw error;
-      }
-    },
-    [],
-  );
+  const fetchReadingQueue = useCallback(async (): Promise<
+    ReadingQueueItem[]
+  > => {
+    try {
+      return await readingQueueApi.getAll();
+    } catch (error) {
+      console.error("Error fetching reading queue:", error);
+      throw error;
+    }
+  }, []);
 
   // Query for reading queue
   const {
@@ -209,7 +162,7 @@ export const useReadingQueue = () => {
     refetch,
   } = useQuery<ReadingQueueItem[], Error>({
     queryKey: queryKeyFactory.queue.list(user?.id || ""),
-    queryFn: () => fetchReadingQueue(user?.id || ""),
+    queryFn: () => fetchReadingQueue(),
     enabled: !!user?.id,
     staleTime: 1 * 60 * 1000, // 1 minute
     gcTime: 5 * 60 * 1000, // 5 minutes
@@ -223,41 +176,7 @@ export const useReadingQueue = () => {
 
       startTimer("addToQueue");
       try {
-        // Check if already in queue
-        const { data: existingItem } = await supabase
-          .from("reading_queue")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("newsletter_id", newsletterId)
-          .maybeSingle();
-
-        if (existingItem) {
-          throw new Error("Newsletter is already in reading queue");
-        }
-
-        // Get the current max position
-        const { data: maxPosition } = await supabase
-          .from("reading_queue")
-          .select("position")
-          .eq("user_id", user.id)
-          .order("position", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const newPosition = (maxPosition?.position || 0) + 1;
-
-        const { data: insertedData, error } = await supabase
-          .from("reading_queue")
-          .insert({
-            user_id: user.id,
-            newsletter_id: newsletterId,
-            position: newPosition,
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        return insertedData;
+        return await readingQueueApi.add(newsletterId);
       } finally {
         endTimer("addToQueue");
       }
@@ -294,7 +213,7 @@ export const useReadingQueue = () => {
       }
     },
     onSuccess: (_data, newsletterId) => {
-      if (!user?.id) return;
+      if (!user) return;
 
       // Update newsletter cache to reflect bookmark status
       safeCacheCall((manager) =>
@@ -308,7 +227,7 @@ export const useReadingQueue = () => {
       );
     },
     onSettled: () => {
-      if (!user?.id) return;
+      if (!user) return;
       // Use cache manager for smart invalidation
       safeCacheCall((manager) =>
         manager.invalidateRelatedQueries([], "queue-add"),
@@ -321,18 +240,13 @@ export const useReadingQueue = () => {
     mutationFn: async (queueItemId: string) => {
       startTimer("removeFromQueue");
       try {
-        const { error } = await supabase
-          .from("reading_queue")
-          .delete()
-          .eq("id", queueItemId);
-
-        if (error) throw error;
+        return await readingQueueApi.remove(queueItemId);
       } finally {
         endTimer("removeFromQueue");
       }
     },
     onMutate: async (queueItemId) => {
-      if (!user?.id) return;
+      if (!user) return;
 
       // Find the item being removed
       const itemToRemove = readingQueue.find((item) => item.id === queueItemId);
@@ -364,7 +278,7 @@ export const useReadingQueue = () => {
       }
     },
     onSuccess: (_data, _queueItemId, context) => {
-      if (!user?.id || !context?.removedItem) return;
+      if (!user || !context?.removedItem) return;
 
       // Update newsletter cache to reflect bookmark status
       safeCacheCall((manager) =>
@@ -378,7 +292,7 @@ export const useReadingQueue = () => {
       );
     },
     onSettled: () => {
-      if (!user?.id) return;
+      if (!user) return;
       // Use cache manager for smart invalidation
       safeCacheCall((manager) =>
         manager.invalidateRelatedQueries([], "queue-remove"),
@@ -389,26 +303,11 @@ export const useReadingQueue = () => {
   // Reorder reading queue
   const reorderQueue = useMutation({
     mutationFn: async (updates: { id: string; position: number }[]) => {
-      if (!user?.id) throw new Error("User not authenticated");
+      if (!user) throw new Error("User not authenticated");
 
       startTimer("reorderQueue");
       try {
-        // Update the positions
-        const { data, error } = await supabase
-          .from("reading_queue")
-          .upsert(
-            updates.map(({ id, position }) => ({
-              id,
-              position,
-              user_id: user.id,
-              updated_at: new Date().toISOString(),
-            })),
-            { onConflict: "id" },
-          )
-          .select();
-
-        if (error) throw error;
-        return data;
+        return await readingQueueApi.reorder(updates);
       } finally {
         endTimer("reorderQueue");
       }

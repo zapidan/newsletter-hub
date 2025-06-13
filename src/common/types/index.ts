@@ -85,7 +85,8 @@ export interface NewsletterSourceGroupMember {
   source?: NewsletterSource;
 }
 
-export interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {
+export interface NewsletterWithRelations
+  extends Omit<Newsletter, "source" | "tags"> {
   newsletter_source_id: string | null;
   source: NewsletterSource | null;
   tags: Tag[];
@@ -97,8 +98,7 @@ export interface ReadingQueueItem {
   user_id: string;
   newsletter_id: string;
   position: number;
-  created_at: string;
-  updated_at: string;
+  added_at: string;
   newsletter: NewsletterWithRelations;
 }
 

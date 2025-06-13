@@ -23,6 +23,7 @@ Reason: [why this change is needed]
 
 Only provide instructions, not code or diffs.
 
+[OUTPUT FORMAT]
 Output in a .md file
 
 [TASK]

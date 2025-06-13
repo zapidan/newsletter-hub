@@ -8,11 +8,15 @@ The Newsletter Hub API layer provides a centralized, type-safe interface for all
 
 ```
 src/common/api/
-├── index.ts                 # Main API exports
-├── supabaseClient.ts        # Enhanced Supabase client
-├── newsletterApi.ts         # Newsletter CRUD operations
-├── newsletterSourceApi.ts   # Newsletter source operations
-└── errorHandling.ts         # Centralized error handling
+├── index.ts                      # Main API exports
+├── supabaseClient.ts             # Enhanced Supabase client
+├── newsletterApi.ts              # Newsletter CRUD operations
+├── newsletterSourceApi.ts        # Newsletter source operations
+├── readingQueueApi.ts            # Reading queue management
+├── tagApi.ts                     # Tag CRUD operations
+├── newsletterSourceGroupApi.ts   # Source group management
+├── userApi.ts                    # User profile and email alias operations
+└── errorHandling.ts              # Centralized error handling
 ```
 
 ## Key Features
@@ -30,7 +34,14 @@ src/common/api/
 ### Basic Import
 
 ```typescript
-import { newsletterApi, newsletterSourceApi } from '@common/api';
+import { 
+  newsletterApi, 
+  newsletterSourceApi,
+  readingQueueApi,
+  tagApi,
+  newsletterSourceGroupApi,
+  userApi 
+} from '@common/api';
 ```
 
 ### Using the Newsletter API
@@ -75,6 +86,78 @@ const newSource = await newsletterSourceApi.create({
 // Search sources
 const searchResults = await newsletterSourceApi.search('tech');
 ```
+
+### Using the Reading Queue API
+
+```typescript
+// Get all reading queue items
+const queueItems = await readingQueueApi.getAll();
+
+// Add newsletter to reading queue
+await readingQueueApi.add('newsletter-id');
+
+// Remove from reading queue
+await readingQueueApi.remove('queue-item-id');
+
+// Reorder queue items
+await readingQueueApi.reorder([
+  { id: 'item1', position: 1 },
+  { id: 'item2', position: 2 }
+]);
+```
+
+### Using the Tag API
+
+```typescript
+// Get all tags
+const tags = await tagApi.getAll();
+
+// Create new tag
+const newTag = await tagApi.create({
+  name: 'Important',
+  color: '#ff0000'
+});
+
+// Update newsletter tags
+await tagApi.updateNewsletterTags('newsletter-id', [tag1, tag2]);
+
+// Get or create tag by name
+const tag = await tagApi.getOrCreate('Work', '#0066cc');
+```
+
+### Using the Newsletter Source Group API
+
+```typescript
+// Get all source groups
+const groups = await newsletterSourceGroupApi.getAll();
+
+// Create new group
+const newGroup = await newsletterSourceGroupApi.create({
+  name: 'Tech News',
+  sourceIds: ['source1', 'source2']
+});
+
+// Add sources to group
+await newsletterSourceGroupApi.addSources({
+  groupId: 'group-id',
+  sourceIds: ['source3', 'source4']
+});
+```
+
+### Using the User API
+
+```typescript
+// Get user profile
+const profile = await userApi.getProfile();
+
+// Generate email alias
+const alias = await userApi.getEmailAlias();
+
+// Update user preferences
+await userApi.updatePreferences({
+  theme: 'dark',
+  notifications: true
+});
 
 ## API Reference
 
@@ -135,6 +218,94 @@ const searchResults = await newsletterSourceApi.search('tech');
 - `getArchived(params?)` - Get archived sources
 - `getStats()` - Get source statistics
 
+### Reading Queue API (`readingQueueApi`)
+
+#### Core Operations
+
+- `getAll()` - Get all reading queue items for current user
+- `add(newsletterId)` - Add newsletter to reading queue
+- `remove(queueItemId)` - Remove item from reading queue
+- `getById(id)` - Get specific queue item
+- `clear()` - Clear all items from reading queue
+
+#### Queue Management
+
+- `reorder(updates)` - Reorder queue items with position updates
+- `moveToPosition(queueItemId, newPosition)` - Move item to specific position
+- `isInQueue(newsletterId)` - Check if newsletter is in queue
+
+#### Statistics
+
+- `getStats()` - Get reading queue statistics (total, read, unread)
+
+### Tag API (`tagApi`)
+
+#### Core Operations
+
+- `getAll()` - Get all tags for current user
+- `getById(id)` - Get tag by ID
+- `create(params)` - Create new tag
+- `update(params)` - Update existing tag
+- `delete(tagId)` - Delete tag
+
+#### Newsletter Tag Operations
+
+- `getTagsForNewsletter(newsletterId)` - Get tags for specific newsletter
+- `updateNewsletterTags(newsletterId, tags)` - Update newsletter's tags
+- `addToNewsletter(newsletterId, tagId)` - Add tag to newsletter
+- `removeFromNewsletter(newsletterId, tagId)` - Remove tag from newsletter
+
+#### Utility Operations
+
+- `getOrCreate(name, color?)` - Get existing tag or create new one
+- `bulkCreate(tags)` - Create multiple tags
+- `search(query)` - Search tags by name
+- `getTagUsageStats()` - Get tags with newsletter counts
+- `getPaginated(options)` - Get tags with pagination
+
+### Newsletter Source Group API (`newsletterSourceGroupApi`)
+
+#### Core Operations
+
+- `getAll()` - Get all source groups for current user
+- `getById(id)` - Get source group by ID
+- `create(params)` - Create new source group
+- `update(params)` - Update source group
+- `delete(id)` - Delete source group
+
+#### Source Management
+
+- `addSources(params)` - Add sources to group
+- `removeSources(params)` - Remove sources from group
+- `getGroupSources(groupId)` - Get all sources in group
+- `getSourceGroups(sourceId)` - Get groups containing source
+
+#### Query Methods
+
+- `search(query)` - Search groups by name
+- `getStats()` - Get group statistics
+
+### User API (`userApi`)
+
+#### Profile Operations
+
+- `getProfile()` - Get current user profile
+- `updateProfile(updates)` - Update user profile
+- `deleteAccount()` - Delete user account and data
+
+#### Email Alias Operations
+
+- `getEmailAlias()` - Get or create email alias for user
+- `generateEmailAlias(email)` - Generate new email alias
+- `updateEmailAlias(newAlias)` - Update user's email alias
+- `isEmailAliasAvailable(alias)` - Check if alias is available
+
+#### Preferences and Statistics
+
+- `getPreferences()` - Get user preferences
+- `updatePreferences(preferences)` - Update user preferences
+- `getStats()` - Get user statistics (newsletter count, tags, etc.)
+
 ## Parameters and Types
 
 ### Query Parameters
@@ -185,6 +356,38 @@ interface BatchResult<T> {
   errors: (Error | null)[];
   successCount: number;
   errorCount: number;
+}
+
+interface EmailAliasResult {
+  email: string;
+  error?: string;
+}
+
+interface ReadingQueueItem {
+  id: string;
+  user_id: string;
+  newsletter_id: string;
+  position: number;
+  added_at: string;
+  newsletter: NewsletterWithRelations;
+}
+
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface NewsletterSourceGroup {
+  id: string;
+  name: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  sources: NewsletterSource[];
 }
 ```
 
@@ -319,6 +522,31 @@ const { data, error } = useQuery(['newsletters'], () =>
 );
 ```
 
+### From Utilities to API Services
+
+**Before:**
+```typescript
+import { updateNewsletterTags } from '@common/utils/tagUtils';
+import { getUserEmailAlias } from '@common/utils/emailAlias';
+
+// Update tags
+await updateNewsletterTags(newsletterId, tagIds, currentTagIds, userId);
+
+// Get email alias
+const alias = await getUserEmailAlias(user);
+```
+
+**After:**
+```typescript
+import { tagApi, userApi } from '@common/api';
+
+// Update tags
+await tagApi.updateNewsletterTags(newsletterId, tags);
+
+// Get email alias
+const alias = await userApi.getEmailAlias();
+```
+
 ## Best Practices
 
 ### 1. Use Specific Query Parameters
@@ -397,6 +625,21 @@ jest.mock('@common/api', () => ({
     update: jest.fn(),
     delete: jest.fn(),
     // ... other methods
+  },
+  readingQueueApi: {
+    getAll: jest.fn(),
+    add: jest.fn(),
+    remove: jest.fn(),
+    reorder: jest.fn(),
+  },
+  tagApi: {
+    getAll: jest.fn(),
+    create: jest.fn(),
+    updateNewsletterTags: jest.fn(),
+  },
+  userApi: {
+    getProfile: jest.fn(),
+    getEmailAlias: jest.fn(),
   }
 }));
 
