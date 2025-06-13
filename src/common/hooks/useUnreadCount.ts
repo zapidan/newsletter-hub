@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@common/services/supabaseClient";
+import { newsletterApi } from "@common/api/newsletterApi";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext, useEffect, useRef, useMemo } from "react";
 import { getCacheManagerSafe } from "@common/utils/cacheUtils";
@@ -20,7 +21,7 @@ export const useUnreadCount = () => {
   }, []);
 
   // Only enable the query when we have a user
-  const queryKey = ["unreadCount", user?.id];
+  const queryKey = useMemo(() => ["unreadCount", user?.id], [user?.id]);
 
   // Use a stable query function with refs to track state
   const {
@@ -33,19 +34,19 @@ export const useUnreadCount = () => {
     queryFn: async () => {
       if (!user) return 0;
 
-      const { count, error } = await supabase
-        .from("newsletters")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("is_read", false)
-        .eq("is_archived", false);
+      try {
+        // Get unread count excluding archived items by using getAll with filters
+        const unreadNonArchived = await newsletterApi.getAll({
+          isRead: false,
+          isArchived: false,
+          limit: 1, // We only need the count, not the actual data
+        });
 
-      if (error) {
+        return unreadNonArchived.count || 0;
+      } catch (error) {
         console.error("Error fetching unread count:", error);
         throw error;
       }
-
-      return count || 0;
     },
     enabled: !!user,
     staleTime: STALE_TIME,

@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { supabase } from "@common/services/supabaseClient";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext, useCallback, useMemo, useRef } from "react";
@@ -7,6 +6,7 @@ import type { NewsletterWithRelations, ReadingQueueItem } from "@common/types";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
 import { getCacheManagerSafe } from "../utils/cacheUtils";
 import { readingQueueApi } from "@common/api/readingQueueApi";
+import { newsletterApi } from "@common/api/newsletterApi";
 
 interface NewsletterFromDB {
   id: string;
@@ -356,13 +356,7 @@ export const useReadingQueue = () => {
   const clearQueue = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error("User not authenticated");
-
-      const { error } = await supabase
-        .from("reading_queue")
-        .delete()
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+      return readingQueueApi.clear();
     },
     onSuccess: () => {
       safeCacheCall((manager) =>
@@ -374,12 +368,7 @@ export const useReadingQueue = () => {
   // Mark newsletter as read
   const markAsRead = useMutation({
     mutationFn: async (newsletterId: string) => {
-      const { error } = await supabase
-        .from("newsletters")
-        .update({ is_read: true })
-        .eq("id", newsletterId);
-
-      if (error) throw error;
+      return newsletterApi.markAsRead(newsletterId);
     },
     onSuccess: () => {
       safeCacheCall((manager) =>
@@ -391,12 +380,7 @@ export const useReadingQueue = () => {
   // Mark newsletter as unread
   const markAsUnread = useMutation({
     mutationFn: async (newsletterId: string) => {
-      const { error } = await supabase
-        .from("newsletters")
-        .update({ is_read: false })
-        .eq("id", newsletterId);
-
-      if (error) throw error;
+      return newsletterApi.markAsUnread(newsletterId);
     },
     onSuccess: () => {
       safeCacheCall((manager) =>

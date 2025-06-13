@@ -16,7 +16,8 @@ import { useTags } from "@common/hooks/useTags";
 import { useCache } from "@common/hooks/useCache";
 import type { Tag, TagCreate, TagWithCount, Newsletter } from "@common/types";
 import LoadingScreen from "@common/components/common/LoadingScreen";
-import { supabase } from "@common/services/supabaseClient";
+import { tagApi } from "@common/api/tagApi";
+import { newsletterApi } from "@common/api/newsletterApi";
 
 const TagsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,102 +54,67 @@ const TagsPage: React.FC = () => {
     refreshData();
   }, [batchInvalidate, refetchTags]);
 
-  // Fetch all newsletter_tags join rows (cached)
+  // Fetch all tags with usage statistics
   const {
-    data: newsletterTagsData = [],
-    isLoading: loadingNewsletterTags,
-    error: errorNewsletterTags,
+    data: tagsWithUsageData = [],
+    isLoading: loadingTagsUsage,
+    error: errorTagsUsage,
   } = useQuery({
-    queryKey: ["newsletter_tags"],
+    queryKey: ["tags_usage_stats"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("newsletter_tags")
-        .select("newsletter_id, tag_id");
-      if (error) throw error;
-      return Array.isArray(data) ? data : [];
+      return await tagApi.getTagUsageStats();
     },
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch all newsletters (for tag navigation/filtering)
+  // Fetch all newsletters with relations (for tag navigation/filtering)
   const {
-    data: newslettersData = [],
+    data: newslettersResponse,
     isLoading: loadingNewsletters,
     error: errorNewsletters,
   } = useQuery({
     queryKey: ["newsletters"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("newsletters").select(`
-        *,
-        newsletter_source_id,
-        source:newsletter_sources(
-          id,
-          name,
-          domain,
-          user_id,
-          created_at
-        ),
-        newsletter_tags (
-          tag:tags (
-            id,
-            name,
-            color
-          )
-        )
-      `);
-      if (error) throw error;
-      return Array.isArray(data)
-        ? data.map(
-            (item: Newsletter & { newsletter_tags?: Array<{ tag: Tag }> }) => ({
-              ...item,
-              tags: Array.isArray(item.newsletter_tags)
-                ? item.newsletter_tags.map((nt: { tag: Tag }) => nt.tag)
-                : [],
-            }),
-          )
-        : [];
+      return await newsletterApi.getAll({
+        includeSource: true,
+        includeTags: true,
+        limit: 1000, // Get a large number for the tags page
+      });
     },
     staleTime: 5 * 60 * 1000,
   });
 
-  // Compute tag usage counts and newsletters-by-tag in-memory
+  // Compute newsletters-by-tag mapping and use tags with usage stats
   const { tagsWithCount, newslettersByTag } = useMemo(() => {
-    // Map tag_id to count
-    const tagCounts: Record<string, number> = {};
+    const newslettersData = newslettersResponse?.data || [];
     // Map tag_id to array of newsletters
     const newslettersMap: Record<string, Newsletter[]> = {};
-    if (
-      Array.isArray(tagsData) &&
-      Array.isArray(newsletterTagsData) &&
-      Array.isArray(newslettersData)
-    ) {
-      // Build a lookup of newsletter_id to newsletter
-      const newsletterLookup: Record<string, Newsletter> = {};
-      newslettersData.forEach((n: Newsletter) => {
-        newsletterLookup[n.id] = n;
-      });
-      // For each tag, find newsletters
-      tagsData.forEach((tag: Tag) => {
-        const relatedNewsletterIds = newsletterTagsData
-          .filter(
-            (nt: { tag_id: string; newsletter_id: string }) =>
-              nt.tag_id === tag.id,
-          )
-          .map(
-            (nt: { tag_id: string; newsletter_id: string }) => nt.newsletter_id,
-          );
-        newslettersMap[tag.id] = relatedNewsletterIds
-          .map((nid: string) => newsletterLookup[nid])
-          .filter(Boolean);
-        tagCounts[tag.id] = newslettersMap[tag.id].length;
+
+    if (Array.isArray(newslettersData)) {
+      // Build newsletters-by-tag mapping from the newsletters data
+      newslettersData.forEach((newsletter: Newsletter) => {
+        if (newsletter.tags && Array.isArray(newsletter.tags)) {
+          newsletter.tags.forEach((tag: Tag) => {
+            if (!newslettersMap[tag.id]) {
+              newslettersMap[tag.id] = [];
+            }
+            newslettersMap[tag.id].push(newsletter);
+          });
+        }
       });
     }
-    const tagsWithCount = (tagsData || []).map((tag: Tag) => ({
-      ...tag,
-      newsletter_count: tagCounts[tag.id] || 0,
-    }));
+
+    // Use the tags with usage stats from the API, or fall back to regular tags
+    const tagsWithCount =
+      Array.isArray(tagsWithUsageData) && tagsWithUsageData.length > 0
+        ? tagsWithUsageData
+        : (tagsData || []).map((tag: Tag) => ({
+            ...tag,
+            newsletter_count: newslettersMap[tag.id]?.length || 0,
+          }));
+
     return { tagsWithCount, newslettersByTag: newslettersMap };
-  }, [tagsData, newsletterTagsData, newslettersData]);
+  }, [tagsData, tagsWithUsageData, newslettersData]);
 
   // Update tags and tagNewsletters only when they actually change
   useEffect(() => {
@@ -161,8 +127,8 @@ const TagsPage: React.FC = () => {
   }, [tagsWithCount, newslettersByTag, tags, tagNewsletters]);
 
   // Loading and error states
-  const loading = loadingTags || loadingNewsletterTags || loadingNewsletters;
-  const error = errorTags || errorNewsletterTags || errorNewsletters;
+  const loading = loadingTags || loadingTagsUsage || loadingNewsletters;
+  const error = errorTags || errorTagsUsage || errorNewsletters;
 
   const [isCreating, setIsCreating] = useState(false);
   const [newTag, setNewTag] = useState<Omit<TagCreate, "user_id">>({
