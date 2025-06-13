@@ -31,45 +31,49 @@ export class SimpleCacheManager {
     id: string;
     updates: Partial<NewsletterWithRelations>;
   }): void {
-    // Update in all newsletter list queries
-    this.queryClient.setQueriesData<NewsletterWithRelations[]>(
-      { queryKey: queryKeyFactory.newsletters.lists() },
-      (oldData) => {
-        if (!oldData) return oldData;
-        return oldData.map((newsletter) =>
-          newsletter.id === update.id
-            ? { ...newsletter, ...update.updates }
-            : newsletter,
-        );
-      },
-    );
-
-    // Update individual newsletter query if it exists
-    const detailQueryKey = queryKeyFactory.newsletters.detail(update.id);
-    this.queryClient.setQueryData<NewsletterWithRelations>(
-      detailQueryKey,
-      (oldData) => {
-        if (!oldData) return oldData;
-        return { ...oldData, ...update.updates };
-      },
-    );
-
-    // Cross-feature sync: update newsletter in reading queue
-    if (this.config.enableCrossFeatureSync) {
-      this.queryClient.setQueriesData<ReadingQueueItem[]>(
-        { queryKey: queryKeyFactory.queue.lists() },
+    try {
+      // Update in all newsletter list queries
+      this.queryClient.setQueriesData<NewsletterWithRelations[] | undefined>(
+        { queryKey: queryKeyFactory.newsletters.lists() },
         (oldData) => {
-          if (!oldData) return oldData;
-          return oldData.map((queueItem) =>
-            queueItem.newsletter.id === update.id
-              ? {
-                  ...queueItem,
-                  newsletter: { ...queueItem.newsletter, ...update.updates },
-                }
-              : queueItem,
+          if (!Array.isArray(oldData)) return oldData;
+          return oldData.map((newsletter) =>
+            newsletter.id === update.id
+              ? { ...newsletter, ...update.updates }
+              : newsletter,
           );
         },
       );
+
+      // Update individual newsletter query if it exists
+      const detailQueryKey = queryKeyFactory.newsletters.detail(update.id);
+      this.queryClient.setQueryData<NewsletterWithRelations | undefined>(
+        detailQueryKey,
+        (oldData) => {
+          if (!oldData) return oldData;
+          return { ...oldData, ...update.updates };
+        },
+      );
+
+      // Cross-feature sync: update newsletter in reading queue
+      if (this.config.enableCrossFeatureSync) {
+        this.queryClient.setQueriesData<ReadingQueueItem[] | undefined>(
+          { queryKey: queryKeyFactory.queue.lists() },
+          (oldData) => {
+            if (!Array.isArray(oldData)) return oldData;
+            return oldData.map((queueItem) =>
+              queueItem.newsletter?.id === update.id
+                ? {
+                    ...queueItem,
+                    newsletter: { ...queueItem.newsletter, ...update.updates },
+                  }
+                : queueItem,
+            );
+          },
+        );
+      }
+    } catch (error) {
+      console.error('Error in updateNewsletterInCache:', error);
     }
   }
 
@@ -307,21 +311,45 @@ export class SimpleCacheManager {
     updates: Partial<NewsletterWithRelations>,
     operation: string,
   ): Promise<NewsletterWithRelations | null> {
-    // Get the current newsletter data before update for potential rollback
-    const currentData =
-      this.queryClient
-        .getQueryData<
-          NewsletterWithRelations[]
-        >(queryKeyFactory.newsletters.lists())
-        ?.find((n) => n.id === newsletterId) || null;
+    try {
+      // Get all query keys that might contain this newsletter
+      const queryCache = this.queryClient.getQueryCache();
+      const queries = queryCache.findAll({
+        predicate: (query) => {
+          const key = query.queryKey;
+          // Match any query key that's for newsletter lists
+          return queryKeyFactory.matchers.isNewsletterListKey(key as any);
+        },
+      });
 
-    // Update newsletter in all relevant caches
-    this.updateNewsletterInCache({ id: newsletterId, updates });
+      // Find the first query that contains our newsletter
+      let currentData: NewsletterWithRelations | null = null;
+      
+      for (const query of queries) {
+        const data = this.queryClient.getQueryData<NewsletterWithRelations[] | undefined>(
+          query.queryKey
+        );
+        
+        if (Array.isArray(data)) {
+          const newsletter = data.find((n) => n.id === newsletterId);
+          if (newsletter) {
+            currentData = newsletter;
+            break;
+          }
+        }
+      }
 
-    // Invalidate related queries to ensure consistency
-    this.invalidateRelatedQueries([newsletterId], operation);
+      // Update newsletter in all relevant caches
+      this.updateNewsletterInCache({ id: newsletterId, updates });
 
-    return currentData;
+      // Invalidate related queries to ensure consistency
+      this.invalidateRelatedQueries([newsletterId], operation);
+
+      return currentData;
+    } catch (error) {
+      console.error('Error in optimisticUpdate:', error);
+      return null;
+    }
   }
 
   // Warm cache by prefetching common queries

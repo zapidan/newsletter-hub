@@ -9,8 +9,9 @@ import {
 } from "@tanstack/react-query";
 
 import { newsletterApi } from "../api/newsletterApi";
+import { readingQueueApi } from "../api/readingQueueApi";
 import { useAuth } from "../contexts/AuthContext";
-import { NewsletterWithRelations } from "../types";
+import { NewsletterWithRelations, ReadingQueueItem } from "../types";
 import { PaginatedResponse } from "../types/api";
 import type { NewsletterFilter } from "../types/cache";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
@@ -485,6 +486,7 @@ export const useNewsletters = (
       return true;
     },
     onMutate: async (id) => {
+      // Cancel any outgoing refetches to avoid race conditions
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
@@ -496,34 +498,38 @@ export const useNewsletters = (
           ),
       });
 
-      const previousNewsletters =
-        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
-      const newsletter = previousNewsletters.find((n) => n.id === id);
-
-      if (newsletter) {
-        cacheManager.updateNewsletterInCache({
-          id,
-          updates: {
-            is_liked: !newsletter.is_liked,
-            updated_at: new Date().toISOString(),
-          },
-        });
+      // Get the current newsletter to toggle its liked status
+      const newsletter = await getNewsletter(id);
+      if (!newsletter) {
+        return { previousNewsletters: [] };
       }
 
-      return { previousNewsletters };
+      // Optimistically update the cache
+    cacheManager.updateNewsletterInCache({
+      id,
+      updates: {
+        is_liked: !newsletter.is_liked,
+        updated_at: new Date().toISOString(),
+      },
+    });
+
+      // Return the previous state in case we need to rollback
+      return {
+        previousNewsletters: [newsletter],
+      };
     },
-    onError: (_err, id, context) => {
+    onError: (_error, id, context) => {
+      // Rollback to the previous state on error
       if (context?.previousNewsletters) {
-        const newsletter = context.previousNewsletters.find((n) => n.id === id);
-        if (newsletter) {
+        context.previousNewsletters.forEach((newsletter) => {
           cacheManager.updateNewsletterInCache({
-            id,
+            id: newsletter.id,
             updates: {
               is_liked: newsletter.is_liked,
               updated_at: newsletter.updated_at,
             },
           });
-        }
+        });
       }
     },
     onSettled: (_data, _error, id) => {
@@ -543,6 +549,7 @@ export const useNewsletters = (
       return true;
     },
     onMutate: async (id) => {
+      // Cancel any outgoing refetches to avoid race conditions
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
@@ -554,26 +561,30 @@ export const useNewsletters = (
           ),
       });
 
-      const previousNewsletters =
-        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
-      const newsletter = previousNewsletters.find((n) => n.id === id);
-
-      if (newsletter) {
-        cacheManager.updateNewsletterInCache({
-          id,
-          updates: {
-            is_archived: !newsletter.is_archived,
-            updated_at: new Date().toISOString(),
-          },
-        });
+      // Get the current newsletter to toggle its archived status
+      const newsletter = await getNewsletter(id);
+      if (!newsletter) {
+        return { previousNewsletters: [] };
       }
 
-      return { previousNewsletters };
+      // Optimistically update the cache
+      cacheManager.updateNewsletterInCache({
+        id,
+        updates: {
+          is_archived: !newsletter.is_archived,
+          updated_at: new Date().toISOString(),
+        },
+      });
+
+      // Return the previous state in case we need to rollback
+      return {
+        previousNewsletters: [newsletter],
+      };
     },
     onError: (_err, id, context) => {
+      // Rollback to the previous state on error
       if (context?.previousNewsletters) {
-        const newsletter = context.previousNewsletters.find((n) => n.id === id);
-        if (newsletter) {
+        context.previousNewsletters.forEach((newsletter) => {
           cacheManager.updateNewsletterInCache({
             id,
             updates: {
@@ -581,10 +592,11 @@ export const useNewsletters = (
               updated_at: newsletter.updated_at,
             },
           });
-        }
+        });
       }
     },
     onSettled: (_data, _error, id) => {
+      // Invalidate the queries to ensure we have fresh data
       cacheManager.invalidateRelatedQueries([id], "toggle-archive");
     },
   });
@@ -745,15 +757,78 @@ export const useNewsletters = (
     },
   });
 
-  // Placeholder for queue operations (if needed in the future)
-  const toggleInQueueMutation = useMutation<boolean, Error, string, unknown>({
-    mutationFn: async (id: string) => {
-      // This would need to be implemented in the API layer
-      throw new Error(
-        `Queue operations not yet implemented for newsletter ${id}`,
-      );
-    },
-  });
+  // Toggle in-queue status mutation
+const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
+  mutationFn: async (id: string) => {
+    // First check the cache for the current queue state
+    const queueItems = getQueryData<ReadingQueueItem[]>(queryKeyFactory.queue.lists()) || [];
+    const isInQueue = queueItems.some(item => item.newsletter_id === id);
+    
+    // If we don't have the queue in cache, fall back to the API
+    if (queueItems.length === 0) {
+      const apiIsInQueue = await readingQueueApi.isInQueue(id);
+      if (apiIsInQueue === isInQueue) {
+        return !isInQueue;
+      }
+    }
+    
+    // Update the server state
+    if (isInQueue) {
+      // Find the queue item ID from cache
+      const queueItem = queueItems.find(item => item.newsletter_id === id);
+      if (queueItem) {
+        await readingQueueApi.remove(queueItem.id);
+      } else {
+        // If not in cache but API said it was in queue, fall back to API
+        await readingQueueApi.remove(id);
+      }
+    } else {
+      await readingQueueApi.add(id);
+    }
+    
+    return !isInQueue;
+  },
+  onMutate: async (id) => {
+    // Cancel any outgoing refetches to avoid race conditions
+    await cancelQueries({
+      predicate: (query) => {
+        const queryKey = query.queryKey as unknown[];
+        return (
+          queryKeyFactory.matchers.isNewsletterListKey(queryKey) ||
+          queryKeyFactory.matchers.isNewsletterDetailKey(queryKey, id) ||
+          (queryKey[0] === 'reading-queue')
+        );
+      },
+    });
+
+    // Get the current newsletter to get its current state
+    const newsletter = await getNewsletter(id);
+    if (!newsletter) {
+      return { previousNewsletters: [] };
+    }
+
+    // Check current queue status
+    const isInQueue = await readingQueueApi.isInQueue(id);
+    
+    // Return the previous state in case we need to rollback
+    return {
+      previousNewsletters: [newsletter],
+      wasInQueue: isInQueue,
+    };
+  },
+  onError: (_error, _id, context) => {
+    // Rollback to the previous state on error
+    if (context?.previousNewsletters) {
+      // The cache will be invalidated by the onSettled handler
+    }
+  },
+  onSettled: (_data, _error, id) => {
+    // Invalidate the queries to ensure we have fresh data
+    cacheManager.invalidateRelatedQueries([id], "toggle-queue");
+    // Invalidate the reading queue query
+    cacheManager.invalidateRelatedQueries(['reading-queue'], "toggle-queue");
+  },
+});
 
   // Unarchive mutation (separate from toggle for specific use cases)
   const unarchiveMutation = useMutation<

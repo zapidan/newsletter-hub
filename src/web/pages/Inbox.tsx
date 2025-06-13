@@ -12,17 +12,19 @@ import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterAct
 import { toggleTagFilter, handleTagClick } from "@common/utils/tagUtils";
 import type { NewsletterWithRelations, Tag } from "@common/types";
 import type { NewsletterFilter } from "@common/types/cache";
-import { newsletterApi } from "@common/api";
+import { newsletterApi, tagApi } from "@common/api";
 import LoadingScreen from "@common/components/common/LoadingScreen";
+import { useQueryClient } from "@tanstack/react-query";
 import NewsletterRow from "@web/components/NewsletterRow";
 import { TimeRange } from "@web/components/TimeFilter";
 import { useAuth } from "@common/contexts";
-import { getCacheManager } from "@common/utils/cacheUtils";
+import { getCacheManager, invalidateNewsletterQueries } from "@common/utils/cacheUtils";
 
 const Inbox: React.FC = () => {
   // Router and URL state
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Get initial values from URL
   const urlFilter = searchParams.get("filter") as
@@ -374,23 +376,50 @@ const Inbox: React.FC = () => {
           return;
         }
 
-        // Use the newsletter API to update tags
-        await newsletterApi.update({
-          id: newsletterId,
-          tag_ids: tagIds,
+        // Get all existing tags to create proper Tag objects with required properties
+        const existingTags = await tagApi.getAll();
+        
+        // Create Tag objects with required properties
+        const tagsToUpdate = tagIds.map(tagId => {
+          const existingTag = existingTags.find(t => t.id === tagId);
+          return {
+            id: tagId,
+            name: existingTag?.name || `Tag ${tagId}`,
+            color: existingTag?.color || '#000000',
+            user_id: user.id,
+            created_at: existingTag?.created_at || new Date().toISOString(),
+          } as Tag;
         });
 
-        setVisibleTags((prev) => {
-          const newVisibleTags = new Set(prev);
-          newVisibleTags.delete(newsletterId);
-          return newVisibleTags;
-        });
+        // Use the tag API to update newsletter tags
+        const success = await tagApi.updateNewsletterTags(
+          newsletterId,
+          tagsToUpdate
+        );
 
-        await refetchNewsletters();
-        setToast({ type: "success", message: "Tags updated successfully" });
+        if (success) {
+          setToast({
+            type: "success",
+            message: "Tags updated successfully",
+          });
+          
+          // Invalidate the newsletters query to refresh the list
+          invalidateNewsletterQueries([newsletterId], "update");
+          
+          // Close the tag editor
+          setVisibleTags(prev => {
+            const newVisibleTags = new Set(prev);
+            newVisibleTags.delete(newsletterId);
+            return newVisibleTags;
+          });
+        } else {
+          throw new Error("Failed to update tags");
+        }
       } catch (error) {
-        console.error("Error updating tags:", error);
-        setToast({ type: "error", message: "Failed to update tags" });
+        setToast({
+          type: "error",
+          message: error instanceof Error ? error.message : "Failed to update tags"
+        });
       }
     },
     [user, refetchNewsletters],
