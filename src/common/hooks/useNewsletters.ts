@@ -10,12 +10,8 @@ import {
 
 import { newsletterApi } from "../api/newsletterApi";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  NewsletterWithRelations,
-  Tag,
-  Newsletter,
-  NewsletterSource,
-} from "../types";
+import { NewsletterWithRelations } from "../types";
+import { PaginatedResponse } from "../types/api";
 import type { NewsletterFilter } from "../types/cache";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
 import {
@@ -58,7 +54,9 @@ interface UseNewslettersReturn {
   errorNewsletters: Error | null;
   refetchNewsletters: (
     options?: RefetchOptions,
-  ) => Promise<QueryObserverResult<NewsletterWithRelations[], Error>>;
+  ) => Promise<
+    QueryObserverResult<PaginatedResponse<NewsletterWithRelations>, Error>
+  >;
 
   // Read status mutations
   markAsRead: UseMutateAsyncFunction<
@@ -751,7 +749,9 @@ export const useNewsletters = (
   const toggleInQueueMutation = useMutation<boolean, Error, string, unknown>({
     mutationFn: async (id: string) => {
       // This would need to be implemented in the API layer
-      throw new Error("Queue operations not yet implemented");
+      throw new Error(
+        `Queue operations not yet implemented for newsletter ${id}`,
+      );
     },
   });
 

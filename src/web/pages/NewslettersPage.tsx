@@ -8,7 +8,7 @@ import React, {
 import { useNavigate } from "react-router-dom";
 import { Dialog, Transition } from "@headlessui/react";
 import { toast } from "react-hot-toast";
-import { supabase } from "@common/services/supabaseClient";
+
 import {
   updateNewsletterTags,
   handleTagClickWithNavigation,
@@ -19,6 +19,8 @@ import {
   useNewsletterSourceGroups,
   useReadingQueue,
 } from "@common/hooks";
+import { useAuth } from "@common/contexts";
+import { newsletterApi } from "@common/api";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import {
   NewsletterSource,
@@ -46,6 +48,7 @@ import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 const NewslettersPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editModalSourceId, setEditModalSourceId] = useState<string | null>(
     null,
@@ -111,7 +114,7 @@ const NewslettersPage: React.FC = () => {
           [
             ...queryKeyFactory.newsletters.list({
               sourceId: source.id,
-              filter: "unread",
+              filter: {isRead: false},
             }),
           ],
           async () => {
@@ -255,14 +258,14 @@ const NewslettersPage: React.FC = () => {
   const confirmDelete = async () => {
     if (!deleteConfirmId) return;
     try {
-      const { data: newsletters, error: fetchError } = await supabase
-        .from("newsletters")
-        .select("id")
-        .eq("newsletter_source_id", deleteConfirmId)
-        .eq("is_archived", false);
-      if (fetchError) throw fetchError;
-      if (newsletters && newsletters.length > 0) {
-        const newsletterIds = newsletters.map((nl) => nl.id);
+      const newslettersResponse = await newsletterApi.getAll({
+        sourceIds: [deleteConfirmId],
+        isArchived: false,
+        limit: 1000, // Get all newsletters for this source
+      });
+
+      if (newslettersResponse.data && newslettersResponse.data.length > 0) {
+        const newsletterIds = newslettersResponse.data.map((nl) => nl.id);
         await bulkArchive(newsletterIds);
       }
       await archiveNewsletterSource(deleteConfirmId);
@@ -290,12 +293,11 @@ const NewslettersPage: React.FC = () => {
     isErrorNewsletters,
     errorNewsletters,
     errorTogglingLike,
-  } = useNewsletters(
-    undefined,
-    selectedSourceId ? "all" : "all",
-    selectedSourceId || undefined,
-    selectedGroupId ? selectedGroupSourceIds : undefined,
-  ) as {
+  } = useNewsletters({
+    status: selectedSourceId ? "all" : "all",  // Not sure why this is the same in both cases?
+    groupIds: selectedGroupId ? [selectedGroupId] : undefined,
+    sourceIds: selectedGroupId ? selectedGroupSourceIds : undefined
+  }) as {
     newsletters: NewsletterWithRelations[];
     isLoadingNewsletters: boolean;
     isErrorNewsletters: boolean;
@@ -430,34 +432,17 @@ const NewslettersPage: React.FC = () => {
   const handleUpdateTags = useCallback(
     async (newsletterId: string, tagIds: string[]): Promise<void> => {
       try {
-        // Get the current user
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError || !user) {
+        if (!user) {
           console.error("User not authenticated");
           toast.error("You must be logged in to update tags");
           return;
         }
 
-        // Get current tags for the newsletter to calculate what changed
-        const { data: currentTags } = await supabase
-          .from("newsletter_tags")
-          .select("tag_id")
-          .eq("newsletter_id", newsletterId)
-          .eq("user_id", user.id);
-
-        const currentTagIds = currentTags?.map((t) => t.tag_id) || [];
-
-        // Use the updateNewsletterTags utility function to handle the update
-        await updateNewsletterTags(
-          newsletterId,
-          tagIds,
-          currentTagIds,
-          user.id,
-        );
+        // Use the newsletter API to update tags
+        await newsletterApi.update({
+          id: newsletterId,
+          tag_ids: tagIds,
+        });
 
         // Invalidate the newsletters query to refresh the UI
         await invalidateQueries({ queryKey: ["newsletters"] });
@@ -467,7 +452,7 @@ const NewslettersPage: React.FC = () => {
         toast.error("Failed to update tags");
       }
     },
-    [],
+    [user],
   );
 
   const toggleTagVisibility = useCallback(

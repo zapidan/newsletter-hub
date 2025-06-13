@@ -1,10 +1,12 @@
 import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo, useContext } from "react";
 import { NewsletterSource } from "@common/types";
+import {
+  PaginatedResponse,
+  NewsletterSourceQueryParams,
+} from "@common/types/api";
 import { AuthContext } from "@common/contexts/AuthContext";
-import { useContext } from "react";
-import { supabase } from "@common/services/supabaseClient";
-import { useMemo } from "react";
+import { newsletterSourceApi } from "@common/api/newsletterSourceApi";
 import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 
 // Cache time constants (in milliseconds)
@@ -16,7 +18,12 @@ const queryKeys = {
   all: ["newsletterSources"],
   lists: () => [...queryKeys.all, "list"],
   detail: (id: string) => [...queryKeys.all, "detail", id],
-  userSources: (userId: string) => [...queryKeys.all, "user", userId],
+  userSources: (userId: string, params?: NewsletterSourceQueryParams) => [
+    ...queryKeys.all,
+    "user",
+    userId,
+    ...(params ? [params] : []),
+  ],
 };
 
 // Types
@@ -34,107 +41,25 @@ type SourceContext = {
   previousSources?: NewsletterSource[];
 };
 
-// API functions
-const updateNewsletterSourceFn = async ({
-  id,
-  name,
-}: UpdateNewsletterSourceVars): Promise<NewsletterSource> => {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
-    throw userError || new Error("User not found for updating source");
-  }
-
-  if (!name.trim()) {
-    throw new Error("Newsletter source name cannot be empty.");
-  }
-
-  const { data, error } = await supabase
-    .from("newsletter_sources")
-    .update({ name: name.trim() })
-    .eq("id", id)
-    .eq("user_id", userData.user.id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  if (!data) throw new Error("Failed to update source");
-  return data;
-};
-
-const archiveNewsletterSourceFn = async ({
-  id,
-  archive,
-}: ArchiveNewsletterSourceVars): Promise<NewsletterSource> => {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
-    throw userError || new Error("User not found for archiving source");
-  }
-
-  const { data, error } = await supabase
-    .from("newsletter_sources")
-    .update({
-      is_archived: archive,
-    })
-    .eq("id", id)
-    .eq("user_id", userData.user.id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  if (!data) throw new Error("Failed to update source archive status");
-  return data;
-};
-
-const fetchNewsletterSourcesFn = async (): Promise<NewsletterSource[]> => {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
-    throw userError || new Error("User not found for fetching sources");
-  }
-
-  // First, get all non-archived sources for the user
-  const { data: sources, error } = await supabase
-    .from("newsletter_sources")
-    .select("*")
-    .eq("user_id", userData.user.id)
-    .eq("is_archived", false)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  if (!sources || sources.length === 0) return [];
-
-  // Get the count of newsletters for each source using a direct query
-  const { data: counts, error: countError } = await supabase
-    .from("newsletters")
-    .select("newsletter_source_id")
-    .eq("user_id", userData.user.id)
-    .eq("is_archived", false)
-    .not("newsletter_source_id", "is", null);
-
-  if (countError) throw countError;
-
-  // Count newsletters per source
-  const countMap = new Map<string, number>();
-  (counts || []).forEach((item) => {
-    const sourceId = item.newsletter_source_id;
-    if (sourceId) {
-      countMap.set(sourceId, (countMap.get(sourceId) || 0) + 1);
-    }
-  });
-
-  // Map the sources and add the counts
-  return sources.map((source) => ({
-    ...source,
-    newsletter_count: countMap.get(source.id) || 0,
-  }));
-};
-
-// Removed unused prefetchSource function
-
 // Hook
-export const useNewsletterSources = () => {
+export const useNewsletterSources = (
+  params: NewsletterSourceQueryParams = {},
+) => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const userId = user?.id || "";
+
+  // Default parameters for getting active sources with counts
+  const queryParams = useMemo(
+    () => ({
+      excludeArchived: true,
+      includeCount: true,
+      orderBy: "created_at",
+      ascending: false,
+      ...params,
+    }),
+    [params],
+  );
 
   // Initialize cache manager safely
   const cacheManager = useMemo(() => {
@@ -155,24 +80,27 @@ export const useNewsletterSources = () => {
     [cacheManager],
   );
 
-  // Query for newsletter sources
+  // Query for newsletter sources using the API layer
   const {
-    data: newsletterSources = [],
+    data: sourcesResponse,
     isLoading: isLoadingSources,
     isError: isErrorSources,
     error: errorSources,
     isFetching: isFetchingSources,
     isStale: isStaleSources,
     refetch: refetchSources,
-  } = useQuery<NewsletterSource[], Error>({
-    queryKey: queryKeys.userSources(userId),
-    queryFn: fetchNewsletterSourcesFn,
+  } = useQuery<PaginatedResponse<NewsletterSource>, Error>({
+    queryKey: queryKeys.userSources(userId, queryParams),
+    queryFn: () => newsletterSourceApi.getAll(queryParams),
     enabled: !!user,
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
+
+  // Extract newsletter sources from paginated response
+  const newsletterSources = sourcesResponse?.data || [];
 
   // Invalidate and refetch
   const invalidateSources = useCallback(async () => {
@@ -188,19 +116,21 @@ export const useNewsletterSources = () => {
     return Promise.resolve();
   }, [user]);
 
-  // Update mutation
+  // Update mutation using API layer
   const updateMutation = useMutation<
     NewsletterSource,
     Error,
     UpdateNewsletterSourceVars,
     SourceContext
   >({
-    mutationFn: updateNewsletterSourceFn,
-    onMutate: async () => {
+    mutationFn: async ({ id, name }) => {
+      return newsletterSourceApi.update({ id, name });
+    },
+    onMutate: async ({ id, name }) => {
       // Use cache manager for optimistic update
       const previousSources = newsletterSources;
 
-      // Apply optimistic update via cache manager
+      // Apply optimistic update with the new name
       safeCacheCall((manager) =>
         manager.invalidateRelatedQueries([], "source-update-optimistic"),
       );
@@ -220,14 +150,18 @@ export const useNewsletterSources = () => {
     },
   });
 
-  // Archive mutation
+  // Archive mutation using API layer
   const archiveMutation = useMutation<
     NewsletterSource,
     Error,
     ArchiveNewsletterSourceVars,
     SourceContext
   >({
-    mutationFn: archiveNewsletterSourceFn,
+    mutationFn: async ({ id, archive }) => {
+      return archive
+        ? newsletterSourceApi.archive(id)
+        : newsletterSourceApi.unarchive(id);
+    },
     onMutate: async ({ archive }) => {
       const previousSources = newsletterSources;
 
@@ -298,6 +232,14 @@ export const useNewsletterSources = () => {
     isFetchingSources,
     isStaleSources,
     refetchSources,
+
+    // Pagination data from API response
+    sourcesCount: sourcesResponse?.count || 0,
+    sourcesPage: sourcesResponse?.page || 1,
+    sourcesLimit: sourcesResponse?.limit || 50,
+    sourcesHasMore: sourcesResponse?.hasMore || false,
+    sourcesNextPage: sourcesResponse?.nextPage,
+    sourcesPrevPage: sourcesResponse?.prevPage,
 
     // Update source
     updateSource,

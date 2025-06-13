@@ -11,7 +11,8 @@ import { useReadingQueue } from "@common/hooks/useReadingQueue";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import { toggleTagFilter, handleTagClick } from "@common/utils/tagUtils";
 import type { NewsletterWithRelations, Tag } from "@common/types";
-import { supabase } from "@common/services/supabaseClient";
+import type { NewsletterFilter } from "@common/types/cache";
+import { newsletterApi } from "@common/api";
 import LoadingScreen from "@common/components/common/LoadingScreen";
 import NewsletterRow from "@web/components/NewsletterRow";
 import { TimeRange } from "@web/components/TimeFilter";
@@ -105,17 +106,80 @@ const Inbox: React.FC = () => {
   const { getTags } = useTags();
   const { readingQueue, removeFromQueue } = useReadingQueue();
   const { newsletterSources = [] } = useNewsletterSources();
+
+  // Build newsletter filter object
+  const newsletterFilter = useMemo(() => {
+    const filters: NewsletterFilter = {};
+
+    // Handle status filter
+    switch (debouncedFilter) {
+      case "unread":
+        filters.isRead = false;
+        filters.isArchived = false;
+        break;
+      case "liked":
+        filters.isLiked = true;
+        filters.isArchived = false;
+        break;
+      case "archived":
+        filters.isArchived = true;
+        break;
+      case "all":
+      default:
+        filters.isArchived = false;
+        break;
+    }
+
+    // Handle source filter
+    if (debouncedSourceFilter) {
+      filters.sourceIds = [debouncedSourceFilter];
+    }
+
+    // Handle tag filter
+    if (debouncedTagUpdates.length > 0) {
+      filters.tagIds = debouncedTagUpdates;
+    }
+
+    // Handle time range filter
+    if (debouncedTimeRange && debouncedTimeRange !== "all") {
+      const now = new Date();
+      let dateFrom: Date;
+
+      switch (debouncedTimeRange) {
+        case "day":
+          dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case "week":
+          dateFrom = subWeeks(now, 1);
+          break;
+        case "month":
+          dateFrom = subMonths(now, 1);
+          break;
+        case "2days":
+          dateFrom = subDays(now, 2);
+          break;
+        default:
+          dateFrom = subDays(now, 7);
+      }
+
+      filters.dateFrom = dateFrom.toISOString();
+    }
+
+    return filters;
+  }, [
+    debouncedFilter,
+    debouncedSourceFilter,
+    debouncedTagUpdates,
+    debouncedTimeRange,
+  ]);
+
   const {
     newsletters = [],
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
     refetchNewsletters,
-  } = useNewsletters(
-    tagIds.length > 0 ? tagIds[0] : undefined,
-    filter,
-    sourceFilter,
-  );
+  } = useNewsletters(newsletterFilter);
   const { user } = useAuth();
 
   // Shared newsletter action handlers
@@ -302,8 +366,6 @@ const Inbox: React.FC = () => {
   const handleUpdateTags = useCallback(
     async (newsletterId: string, tagIds: string[]) => {
       try {
-        // Using the tag update from shared handlers would need to be implemented
-        // For now, keeping the existing implementation but with proper cleanup
         if (!user) {
           setToast({
             type: "error",
@@ -312,42 +374,11 @@ const Inbox: React.FC = () => {
           return;
         }
 
-        const newsletter = newsletters.find((n) => n.id === newsletterId);
-        if (!newsletter) {
-          setToast({ type: "error", message: "Newsletter not found" });
-          return;
-        }
-
-        const currentTagIds = (newsletter.tags || []).map((tag: Tag) => tag.id);
-        const tagsToAdd = tagIds.filter(
-          (id: string) => !currentTagIds.includes(id),
-        );
-        const tagsToRemove = currentTagIds.filter(
-          (id: string) => !tagIds.includes(id),
-        );
-
-        const addPromises = tagsToAdd.map(async (tagId: string) => {
-          const { error } = await supabase.from("newsletter_tags").insert([
-            {
-              newsletter_id: newsletterId,
-              tag_id: tagId,
-              user_id: user.id,
-            },
-          ]);
-          if (error) throw error;
+        // Use the newsletter API to update tags
+        await newsletterApi.update({
+          id: newsletterId,
+          tag_ids: tagIds,
         });
-
-        const removePromises = tagsToRemove.map(async (tagId: string) => {
-          const { error } = await supabase
-            .from("newsletter_tags")
-            .delete()
-            .eq("newsletter_id", newsletterId)
-            .eq("tag_id", tagId)
-            .eq("user_id", user.id);
-          if (error) throw error;
-        });
-
-        await Promise.all([...addPromises, ...removePromises]);
 
         setVisibleTags((prev) => {
           const newVisibleTags = new Set(prev);
@@ -362,7 +393,7 @@ const Inbox: React.FC = () => {
         setToast({ type: "error", message: "Failed to update tags" });
       }
     },
-    [user, newsletters, refetchNewsletters],
+    [user, refetchNewsletters],
   );
 
   // Toggle tag visibility
