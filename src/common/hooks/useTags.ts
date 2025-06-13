@@ -1,15 +1,16 @@
 import { useState, useCallback, useContext, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@common/services/supabaseClient";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { Tag, TagCreate, TagUpdate } from "@common/types";
-import { getCacheManagerSafe } from "@common/utils/cacheUtils";
+import {
+  getCacheManagerSafe,
+  invalidateQueries,
+} from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 export const useTags = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
-  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,17 +73,16 @@ export const useTags = () => {
         if (error) throw error;
 
         // Use cache manager for better tag cache management
-        safeCacheCall((manager) =>
-          manager.invalidateRelatedQueries([], "tag-create"),
-        );
+        safeCacheCall((manager) => {
+          manager.invalidateRelatedQueries([], "tag-create");
+          manager.invalidateTagQueries();
+        });
         if (!cacheManager) {
-          // Fallback to manual invalidation
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.tags(),
-            }),
-            queryClient.invalidateQueries({ queryKey: ["newsletter_tags"] }),
-          ]);
+          // Fallback to cache utils
+          await invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.tags(),
+          });
+          await invalidateQueries({ queryKey: ["newsletter_tags"] });
         }
 
         return data;
@@ -95,7 +95,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall],
   );
 
   // Update an existing tag
@@ -117,20 +117,19 @@ export const useTags = () => {
         if (error) throw error;
 
         // Use cache manager for cross-feature cache synchronization
-        safeCacheCall((manager) =>
-          manager.invalidateRelatedQueries([data.id], "tag-update"),
-        );
+        safeCacheCall((manager) => {
+          manager.invalidateRelatedQueries([data.id], "tag-update");
+          manager.invalidateTagQueries();
+        });
         if (!cacheManager) {
-          // Fallback to manual invalidation
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.tags(),
-            }),
-            queryClient.invalidateQueries({ queryKey: ["newsletter_tags"] }),
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.lists(),
-            }),
-          ]);
+          // Fallback to cache utils
+          await invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.tags(),
+          });
+          await invalidateQueries({ queryKey: ["newsletter_tags"] });
+          await invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+          });
         }
 
         return data;
@@ -143,7 +142,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall],
   );
 
   // Delete a tag
@@ -162,13 +161,14 @@ export const useTags = () => {
         if (error) throw error;
 
         // Use cache manager for comprehensive tag deletion cache management
-        safeCacheCall((manager) =>
-          manager.invalidateRelatedQueries([tagId], "tag-delete"),
-        );
+        safeCacheCall((manager) => {
+          manager.invalidateRelatedQueries([tagId], "tag-delete");
+          manager.removeTagFromAllNewsletters(tagId);
+        });
         if (!cacheManager) {
-          // Also invalidate any newsletter lists that might have been filtered by this tag
-          queryClient.invalidateQueries({
-            predicate: (query) => {
+          // Fallback to cache utils
+          await invalidateQueries({
+            predicate: (query: { queryKey: unknown[] }) => {
               return (
                 queryKeyFactory.matchers?.isAffectedByTagChange?.(
                   query.queryKey as unknown[],
@@ -178,17 +178,13 @@ export const useTags = () => {
             },
             refetchType: "active",
           });
-        } else {
-          // Fallback to manual invalidation
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.tags(),
-            }),
-            queryClient.invalidateQueries({ queryKey: ["newsletter_tags"] }),
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.lists(),
-            }),
-          ]);
+          await invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.tags(),
+          });
+          await invalidateQueries({ queryKey: ["newsletter_tags"] });
+          await invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+          });
         }
 
         return true;
@@ -201,7 +197,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall],
   );
 
   // Get tags for a specific newsletter
@@ -293,35 +289,22 @@ export const useTags = () => {
 
         // Use cache manager for newsletter-tag relationship updates
         safeCacheCall((manager) => {
-          // Update the specific newsletter in cache with new tags
-          manager.updateNewsletterInCache({
-            id: newsletterId,
-            updates: { tags },
-          });
-
-          // Invalidate tag-related queries
+          manager.updateNewsletterTagsInCache(newsletterId, tags);
           manager.invalidateRelatedQueries([], "newsletter-tag-update");
         });
 
         if (!cacheManager) {
-          // Invalidate newsletter detail if it exists
-          queryClient.invalidateQueries({
+          // Fallback to cache utils
+          await invalidateQueries({
             queryKey: queryKeyFactory.newsletters.detail(newsletterId),
           });
-        } else {
-          // Fallback to manual invalidation
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["newsletter_tags"] }),
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.lists(),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.tags(),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: queryKeyFactory.newsletters.detail(newsletterId),
-            }),
-          ]);
+          await invalidateQueries({ queryKey: ["newsletter_tags"] });
+          await invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+          });
+          await invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.tags(),
+          });
         }
 
         return true;
@@ -334,7 +317,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, queryClient, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall],
   );
 
   return {

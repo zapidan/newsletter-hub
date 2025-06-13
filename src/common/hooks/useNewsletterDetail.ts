@@ -1,11 +1,16 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useContext, useCallback, useMemo } from "react";
 import { supabase } from "@common/services/supabaseClient";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { NewsletterWithRelations } from "@common/types";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { getCacheManagerSafe } from "@common/utils/cacheUtils";
-import { useCache } from "@common/hooks/useCache";
+import {
+  getCacheManagerSafe,
+  getQueriesData,
+  getQueryData,
+  getQueryState,
+  prefetchQuery,
+} from "@common/utils/cacheUtils";
 
 export interface UseNewsletterDetailOptions {
   enabled?: boolean;
@@ -72,8 +77,6 @@ export const useNewsletterDetail = (
 ) => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
-  const queryClient = useQueryClient();
-  const { prefetchQuery } = useCache();
 
   // Initialize cache manager safely
   const cacheManager = useMemo(() => {
@@ -160,9 +163,9 @@ export const useNewsletterDetail = (
     refetchOnWindowFocus,
     // Optimistic updates - try to get data from newsletter lists first
     initialData: () => {
-      const listsData = queryClient.getQueriesData<NewsletterWithRelations[]>({
-        queryKey: queryKeyFactory.newsletters.lists(),
-      });
+      const listsData = getQueriesData<NewsletterWithRelations[]>(
+        queryKeyFactory.newsletters.lists(),
+      );
 
       for (const [, newsletters] of listsData) {
         if (newsletters) {
@@ -176,16 +179,16 @@ export const useNewsletterDetail = (
     },
     initialDataUpdatedAt: () => {
       // Get the timestamp of when the list data was last updated
-      const listsData = queryClient.getQueriesData<NewsletterWithRelations[]>({
-        queryKey: queryKeyFactory.newsletters.lists(),
-      });
+      const listsData = getQueriesData<NewsletterWithRelations[]>(
+        queryKeyFactory.newsletters.lists(),
+      );
 
       let latestUpdate = 0;
       for (const [queryKey, newsletters] of listsData) {
         if (newsletters) {
           const found = newsletters.find((n) => n.id === newsletterId);
           if (found) {
-            const state = queryClient.getQueryState(queryKey);
+            const state = getQueryState(queryKey);
             latestUpdate = Math.max(latestUpdate, state?.dataUpdatedAt || 0);
           }
         }
@@ -248,10 +251,10 @@ export const useNewsletterDetail = (
                 .from("newsletters")
                 .select(
                   `
-                  *,
-                  source:newsletter_sources(*),
-                  tags:newsletter_tags(tag:tags(*))
-                `,
+                    *,
+                    source:newsletter_sources(*),
+                    tags:newsletter_tags(tag:tags(*))
+                  `,
                 )
                 .eq("user_id", user.id)
                 .limit(20);
@@ -339,7 +342,7 @@ export const useNewsletterDetail = (
       console.warn("Some prefetch operations failed:", error);
       // Don't throw - prefetching failures shouldn't break the main functionality
     }
-  }, [query.data, user, prefetchQuery, prefetchTags, prefetchSource]);
+  }, [query.data, user, prefetchTags, prefetchSource]);
 
   // Enhanced refetch that also updates cache manager
   const refetch = useCallback(() => {
@@ -376,7 +379,6 @@ export const useNewsletterDetail = (
 export const usePrefetchNewsletterDetail = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
-  const queryClient = useQueryClient();
 
   const prefetchNewsletter = useCallback(
     async (newsletterId: string, options: { priority?: boolean } = {}) => {
@@ -385,10 +387,10 @@ export const usePrefetchNewsletterDetail = () => {
       const { priority = false } = options;
 
       // Check if already cached and fresh
-      const existingData = queryClient.getQueryData(
+      const existingData = getQueryData(
         queryKeyFactory.newsletters.detail(newsletterId),
       );
-      const queryState = queryClient.getQueryState(
+      const queryState = getQueryState(
         queryKeyFactory.newsletters.detail(newsletterId),
       );
 
@@ -402,9 +404,9 @@ export const usePrefetchNewsletterDetail = () => {
       }
 
       try {
-        await queryClient.prefetchQuery({
-          queryKey: queryKeyFactory.newsletters.detail(newsletterId),
-          queryFn: async () => {
+        await prefetchQuery(
+          queryKeyFactory.newsletters.detail(newsletterId),
+          async () => {
             const { data, error } = await supabase
               .from("newsletters")
               .select(
@@ -428,16 +430,18 @@ export const usePrefetchNewsletterDetail = () => {
               newsletter_source_id: typedData.newsletter_source_id || null,
             };
           },
-          staleTime: 5 * 60 * 1000, // 5 minutes
-          // Higher priority prefetches get longer cache time
-          gcTime: priority ? 60 * 60 * 1000 : 30 * 60 * 1000,
-        });
+          {
+            staleTime: 5 * 60 * 1000, // 5 minutes
+            // Higher priority prefetches get longer cache time
+            gcTime: priority ? 60 * 60 * 1000 : 30 * 60 * 1000,
+          },
+        );
       } catch (error) {
         console.warn(`Failed to prefetch newsletter ${newsletterId}:`, error);
         // Don't throw - prefetch failures shouldn't break the app
       }
     },
-    [user, queryClient],
+    [user],
   );
 
   return { prefetchNewsletter };

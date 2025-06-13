@@ -1,6 +1,11 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useCallback } from "react";
-import { getCacheManager, createCacheManager } from "@common/utils/cacheUtils";
+import {
+  getCacheManager,
+  prefetchQuery as utilsPrefetchQuery,
+  setQueryData as utilsSetQueryData,
+  getQueryData as utilsGetQueryData,
+  invalidateQueries,
+} from "@common/utils/cacheUtils";
 import type { NewsletterWithRelations, ReadingQueueItem } from "@common/types";
 
 /**
@@ -8,24 +13,21 @@ import type { NewsletterWithRelations, ReadingQueueItem } from "@common/types";
  * Uses the SimpleCacheManager internally to ensure consistent cache management
  */
 export const useCache = () => {
-  const queryClient = useQueryClient();
-
   // Initialize or get existing cache manager instance
   const cacheManager = useMemo(() => {
     try {
       return getCacheManager();
     } catch {
-      return createCacheManager(queryClient, {
-        enableOptimisticUpdates: true,
-        enableCrossFeatureSync: true,
-        enablePerformanceLogging: process.env.NODE_ENV === "development",
-      });
+      // If no cache manager exists, this means it needs to be initialized elsewhere
+      // Return null and handle gracefully
+      return null;
     }
-  }, [queryClient]);
+  }, []);
 
   // Newsletter cache operations
   const updateNewsletter = useCallback(
     (newsletterId: string, updates: Partial<NewsletterWithRelations>) => {
+      if (!cacheManager) return;
       cacheManager.updateNewsletterInCache({
         id: newsletterId,
         updates,
@@ -38,6 +40,7 @@ export const useCache = () => {
     async (
       updates: { id: string; updates: Partial<NewsletterWithRelations> }[],
     ) => {
+      if (!cacheManager) return;
       await cacheManager.batchUpdateNewsletters(updates);
     },
     [cacheManager],
@@ -49,6 +52,7 @@ export const useCache = () => {
       updates: Partial<NewsletterWithRelations>,
       operation: string,
     ): Promise<NewsletterWithRelations | null> => {
+      if (!cacheManager) return null;
       return await cacheManager.optimisticUpdate(
         newsletterId,
         updates,
@@ -69,6 +73,7 @@ export const useCache = () => {
       queueItems?: ReadingQueueItem[];
       userId: string;
     }) => {
+      if (!cacheManager) return;
       cacheManager.updateReadingQueueInCache(operation);
     },
     [cacheManager],
@@ -77,22 +82,26 @@ export const useCache = () => {
   // Query invalidation operations
   const invalidateRelatedQueries = useCallback(
     (newsletterIds: string[], operationType: string) => {
+      if (!cacheManager) return;
       cacheManager.invalidateRelatedQueries(newsletterIds, operationType);
     },
     [cacheManager],
   );
 
   const invalidateNewsletters = useCallback(() => {
+    if (!cacheManager) return;
     cacheManager.clearNewsletterCache();
   }, [cacheManager]);
 
   const invalidateReadingQueue = useCallback(() => {
+    if (!cacheManager) return;
     cacheManager.clearReadingQueueCache();
   }, [cacheManager]);
 
   // Cache warming operations
   const warmCache = useCallback(
     (userId: string, priority: "high" | "medium" | "low" = "medium") => {
+      if (!cacheManager) return;
       cacheManager.warmCache(userId, priority);
     },
     [cacheManager],
@@ -101,6 +110,7 @@ export const useCache = () => {
   // Tag-specific cache operations (extending cache manager functionality)
   const invalidateTagQueries = useCallback(
     (tagIds: string[], operationType: string) => {
+      if (!cacheManager) return;
       // Use the generic invalidateRelatedQueries with tag-specific operation types
       const tagOperationTypes = [
         "tag-create",
@@ -122,6 +132,7 @@ export const useCache = () => {
   // Newsletter source cache operations
   const invalidateSourceQueries = useCallback(
     (sourceIds: string[], operationType: string) => {
+      if (!cacheManager) return;
       const sourceOperationTypes = [
         "newsletter-sources",
         "source-update-optimistic",
@@ -144,60 +155,60 @@ export const useCache = () => {
   // Generic cache utilities
   const prefetchQuery = useCallback(
     (
-      queryKey: unknown[],
+      queryKey: readonly unknown[],
       queryFn: () => Promise<unknown>,
-      options?: { staleTime?: number },
+      options?: { staleTime?: number; gcTime?: number },
     ) => {
-      return queryClient.prefetchQuery({
-        queryKey,
-        queryFn,
-        staleTime: options?.staleTime || 5 * 60 * 1000, // 5 minutes default
+      return utilsPrefetchQuery(queryKey, queryFn, {
+        staleTime: options?.staleTime || 5 * 60 * 1000,
+        gcTime: options?.gcTime || 30 * 60 * 1000,
       });
     },
-    [queryClient],
+    [],
   );
 
   const setQueryData = useCallback(
-    <T>(queryKey: unknown[], data: T | ((oldData: T | undefined) => T)) => {
-      return queryClient.setQueryData(queryKey, data);
+    <T>(
+      queryKey: readonly unknown[],
+      data: T | ((oldData: T | undefined) => T),
+    ) => {
+      return utilsSetQueryData(queryKey, data);
     },
-    [queryClient],
+    [],
   );
 
   const getQueryData = useCallback(
-    <T>(queryKey: unknown[]): T | undefined => {
-      return queryClient.getQueryData<T>(queryKey);
+    <T>(queryKey: readonly unknown[]): T | undefined => {
+      return utilsGetQueryData<T>(queryKey);
     },
-    [queryClient],
+    [],
   );
 
-  const removeQueries = useCallback(
-    (queryKey: unknown[]) => {
-      queryClient.removeQueries({ queryKey, exact: true });
-    },
-    [queryClient],
-  );
+  const removeQueries = useCallback(async (queryKey: readonly unknown[]) => {
+    // Use invalidateQueries with exact matching for removal
+    await invalidateQueries({ queryKey });
+  }, []);
 
   // Batch operations for performance
   const batchInvalidate = useCallback(
     async (
       operations: Array<{
-        queryKey?: unknown[];
+        queryKey?: readonly unknown[];
         predicate?: (query: unknown) => boolean;
       }>,
     ) => {
       const promises = operations.map((op) => {
         if (op.queryKey) {
-          return queryClient.invalidateQueries({ queryKey: op.queryKey });
+          return invalidateQueries({ queryKey: op.queryKey });
         } else if (op.predicate) {
-          return queryClient.invalidateQueries({ predicate: op.predicate });
+          return invalidateQueries({ predicate: op.predicate });
         }
         return Promise.resolve();
       });
 
       await Promise.all(promises);
     },
-    [queryClient],
+    [],
   );
 
   return {

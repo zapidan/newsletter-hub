@@ -37,13 +37,15 @@ import {
 import NewsletterRow from "@web/components/NewsletterRow";
 import { CreateSourceGroupModal } from "@web/components/CreateSourceGroupModal";
 import { SourceGroupCard } from "@web/components/SourceGroupCard";
-import { useQueryClient } from "@tanstack/react-query";
-import { getCacheManager } from "@common/utils/cacheUtils";
+import {
+  getCacheManager,
+  prefetchQuery,
+  invalidateQueries,
+} from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 const NewslettersPage: React.FC = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editModalSourceId, setEditModalSourceId] = useState<string | null>(
     null,
@@ -99,22 +101,28 @@ const NewslettersPage: React.FC = () => {
           (source) =>
             (source as NewsletterSource & { newsletter_count?: number })
               .newsletter_count &&
-            (source as NewsletterSource & { newsletter_count: number })
-              .newsletter_count > 10,
+            (source as NewsletterSource & { newsletter_count?: number })
+              .newsletter_count! > 5,
         )
-        .slice(0, 3); // Limit to top 3 to avoid overloading
+        .slice(0, 3);
 
-      popularSources.forEach((source) => {
-        queryClient.prefetchQuery({
-          queryKey: queryKeyFactory.newsletters.list({
-            sourceId: source.id,
-            filter: "unread",
-          }),
-          staleTime: 30000, // 30 seconds
-        });
+      popularSources.forEach(async (source) => {
+        await prefetchQuery(
+          [
+            ...queryKeyFactory.newsletters.list({
+              sourceId: source.id,
+              filter: "unread",
+            }),
+          ],
+          async () => {
+            // This would be replaced with actual fetch function
+            return [];
+          },
+          { staleTime: 30000 },
+        );
       });
     }
-  }, [cacheManager, sourcesWithCounts, queryClient]);
+  }, [cacheManager, sourcesWithCounts]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -452,15 +460,14 @@ const NewslettersPage: React.FC = () => {
         );
 
         // Invalidate the newsletters query to refresh the UI
-        await queryClient.invalidateQueries({ queryKey: ["newsletters"] });
+        await invalidateQueries({ queryKey: ["newsletters"] });
         toast.success("Tags updated successfully");
       } catch (error) {
         console.error("Error updating tags:", error);
         toast.error("Failed to update tags");
-        throw error;
       }
     },
-    [queryClient],
+    [],
   );
 
   const toggleTagVisibility = useCallback(

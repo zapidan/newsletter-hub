@@ -1,6 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { queryKeyFactory } from "./queryKeyFactory";
-import type { NewsletterWithRelations, ReadingQueueItem } from "@common/types";
+import type {
+  NewsletterWithRelations,
+  ReadingQueueItem,
+  Tag,
+} from "@common/types";
 
 interface CacheManagerConfig {
   enableOptimisticUpdates?: boolean;
@@ -9,7 +13,7 @@ interface CacheManagerConfig {
 }
 
 export class SimpleCacheManager {
-  private queryClient: QueryClient;
+  public queryClient: QueryClient;
   private config: CacheManagerConfig;
 
   constructor(queryClient: QueryClient, config: CacheManagerConfig = {}) {
@@ -369,6 +373,71 @@ export class SimpleCacheManager {
       refetchType: "active",
     });
   }
+
+  // Tag-specific cache operations
+  invalidateTagQueries(): void {
+    this.queryClient.invalidateQueries({
+      queryKey: queryKeyFactory.newsletters.tags(),
+      refetchType: "active",
+    });
+    this.queryClient.invalidateQueries({
+      queryKey: ["newsletter_tags"],
+      refetchType: "active",
+    });
+  }
+
+  updateNewsletterTagsInCache(newsletterId: string, tags: Tag[]): void {
+    // Update newsletter with new tags in all caches
+    this.updateNewsletterInCache({
+      id: newsletterId,
+      updates: { tags },
+    });
+
+    // Invalidate tag-related queries
+    this.invalidateTagQueries();
+  }
+
+  removeTagFromAllNewsletters(tagId: string): void {
+    // Update all newsletter list queries to remove the deleted tag
+    this.queryClient.setQueriesData<NewsletterWithRelations[]>(
+      { queryKey: queryKeyFactory.newsletters.lists() },
+      (oldData) => {
+        if (!oldData) return oldData;
+        return oldData.map((newsletter) => ({
+          ...newsletter,
+          tags: newsletter.tags?.filter((tag) => tag.id !== tagId) || [],
+        }));
+      },
+    );
+
+    // Update individual newsletter queries
+    this.queryClient
+      .getQueryCache()
+      .findAll()
+      .forEach((query) => {
+        if (
+          query.queryKey[0] === "newsletters" &&
+          query.queryKey[1] === "detail"
+        ) {
+          const newsletterData = query.state.data as NewsletterWithRelations;
+          if (newsletterData?.tags?.some((tag) => tag.id === tagId)) {
+            this.queryClient.setQueryData<NewsletterWithRelations>(
+              query.queryKey,
+              (oldData) => {
+                if (!oldData) return oldData;
+                return {
+                  ...oldData,
+                  tags: oldData.tags?.filter((tag) => tag.id !== tagId) || [],
+                };
+              },
+            );
+          }
+        }
+      });
+
+    // Invalidate tag-related queries
+    this.invalidateTagQueries();
+  }
 }
 
 // Singleton instance
@@ -393,6 +462,59 @@ export const getCacheManager = (): SimpleCacheManager => {
 
 export const getCacheManagerSafe = (): SimpleCacheManager | null => {
   return cacheManagerInstance;
+};
+
+// Additional cache utility methods
+export const prefetchQuery = async <T>(
+  queryKey: readonly unknown[],
+  queryFn: () => Promise<T>,
+  options: { staleTime?: number; gcTime?: number } = {},
+): Promise<void> => {
+  const manager = getCacheManager();
+  await manager.queryClient.prefetchQuery({
+    queryKey,
+    queryFn,
+    staleTime: options.staleTime || 5 * 60 * 1000,
+    gcTime: options.gcTime || 30 * 60 * 1000,
+  });
+};
+
+export const getQueryData = <T>(
+  queryKey: readonly unknown[],
+): T | undefined => {
+  const manager = getCacheManager();
+  return manager.queryClient.getQueryData<T>(queryKey);
+};
+
+export const getQueriesData = <T>(
+  queryKey: readonly unknown[],
+): [readonly unknown[], T | undefined][] => {
+  const manager = getCacheManager();
+  return manager.queryClient.getQueriesData<T>({ queryKey });
+};
+
+export const getQueryState = (queryKey: readonly unknown[]) => {
+  const manager = getCacheManager();
+  return manager.queryClient.getQueryState(queryKey);
+};
+
+export const invalidateQueries = async (options: {
+  queryKey?: readonly unknown[];
+  predicate?: (query: { queryKey: unknown[] }) => boolean;
+  refetchType?: "active" | "inactive" | "all";
+}): Promise<void> => {
+  const manager = getCacheManager();
+  await manager.queryClient.invalidateQueries(
+    options as Parameters<typeof manager.queryClient.invalidateQueries>[0],
+  );
+};
+
+export const setQueryData = <T>(
+  queryKey: readonly unknown[],
+  data: T | ((oldData: T | undefined) => T),
+): void => {
+  const manager = getCacheManager();
+  manager.queryClient.setQueryData<T>(queryKey, data);
 };
 
 // Utility functions for backward compatibility
