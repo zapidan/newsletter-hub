@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef } from "react";
 import {
   useQuery,
   useMutation,
-  useQueryClient,
   QueryObserverResult,
   RefetchOptions,
   UseMutateAsyncFunction,
@@ -20,9 +19,11 @@ import {
 import type { NewsletterFilter } from "../types/cache";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
 import {
-  createCacheManager,
   getCacheManager,
   SimpleCacheManager,
+  getQueryData,
+  setQueryData,
+  cancelQueries,
 } from "../utils/cacheUtils";
 
 type PreviousNewslettersState = {
@@ -251,7 +252,6 @@ export const useNewsletters = (
   groupSourceIds: string[] = [],
   timeRange?: string,
 ): UseNewslettersReturn => {
-  const queryClient = useQueryClient();
   const { user } = useAuth();
 
   if (!user?.id) {
@@ -265,13 +265,10 @@ export const useNewsletters = (
     try {
       return getCacheManager();
     } catch {
-      return createCacheManager(queryClient, {
-        enableOptimisticUpdates: true,
-        enableCrossFeatureSync: true,
-        enablePerformanceLogging: process.env.NODE_ENV === "development",
-      });
+      // Cache manager should be initialized elsewhere
+      throw new Error("Cache manager not initialized");
     }
-  }, [queryClient]);
+  }, []);
 
   // Build query key with new factory
   const queryKey = useMemo(
@@ -582,7 +579,7 @@ export const useNewsletters = (
     },
     onMutate: async (id: string) => {
       // Cancel any outgoing refetches for this newsletter
-      await queryClient.cancelQueries({
+      await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
             query.queryKey as unknown[],
@@ -593,9 +590,9 @@ export const useNewsletters = (
           ),
       });
 
-      // Snapshot the previous values
+      // Snapshot the previous value
       const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Find the newsletter to check if it's archived
       const newsletter = previousNewsletters.find((n) => n.id === id);
@@ -753,27 +750,23 @@ export const useNewsletters = (
       if (!user?.id) return;
 
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({
+      await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
             query.queryKey as unknown[],
           ) ||
           queryKeyFactory.matchers.isReadingQueueKey(
             query.queryKey as unknown[],
-          ) ||
-          queryKeyFactory.matchers.isNewsletterDetailKey(
-            query.queryKey as unknown[],
-            newsletterId,
           ),
       });
 
-      // Snapshot previous values
+      // Snapshot the previous value
       const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
-      // Check current queue status
+      // Get current queue state
       const currentQueue =
-        queryClient.getQueryData<{ newsletter_id: string }[]>(
+        getQueryData<{ newsletter_id: string }[]>(
           queryKeyFactory.queue.list(user.id),
         ) || [];
 
@@ -991,7 +984,7 @@ export const useNewsletters = (
     },
     onMutate: async (id) => {
       // Cancel any outgoing refetches for newsletter queries
-      await queryClient.cancelQueries({
+      await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
             query.queryKey as unknown[],
@@ -1008,18 +1001,17 @@ export const useNewsletters = (
 
       // Snapshot the previous values
       const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(listKey) || [];
-      const previousDetail =
-        queryClient.getQueryData<NewsletterWithRelations>(detailKey);
+        getQueryData<NewsletterWithRelations[]>(listKey) || [];
+      const previousDetail = getQueryData<NewsletterWithRelations>(detailKey);
 
       // Optimistically update the list cache
-      queryClient.setQueryData<NewsletterWithRelations[]>(listKey, (old = []) =>
+      setQueryData<NewsletterWithRelations[]>(listKey, (old = []) =>
         old.map((n) => (n.id === id ? { ...n, is_archived: false } : n)),
       );
 
-      // Also update the individual newsletter cache
+      // Optimistically update the detail cache if it exists
       if (previousDetail) {
-        queryClient.setQueryData(detailKey, {
+        setQueryData(detailKey, {
           ...previousDetail,
           is_archived: false,
           updated_at: new Date().toISOString(),
@@ -1299,7 +1291,7 @@ export const useNewsletters = (
     },
     onMutate: async (ids) => {
       // Cancel any outgoing refetches for newsletter queries
-      await queryClient.cancelQueries({
+      await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
             query.queryKey as unknown[],
@@ -1314,7 +1306,7 @@ export const useNewsletters = (
 
       // Snapshot the previous value
       const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
       await cacheManager.batchUpdateNewsletters(
@@ -1386,7 +1378,7 @@ export const useNewsletters = (
     },
     onMutate: async (ids) => {
       // Cancel any outgoing refetches for newsletter queries
-      await queryClient.cancelQueries({
+      await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
             query.queryKey as unknown[],
@@ -1401,7 +1393,7 @@ export const useNewsletters = (
 
       // Snapshot the previous value
       const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
       await cacheManager.batchUpdateNewsletters(
@@ -1471,7 +1463,7 @@ export const useNewsletters = (
     },
     onMutate: async (ids) => {
       // Cancel any outgoing refetches for newsletter queries
-      await queryClient.cancelQueries({
+      await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
             query.queryKey as unknown[],
@@ -1486,7 +1478,7 @@ export const useNewsletters = (
 
       // Snapshot the previous value
       const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
       cacheManager.batchUpdateNewsletters(
@@ -1550,7 +1542,7 @@ export const useNewsletters = (
     },
     onMutate: async (ids) => {
       // Cancel any outgoing refetches for newsletter queries
-      await queryClient.cancelQueries({
+      await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
             query.queryKey as unknown[],
@@ -1565,7 +1557,7 @@ export const useNewsletters = (
 
       // Snapshot the previous value
       const previousNewsletters =
-        queryClient.getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
       // Use cache manager for bulk optimistic update
       cacheManager.batchUpdateNewsletters(

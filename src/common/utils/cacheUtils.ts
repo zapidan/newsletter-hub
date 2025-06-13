@@ -517,6 +517,17 @@ export const setQueryData = <T>(
   manager.queryClient.setQueryData<T>(queryKey, data);
 };
 
+export const cancelQueries = async (options: {
+  queryKey?: readonly unknown[];
+  predicate?: (query: { queryKey: unknown[] }) => boolean;
+  refetchType?: "active" | "inactive" | "all";
+}): Promise<void> => {
+  const manager = getCacheManager();
+  await manager.queryClient.cancelQueries(
+    options as Parameters<typeof manager.queryClient.cancelQueries>[0],
+  );
+};
+
 // Utility functions for backward compatibility
 export const updateCachedNewsletter = (
   newsletterId: string,
