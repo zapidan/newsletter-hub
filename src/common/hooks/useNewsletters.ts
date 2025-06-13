@@ -26,6 +26,7 @@ type PreviousNewslettersState = {
   previousNewsletters?: NewsletterWithRelations[];
   previousNewsletter?: NewsletterWithRelations;
   deletedIds?: string[];
+  rollbackFunctions?: Array<() => void>;
 };
 
 // Cache configuration based on data volatility
@@ -102,6 +103,16 @@ interface UseNewslettersReturn {
   >;
   isTogglingLike: boolean;
   errorTogglingLike: Error | null;
+
+  // Bookmark mutations
+  toggleBookmark: UseMutateAsyncFunction<
+    boolean,
+    Error,
+    string,
+    PreviousNewslettersState
+  >;
+  isTogglingBookmark: boolean;
+  errorTogglingBookmark: Error | null;
 
   // Archive mutations
   toggleArchive: UseMutateAsyncFunction<
@@ -498,42 +509,241 @@ export const useNewsletters = (
           ),
       });
 
-      // Get the current newsletter to toggle its liked status
-      const newsletter = await getNewsletter(id);
-      if (!newsletter) {
-        return { previousNewsletters: [] };
+      // Store current state for rollback
+      const previousNewsletters =
+        getQueryData<NewsletterWithRelations[]>(queryKey);
+
+      // Ensure previousNewsletters is always an array
+      const newsletterArray = Array.isArray(previousNewsletters)
+        ? previousNewsletters
+        : [];
+
+      // Find the current newsletter to get its like status
+      const currentNewsletter = newsletterArray.find((n) => n.id === id);
+      const currentLikedState = currentNewsletter?.is_liked ?? false;
+      const newLikedState = !currentLikedState;
+
+      const rollbackFunctions: Array<() => void> = [];
+
+      try {
+        // Update newsletter list optimistically with rollback
+        const listResult = await cacheManager.optimisticUpdateWithRollback<
+          NewsletterWithRelations[]
+        >([...queryKey], (data) => {
+          // Always return a valid array, even if data is undefined
+          const currentData = Array.isArray(data) ? data : [];
+          return currentData.map((newsletter) =>
+            newsletter.id === id
+              ? { ...newsletter, is_liked: newLikedState }
+              : newsletter,
+          );
+        });
+
+        if (listResult?.rollback) {
+          rollbackFunctions.push(listResult.rollback);
+        }
+
+        // Update individual newsletter queries with rollback
+        const detailQueries = cacheManager.queryClient.getQueryCache().findAll({
+          predicate: (query) =>
+            queryKeyFactory.matchers.isNewsletterDetailKey(
+              query.queryKey as unknown[],
+              id,
+            ),
+        });
+
+        for (const query of detailQueries) {
+          try {
+            const detailResult =
+              await cacheManager.optimisticUpdateWithRollback<NewsletterWithRelations>(
+                Array.from(query.queryKey),
+                (data) => {
+                  if (!data) return data;
+                  return { ...data, is_liked: newLikedState };
+                },
+              );
+
+            if (detailResult?.rollback) {
+              rollbackFunctions.push(detailResult.rollback);
+            }
+          } catch (detailError) {
+            console.warn(
+              "Failed to update individual newsletter query:",
+              query.queryKey,
+              detailError,
+            );
+            // Continue with other queries even if one fails
+          }
+        }
+      } catch (error) {
+        console.error("Optimistic update failed:", error);
+        // Execute any rollback functions that were successfully created
+        rollbackFunctions.forEach((rollback) => {
+          try {
+            rollback();
+          } catch (rollbackError) {
+            console.error("Rollback failed:", rollbackError);
+          }
+        });
       }
 
-      // Optimistically update the cache
-    cacheManager.updateNewsletterInCache({
-      id,
-      updates: {
-        is_liked: !newsletter.is_liked,
-        updated_at: new Date().toISOString(),
-      },
-    });
-
-      // Return the previous state in case we need to rollback
       return {
-        previousNewsletters: [newsletter],
+        previousNewsletters: newsletterArray,
+        currentLikedState,
+        newLikedState,
+        rollbackFunctions,
       };
     },
     onError: (_error, id, context) => {
-      // Rollback to the previous state on error
-      if (context?.previousNewsletters) {
-        context.previousNewsletters.forEach((newsletter) => {
-          cacheManager.updateNewsletterInCache({
-            id: newsletter.id,
-            updates: {
-              is_liked: newsletter.is_liked,
-              updated_at: newsletter.updated_at,
-            },
-          });
+      console.error("Error toggling like status:", _error);
+
+      // Execute rollback functions if available
+      if (context?.rollbackFunctions) {
+        context.rollbackFunctions.forEach((rollback) => {
+          try {
+            rollback();
+          } catch (rollbackError) {
+            console.error("Error during rollback:", rollbackError);
+          }
         });
       }
+
+      // Force refresh of affected queries as fallback
+      cacheManager.invalidateRelatedQueries([id], "toggle-like-error");
     },
     onSettled: (_data, _error, id) => {
       cacheManager.invalidateRelatedQueries([id], "toggle-like");
+    },
+  });
+
+  // Toggle bookmark mutation
+  const toggleBookmarkMutation = useMutation<
+    boolean,
+    Error,
+    string,
+    PreviousNewslettersState
+  >({
+    mutationFn: async (id: string) => {
+      await newsletterApi.toggleBookmark(id);
+      return true;
+    },
+    onMutate: async (id) => {
+      // Cancel any outgoing refetches to avoid race conditions
+      await cancelQueries({
+        predicate: (query) =>
+          queryKeyFactory.matchers.isNewsletterListKey(
+            query.queryKey as unknown[],
+          ) ||
+          queryKeyFactory.matchers.isNewsletterDetailKey(
+            query.queryKey as unknown[],
+            id,
+          ),
+      });
+
+      // Store current state for rollback
+      const previousNewsletters =
+        getQueryData<NewsletterWithRelations[]>(queryKey);
+
+      // Ensure previousNewsletters is always an array
+      const newsletterArray = Array.isArray(previousNewsletters)
+        ? previousNewsletters
+        : [];
+
+      // Find the current newsletter to get its bookmark status
+      const currentNewsletter = newsletterArray.find((n) => n.id === id);
+      const currentBookmarkedState = currentNewsletter?.is_bookmarked ?? false;
+      const newBookmarkedState = !currentBookmarkedState;
+
+      const rollbackFunctions: Array<() => void> = [];
+
+      try {
+        // Update newsletter list optimistically with rollback
+        const listResult = await cacheManager.optimisticUpdateWithRollback<
+          NewsletterWithRelations[]
+        >([...queryKey], (data) => {
+          // Always return a valid array, even if data is undefined
+          const currentData = Array.isArray(data) ? data : [];
+          return currentData.map((newsletter) =>
+            newsletter.id === id
+              ? { ...newsletter, is_bookmarked: newBookmarkedState }
+              : newsletter,
+          );
+        });
+
+        if (listResult?.rollback) {
+          rollbackFunctions.push(listResult.rollback);
+        }
+
+        // Update individual newsletter queries with rollback
+        const detailQueries = cacheManager.queryClient.getQueryCache().findAll({
+          predicate: (query) =>
+            queryKeyFactory.matchers.isNewsletterDetailKey(
+              query.queryKey as unknown[],
+              id,
+            ),
+        });
+
+        for (const query of detailQueries) {
+          try {
+            const detailResult =
+              await cacheManager.optimisticUpdateWithRollback<NewsletterWithRelations>(
+                Array.from(query.queryKey),
+                (data) => {
+                  if (!data) return data;
+                  return { ...data, is_bookmarked: newBookmarkedState };
+                },
+              );
+
+            if (detailResult?.rollback) {
+              rollbackFunctions.push(detailResult.rollback);
+            }
+          } catch (detailError) {
+            console.warn(
+              "Failed to update individual newsletter query:",
+              query.queryKey,
+              detailError,
+            );
+            // Continue with other queries even if one fails
+          }
+        }
+      } catch (error) {
+        console.error("Optimistic update failed:", error);
+        // Execute any rollback functions that were successfully created
+        rollbackFunctions.forEach((rollback) => {
+          try {
+            rollback();
+          } catch (rollbackError) {
+            console.error("Rollback failed:", rollbackError);
+          }
+        });
+      }
+
+      return {
+        previousNewsletters: newsletterArray,
+        currentBookmarkedState,
+        newBookmarkedState,
+        rollbackFunctions,
+      };
+    },
+    onError: (_error, id, context) => {
+      console.error("Error toggling bookmark status:", _error);
+
+      // Execute rollback functions if available
+      if (context?.rollbackFunctions) {
+        context.rollbackFunctions.forEach((rollback) => {
+          try {
+            rollback();
+          } catch (rollbackError) {
+            console.error("Error during rollback:", rollbackError);
+          }
+        });
+      }
+
+      // Force refresh of affected queries as fallback
+      cacheManager.invalidateRelatedQueries([id], "toggle-bookmark-error");
+    },
+    onSettled: (_data, _error, id) => {
+      cacheManager.invalidateRelatedQueries([id], "toggle-bookmark");
     },
   });
 
@@ -757,78 +967,153 @@ export const useNewsletters = (
     },
   });
 
-  // Toggle in-queue status mutation
-const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
-  mutationFn: async (id: string) => {
-    // First check the cache for the current queue state
-    const queueItems = getQueryData<ReadingQueueItem[]>(queryKeyFactory.queue.lists()) || [];
-    const isInQueue = queueItems.some(item => item.newsletter_id === id);
-    
-    // If we don't have the queue in cache, fall back to the API
-    if (queueItems.length === 0) {
-      const apiIsInQueue = await readingQueueApi.isInQueue(id);
-      if (apiIsInQueue === isInQueue) {
-        return !isInQueue;
-      }
+  // Toggle in-queue status mutation with improved optimistic updates
+  const toggleInQueueMutation = useMutation<
+    boolean,
+    Error,
+    string,
+    {
+      previousNewsletters: NewsletterWithRelations[];
+      wasInQueue: boolean;
+      rollbackFunctions: Array<() => void>;
+      previousQueueItems?: ReadingQueueItem[];
     }
-    
-    // Update the server state
-    if (isInQueue) {
-      // Find the queue item ID from cache
-      const queueItem = queueItems.find(item => item.newsletter_id === id);
-      if (queueItem) {
-        await readingQueueApi.remove(queueItem.id);
+  >({
+    mutationFn: async (id: string) => {
+      // Get current queue status from cache first, then API if needed
+      const queueItems =
+        getQueryData<ReadingQueueItem[]>(queryKeyFactory.queue.lists()) || [];
+      let isInQueue = queueItems.some((item) => item.newsletter_id === id);
+
+      // If cache is empty or unreliable, check API
+      if (queueItems.length === 0) {
+        try {
+          isInQueue = await readingQueueApi.isInQueue(id);
+        } catch (error) {
+          console.warn(
+            "Failed to check queue status, proceeding with cache value:",
+            error,
+          );
+        }
+      }
+
+      // Perform the toggle operation
+      if (isInQueue) {
+        const queueItem = queueItems.find((item) => item.newsletter_id === id);
+        if (queueItem) {
+          await readingQueueApi.remove(queueItem.id);
+        }
       } else {
-        // If not in cache but API said it was in queue, fall back to API
-        await readingQueueApi.remove(id);
+        await readingQueueApi.add(id);
       }
-    } else {
-      await readingQueueApi.add(id);
-    }
-    
-    return !isInQueue;
-  },
-  onMutate: async (id) => {
-    // Cancel any outgoing refetches to avoid race conditions
-    await cancelQueries({
-      predicate: (query) => {
-        const queryKey = query.queryKey as unknown[];
-        return (
-          queryKeyFactory.matchers.isNewsletterListKey(queryKey) ||
-          queryKeyFactory.matchers.isNewsletterDetailKey(queryKey, id) ||
-          (queryKey[0] === 'reading-queue')
-        );
-      },
-    });
 
-    // Get the current newsletter to get its current state
-    const newsletter = await getNewsletter(id);
-    if (!newsletter) {
-      return { previousNewsletters: [] };
-    }
+      return !isInQueue;
+    },
+    onMutate: async (id) => {
+      // Cancel any outgoing refetches to avoid race conditions
+      await cancelQueries({
+        predicate: (query) => {
+          const queryKey = query.queryKey as unknown[];
+          return (
+            queryKeyFactory.matchers.isNewsletterListKey(queryKey) ||
+            queryKeyFactory.matchers.isNewsletterDetailKey(queryKey, id) ||
+            queryKey[0] === "reading-queue" ||
+            queryKey[0] === "unreadCount"
+          );
+        },
+      });
 
-    // Check current queue status
-    const isInQueue = await readingQueueApi.isInQueue(id);
-    
-    // Return the previous state in case we need to rollback
-    return {
-      previousNewsletters: [newsletter],
-      wasInQueue: isInQueue,
-    };
-  },
-  onError: (_error, _id, context) => {
-    // Rollback to the previous state on error
-    if (context?.previousNewsletters) {
-      // The cache will be invalidated by the onSettled handler
-    }
-  },
-  onSettled: (_data, _error, id) => {
-    // Invalidate the queries to ensure we have fresh data
-    cacheManager.invalidateRelatedQueries([id], "toggle-queue");
-    // Invalidate the reading queue query
-    cacheManager.invalidateRelatedQueries(['reading-queue'], "toggle-queue");
-  },
-});
+      const rollbackFunctions: Array<() => void> = [];
+
+      // Get current states for rollback
+      const previousNewsletters =
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+
+      const newsletterArray = Array.isArray(previousNewsletters)
+        ? previousNewsletters
+        : [];
+
+      const queueItems =
+        getQueryData<ReadingQueueItem[]>(queryKeyFactory.queue.lists()) || [];
+      const wasInQueue = queueItems.some((item) => item.newsletter_id === id);
+
+      // Note: We don't need to update newsletter lists since queue status
+      // is managed separately through ReadingQueueItem table
+
+      // Apply optimistic updates to reading queue with better error handling
+      const queueQueryKey = queryKeyFactory.queue.lists();
+      try {
+        const result = await cacheManager.optimisticUpdateWithRollback<
+          ReadingQueueItem[]
+        >(Array.from(queueQueryKey), (data) => {
+          // Ensure we always have a valid array
+          const currentData = Array.isArray(data) ? data : [];
+
+          if (wasInQueue) {
+            // Remove from queue
+            return currentData.filter((item) => item.newsletter_id !== id);
+          } else {
+            // Add to queue (create a mock item for the UI)
+            const newsletter = newsletterArray.find((n) => n.id === id);
+            if (newsletter) {
+              const mockQueueItem: ReadingQueueItem = {
+                id: `temp-${id}`,
+                newsletter_id: id,
+                user_id: user?.id || "",
+                position: currentData.length + 1,
+                added_at: new Date().toISOString(),
+                newsletter,
+              };
+              return [...currentData, mockQueueItem];
+            }
+          }
+          return currentData;
+        });
+
+        if (result?.rollback) {
+          rollbackFunctions.push(result.rollback);
+        }
+      } catch (error) {
+        console.warn("Failed to apply optimistic update to queue:", error);
+        // Don't throw here - we want to continue with the mutation
+      }
+
+      return {
+        previousNewsletters: newsletterArray,
+        wasInQueue,
+        rollbackFunctions,
+      };
+    },
+    onError: (error, id, context) => {
+      console.error("Error toggling queue status:", error);
+
+      // Execute all rollback functions
+      if (context?.rollbackFunctions) {
+        context.rollbackFunctions.forEach((rollback) => {
+          try {
+            rollback();
+          } catch (rollbackError) {
+            console.error("Error during rollback:", rollbackError);
+          }
+        });
+      }
+
+      // Force refresh of queue data as fallback
+      cacheManager.invalidateRelatedQueries([id], "toggle-queue-error");
+    },
+    onSuccess: (_result, id) => {
+      // Use smart invalidation for efficient cache updates
+      cacheManager.smartInvalidate({
+        operation: "toggle-queue",
+        newsletterIds: [id],
+        priority: "high",
+      });
+    },
+    onSettled: (_data, _error, id) => {
+      // Ensure fresh data with minimal invalidation
+      cacheManager.invalidateRelatedQueries([id], "toggle-queue");
+    },
+  });
 
   // Unarchive mutation (separate from toggle for specific use cases)
   const unarchiveMutation = useMutation<
@@ -856,6 +1141,10 @@ const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewsle
       const previousNewsletters =
         getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
+      const newsletterArray = Array.isArray(previousNewsletters)
+        ? previousNewsletters
+        : [];
+
       cacheManager.updateNewsletterInCache({
         id,
         updates: {
@@ -864,7 +1153,7 @@ const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewsle
         },
       });
 
-      return { previousNewsletters };
+      return { previousNewsletters: newsletterArray };
     },
     onError: (_err, id, context) => {
       if (context?.previousNewsletters) {
@@ -946,6 +1235,16 @@ const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewsle
     [toggleLikeMutation],
   );
 
+  const toggleBookmark = useCallback(
+    async (
+      id: string,
+      options?: MutateOptions<boolean, Error, string, PreviousNewslettersState>,
+    ) => {
+      return toggleBookmarkMutation.mutateAsync(id, options);
+    },
+    [toggleBookmarkMutation],
+  );
+
   const toggleArchive = useCallback(
     async (
       id: string,
@@ -1015,6 +1314,11 @@ const toggleInQueueMutation = useMutation<boolean, Error, string, PreviousNewsle
     toggleLike,
     isTogglingLike: toggleLikeMutation.isPending,
     errorTogglingLike: toggleLikeMutation.error,
+
+    // Bookmark mutation
+    toggleBookmark,
+    isTogglingBookmark: toggleBookmarkMutation.isPending,
+    errorTogglingBookmark: toggleBookmarkMutation.error,
 
     // Archive mutations
     toggleArchive,

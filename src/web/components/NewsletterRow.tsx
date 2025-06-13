@@ -204,13 +204,29 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                     newsletter.is_read
                       ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
                       : "bg-green-100 text-green-700 hover:bg-green-200"
+                  } ${
+                    loadingStates[newsletter.id] === "read" ? "opacity-50" : ""
                   }`}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    await onToggleRead(newsletter.id);
+                    try {
+                      await onToggleRead(newsletter.id);
+                    } catch (error) {
+                      console.error("Error toggling read status:", error);
+                    }
                   }}
+                  disabled={loadingStates[newsletter.id] === "read"}
                 >
-                  {newsletter.is_read ? "Mark as Unread" : "Mark as Read"}
+                  {loadingStates[newsletter.id] === "read" ? (
+                    <div className="inline-flex items-center">
+                      <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent mr-1" />
+                      {newsletter.is_read ? "Marking..." : "Marking..."}
+                    </div>
+                  ) : (
+                    <>
+                      {newsletter.is_read ? "Mark as Unread" : "Mark as Read"}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -226,7 +242,11 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 } ${errorTogglingLike ? "opacity-50 cursor-not-allowed" : ""}`}
                 onClick={async (e) => {
                   e.stopPropagation();
-                  await onToggleLike(newsletter);
+                  try {
+                    await onToggleLike(newsletter);
+                  } catch (error) {
+                    console.error("Error toggling like:", error);
+                  }
                 }}
                 disabled={
                   !!errorTogglingLike || loadingStates[newsletter.id] === "like"
@@ -276,8 +296,14 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               {/* Reading queue button */}
               <button
                 type="button"
-                className="p-1 rounded-full hover:bg-gray-200 transition-colors"
-                onClick={handleToggleQueue}
+                className={`p-1 rounded-full hover:bg-gray-200 transition-colors ${
+                  loadingStates[newsletter.id] === "queue" ? "opacity-50" : ""
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleQueue(e);
+                }}
+                disabled={loadingStates[newsletter.id] === "queue"}
                 title={
                   readingQueue.some(
                     (item) => item.newsletter_id === newsletter.id,
@@ -286,24 +312,37 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                     : "Add to reading queue"
                 }
               >
-                <BookmarkIcon
-                  className="h-4 w-4"
-                  fill={isInReadingQueue ? "#9CA3AF" : "none"}
-                  stroke="#9CA3AF"
-                  strokeWidth={1.5}
-                />
+                {loadingStates[newsletter.id] === "queue" ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                ) : (
+                  <BookmarkIcon
+                    className="h-4 w-4"
+                    fill={isInReadingQueue ? "#3B82F6" : "none"}
+                    stroke={isInReadingQueue ? "#3B82F6" : "#9CA3AF"}
+                    strokeWidth={1.5}
+                  />
+                )}
               </button>
               {/* Archive/Unarchive button */}
               <button
                 type="button"
-                className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                className={`p-1 rounded-full hover:bg-gray-200 transition-colors ${
+                  loadingStates[newsletter.id] === "archive" ? "opacity-50" : ""
+                }`}
                 onClick={async (e) => {
                   e.stopPropagation();
-                  await onToggleArchive(newsletter.id);
+                  try {
+                    await onToggleArchive(newsletter.id);
+                  } catch (error) {
+                    console.error("Error toggling archive:", error);
+                  }
                 }}
+                disabled={loadingStates[newsletter.id] === "archive"}
                 title={newsletter.is_archived ? "Unarchive" : "Archive"}
               >
-                {newsletter.is_archived ? (
+                {loadingStates[newsletter.id] === "archive" ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                ) : newsletter.is_archived ? (
                   <ArchiveX className="h-4 w-4 text-green-700" />
                 ) : (
                   <Archive className="h-4 w-4 text-amber-700" />
@@ -313,15 +352,31 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               {newsletter.is_archived && (
                 <button
                   type="button"
-                  className="p-1 rounded-full hover:bg-red-100 transition-colors"
+                  className={`p-1 rounded-full hover:bg-red-100 transition-colors ${
+                    isDeletingNewsletter ||
+                    loadingStates[newsletter.id] === "delete"
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onTrash(newsletter.id);
+                    try {
+                      onTrash(newsletter.id);
+                    } catch (error) {
+                      console.error("Error deleting newsletter:", error);
+                    }
                   }}
                   title="Delete permanently"
-                  disabled={isDeletingNewsletter}
+                  disabled={
+                    isDeletingNewsletter ||
+                    loadingStates[newsletter.id] === "delete"
+                  }
                 >
-                  <Trash className="h-4 w-4 text-red-600" />
+                  {loadingStates[newsletter.id] === "delete" ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+                  ) : (
+                    <Trash className="h-4 w-4 text-red-600" />
+                  )}
                 </button>
               )}
             </div>

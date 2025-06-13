@@ -81,12 +81,14 @@ const TagsPage: React.FC = () => {
         limit: 1000, // Get a large number for the tags page
       });
     },
-    staleTime: 5 * 60 * 1000,
+  staleTime: 5 * 60 * 1000,
   });
+
+  const newslettersData = newslettersResponse?.data || [];
 
   // Compute newsletters-by-tag mapping and use tags with usage stats
   const { tagsWithCount, newslettersByTag } = useMemo(() => {
-    const newslettersData = newslettersResponse?.data || [];
+    
     // Map tag_id to array of newsletters
     const newslettersMap: Record<string, Newsletter[]> = {};
 

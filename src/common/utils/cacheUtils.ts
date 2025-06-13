@@ -73,7 +73,7 @@ export class SimpleCacheManager {
         );
       }
     } catch (error) {
-      console.error('Error in updateNewsletterInCache:', error);
+      console.error("Error in updateNewsletterInCache:", error);
     }
   }
 
@@ -324,12 +324,12 @@ export class SimpleCacheManager {
 
       // Find the first query that contains our newsletter
       let currentData: NewsletterWithRelations | null = null;
-      
+
       for (const query of queries) {
-        const data = this.queryClient.getQueryData<NewsletterWithRelations[] | undefined>(
-          query.queryKey
-        );
-        
+        const data = this.queryClient.getQueryData<
+          NewsletterWithRelations[] | undefined
+        >(query.queryKey);
+
         if (Array.isArray(data)) {
           const newsletter = data.find((n) => n.id === newsletterId);
           if (newsletter) {
@@ -347,7 +347,7 @@ export class SimpleCacheManager {
 
       return currentData;
     } catch (error) {
-      console.error('Error in optimisticUpdate:', error);
+      console.error("Error in optimisticUpdate:", error);
       return null;
     }
   }
@@ -465,6 +465,165 @@ export class SimpleCacheManager {
 
     // Invalidate tag-related queries
     this.invalidateTagQueries();
+  }
+
+  // Enhanced cache invalidation for granular control
+  invalidateNewsletterListQueries(
+    filters?: Record<string, any>,
+  ): Promise<void> {
+    const queryKey = filters
+      ? queryKeyFactory.newsletters.list(filters)
+      : queryKeyFactory.newsletters.lists();
+
+    return this.queryClient.invalidateQueries({
+      queryKey,
+      refetchType: "active",
+    });
+  }
+
+  // Batch invalidation for multiple operations
+  async batchInvalidateQueries(
+    operations: Array<{
+      type: string;
+      ids: string[];
+      filters?: Record<string, any>;
+    }>,
+  ): Promise<void> {
+    const promises = operations.map(({ type, ids, filters }) => {
+      switch (type) {
+        case "newsletter-list":
+          return this.invalidateNewsletterListQueries(filters);
+        case "newsletter-detail":
+          return Promise.all(
+            ids.map((id) =>
+              this.queryClient.invalidateQueries({
+                queryKey: queryKeyFactory.newsletters.detail(id),
+                refetchType: "active",
+              }),
+            ),
+          );
+        case "reading-queue":
+          return this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.queue.lists(),
+            refetchType: "active",
+          });
+        case "unread-count":
+          return this.queryClient.invalidateQueries({
+            queryKey: ["unreadCount"],
+            refetchType: "active",
+          });
+        default:
+          return Promise.resolve();
+      }
+    });
+
+    await Promise.all(promises);
+  }
+
+  // Smart invalidation based on operation context
+  smartInvalidate(context: {
+    operation: string;
+    newsletterIds: string[];
+    affectedFilters?: string[];
+    priority?: "high" | "medium" | "low";
+  }): void {
+    const {
+      operation,
+      newsletterIds,
+      affectedFilters = [],
+      priority = "medium",
+    } = context;
+
+    // Determine which queries to invalidate based on operation
+    const invalidationPlan: Array<{
+      type: string;
+      ids: string[];
+      filters?: Record<string, any>;
+    }> = [];
+
+    // Always invalidate affected newsletter details
+    if (newsletterIds.length > 0) {
+      invalidationPlan.push({
+        type: "newsletter-detail",
+        ids: newsletterIds,
+      });
+    }
+
+    // Operation-specific invalidations
+    switch (operation) {
+      case "mark-read":
+      case "mark-unread":
+      case "bulk-mark-read":
+      case "bulk-mark-unread":
+        invalidationPlan.push(
+          { type: "newsletter-list", ids: [] },
+          { type: "unread-count", ids: [] },
+        );
+        break;
+
+      case "archive":
+      case "unarchive":
+      case "bulk-archive":
+      case "bulk-unarchive":
+        invalidationPlan.push(
+          { type: "newsletter-list", ids: [] },
+          { type: "unread-count", ids: [] },
+        );
+        break;
+
+      case "toggle-queue":
+      case "add-to-queue":
+      case "remove-from-queue":
+        invalidationPlan.push(
+          { type: "newsletter-list", ids: [] },
+          { type: "reading-queue", ids: [] },
+        );
+        break;
+
+      case "delete":
+      case "bulk-delete":
+        invalidationPlan.push(
+          { type: "newsletter-list", ids: [] },
+          { type: "reading-queue", ids: [] },
+          { type: "unread-count", ids: [] },
+        );
+        break;
+    }
+
+    // Execute invalidation based on priority
+    if (priority === "high") {
+      this.batchInvalidateQueries(invalidationPlan);
+    } else {
+      // Debounce for medium/low priority operations
+      setTimeout(
+        () => {
+          this.batchInvalidateQueries(invalidationPlan);
+        },
+        priority === "medium" ? 100 : 300,
+      );
+    }
+  }
+
+  // Optimistic update with enhanced rollback
+  async optimisticUpdateWithRollback<T>(
+    queryKey: unknown[],
+    updater: (data: T) => T,
+    rollbackData?: T,
+  ): Promise<{ rollback: () => void; previousData: T | undefined }> {
+    const previousData = this.queryClient.getQueryData<T>(queryKey);
+
+    // Apply optimistic update
+    this.queryClient.setQueryData<T>(queryKey, updater);
+
+    const rollback = () => {
+      if (rollbackData !== undefined) {
+        this.queryClient.setQueryData<T>(queryKey, rollbackData);
+      } else if (previousData !== undefined) {
+        this.queryClient.setQueryData<T>(queryKey, previousData);
+      }
+    };
+
+    return { rollback, previousData };
   }
 }
 

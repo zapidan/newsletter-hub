@@ -21,6 +21,7 @@ export const useSharedNewsletterActions = (
     markAsRead,
     markAsUnread,
     toggleLike,
+    toggleBookmark,
     toggleArchive,
     deleteNewsletter,
     toggleInQueue,
@@ -33,11 +34,16 @@ export const useSharedNewsletterActions = (
     isMarkingAsRead,
     isMarkingAsUnread,
     isDeletingNewsletter,
+    isTogglingLike,
+    isTogglingBookmark,
     isBulkMarkingAsRead,
     isBulkMarkingAsUnread,
     isBulkArchiving,
     isBulkUnarchiving,
     isBulkDeletingNewsletters,
+    // Error states
+    errorTogglingLike,
+    errorTogglingBookmark,
   } = useNewsletters();
 
   const { addToQueue, removeFromQueue } = useReadingQueue();
@@ -65,9 +71,16 @@ export const useSharedNewsletterActions = (
       [toggleLike],
     ),
 
+    toggleBookmark: useCallback(
+      async (id: string) => {
+        await toggleBookmark(id);
+      },
+      [toggleBookmark],
+    ),
+
     toggleArchive: useCallback(
-      async (id: string, archive?: boolean) => {
-        await toggleArchive(id, archive ?? true);
+      async (id: string) => {
+        await toggleArchive(id);
       },
       [toggleArchive],
     ),
@@ -159,13 +172,22 @@ export const useSharedNewsletterActions = (
     [sharedHandlers],
   );
 
+  const handleToggleBookmark = useCallback(
+    async (
+      newsletter: NewsletterWithRelations,
+      actionOptions?: UseSharedNewsletterActionsOptions,
+    ) => {
+      return sharedHandlers.toggleBookmark(newsletter, actionOptions);
+    },
+    [sharedHandlers],
+  );
+
   const handleToggleArchive = useCallback(
     async (
       newsletter: NewsletterWithRelations,
-      archive?: boolean,
       actionOptions?: UseSharedNewsletterActionsOptions,
     ) => {
-      return sharedHandlers.toggleArchive(newsletter, archive, actionOptions);
+      return sharedHandlers.toggleArchive(newsletter, actionOptions);
     },
     [sharedHandlers],
   );
@@ -316,6 +338,7 @@ export const useSharedNewsletterActions = (
     (newsletter: NewsletterWithRelations) => {
       return {
         onToggleLike: () => handleToggleLike(newsletter),
+        onToggleBookmark: () => handleToggleBookmark(newsletter),
         onToggleArchive: () => handleToggleArchive(newsletter),
         onToggleRead: () => handleToggleRead(newsletter),
         onTrash: () => handleDeleteNewsletter(newsletter.id),
@@ -326,6 +349,7 @@ export const useSharedNewsletterActions = (
     },
     [
       handleToggleLike,
+      handleToggleBookmark,
       handleToggleArchive,
       handleToggleRead,
       handleDeleteNewsletter,
@@ -339,6 +363,7 @@ export const useSharedNewsletterActions = (
     handleMarkAsRead,
     handleMarkAsUnread,
     handleToggleLike,
+    handleToggleBookmark,
     handleToggleArchive,
     handleDeleteNewsletter,
     handleToggleInQueue,
@@ -362,12 +387,18 @@ export const useSharedNewsletterActions = (
     // Loading states
     isMarkingAsRead,
     isMarkingAsUnread,
+    isTogglingLike,
+    isTogglingBookmark,
     isDeletingNewsletter,
     isBulkMarkingAsRead,
     isBulkMarkingAsUnread,
     isBulkArchiving,
     isBulkUnarchiving,
     isBulkDeletingNewsletters,
+
+    // Error states
+    errorTogglingLike,
+    errorTogglingBookmark,
 
     // Create handlers with specific options
     withOptions: sharedHandlers.withOptions.bind(sharedHandlers),

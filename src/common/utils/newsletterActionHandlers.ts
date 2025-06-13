@@ -6,7 +6,8 @@ export interface NewsletterActionHandlers {
   markAsRead: (id: string) => Promise<void>;
   markAsUnread: (id: string) => Promise<void>;
   toggleLike: (id: string) => Promise<void>;
-  toggleArchive: (id: string, archive?: boolean) => Promise<void>;
+  toggleBookmark: (id: string) => Promise<void>;
+  toggleArchive: (id: string) => Promise<void>;
   deleteNewsletter: (id: string) => Promise<void>;
   toggleInQueue: (id: string) => Promise<void>;
   updateTags: (id: string, tagIds: string[]) => Promise<void>;
@@ -75,10 +76,10 @@ export class SharedNewsletterActionHandlers {
     } catch (error) {
       // Revert optimistic update on error
       if (opts.optimisticUpdates && originalData) {
-        await this.cacheManager.updateNewsletterInCache(
-          { id: newsletterId, updates: originalData },
-          { optimistic: true },
-        );
+        this.cacheManager.updateNewsletterInCache({
+          id: newsletterId,
+          updates: originalData,
+        });
       }
 
       const errorMessage =
@@ -106,9 +107,8 @@ export class SharedNewsletterActionHandlers {
     try {
       // Apply bulk optimistic updates if enabled
       if (opts.optimisticUpdates) {
-        await this.cacheManager.batchUpdateNewsletters(
+        this.cacheManager.batchUpdateNewsletters(
           newsletterIds.map((id) => ({ id, updates })),
-          { optimistic: true },
         );
       }
 
@@ -212,16 +212,41 @@ export class SharedNewsletterActionHandlers {
     );
   }
 
-  async toggleArchive(
+  async toggleBookmark(
     newsletter: NewsletterWithRelations,
-    archive?: boolean,
     options?: NewsletterActionOptions,
   ): Promise<void> {
-    const newArchivedState = archive ?? !newsletter.is_archived;
+    const newBookmarkedState = !newsletter.is_bookmarked;
+    return this.withOptimisticUpdate(
+      newsletter.id,
+      { is_bookmarked: newBookmarkedState },
+      () => this.handlers.toggleBookmark(newsletter.id),
+      "toggle-bookmark",
+      {
+        ...options,
+        onSuccess: () => {
+          if (options?.showToasts !== false) {
+            toast.success(
+              newBookmarkedState
+                ? "Added to bookmarks"
+                : "Removed from bookmarks",
+            );
+          }
+          options?.onSuccess?.(newsletter);
+        },
+      },
+    );
+  }
+
+  async toggleArchive(
+    newsletter: NewsletterWithRelations,
+    options?: NewsletterActionOptions,
+  ): Promise<void> {
+    const newArchivedState = !newsletter.is_archived;
     return this.withOptimisticUpdate(
       newsletter.id,
       { is_archived: newArchivedState },
-      () => this.handlers.toggleArchive(newsletter.id, newArchivedState),
+      () => this.handlers.toggleArchive(newsletter.id),
       newArchivedState ? "archive" : "unarchive",
       {
         ...options,

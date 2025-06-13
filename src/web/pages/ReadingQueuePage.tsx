@@ -6,6 +6,7 @@ import React, {
   useContext,
 } from "react";
 import { useReadingQueue } from "@common/hooks/useReadingQueue";
+import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import { useNavigate } from "react-router-dom";
 import { ReadingQueueItem, Tag, NewsletterWithRelations } from "@common/types";
 import { toast } from "react-hot-toast";
@@ -29,11 +30,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { SortableNewsletterRow } from "../components/reading-queue/SortableNewsletterRow";
-import { useNewsletters } from "@common/hooks/useNewsletters";
 
 import { ArrowUp, ArrowDown } from "lucide-react";
 import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
 import { getCacheManager } from "@common/utils/cacheUtils";
+import { useNewsletters } from "@common/hooks";
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,12 +47,38 @@ const ReadingQueuePage: React.FC = () => {
     isLoading,
     error,
     refetch,
-    addToQueue,
     removeFromQueue,
     reorderQueue,
-    markAsRead,
-    markAsUnread,
   } = useReadingQueue();
+
+  // Use shared newsletter actions for consistent cache management
+  const {
+    handleMarkAsRead,
+    handleMarkAsUnread,
+    handleToggleLike,
+    handleToggleArchive,
+    handleDeleteNewsletter,
+    handleUpdateTags,
+    isMarkingAsRead,
+    isMarkingAsUnread,
+    isDeletingNewsletter,
+  } = useSharedNewsletterActions({
+    showToasts: true,
+    optimisticUpdates: true,
+    onSuccess: () => {
+      // Invalidate reading queue after successful actions
+      if (cacheManager) {
+        cacheManager.smartInvalidate({
+          operation: "queue-action",
+          newsletterIds: [],
+          priority: "high",
+        });
+      }
+    },
+    onError: (error) => {
+      console.error("Reading queue action error:", error);
+    },
+  });
 
   const { getTags } = useTags();
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -66,7 +93,7 @@ const ReadingQueuePage: React.FC = () => {
     }
   }, []);
 
-  // Cache warming on component mount and when queue changes
+  // Enhanced cache warming and pre-loading
   useEffect(() => {
     if (cacheManager && user?.id) {
       // Warm up critical caches for better performance
@@ -74,12 +101,34 @@ const ReadingQueuePage: React.FC = () => {
 
       // Pre-warm newsletter details for queue items
       if (readingQueue.length > 0) {
-        readingQueue.slice(0, 5).forEach(() => {
-          // Pre-load first 5 newsletters in queue for instant access
+        // Batch pre-load first 5 newsletters for instant access
+        const newsletterIds = readingQueue
+          .slice(0, 5)
+          .map((item) => item.newsletter_id);
+
+        setTimeout(() => {
+          cacheManager.batchInvalidateQueries([
+            {
+              type: "newsletter-detail",
+              ids: newsletterIds,
+            },
+          ]);
+        }, 100);
+
+        // Pre-load next batch in background
+        if (readingQueue.length > 5) {
+          const nextBatchIds = readingQueue
+            .slice(5, 10)
+            .map((item) => item.newsletter_id);
           setTimeout(() => {
-            cacheManager.warmCache(user.id, "medium");
-          }, 100);
-        });
+            cacheManager.batchInvalidateQueries([
+              {
+                type: "newsletter-detail",
+                ids: nextBatchIds,
+              },
+            ]);
+          }, 500);
+        }
       }
     }
   }, [cacheManager, user?.id, readingQueue]);
@@ -108,7 +157,7 @@ const ReadingQueuePage: React.FC = () => {
     [readingQueue],
   );
 
-  // Toggle a newsletter in/out of the reading queue
+  // Toggle a newsletter in/out of the reading queue with optimized cache management
   const toggleInQueue = useCallback(
     async (newsletterId: string) => {
       const currentlyInQueue = isInQueue(newsletterId);
@@ -121,18 +170,28 @@ const ReadingQueuePage: React.FC = () => {
           );
           if (queueItem) {
             await removeFromQueue(queueItem.id);
-            toast.success("Removed from reading queue");
+
+            // Use smart cache invalidation
+            if (cacheManager) {
+              cacheManager.smartInvalidate({
+                operation: "remove-from-queue",
+                newsletterIds: [newsletterId],
+                priority: "high",
+              });
+            }
           }
         } else {
-          await addToQueue(newsletterId);
-          toast.success("Added to reading queue");
+          // This shouldn't happen in reading queue context, but handle gracefully
+          console.warn(
+            "Attempted to add newsletter to queue from reading queue page",
+          );
         }
       } catch (error) {
         console.error("Error toggling reading queue status:", error);
         toast.error("Failed to update reading queue");
       }
     },
-    [readingQueue, isInQueue, addToQueue, removeFromQueue],
+    [readingQueue, isInQueue, removeFromQueue, cacheManager],
   );
 
   const [sortByDate, setSortByDate] = useState(false);
@@ -209,7 +268,7 @@ const ReadingQueuePage: React.FC = () => {
     [validQueueItems, reorderQueue],
   );
 
-  // Handle toggling read status
+  // Handle toggling read status with shared actions
   const handleToggleRead = useCallback(
     async (newsletterId: string) => {
       try {
@@ -219,58 +278,82 @@ const ReadingQueuePage: React.FC = () => {
         if (!item) return;
 
         if (item.newsletter.is_read) {
-          await markAsUnread(newsletterId);
+          await handleMarkAsUnread(newsletterId);
         } else {
-          await markAsRead(newsletterId);
+          await handleMarkAsRead(newsletterId);
         }
-        await refetch();
+
+        // Smart cache invalidation
+        if (cacheManager) {
+          cacheManager.smartInvalidate({
+            operation: "queue-mark-read",
+            newsletterIds: [newsletterId],
+            priority: "high",
+          });
+        }
       } catch (error) {
         console.error("Error toggling read status:", error);
       }
     },
-    [markAsRead, markAsUnread, refetch, validQueueItems],
+    [handleMarkAsRead, handleMarkAsUnread, validQueueItems, cacheManager],
   );
 
-  // Handle toggling like status
-  const handleToggleLike = useCallback(
+  // Handle toggling like status with shared actions
+  const handleToggleLikeAction = useCallback(
     async (newsletter: string | NewsletterWithRelations) => {
       try {
         // Handle both signatures: (id: string) and (newsletter: Newsletter)
-        const newsletterId =
-          typeof newsletter === "string" ? newsletter : newsletter.id;
-        const isLiked =
-          typeof newsletter === "string" ? false : newsletter.is_liked;
+        let newsletterObj: NewsletterWithRelations;
 
-        await toggleNewsletterLike(newsletterId, !isLiked);
-        await refetch();
-        toast.success(
-          !isLiked ? "Added to favorites" : "Removed from favorites",
-        );
+        if (typeof newsletter === "string") {
+          const item = validQueueItems.find(
+            (item) => item.newsletter.id === newsletter,
+          );
+          if (!item) return;
+          newsletterObj = item.newsletter;
+        } else {
+          newsletterObj = newsletter;
+        }
+
+        await handleToggleLike(newsletterObj);
+
+        // Smart cache invalidation
+        if (cacheManager) {
+          cacheManager.smartInvalidate({
+            operation: "toggle-like",
+            newsletterIds: [newsletterObj.id],
+            priority: "high",
+          });
+        }
       } catch (error) {
         console.error("Failed to toggle like status:", error);
-        toast.error("Failed to update favorite status");
       }
     },
-    [toggleNewsletterLike, refetch],
+    [handleToggleLike, validQueueItems, cacheManager],
   );
 
-  // Handle toggling archive status
-  const handleToggleArchive = useCallback(
+  // Handle toggling archive status with shared actions
+  const handleToggleArchiveAction = useCallback(
     async (id: string) => {
       try {
         const item = validQueueItems.find((item) => item.newsletter.id === id);
         if (!item) return;
 
-        // Note: Archive functionality not implemented in useReadingQueue
-        // This would need to be added to the hook
-        console.warn("Archive functionality not yet implemented");
+        await handleToggleArchive(item.newsletter);
 
-        await refetch();
+        // Smart cache invalidation
+        if (cacheManager) {
+          cacheManager.smartInvalidate({
+            operation: "toggle-archive",
+            newsletterIds: [id],
+            priority: "high",
+          });
+        }
       } catch (error) {
         console.error("Error toggling archive status:", error);
       }
     },
-    [validQueueItems, refetch],
+    [handleToggleArchive, validQueueItems, cacheManager],
   );
 
   // Toggle sort mode between manual and date
@@ -440,8 +523,8 @@ const ReadingQueuePage: React.FC = () => {
                 id={item.id}
                 newsletter={item.newsletter}
                 onToggleRead={handleToggleRead}
-                onToggleLike={handleToggleLike}
-                onToggleArchive={handleToggleArchive}
+                onToggleLike={handleToggleLikeAction}
+                onToggleArchive={handleToggleArchiveAction}
                 onToggleQueue={toggleInQueue}
                 onTrash={() => {}}
                 onUpdateTags={async (newsletterId, tagIds) => {

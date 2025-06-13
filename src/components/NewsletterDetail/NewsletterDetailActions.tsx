@@ -6,9 +6,7 @@ import {
   ArchiveX,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { useNewsletters } from "@common/hooks/useNewsletters";
-import { useReadingQueue } from "@common/hooks/useReadingQueue";
-import { getCacheManager } from "@common/utils/cacheUtils";
+import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import type { NewsletterWithRelations } from "@common/types";
 
 interface NewsletterDetailActionsProps {
@@ -20,35 +18,39 @@ interface NewsletterDetailActionsProps {
 export const NewsletterDetailActions: React.FC<
   NewsletterDetailActionsProps
 > = ({ newsletter, onNewsletterUpdate, isFromReadingQueue = false }) => {
+  // Use shared newsletter actions for consistent cache management
   const {
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
+    handleMarkAsRead,
+    handleMarkAsUnread,
+    handleToggleLike,
+    handleToggleArchive,
+    handleDeleteNewsletter,
+    handleToggleInQueue,
     isMarkingAsRead,
     isMarkingAsUnread,
     isDeletingNewsletter,
-    getNewsletter,
-  } = useNewsletters(undefined, "all", undefined, []);
+  } = useSharedNewsletterActions({
+    showToasts: false, // We'll handle our own toasts for better UX
+    optimisticUpdates: true,
+    onSuccess: (updatedNewsletter) => {
+      if (updatedNewsletter) {
+        onNewsletterUpdate(updatedNewsletter);
+      }
+    },
+    onError: (error) => {
+      console.error("Action error:", error);
+    },
+  });
 
-  const { refetch: refetchReadingQueue } = useReadingQueue();
-
-  // Local optimistic state to ensure UI consistency
+  // Optimistic local state for immediate UI feedback
   const [localNewsletter, setLocalNewsletter] =
     useState<NewsletterWithRelations>(newsletter);
 
-  // Local loading states for better UX
+  // Enhanced loading states
   const [isLiking, setIsLiking] = useState(false);
   const [isBookmarking, setIsBookmarking] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isTogglingReadStatus, setIsTogglingReadStatus] = useState(false);
-
-  // Get cache manager for optimistic updates
-  const cacheManager = React.useMemo(() => {
-    return getCacheManager();
-  }, []);
 
   // Sync local state with props when newsletter changes
   useEffect(() => {
@@ -70,16 +72,9 @@ export const NewsletterDetailActions: React.FC<
 
     try {
       if (localNewsletter.is_read) {
-        await markAsUnread(localNewsletter.id);
+        await handleMarkAsUnread(localNewsletter.id);
       } else {
-        await markAsRead(localNewsletter.id);
-      }
-
-      // Refresh from server to ensure consistency
-      const updated = await getNewsletter(localNewsletter.id);
-      if (updated) {
-        setLocalNewsletter(updated);
-        onNewsletterUpdate(updated);
+        await handleMarkAsRead(localNewsletter.id);
       }
 
       toast.success(
@@ -97,14 +92,13 @@ export const NewsletterDetailActions: React.FC<
   }, [
     localNewsletter,
     isTogglingReadStatus,
-    markAsRead,
-    markAsUnread,
+    handleMarkAsRead,
+    handleMarkAsUnread,
     onNewsletterUpdate,
-    getNewsletter,
     newsletter,
   ]);
 
-  const handleToggleLike = useCallback(async () => {
+  const handleToggleLikeAction = useCallback(async () => {
     if (!localNewsletter?.id || isLiking) return;
 
     setIsLiking(true);
@@ -118,14 +112,7 @@ export const NewsletterDetailActions: React.FC<
     onNewsletterUpdate(optimisticNewsletter);
 
     try {
-      await toggleLike(localNewsletter.id);
-
-      // Refresh from server to ensure consistency
-      const updated = await getNewsletter(localNewsletter.id);
-      if (updated) {
-        setLocalNewsletter(updated);
-        onNewsletterUpdate(updated);
-      }
+      await handleToggleLike(localNewsletter);
 
       toast.success(
         localNewsletter.is_liked ? "Removed from liked" : "Added to liked",
@@ -142,9 +129,8 @@ export const NewsletterDetailActions: React.FC<
   }, [
     localNewsletter,
     isLiking,
-    toggleLike,
+    handleToggleLike,
     onNewsletterUpdate,
-    getNewsletter,
     newsletter,
   ]);
 
@@ -162,18 +148,7 @@ export const NewsletterDetailActions: React.FC<
     onNewsletterUpdate(optimisticNewsletter);
 
     try {
-      await toggleInQueue(localNewsletter.id);
-
-      // Refresh reading queue and newsletter data
-      if (refetchReadingQueue) {
-        await refetchReadingQueue();
-      }
-
-      const updated = await getNewsletter(localNewsletter.id);
-      if (updated) {
-        setLocalNewsletter(updated);
-        onNewsletterUpdate(updated);
-      }
+      await handleToggleInQueue(localNewsletter);
 
       toast.success(
         localNewsletter.is_bookmarked
@@ -192,10 +167,8 @@ export const NewsletterDetailActions: React.FC<
   }, [
     localNewsletter,
     isBookmarking,
-    toggleInQueue,
+    handleToggleInQueue,
     onNewsletterUpdate,
-    refetchReadingQueue,
-    getNewsletter,
     newsletter,
   ]);
 
@@ -214,14 +187,7 @@ export const NewsletterDetailActions: React.FC<
     onNewsletterUpdate(optimisticNewsletter);
 
     try {
-      await toggleArchive(localNewsletter.id, true);
-
-      // Refresh from server to ensure consistency
-      const updated = await getNewsletter(localNewsletter.id);
-      if (updated) {
-        setLocalNewsletter(updated);
-        onNewsletterUpdate(updated);
-      }
+      await handleToggleArchive(localNewsletter, true);
 
       toast.success("Newsletter archived");
     } catch (error) {
@@ -236,9 +202,8 @@ export const NewsletterDetailActions: React.FC<
   }, [
     localNewsletter,
     isArchiving,
-    toggleArchive,
+    handleToggleArchive,
     onNewsletterUpdate,
-    getNewsletter,
     newsletter,
   ]);
 
@@ -257,14 +222,7 @@ export const NewsletterDetailActions: React.FC<
     onNewsletterUpdate(optimisticNewsletter);
 
     try {
-      await toggleArchive(localNewsletter.id, false);
-
-      // Refresh from server to ensure consistency
-      const updated = await getNewsletter(localNewsletter.id);
-      if (updated) {
-        setLocalNewsletter(updated);
-        onNewsletterUpdate(updated);
-      }
+      await handleToggleArchive(localNewsletter, false);
 
       toast.success("Newsletter unarchived");
     } catch (error) {
@@ -279,9 +237,8 @@ export const NewsletterDetailActions: React.FC<
   }, [
     localNewsletter,
     isArchiving,
-    toggleArchive,
+    handleToggleArchive,
     onNewsletterUpdate,
-    getNewsletter,
     newsletter,
   ]);
 
@@ -297,7 +254,7 @@ export const NewsletterDetailActions: React.FC<
     }
 
     try {
-      await deleteNewsletter(localNewsletter.id);
+      await handleDeleteNewsletter(localNewsletter.id);
       toast.success("Newsletter deleted permanently");
 
       // Navigate back after deletion
@@ -310,7 +267,7 @@ export const NewsletterDetailActions: React.FC<
       console.error("Error deleting newsletter:", error);
       toast.error("Failed to delete newsletter");
     }
-  }, [localNewsletter?.id, deleteNewsletter, isFromReadingQueue]);
+  }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue]);
 
   return (
     <div className="flex items-center gap-2">
@@ -335,7 +292,7 @@ export const NewsletterDetailActions: React.FC<
 
       {/* Like Toggle */}
       <button
-        onClick={handleToggleLike}
+        onClick={handleToggleLikeAction}
         disabled={isLiking}
         className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           localNewsletter?.is_liked

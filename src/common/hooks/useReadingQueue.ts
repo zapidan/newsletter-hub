@@ -149,7 +149,7 @@ export const useReadingQueue = () => {
       return await readingQueueApi.getAll();
     } catch (error) {
       console.error("Error fetching reading queue:", error);
-      throw error;
+      return [];
     }
   }, []);
 
