@@ -1,17 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
+// This file is kept for backward compatibility
+// The enhanced Supabase client is now located in ../api/supabaseClient.ts
 
-// Use Vite's environment variables (prefixed with VITE_)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+export {
+  supabase,
+  handleSupabaseError,
+  getCurrentUser,
+  getCurrentSession,
+  requireAuth,
+  checkConnection,
+  withPerformanceLogging,
+  SupabaseError,
+} from "../api/supabaseClient";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables. Please check your .env file.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-});
+// Legacy default export for backward compatibility
+export { supabase as default } from "../api/supabaseClient";
