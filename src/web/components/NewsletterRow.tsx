@@ -280,10 +280,22 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                     return;
                   }
 
-                  // Handle like toggle with proper error handling
+                  // Handle like toggle with comprehensive error handling and navigation prevention
                   (async () => {
                     try {
+                      // Store current location to detect unwanted navigation
+                      const currentLocation = window.location.href;
+
                       await onToggleLike(newsletter);
+
+                      // Ensure we stay on the same page
+                      if (window.location.href !== currentLocation) {
+                        console.warn(
+                          "🔄 Unexpected navigation detected, restoring location",
+                        );
+                        window.history.replaceState({}, "", currentLocation);
+                      }
+
                       // Success - UI should update via optimistic updates
                     } catch (error) {
                       console.error("Error toggling like:", error);

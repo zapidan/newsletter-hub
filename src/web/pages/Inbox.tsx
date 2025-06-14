@@ -242,6 +242,7 @@ const Inbox: React.FC = memo(() => {
     sourceFilter,
     timeRange,
     debouncedTagUpdates,
+    newsletterFilter,
     refetchNewsletters,
   ]);
 
@@ -280,18 +281,64 @@ const Inbox: React.FC = memo(() => {
   ]);
 
   // Shared newsletter action handlers
+  const baseActions = useSharedNewsletterActions({
+    showToasts: true,
+    optimisticUpdates: true,
+  });
+
+  // Create navigation-safe wrapper for all actions
+  const createSafeAction = useCallback(
+    (actionFn: (...args: any[]) => Promise<any>, actionName: string) => {
+      return async (...args: any[]) => {
+        const currentUrl = window.location.href;
+
+        try {
+          console.log(`🔒 Executing safe ${actionName}...`);
+
+          // Execute the action
+          const result = await actionFn(...args);
+
+          // Ensure we stay on the same page with same filters
+          if (window.location.href !== currentUrl) {
+            console.warn(
+              `🔄 Navigation detected during ${actionName}, restoring...`,
+            );
+            window.history.replaceState({}, "", currentUrl);
+          }
+
+          // Clear toast after successful action
+          setTimeout(() => setToast(null), 3000);
+
+          return result;
+        } catch (error) {
+          console.error(`❌ ${actionName} failed:`, error);
+
+          // Restore URL if changed
+          if (window.location.href !== currentUrl) {
+            window.history.replaceState({}, "", currentUrl);
+          }
+
+          setToast({ type: "error", message: (error as Error).message });
+          throw error;
+        }
+      };
+    },
+    [filter, sourceFilter, timeRange, debouncedTagUpdates],
+  );
+
+  // Extract all needed properties from base actions
   const {
-    handleToggleLike,
-    handleToggleBookmark,
-    handleToggleArchive,
-    handleToggleRead,
-    handleDeleteNewsletter,
-    handleToggleInQueue,
-    handleBulkMarkAsRead,
-    handleBulkMarkAsUnread,
-    handleBulkArchive,
-    handleBulkUnarchive,
-    handleBulkDelete,
+    handleToggleLike: baseHandleToggleLike,
+    handleToggleBookmark: baseHandleToggleBookmark,
+    handleToggleArchive: baseHandleToggleArchive,
+    handleToggleRead: baseHandleToggleRead,
+    handleDeleteNewsletter: baseHandleDeleteNewsletter,
+    handleToggleInQueue: baseHandleToggleInQueue,
+    handleBulkMarkAsRead: baseHandleBulkMarkAsRead,
+    handleBulkMarkAsUnread: baseHandleBulkMarkAsUnread,
+    handleBulkArchive: baseHandleBulkArchive,
+    handleBulkUnarchive: baseHandleBulkUnarchive,
+    handleBulkDelete: baseHandleBulkDelete,
     isDeletingNewsletter,
     isBulkMarkingAsRead,
     isBulkMarkingAsUnread,
@@ -299,19 +346,56 @@ const Inbox: React.FC = memo(() => {
     isBulkUnarchiving,
     isBulkDeletingNewsletters,
     isTogglingLike,
+    isTogglingBookmark,
     errorTogglingLike,
     errorTogglingBookmark,
-  } = useSharedNewsletterActions({
-    showToasts: true,
-    optimisticUpdates: true,
-    onSuccess: () => {
-      // Clear toast after successful action
-      setTimeout(() => setToast(null), 3000);
-    },
-    onError: (error) => {
-      setToast({ type: "error", message: error.message });
-    },
-  });
+  } = baseActions;
+
+  // Create navigation-safe versions of the actions
+  const handleToggleLike = useMemo(
+    () => createSafeAction(baseHandleToggleLike, "toggleLike"),
+    [baseHandleToggleLike, createSafeAction],
+  );
+  const handleToggleBookmark = useMemo(
+    () => createSafeAction(baseHandleToggleBookmark, "toggleBookmark"),
+    [baseHandleToggleBookmark, createSafeAction],
+  );
+  const handleToggleArchive = useMemo(
+    () => createSafeAction(baseHandleToggleArchive, "toggleArchive"),
+    [baseHandleToggleArchive, createSafeAction],
+  );
+  const handleToggleRead = useMemo(
+    () => createSafeAction(baseHandleToggleRead, "toggleRead"),
+    [baseHandleToggleRead, createSafeAction],
+  );
+  const handleDeleteNewsletter = useMemo(
+    () => createSafeAction(baseHandleDeleteNewsletter, "deleteNewsletter"),
+    [baseHandleDeleteNewsletter, createSafeAction],
+  );
+  const handleToggleInQueue = useMemo(
+    () => createSafeAction(baseHandleToggleInQueue, "toggleInQueue"),
+    [baseHandleToggleInQueue, createSafeAction],
+  );
+  const handleBulkMarkAsRead = useMemo(
+    () => createSafeAction(baseHandleBulkMarkAsRead, "bulkMarkAsRead"),
+    [baseHandleBulkMarkAsRead, createSafeAction],
+  );
+  const handleBulkMarkAsUnread = useMemo(
+    () => createSafeAction(baseHandleBulkMarkAsUnread, "bulkMarkAsUnread"),
+    [baseHandleBulkMarkAsUnread, createSafeAction],
+  );
+  const handleBulkArchive = useMemo(
+    () => createSafeAction(baseHandleBulkArchive, "bulkArchive"),
+    [baseHandleBulkArchive, createSafeAction],
+  );
+  const handleBulkUnarchive = useMemo(
+    () => createSafeAction(baseHandleBulkUnarchive, "bulkUnarchive"),
+    [baseHandleBulkUnarchive, createSafeAction],
+  );
+  const handleBulkDelete = useMemo(
+    () => createSafeAction(baseHandleBulkDelete, "bulkDelete"),
+    [baseHandleBulkDelete, createSafeAction],
+  );
 
   // Initialize cache manager for advanced operations
   const cacheManager = useMemo(() => {
@@ -376,16 +460,11 @@ const Inbox: React.FC = memo(() => {
     if (debouncedTagUpdates.length > 0)
       newParams.set("tags", debouncedTagUpdates.join(","));
     if (newParams.toString() !== searchParams.toString()) {
-      setSearchParams(newParams, { replace: true });
+      // Use replaceState to avoid triggering navigation events
+      const newUrl = `${window.location.pathname}${newParams.toString() ? "?" + newParams.toString() : ""}`;
+      window.history.replaceState({ preserveScroll: true }, "", newUrl);
     }
-  }, [
-    filter,
-    sourceFilter,
-    timeRange,
-    debouncedTagUpdates,
-    searchParams,
-    setSearchParams,
-  ]);
+  }, [filter, sourceFilter, timeRange, debouncedTagUpdates, searchParams]);
 
   // Handle URL updates when tag filters change
   useEffect(() => {
@@ -1156,7 +1235,9 @@ const Inbox: React.FC = memo(() => {
                   ...loadingStates,
                   [newsletter.id]: isTogglingLike
                     ? "like"
-                    : loadingStates[newsletter.id],
+                    : isTogglingBookmark
+                      ? "bookmark"
+                      : loadingStates[newsletter.id],
                 }}
                 errorTogglingLike={errorTogglingLike}
                 errorTogglingBookmark={errorTogglingBookmark}

@@ -7,7 +7,7 @@ import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 // Cache time constants (in milliseconds) - Very short for real-time unread counts
 const STALE_TIME = 0; // Always fresh data for unread count
-const CACHE_TIME = 10 * 1000; // 10 seconds - very short cache for immediate updates
+const CACHE_TIME = 5 * 1000; // 5 seconds - very short cache for immediate updates
 
 export const useUnreadCount = (sourceId?: string | null) => {
   const auth = useContext(AuthContext);
@@ -23,10 +23,11 @@ export const useUnreadCount = (sourceId?: string | null) => {
 
   // Only enable the query when we have a user
   const queryKey = useMemo(() => {
-    if (sourceId) {
-      return ["unreadCount", user?.id, "source", sourceId];
-    }
-    return ["unreadCount", user?.id];
+    const key = sourceId
+      ? ["unreadCount", user?.id, "source", sourceId]
+      : ["unreadCount", user?.id];
+    console.log("🔑 Unread count query key:", key);
+    return key;
   }, [user?.id, sourceId]);
 
   // Use a stable query function with refs to track state
@@ -38,29 +39,36 @@ export const useUnreadCount = (sourceId?: string | null) => {
   } = useQuery<number, Error>({
     queryKey,
     queryFn: async () => {
-      if (!user) return 0;
+      if (!user) {
+        console.log("🚫 No user, returning 0 for unread count");
+        return 0;
+      }
+
+      console.log("🔍 Fetching unread count...", { sourceId, userId: user.id });
 
       try {
-        if (sourceId) {
-          // Get unread count for specific source
-          const unreadNonArchived = await newsletterApi.getAll({
-            isRead: false,
-            isArchived: false,
-            sourceIds: [sourceId],
-            limit: 1, // We only need the count, not the actual data
-          });
-          return unreadNonArchived.count || 0;
-        } else {
-          // Get total unread count excluding archived items
-          const unreadNonArchived = await newsletterApi.getAll({
-            isRead: false,
-            isArchived: false,
-            limit: 1, // We only need the count, not the actual data
-          });
-          return unreadNonArchived.count || 0;
-        }
+        const params = {
+          isRead: false,
+          isArchived: false,
+          limit: 50, // Get actual data to count reliably
+          ...(sourceId && { sourceIds: [sourceId] }),
+        };
+
+        console.log("📋 Query params:", params);
+
+        const result = await newsletterApi.getAll(params);
+        const count = result.count || 0;
+
+        console.log("📊 Unread count result:", {
+          sourceId,
+          count,
+          actualDataLength: result.data?.length,
+          resultCount: result.count,
+        });
+
+        return count;
       } catch (error) {
-        console.error("Error fetching unread count:", error);
+        console.error("❌ Error fetching unread count:", error);
         throw error;
       }
     },
@@ -71,9 +79,11 @@ export const useUnreadCount = (sourceId?: string | null) => {
     refetchOnMount: true,
     refetchOnReconnect: true,
     // Don't use placeholder data to ensure fresh updates
-    refetchInterval: 10 * 1000, // Refetch every 10 seconds as backup
+    refetchInterval: 5 * 1000, // Refetch every 5 seconds as backup
     // Force refetch on every mount to ensure accuracy
     refetchIntervalInBackground: true,
+    // Force network fetch
+    networkMode: "always",
   });
 
   // Track initial load
@@ -114,17 +124,19 @@ export const useUnreadCount = (sourceId?: string | null) => {
       });
 
       // Force immediate refetch of current query with timeout to ensure execution
-      setTimeout(() => {
-        queryClient.refetchQueries({
+      // Force immediate and thorough refetch
+      Promise.resolve().then(async () => {
+        await queryClient.invalidateQueries({
+          queryKey: ["unreadCount"],
+          exact: false,
+          refetchType: "all",
+        });
+
+        await queryClient.refetchQueries({
           queryKey,
           exact: true,
+          type: "all",
         });
-      }, 100);
-
-      // Also trigger immediate refetch without timeout
-      queryClient.refetchQueries({
-        queryKey,
-        exact: true,
       });
     };
 
@@ -221,18 +233,19 @@ export const useUnreadCountsBySource = () => {
         refetchType: "all", // Refetch all, not just active
       });
 
-      // Force immediate refetch with timeout to ensure execution
-      setTimeout(() => {
-        queryClient.refetchQueries({
+      // Force immediate and thorough refetch for source counts
+      Promise.resolve().then(async () => {
+        await queryClient.invalidateQueries({
           queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
           exact: true,
+          refetchType: "all",
         });
-      }, 100);
 
-      // Also trigger immediate refetch without timeout
-      queryClient.refetchQueries({
-        queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
-        exact: true,
+        await queryClient.refetchQueries({
+          queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
+          exact: true,
+          type: "all",
+        });
       });
     };
 
