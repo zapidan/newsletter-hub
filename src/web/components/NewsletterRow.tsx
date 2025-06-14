@@ -281,14 +281,18 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                   }
 
                   // Handle like toggle with proper error handling
-                  Promise.resolve(onToggleLike(newsletter))
-                    .then(() => {
+                  (async () => {
+                    try {
+                      await onToggleLike(newsletter);
                       // Success - UI should update via optimistic updates
-                    })
-                    .catch((error) => {
+                    } catch (error) {
                       console.error("Error toggling like:", error);
+                      // Prevent any navigation or page reload
+                      e.preventDefault();
+                      e.stopPropagation();
                       // Error handling is done by the shared action handlers
-                    });
+                    }
+                  })();
                 }}
                 disabled={
                   !!errorTogglingLike || loadingStates[newsletter.id] === "like"

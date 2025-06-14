@@ -646,12 +646,9 @@ export const useNewsletters = (
       return true;
     },
     onMutate: async (id) => {
-      // Cancel any outgoing refetches to avoid race conditions
+      // Only cancel detail queries for this specific newsletter, not list queries
       await cancelQueries({
         predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
           queryKeyFactory.matchers.isNewsletterDetailKey(
             query.queryKey as unknown[],
             id,
@@ -761,7 +758,10 @@ export const useNewsletters = (
       cacheManager.invalidateRelatedQueries([id], "toggle-like-error");
     },
     onSettled: (_data, _error, id) => {
-      cacheManager.invalidateRelatedQueries([id], "toggle-like");
+      // Use gentle invalidation with delay to prevent empty state
+      setTimeout(() => {
+        cacheManager.invalidateRelatedQueries([id], "toggle-like");
+      }, 200);
     },
   });
 
@@ -892,7 +892,10 @@ export const useNewsletters = (
       cacheManager.invalidateRelatedQueries([id], "toggle-bookmark-error");
     },
     onSettled: (_data, _error, id) => {
-      cacheManager.invalidateRelatedQueries([id], "toggle-bookmark");
+      // Use gentle invalidation with delay to prevent empty state
+      setTimeout(() => {
+        cacheManager.invalidateRelatedQueries([id], "toggle-bookmark");
+      }, 200);
     },
   });
 

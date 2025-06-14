@@ -25,6 +25,11 @@ This document summarizes the critical fixes applied to resolve filtering and cou
 - **Symptoms**: Count showed 1 even when there were 0 or multiple unread newsletters
 - **Root Cause**: Insufficient query invalidation and caching preventing real-time updates
 
+### 5. Like Button Causing Page Reload
+- **Problem**: Clicking like button would trigger page reload and show "no newsletters found" error
+- **Symptoms**: UI would break after like action, showing empty state temporarily
+- **Root Cause**: Aggressive query cancellation in toggleLike mutation was clearing the newsletter list
+
 ## Root Cause Analysis
 
 ### Before: Working Implementation

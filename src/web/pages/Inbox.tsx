@@ -198,7 +198,11 @@ const Inbox: React.FC = memo(() => {
     isErrorNewsletters,
     errorNewsletters,
     refetchNewsletters,
-  } = useNewsletters(newsletterFilter, { debug: true });
+  } = useNewsletters(newsletterFilter, {
+    debug: true,
+    refetchOnWindowFocus: false,
+    staleTime: 0, // Force fresh data on filter changes
+  });
 
   // Debug newsletters data
   useEffect(() => {
@@ -217,7 +221,63 @@ const Inbox: React.FC = memo(() => {
         : true,
     });
   }, [newsletters, sourceFilter, isLoadingNewsletters]);
+
+  // Force refetch when filters change to ensure fresh data
+  useEffect(() => {
+    console.log("🔄 Filter changed, refetching newsletters...", {
+      filter,
+      sourceFilter,
+      timeRange,
+      debouncedTagUpdates,
+      newsletterFilter: JSON.stringify(newsletterFilter),
+    });
+    // Add small delay to ensure state has settled
+    const timeoutId = setTimeout(() => {
+      refetchNewsletters();
+    }, 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    filter,
+    sourceFilter,
+    timeRange,
+    debouncedTagUpdates,
+    refetchNewsletters,
+  ]);
+
   const { user } = useAuth();
+
+  // Debug filter changes in detail
+  useEffect(() => {
+    console.group("📊 Inbox Filter State Debug");
+    console.log("Current filter state:", {
+      filter,
+      sourceFilter,
+      timeRange,
+      debouncedTagUpdates,
+    });
+    console.log(
+      "Computed newsletterFilter:",
+      JSON.stringify(newsletterFilter, null, 2),
+    );
+    console.log("Query is enabled:", !!user);
+    console.log("Is loading:", isLoadingNewsletters);
+    console.log("Has error:", isErrorNewsletters);
+    console.log("Error details:", errorNewsletters);
+    console.log("Newsletter count:", newsletters.length);
+    console.groupEnd();
+  }, [
+    filter,
+    sourceFilter,
+    timeRange,
+    debouncedTagUpdates,
+    newsletterFilter,
+    user,
+    isLoadingNewsletters,
+    isErrorNewsletters,
+    errorNewsletters,
+    newsletters.length,
+  ]);
 
   // Shared newsletter action handlers
   const {
@@ -937,8 +997,20 @@ const Inbox: React.FC = memo(() => {
         <div>Time Range: {timeRange}</div>
         <div>Tag IDs: {tagIds.length > 0 ? tagIds.join(", ") : "None"}</div>
         <div>Fetched Newsletters: {newsletters.length}</div>
-        <div>Loading: {isLoadingNewsletters ? "Yes" : "No"}</div>
-        <div>Error: {isErrorNewsletters ? "Yes" : "No"}</div>
+        <div>Filtered Newsletters: {filteredNewsletters.length}</div>
+        <div>Is Loading: {isLoadingNewsletters ? "Yes" : "No"}</div>
+        <div>Is Error: {isErrorNewsletters ? "Yes" : "No"}</div>
+        <div>User ID: {user?.id || "None"}</div>
+        <div>Query Enabled: {!!user ? "Yes" : "No"}</div>
+        <button
+          onClick={() => {
+            console.log("Manual refetch triggered");
+            refetchNewsletters();
+          }}
+          className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Force Refetch
+        </button>
         <div>Newsletter Filter: {JSON.stringify(newsletterFilter)}</div>
       </div>
 
