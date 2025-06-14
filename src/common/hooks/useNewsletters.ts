@@ -594,8 +594,12 @@ export const useNewsletters = (
           ),
       });
 
-      const previousNewsletters =
-        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+      const queryData = getQueryData<any>(queryKey);
+      const previousNewsletters = Array.isArray(queryData?.data)
+        ? queryData.data
+        : Array.isArray(queryData)
+          ? queryData
+          : [];
 
       cacheManager.batchUpdateNewsletters(
         ids.map((id) => ({
@@ -656,8 +660,12 @@ export const useNewsletters = (
       });
 
       // Store current state for rollback
-      const previousNewsletters =
-        getQueryData<NewsletterWithRelations[]>(queryKey);
+      const queryData = getQueryData<any>(queryKey);
+      const previousNewsletters = Array.isArray(queryData?.data)
+        ? queryData.data
+        : Array.isArray(queryData)
+          ? queryData
+          : [];
 
       // Ensure previousNewsletters is always an array
       const newsletterArray = Array.isArray(previousNewsletters)
@@ -790,8 +798,12 @@ export const useNewsletters = (
       });
 
       // Store current state for rollback
-      const previousNewsletters =
-        getQueryData<NewsletterWithRelations[]>(queryKey);
+      const queryData = getQueryData<any>(queryKey);
+      const previousNewsletters = Array.isArray(queryData?.data)
+        ? queryData.data
+        : Array.isArray(queryData)
+          ? queryData
+          : [];
 
       // Ensure previousNewsletters is always an array
       const newsletterArray = Array.isArray(previousNewsletters)
@@ -923,42 +935,104 @@ export const useNewsletters = (
           ),
       });
 
-      // Get the current newsletter to toggle its archived status
-      const newsletter = await getNewsletter(id);
+      // Get the current newsletter list data to understand the current filter context
+      const queryData = getQueryData<any>(queryKey);
+      const previousNewsletters = Array.isArray(queryData?.data)
+        ? queryData.data
+        : Array.isArray(queryData)
+          ? queryData
+          : [];
+      const newsletter = previousNewsletters.find(
+        (n: NewsletterWithRelations) => n.id === id,
+      );
+
       if (!newsletter) {
-        return { previousNewsletters: [] };
+        return { previousNewsletters };
       }
 
-      // Optimistically update the cache
-      cacheManager.updateNewsletterInCache({
-        id,
-        updates: {
-          is_archived: !newsletter.is_archived,
-          updated_at: new Date().toISOString(),
-        },
-      });
+      const newArchivedState = !newsletter.is_archived;
+
+      // Determine if we should remove the newsletter from the current view
+      const currentFilter = filters;
+      const shouldRemoveFromView =
+        newArchivedState && // Newsletter is being archived
+        (currentFilter.isArchived === false ||
+          currentFilter.isArchived === undefined); // And we're not in archived view
+
+      if (shouldRemoveFromView) {
+        // Remove the newsletter from the current filtered view immediately
+        cacheManager.queryClient.setQueryData(queryKey, (oldData: any) => {
+          if (!oldData || !oldData.data || !Array.isArray(oldData.data))
+            return oldData;
+
+          const filteredData = oldData.data.filter(
+            (n: NewsletterWithRelations) => n.id !== id,
+          );
+          return {
+            ...oldData,
+            data: filteredData,
+            count: Math.max(0, (oldData.count || 0) - 1),
+          };
+        });
+      } else {
+        // Update the newsletter's archived status in place
+        cacheManager.updateNewsletterInCache({
+          id,
+          updates: {
+            is_archived: newArchivedState,
+            updated_at: new Date().toISOString(),
+          },
+        });
+      }
 
       // Return the previous state in case we need to rollback
       return {
-        previousNewsletters: [newsletter],
+        previousNewsletters,
+        newsletter,
+        newArchivedState,
+        shouldRemoveFromView,
       };
     },
     onError: (_err, id, context) => {
       // Rollback to the previous state on error
-      if (context?.previousNewsletters) {
-        context.previousNewsletters.forEach((newsletter) => {
+      if (context?.previousNewsletters && context?.newsletter) {
+        if (context.shouldRemoveFromView) {
+          // Restore the newsletter to the list if it was removed
+          cacheManager.queryClient.setQueryData(queryKey, (oldData: any) => {
+            if (!oldData || !oldData.data || !Array.isArray(oldData.data))
+              return oldData;
+
+            // Add the newsletter back to its original position
+            const restoredData = [...oldData.data];
+            const originalIndex = context.previousNewsletters!.findIndex(
+              (n) => n.id === id,
+            );
+            if (originalIndex >= 0) {
+              restoredData.splice(originalIndex, 0, context.newsletter!);
+            } else {
+              restoredData.unshift(context.newsletter!);
+            }
+
+            return {
+              ...oldData,
+              data: restoredData,
+              count: (oldData.count || 0) + 1,
+            };
+          });
+        } else {
+          // Restore the original archived state
           cacheManager.updateNewsletterInCache({
             id,
             updates: {
-              is_archived: newsletter.is_archived,
-              updated_at: newsletter.updated_at,
+              is_archived: context.newsletter.is_archived,
+              updated_at: context.newsletter.updated_at,
             },
           });
-        });
+        }
       }
     },
     onSettled: (_data, _error, id) => {
-      // Invalidate the queries to ensure we have fresh data
+      // Use minimal invalidation to preserve filter state
       cacheManager.invalidateRelatedQueries([id], "toggle-archive");
       // Dispatch event for unread count updates
       window.dispatchEvent(new CustomEvent("newsletter:archived"));
@@ -990,8 +1064,12 @@ export const useNewsletters = (
           ),
       });
 
-      const previousNewsletters =
-        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+      const queryData = getQueryData<any>(queryKey);
+      const previousNewsletters = Array.isArray(queryData?.data)
+        ? queryData.data
+        : Array.isArray(queryData)
+          ? queryData
+          : [];
 
       cacheManager.batchUpdateNewsletters(
         ids.map((id) => ({
@@ -1055,8 +1133,12 @@ export const useNewsletters = (
           ),
       });
 
-      const previousNewsletters =
-        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+      const queryData = getQueryData<any>(queryKey);
+      const previousNewsletters = Array.isArray(queryData?.data)
+        ? queryData.data
+        : Array.isArray(queryData)
+          ? queryData
+          : [];
 
       cacheManager.batchUpdateNewsletters(
         ids.map((id) => ({

@@ -246,6 +246,18 @@ const Inbox: React.FC = memo(() => {
     refetchNewsletters,
   ]);
 
+  // Store current filter context for actions
+  const currentFilterContext = useMemo(
+    () => ({
+      filter,
+      sourceFilter,
+      timeRange,
+      tagIds: debouncedTagUpdates,
+      newsletterFilter,
+    }),
+    [filter, sourceFilter, timeRange, debouncedTagUpdates, newsletterFilter],
+  );
+
   const { user } = useAuth();
 
   // Debug filter changes in detail
@@ -280,38 +292,101 @@ const Inbox: React.FC = memo(() => {
     newsletters.length,
   ]);
 
-  // Shared newsletter action handlers
+  // Shared newsletter action handlers with filter context
   const baseActions = useSharedNewsletterActions({
     showToasts: true,
     optimisticUpdates: true,
+    onSuccess: (newsletter) => {
+      // Ensure filters are preserved after successful actions
+      if (cacheManager) {
+        // Use smart invalidation that respects current filter context
+        setTimeout(() => {
+          cacheManager.smartInvalidate({
+            operation: "newsletter-action",
+            filterContext: currentFilterContext,
+            priority: "high",
+          });
+        }, 100);
+      }
+    },
+    onError: (error) => {
+      console.error("Newsletter action failed:", error);
+      // Restore filter state if needed
+      if (
+        window.location.search !==
+        new URLSearchParams({
+          ...(filter !== "all" && { filter }),
+          ...(sourceFilter && { source: sourceFilter }),
+          ...(timeRange !== "all" && { time: timeRange }),
+          ...(debouncedTagUpdates.length > 0 && {
+            tags: debouncedTagUpdates.join(","),
+          }),
+        }).toString()
+      ) {
+        const params = new URLSearchParams();
+        if (filter !== "all") params.set("filter", filter);
+        if (sourceFilter) params.set("source", sourceFilter);
+        if (timeRange !== "all") params.set("time", timeRange);
+        if (debouncedTagUpdates.length > 0)
+          params.set("tags", debouncedTagUpdates.join(","));
+        window.history.replaceState(
+          {},
+          "",
+          `${window.location.pathname}?${params.toString()}`,
+        );
+      }
+    },
   });
 
-  // Create navigation-safe wrapper for all actions
-  const createSafeAction = useCallback(
+  // Create filter-aware action wrapper
+  const createFilterAwareAction = useCallback(
     (actionFn: (...args: any[]) => Promise<any>, actionName: string) => {
       return async (...args: any[]) => {
         const currentUrl = window.location.href;
+        const currentFilterState = {
+          filter,
+          sourceFilter,
+          timeRange,
+          tagIds: debouncedTagUpdates,
+        };
 
         try {
-          console.log(`🔒 Executing safe ${actionName}...`);
+          console.log(`🔒 Executing filter-aware ${actionName}...`, {
+            currentFilterState,
+            url: currentUrl,
+          });
 
-          // Execute the action
-          const result = await actionFn(...args);
+          // Execute the action with immediate feedback
+          const result = actionFn(...args);
 
-          // Ensure we stay on the same page with same filters
-          if (window.location.href !== currentUrl) {
-            console.warn(
-              `🔄 Navigation detected during ${actionName}, restoring...`,
-            );
-            window.history.replaceState({}, "", currentUrl);
-          }
+          // Don't wait for the action to complete for responsiveness
+          result
+            .then(() => {
+              // Ensure filters are preserved after action completes
+              if (window.location.href !== currentUrl) {
+                console.warn(
+                  `🔄 Navigation detected during ${actionName}, restoring...`,
+                );
+                window.history.replaceState({}, "", currentUrl);
+              }
 
-          // Clear toast after successful action
-          setTimeout(() => setToast(null), 3000);
+              // Clear toast after successful action
+              setTimeout(() => setToast(null), 3000);
+            })
+            .catch((error) => {
+              console.error(`❌ ${actionName} failed:`, error);
+
+              // Restore URL if changed
+              if (window.location.href !== currentUrl) {
+                window.history.replaceState({}, "", currentUrl);
+              }
+
+              setToast({ type: "error", message: (error as Error).message });
+            });
 
           return result;
         } catch (error) {
-          console.error(`❌ ${actionName} failed:`, error);
+          console.error(`❌ ${actionName} sync error:`, error);
 
           // Restore URL if changed
           if (window.location.href !== currentUrl) {
@@ -351,50 +426,52 @@ const Inbox: React.FC = memo(() => {
     errorTogglingBookmark,
   } = baseActions;
 
-  // Create navigation-safe versions of the actions
+  // Create filter-aware versions of the actions
   const handleToggleLike = useMemo(
-    () => createSafeAction(baseHandleToggleLike, "toggleLike"),
-    [baseHandleToggleLike, createSafeAction],
+    () => createFilterAwareAction(baseHandleToggleLike, "toggleLike"),
+    [baseHandleToggleLike, createFilterAwareAction],
   );
   const handleToggleBookmark = useMemo(
-    () => createSafeAction(baseHandleToggleBookmark, "toggleBookmark"),
-    [baseHandleToggleBookmark, createSafeAction],
+    () => createFilterAwareAction(baseHandleToggleBookmark, "toggleBookmark"),
+    [baseHandleToggleBookmark, createFilterAwareAction],
   );
   const handleToggleArchive = useMemo(
-    () => createSafeAction(baseHandleToggleArchive, "toggleArchive"),
-    [baseHandleToggleArchive, createSafeAction],
+    () => createFilterAwareAction(baseHandleToggleArchive, "toggleArchive"),
+    [baseHandleToggleArchive, createFilterAwareAction],
   );
   const handleToggleRead = useMemo(
-    () => createSafeAction(baseHandleToggleRead, "toggleRead"),
-    [baseHandleToggleRead, createSafeAction],
+    () => createFilterAwareAction(baseHandleToggleRead, "toggleRead"),
+    [baseHandleToggleRead, createFilterAwareAction],
   );
   const handleDeleteNewsletter = useMemo(
-    () => createSafeAction(baseHandleDeleteNewsletter, "deleteNewsletter"),
-    [baseHandleDeleteNewsletter, createSafeAction],
+    () =>
+      createFilterAwareAction(baseHandleDeleteNewsletter, "deleteNewsletter"),
+    [baseHandleDeleteNewsletter, createFilterAwareAction],
   );
   const handleToggleInQueue = useMemo(
-    () => createSafeAction(baseHandleToggleInQueue, "toggleInQueue"),
-    [baseHandleToggleInQueue, createSafeAction],
+    () => createFilterAwareAction(baseHandleToggleInQueue, "toggleInQueue"),
+    [baseHandleToggleInQueue, createFilterAwareAction],
   );
   const handleBulkMarkAsRead = useMemo(
-    () => createSafeAction(baseHandleBulkMarkAsRead, "bulkMarkAsRead"),
-    [baseHandleBulkMarkAsRead, createSafeAction],
+    () => createFilterAwareAction(baseHandleBulkMarkAsRead, "bulkMarkAsRead"),
+    [baseHandleBulkMarkAsRead, createFilterAwareAction],
   );
   const handleBulkMarkAsUnread = useMemo(
-    () => createSafeAction(baseHandleBulkMarkAsUnread, "bulkMarkAsUnread"),
-    [baseHandleBulkMarkAsUnread, createSafeAction],
+    () =>
+      createFilterAwareAction(baseHandleBulkMarkAsUnread, "bulkMarkAsUnread"),
+    [baseHandleBulkMarkAsUnread, createFilterAwareAction],
   );
   const handleBulkArchive = useMemo(
-    () => createSafeAction(baseHandleBulkArchive, "bulkArchive"),
-    [baseHandleBulkArchive, createSafeAction],
+    () => createFilterAwareAction(baseHandleBulkArchive, "bulkArchive"),
+    [baseHandleBulkArchive, createFilterAwareAction],
   );
   const handleBulkUnarchive = useMemo(
-    () => createSafeAction(baseHandleBulkUnarchive, "bulkUnarchive"),
-    [baseHandleBulkUnarchive, createSafeAction],
+    () => createFilterAwareAction(baseHandleBulkUnarchive, "bulkUnarchive"),
+    [baseHandleBulkUnarchive, createFilterAwareAction],
   );
   const handleBulkDelete = useMemo(
-    () => createSafeAction(baseHandleBulkDelete, "bulkDelete"),
-    [baseHandleBulkDelete, createSafeAction],
+    () => createFilterAwareAction(baseHandleBulkDelete, "bulkDelete"),
+    [baseHandleBulkDelete, createFilterAwareAction],
   );
 
   // Initialize cache manager for advanced operations

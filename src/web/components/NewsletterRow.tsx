@@ -118,10 +118,10 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     async (e: React.MouseEvent) => {
       e.stopPropagation();
       try {
-        if (isInReadingQueue && onRemoveFromQueue) {
-          onRemoveFromQueue(e, newsletter.id);
-        } else if (onToggleQueue) {
+        if (onToggleQueue) {
           await onToggleQueue(newsletter.id);
+        } else if (isInReadingQueue && onRemoveFromQueue) {
+          onRemoveFromQueue(e, newsletter.id);
         }
       } catch (error) {
         console.error("Error toggling queue status:", error);

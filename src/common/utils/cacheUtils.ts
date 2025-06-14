@@ -188,6 +188,7 @@ export class SimpleCacheManager {
       case "mark-unread":
       case "bulk-mark-read":
       case "bulk-mark-unread":
+        // Only invalidate unread count, keep newsletter lists with optimistic updates
         invalidationPromises.push(
           this.queryClient.invalidateQueries({
             queryKey: ["unreadCount"],
@@ -196,10 +197,14 @@ export class SimpleCacheManager {
         );
         break;
 
+      case "toggle-archive":
       case "archive":
       case "unarchive":
       case "bulk-archive":
       case "bulk-unarchive":
+        // For archive operations, we need to remove items from filtered views
+        // and invalidate unread counts
+        this.handleArchiveInvalidation(newsletterIds, operationType);
         invalidationPromises.push(
           this.queryClient.invalidateQueries({
             queryKey: ["unreadCount"],
@@ -210,26 +215,31 @@ export class SimpleCacheManager {
 
       case "delete":
       case "bulk-delete":
+        // For delete operations, remove from all caches completely
+        this.handleDeleteInvalidation(newsletterIds);
         invalidationPromises.push(
-          this.queryClient.invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.lists(),
-            refetchType: "active",
-          }),
           this.queryClient.invalidateQueries({
             queryKey: ["unreadCount"],
             refetchType: "active",
           }),
         );
-        // Remove individual newsletter caches
-        newsletterIds.forEach((id) => {
-          this.queryClient.removeQueries({
-            queryKey: queryKeyFactory.newsletters.detail(id),
-            exact: true,
-          });
-        });
         break;
 
       case "toggle-like":
+      case "toggle-bookmark":
+        // For like/bookmark operations, use very gentle invalidation
+        // Only invalidate if we're in a liked filter view
+        setTimeout(() => {
+          this.queryClient.refetchQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+            type: "active",
+          });
+        }, 500);
+        break;
+
+      case "toggle-like-error":
+      case "toggle-bookmark-error":
+        // For error cases, force a gentle refresh
         invalidationPromises.push(
           this.queryClient.invalidateQueries({
             queryKey: queryKeyFactory.newsletters.lists(),
@@ -303,6 +313,172 @@ export class SimpleCacheManager {
     Promise.all(invalidationPromises).catch((error) => {
       console.error("Error invalidating related queries:", error);
     });
+  }
+
+  // Smart invalidation that respects filter context
+  smartInvalidate(options: {
+    operation: string;
+    newsletterIds?: string[];
+    filterContext?: unknown;
+    priority: "high" | "medium" | "low";
+  }): void {
+    const { operation, newsletterIds = [], filterContext, priority } = options;
+
+    console.log("🧠 Smart invalidation:", {
+      operation,
+      newsletterIds,
+      filterContext,
+      priority,
+    });
+
+    switch (operation) {
+      case "newsletter-action":
+        // For newsletter actions, preserve the current filter state
+        // Only invalidate unread counts, let optimistic updates handle the rest
+        this.queryClient.invalidateQueries({
+          queryKey: ["unreadCount"],
+          refetchType: priority === "high" ? "active" : "none",
+        });
+
+        // Gentle refresh of current newsletter list after a delay
+        if (priority === "high") {
+          setTimeout(() => {
+            this.queryClient.refetchQueries({
+              queryKey: queryKeyFactory.newsletters.lists(),
+              type: "active",
+            });
+          }, 500);
+        }
+        break;
+
+      case "queue-action":
+        // For reading queue actions, invalidate queue and unread counts
+        this.queryClient.invalidateQueries({
+          queryKey: queryKeyFactory.queue.lists(),
+          refetchType: priority === "high" ? "active" : "none",
+        });
+        this.queryClient.invalidateQueries({
+          queryKey: ["unreadCount"],
+          refetchType: "active",
+        });
+        break;
+
+      default:
+        // Fallback to standard invalidation
+        this.invalidateRelatedQueries(newsletterIds, operation);
+        break;
+    }
+  }
+
+  // Handle archive operations with filter-aware cache updates
+  private handleArchiveInvalidation(
+    newsletterIds: string[],
+    operationType: string,
+  ): void {
+    const isArchiving =
+      operationType === "toggle-archive" ||
+      operationType === "archive" ||
+      operationType === "bulk-archive";
+
+    // Update all newsletter list queries to remove/add archived items based on filter context
+    this.queryClient.setQueriesData<unknown>(
+      { queryKey: queryKeyFactory.newsletters.lists() },
+      (oldData: unknown) => {
+        if (!oldData || !oldData.data || !Array.isArray(oldData.data))
+          return oldData;
+
+        // Get the filter context from the query key to understand if archived items should be shown
+        const shouldShowArchived = this.shouldShowArchivedInQuery(
+          oldData as any,
+        );
+
+        if (isArchiving && !shouldShowArchived) {
+          // Remove archived newsletters from non-archived views
+          const filteredData = (oldData as any).data.filter(
+            (newsletter: NewsletterWithRelations) =>
+              !newsletterIds.includes(newsletter.id),
+          );
+          return {
+            ...(oldData as any),
+            data: filteredData,
+            count: Math.max(
+              0,
+              ((oldData as any).count || 0) - newsletterIds.length,
+            ),
+          };
+        } else if (!isArchiving && shouldShowArchived) {
+          // For unarchive operations in archived view, let optimistic updates handle it
+          // The newsletters will still show until the actual refetch happens
+          return oldData;
+        }
+
+        return oldData;
+      },
+    );
+  }
+
+  // Handle delete operations by completely removing items from all caches
+  private handleDeleteInvalidation(newsletterIds: string[]): void {
+    // Remove from all newsletter list queries
+    this.queryClient.setQueriesData<unknown>(
+      { queryKey: queryKeyFactory.newsletters.lists() },
+      (oldData: unknown) => {
+        if (
+          !oldData ||
+          !(oldData as any)?.data ||
+          !Array.isArray((oldData as any).data)
+        )
+          return oldData;
+
+        const filteredData = (oldData as any).data.filter(
+          (newsletter: NewsletterWithRelations) =>
+            !newsletterIds.includes(newsletter.id),
+        );
+
+        return {
+          ...(oldData as any),
+          data: filteredData,
+          count: Math.max(
+            0,
+            ((oldData as any).count || 0) - newsletterIds.length,
+          ),
+        };
+      },
+    );
+
+    // Remove individual newsletter detail caches
+    newsletterIds.forEach((id) => {
+      this.queryClient.removeQueries({
+        queryKey: queryKeyFactory.newsletters.detail(id),
+        exact: true,
+      });
+    });
+
+    // Remove from reading queue if present
+    this.queryClient.setQueriesData<ReadingQueueItem[]>(
+      { queryKey: queryKeyFactory.queue.lists() },
+      (oldData) => {
+        if (!Array.isArray(oldData)) return oldData;
+        return oldData.filter(
+          (item) => !newsletterIds.includes(item.newsletter_id),
+        );
+      },
+    );
+  }
+
+  // Determine if a query should show archived newsletters based on its filter context
+  private shouldShowArchivedInQuery(queryData: unknown): boolean {
+    // This is a heuristic - in a real implementation, you'd parse the query key
+    // to understand the filter context. For now, we assume if the data contains
+    // archived newsletters, it's an "all" or "archived" view
+    if (!(queryData as any)?.data || !Array.isArray((queryData as any).data))
+      return false;
+
+    const hasArchivedNewsletters = (queryData as any).data.some(
+      (newsletter: NewsletterWithRelations) => newsletter.is_archived === true,
+    );
+
+    return hasArchivedNewsletters;
   }
 
   // Optimistic update with rollback support
@@ -518,90 +694,6 @@ export class SimpleCacheManager {
     });
 
     await Promise.all(promises);
-  }
-
-  // Smart invalidation based on operation context
-  smartInvalidate(context: {
-    operation: string;
-    newsletterIds: string[];
-    affectedFilters?: string[];
-    priority?: "high" | "medium" | "low";
-  }): void {
-    const {
-      operation,
-      newsletterIds,
-      affectedFilters = [],
-      priority = "medium",
-    } = context;
-
-    // Determine which queries to invalidate based on operation
-    const invalidationPlan: Array<{
-      type: string;
-      ids: string[];
-      filters?: Record<string, any>;
-    }> = [];
-
-    // Always invalidate affected newsletter details
-    if (newsletterIds.length > 0) {
-      invalidationPlan.push({
-        type: "newsletter-detail",
-        ids: newsletterIds,
-      });
-    }
-
-    // Operation-specific invalidations
-    switch (operation) {
-      case "mark-read":
-      case "mark-unread":
-      case "bulk-mark-read":
-      case "bulk-mark-unread":
-        invalidationPlan.push(
-          { type: "newsletter-list", ids: [] },
-          { type: "unread-count", ids: [] },
-        );
-        break;
-
-      case "archive":
-      case "unarchive":
-      case "bulk-archive":
-      case "bulk-unarchive":
-        invalidationPlan.push(
-          { type: "newsletter-list", ids: [] },
-          { type: "unread-count", ids: [] },
-        );
-        break;
-
-      case "toggle-queue":
-      case "add-to-queue":
-      case "remove-from-queue":
-        invalidationPlan.push(
-          { type: "newsletter-list", ids: [] },
-          { type: "reading-queue", ids: [] },
-        );
-        break;
-
-      case "delete":
-      case "bulk-delete":
-        invalidationPlan.push(
-          { type: "newsletter-list", ids: [] },
-          { type: "reading-queue", ids: [] },
-          { type: "unread-count", ids: [] },
-        );
-        break;
-    }
-
-    // Execute invalidation based on priority
-    if (priority === "high") {
-      this.batchInvalidateQueries(invalidationPlan);
-    } else {
-      // Debounce for medium/low priority operations
-      setTimeout(
-        () => {
-          this.batchInvalidateQueries(invalidationPlan);
-        },
-        priority === "medium" ? 100 : 300,
-      );
-    }
   }
 
   // Optimistic update with enhanced rollback

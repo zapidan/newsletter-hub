@@ -58,6 +58,28 @@ export const useSharedNewsletterActions = (
 
   const { addToQueue, removeFromQueue } = useReadingQueue();
 
+  // Create responsive action wrappers that provide immediate feedback
+  const createResponsiveAction = useCallback(
+    <T extends any[]>(
+      actionFn: (...args: T) => Promise<any>,
+      actionName: string,
+    ) => {
+      return async (...args: T) => {
+        // Provide immediate visual feedback by not blocking UI
+        const actionPromise = actionFn(...args);
+
+        // Don't await here to make actions feel more responsive
+        actionPromise.catch((error) => {
+          console.error(`Responsive ${actionName} failed:`, error);
+          options?.onError?.(error);
+        });
+
+        return actionPromise;
+      };
+    },
+    [options],
+  );
+
   // Create the handler interface
   const handlers: NewsletterActionHandlers = {
     markAsRead: useCallback(
@@ -185,66 +207,87 @@ export const useSharedNewsletterActions = (
   // Create shared handlers with options
   const sharedHandlers = createSharedNewsletterHandlers(handlers, options);
 
-  // Individual action handlers
+  // Individual action handlers with responsive wrappers
   const handleMarkAsRead = useCallback(
-    async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
-      return sharedHandlers.markAsRead(id, actionOptions);
-    },
-    [sharedHandlers],
+    createResponsiveAction(
+      async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
+        return sharedHandlers.markAsRead(id, actionOptions);
+      },
+      "markAsRead",
+    ),
+    [sharedHandlers, createResponsiveAction],
   );
 
   const handleMarkAsUnread = useCallback(
-    async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
-      return sharedHandlers.markAsUnread(id, actionOptions);
-    },
-    [sharedHandlers],
+    createResponsiveAction(
+      async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
+        return sharedHandlers.markAsUnread(id, actionOptions);
+      },
+      "markAsUnread",
+    ),
+    [sharedHandlers, createResponsiveAction],
   );
 
   const handleToggleLike = useCallback(
-    async (
-      newsletter: NewsletterWithRelations,
-      actionOptions?: UseSharedNewsletterActionsOptions,
-    ) => {
-      return sharedHandlers.toggleLike(newsletter, actionOptions);
-    },
-    [sharedHandlers],
+    createResponsiveAction(
+      async (
+        newsletter: NewsletterWithRelations,
+        actionOptions?: UseSharedNewsletterActionsOptions,
+      ) => {
+        return sharedHandlers.toggleLike(newsletter, actionOptions);
+      },
+      "toggleLike",
+    ),
+    [sharedHandlers, createResponsiveAction],
   );
 
   const handleToggleBookmark = useCallback(
-    async (
-      newsletter: NewsletterWithRelations,
-      actionOptions?: UseSharedNewsletterActionsOptions,
-    ) => {
-      return sharedHandlers.toggleBookmark(newsletter, actionOptions);
-    },
-    [sharedHandlers],
+    createResponsiveAction(
+      async (
+        newsletter: NewsletterWithRelations,
+        actionOptions?: UseSharedNewsletterActionsOptions,
+      ) => {
+        return sharedHandlers.toggleBookmark(newsletter, actionOptions);
+      },
+      "toggleBookmark",
+    ),
+    [sharedHandlers, createResponsiveAction],
   );
 
   const handleToggleArchive = useCallback(
-    async (
-      newsletter: NewsletterWithRelations,
-      actionOptions?: UseSharedNewsletterActionsOptions,
-    ) => {
-      return sharedHandlers.toggleArchive(newsletter, actionOptions);
-    },
-    [sharedHandlers],
+    createResponsiveAction(
+      async (
+        newsletter: NewsletterWithRelations,
+        actionOptions?: UseSharedNewsletterActionsOptions,
+      ) => {
+        return sharedHandlers.toggleArchive(newsletter, actionOptions);
+      },
+      "toggleArchive",
+    ),
+    [sharedHandlers, createResponsiveAction],
   );
 
   const handleDeleteNewsletter = useCallback(
-    async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
-      return sharedHandlers.deleteNewsletter(id, actionOptions);
-    },
-    [sharedHandlers],
+    createResponsiveAction(
+      async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
+        return sharedHandlers.deleteNewsletter(id, actionOptions);
+      },
+      "deleteNewsletter",
+    ),
+    [sharedHandlers, createResponsiveAction],
   );
 
   const handleToggleInQueue = useCallback(
-    async (
-      newsletter: NewsletterWithRelations,
-      actionOptions?: UseSharedNewsletterActionsOptions,
-    ) => {
-      return sharedHandlers.toggleInQueue(newsletter, actionOptions);
-    },
-    [sharedHandlers],
+    createResponsiveAction(
+      async (
+        newsletter: NewsletterWithRelations,
+        actionOptions?: UseSharedNewsletterActionsOptions,
+      ) => {
+        return sharedHandlers.toggleInQueue(newsletter, actionOptions);
+      },
+      "toggleInQueue",
+    ),
+    [sharedHandlers, createResponsiveAction],
   );
 
   const handleUpdateTags = useCallback(
@@ -375,17 +418,20 @@ export const useSharedNewsletterActions = (
 
   // Toggle read/unread based on current state
   const handleToggleRead = useCallback(
-    async (
-      newsletter: NewsletterWithRelations,
-      actionOptions?: UseSharedNewsletterActionsOptions,
-    ) => {
-      if (newsletter.is_read) {
-        return handleMarkAsUnread(newsletter.id, actionOptions);
-      } else {
-        return handleMarkAsRead(newsletter.id, actionOptions);
-      }
-    },
-    [handleMarkAsRead, handleMarkAsUnread],
+    createResponsiveAction(
+      async (
+        newsletter: NewsletterWithRelations,
+        actionOptions?: UseSharedNewsletterActionsOptions,
+      ) => {
+        if (newsletter.is_read) {
+          return handleMarkAsUnread(newsletter.id, actionOptions);
+        } else {
+          return handleMarkAsRead(newsletter.id, actionOptions);
+        }
+      },
+      "toggleRead",
+    ),
+    [handleMarkAsRead, handleMarkAsUnread, createResponsiveAction],
   );
 
   // Newsletter row action handlers (for use in newsletter lists)
