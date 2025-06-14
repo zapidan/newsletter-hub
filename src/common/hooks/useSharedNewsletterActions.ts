@@ -5,6 +5,12 @@ import {
   createSharedNewsletterHandlers,
   NewsletterActionHandlers,
 } from "@common/utils/newsletterActionHandlers";
+import { useAuth } from "@common/contexts";
+import {
+  ERROR_CODES,
+  getErrorMessage,
+  createErrorWithCode,
+} from "@common/constants/errorMessages";
 import type { NewsletterWithRelations } from "@common/types";
 
 export interface UseSharedNewsletterActionsOptions {
@@ -17,6 +23,7 @@ export interface UseSharedNewsletterActionsOptions {
 export const useSharedNewsletterActions = (
   options?: UseSharedNewsletterActionsOptions,
 ) => {
+  const { user } = useAuth();
   const {
     markAsRead,
     markAsUnread,
@@ -30,6 +37,7 @@ export const useSharedNewsletterActions = (
     bulkArchive,
     bulkUnarchive,
     bulkDeleteNewsletters,
+    updateNewsletterTags,
     // Loading states
     isMarkingAsRead,
     isMarkingAsUnread,
@@ -41,9 +49,11 @@ export const useSharedNewsletterActions = (
     isBulkArchiving,
     isBulkUnarchiving,
     isBulkDeletingNewsletters,
+    isUpdatingTags,
     // Error states
     errorTogglingLike,
     errorTogglingBookmark,
+    errorUpdatingTags,
   } = useNewsletters();
 
   const { addToQueue, removeFromQueue } = useReadingQueue();
@@ -99,14 +109,42 @@ export const useSharedNewsletterActions = (
       [toggleInQueue],
     ),
 
-    updateTags: useCallback(async (id: string, tagIds: string[]) => {
-      // For now, this needs to be implemented or imported from elsewhere
-      console.warn("updateTags not implemented in useNewsletters", {
-        id,
-        tagIds,
-      });
-      throw new Error("updateTags not available");
-    }, []),
+    updateTags: useCallback(
+      async (id: string, tagIds: string[]) => {
+        if (!user?.id) {
+          throw createErrorWithCode(ERROR_CODES.AUTH_REQUIRED);
+        }
+
+        if (!id) {
+          throw createErrorWithCode(
+            ERROR_CODES.MISSING_REQUIRED_FIELD,
+            "Newsletter ID is required",
+          );
+        }
+
+        if (!Array.isArray(tagIds)) {
+          throw createErrorWithCode(
+            ERROR_CODES.INVALID_TAG_IDS,
+            "Tag IDs must be an array",
+          );
+        }
+
+        try {
+          // Use the updateNewsletterTags function from the useNewsletters hook
+          await updateNewsletterTags(id, tagIds);
+        } catch (error) {
+          console.error("Failed to update newsletter tags:", error);
+          if (error instanceof Error && "code" in error) {
+            throw error; // Re-throw errors with codes
+          }
+          throw createErrorWithCode(
+            ERROR_CODES.TAG_UPDATE_FAILED,
+            error instanceof Error ? error.message : "Unknown error occurred",
+          );
+        }
+      },
+      [updateNewsletterTags, user?.id],
+    ),
 
     bulkMarkAsRead: useCallback(
       async (ids: string[]) => {
@@ -215,7 +253,24 @@ export const useSharedNewsletterActions = (
       tagIds: string[],
       actionOptions?: UseSharedNewsletterActionsOptions,
     ) => {
-      return sharedHandlers.updateTags(id, tagIds, actionOptions);
+      try {
+        const result = await sharedHandlers.updateTags(
+          id,
+          tagIds,
+          actionOptions,
+        );
+        actionOptions?.onSuccess?.();
+        return result;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : getErrorMessage(ERROR_CODES.TAG_UPDATE_FAILED);
+        actionOptions?.onError?.(
+          error instanceof Error ? error : new Error(errorMessage),
+        );
+        throw error;
+      }
     },
     [sharedHandlers],
   );
@@ -395,10 +450,12 @@ export const useSharedNewsletterActions = (
     isBulkArchiving,
     isBulkUnarchiving,
     isBulkDeletingNewsletters,
+    isUpdatingTags,
 
     // Error states
     errorTogglingLike,
     errorTogglingBookmark,
+    errorUpdatingTags,
 
     // Create handlers with specific options
     withOptions: sharedHandlers.withOptions.bind(sharedHandlers),

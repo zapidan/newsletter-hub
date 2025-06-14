@@ -15,6 +15,7 @@ import { NewsletterWithRelations, ReadingQueueItem } from "../types";
 import { PaginatedResponse } from "../types/api";
 import type { NewsletterFilter } from "../types/cache";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
+import { updateNewsletterTags } from "../utils/tagUtils";
 import {
   getCacheManager,
   SimpleCacheManager,
@@ -159,6 +160,20 @@ interface UseNewslettersReturn {
   >;
   isBulkDeletingNewsletters: boolean;
   errorBulkDeletingNewsletters: Error | null;
+
+  // Tag mutations
+  updateNewsletterTags: (
+    id: string,
+    tagIds: string[],
+    options?: MutateOptions<
+      boolean,
+      Error,
+      { id: string; tagIds: string[] },
+      PreviousNewslettersState
+    >,
+  ) => Promise<void>;
+  isUpdatingTags: boolean;
+  errorUpdatingTags: Error | null;
 }
 
 export const useNewsletters = (
@@ -1115,6 +1130,77 @@ export const useNewsletters = (
     },
   });
 
+  // Update newsletter tags mutation
+  const updateNewsletterTagsMutation = useMutation<
+    boolean,
+    Error,
+    { id: string; tagIds: string[] },
+    PreviousNewslettersState
+  >({
+    mutationFn: async ({ id, tagIds }) => {
+      if (!user?.id) {
+        throw new Error("User authentication required");
+      }
+
+      // Get current newsletter to get current tags
+      const currentNewsletter = await newsletterApi.getById(id);
+      if (!currentNewsletter) {
+        throw new Error("Newsletter not found");
+      }
+
+      const currentTagIds = currentNewsletter.tags?.map((tag) => tag.id) || [];
+
+      // Update newsletter tags using the tag utility
+      await updateNewsletterTags(id, tagIds, currentTagIds, user.id);
+      return true;
+    },
+    onMutate: async ({ id }) => {
+      await cancelQueries({
+        predicate: (query) =>
+          queryKeyFactory.matchers.isNewsletterListKey(
+            query.queryKey as unknown[],
+          ) ||
+          queryKeyFactory.matchers.isNewsletterDetailKey(
+            query.queryKey as unknown[],
+            id,
+          ),
+      });
+
+      const previousNewsletters =
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+
+      // Optimistically update the newsletter with new tags
+      // Note: We don't have the full tag objects here, just IDs
+      // The actual tag objects will be fetched after the mutation succeeds
+      cacheManager.updateNewsletterInCache({
+        id,
+        updates: {
+          updated_at: new Date().toISOString(),
+        },
+      });
+
+      return { previousNewsletters };
+    },
+    onError: (_err, { id }, context) => {
+      // Revert optimistic updates if the mutation fails
+      if (context?.previousNewsletters) {
+        const newsletter = context.previousNewsletters.find((n) => n.id === id);
+        if (newsletter) {
+          cacheManager.updateNewsletterInCache({
+            id,
+            updates: {
+              updated_at: newsletter.updated_at,
+            },
+          });
+        }
+      }
+    },
+    onSettled: (_data, _error, { id }) => {
+      // Invalidate queries to refetch fresh data with updated tags
+      cacheManager.invalidateRelatedQueries([id], "update-tags");
+    },
+  });
+
   // Unarchive mutation (separate from toggle for specific use cases)
   const unarchiveMutation = useMutation<
     boolean,
@@ -1285,6 +1371,22 @@ export const useNewsletters = (
     [bulkUnarchiveMutation],
   );
 
+  const updateNewsletterTagsCallback = useCallback(
+    async (
+      id: string,
+      tagIds: string[],
+      options?: MutateOptions<
+        boolean,
+        Error,
+        { id: string; tagIds: string[] },
+        PreviousNewslettersState
+      >,
+    ) => {
+      await updateNewsletterTagsMutation.mutateAsync({ id, tagIds }, options);
+    },
+    [updateNewsletterTagsMutation],
+  );
+
   return {
     // Single newsletter operations
     getNewsletter,
@@ -1345,5 +1447,10 @@ export const useNewsletters = (
     bulkDeleteNewsletters: bulkDeleteNewslettersMutation.mutateAsync,
     isBulkDeletingNewsletters: bulkDeleteNewslettersMutation.isPending,
     errorBulkDeletingNewsletters: bulkDeleteNewslettersMutation.error,
+
+    // Tag mutations
+    updateNewsletterTags: updateNewsletterTagsCallback,
+    isUpdatingTags: updateNewsletterTagsMutation.isPending,
+    errorUpdatingTags: updateNewsletterTagsMutation.error,
   } as const;
 };

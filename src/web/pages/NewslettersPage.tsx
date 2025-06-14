@@ -9,17 +9,14 @@ import { useNavigate } from "react-router-dom";
 import { Dialog, Transition } from "@headlessui/react";
 import { toast } from "react-hot-toast";
 
-import {
-  updateNewsletterTags,
-  handleTagClickWithNavigation,
-} from "@common/utils/tagUtils";
+import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
 import {
   useNewsletters,
   useNewsletterSources,
   useNewsletterSourceGroups,
   useReadingQueue,
 } from "@common/hooks";
-import { useAuth } from "@common/contexts";
+
 import { newsletterApi } from "@common/api";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import {
@@ -39,16 +36,11 @@ import {
 import NewsletterRow from "@web/components/NewsletterRow";
 import { CreateSourceGroupModal } from "@web/components/CreateSourceGroupModal";
 import { SourceGroupCard } from "@web/components/SourceGroupCard";
-import {
-  getCacheManager,
-  prefetchQuery,
-  invalidateQueries,
-} from "@common/utils/cacheUtils";
+import { getCacheManager, prefetchQuery } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 const NewslettersPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editModalSourceId, setEditModalSourceId] = useState<string | null>(
     null,
@@ -114,7 +106,7 @@ const NewslettersPage: React.FC = () => {
           [
             ...queryKeyFactory.newsletters.list({
               sourceId: source.id,
-              filter: {isRead: false},
+              filter: { isRead: false },
             }),
           ],
           async () => {
@@ -294,9 +286,14 @@ const NewslettersPage: React.FC = () => {
     errorNewsletters,
     errorTogglingLike,
   } = useNewsletters({
-    status: selectedSourceId ? "all" : "all",  // Not sure why this is the same in both cases?
+    status: "all", // Simplified since we're handling archived state separately
+    isArchived: false, // Explicitly exclude archived newsletters
     groupIds: selectedGroupId ? [selectedGroupId] : undefined,
-    sourceIds: selectedGroupId ? selectedGroupSourceIds : undefined
+    sourceIds: selectedSourceId
+      ? [selectedSourceId]
+      : selectedGroupId
+        ? selectedGroupSourceIds
+        : undefined,
   }) as {
     newsletters: NewsletterWithRelations[];
     isLoadingNewsletters: boolean;
@@ -312,6 +309,8 @@ const NewslettersPage: React.FC = () => {
     handleToggleRead,
     handleDeleteNewsletter,
     handleToggleInQueue,
+    handleUpdateTags: sharedHandleUpdateTags,
+    isUpdatingTags,
   } = useSharedNewsletterActions({
     showToasts: true,
     optimisticUpdates: true,
@@ -371,7 +370,7 @@ const NewslettersPage: React.FC = () => {
       );
 
       try {
-        await handleToggleArchive(newsletter, willArchive);
+        await handleToggleArchive(newsletter);
       } catch (error) {
         // Revert optimistic update on error
         setNewsletters(fetchedNewsletters || []);
@@ -432,27 +431,13 @@ const NewslettersPage: React.FC = () => {
   const handleUpdateTags = useCallback(
     async (newsletterId: string, tagIds: string[]): Promise<void> => {
       try {
-        if (!user) {
-          console.error("User not authenticated");
-          toast.error("You must be logged in to update tags");
-          return;
-        }
-
-        // Use the newsletter API to update tags
-        await newsletterApi.update({
-          id: newsletterId,
-          tag_ids: tagIds,
-        });
-
-        // Invalidate the newsletters query to refresh the UI
-        await invalidateQueries({ queryKey: ["newsletters"] });
-        toast.success("Tags updated successfully");
+        await sharedHandleUpdateTags(newsletterId, tagIds);
       } catch (error) {
         console.error("Error updating tags:", error);
-        toast.error("Failed to update tags");
+        // Error handling is already done by shared actions
       }
     },
-    [user],
+    [sharedHandleUpdateTags],
   );
 
   const toggleTagVisibility = useCallback(
@@ -1003,6 +988,7 @@ const NewslettersPage: React.FC = () => {
                     isDeletingNewsletter={false}
                     loadingStates={{}}
                     errorTogglingLike={errorTogglingLike}
+                    isUpdatingTags={isUpdatingTags}
                   />
                 ))}
               </div>

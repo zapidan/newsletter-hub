@@ -1,5 +1,6 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 import {
   Heart,
   BookmarkIcon,
@@ -7,10 +8,12 @@ import {
   Archive,
   ArchiveX,
   Trash,
+  Loader2,
 } from "lucide-react";
 import { NewsletterWithRelations, Tag } from "@common/types";
 import { usePrefetchNewsletterDetail } from "@common/hooks/useNewsletterDetail";
 import TagSelector from "./TagSelector";
+import { getErrorMessage, ERROR_CODES } from "@common/constants/errorMessages";
 
 interface NewsletterRowProps {
   newsletter: NewsletterWithRelations;
@@ -34,6 +37,7 @@ interface NewsletterRowProps {
   isDeletingNewsletter: boolean;
   loadingStates?: Record<string, string>;
   errorTogglingLike?: Error | null;
+  isUpdatingTags?: boolean;
 }
 
 const NewsletterRow: React.FC<NewsletterRowProps> = ({
@@ -57,9 +61,11 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   isDeletingNewsletter = false,
   loadingStates = {},
   errorTogglingLike,
+  isUpdatingTags = false,
 }) => {
   const navigate = useNavigate();
   const { prefetchNewsletter } = usePrefetchNewsletterDetail();
+  const [tagUpdateError, setTagUpdateError] = useState<string | null>(null);
 
   const handleRowClick = async (e: React.MouseEvent) => {
     // Only proceed if the click wasn't on a button or link
@@ -122,10 +128,28 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
 
   const handleUpdateTags = useCallback(
     async (tagIds: string[]) => {
+      setTagUpdateError(null);
+
       try {
         await onUpdateTags(newsletter.id, tagIds);
+        toast.success("Tags updated successfully");
       } catch (error) {
         console.error("Error updating tags:", error);
+
+        // Extract user-friendly error message
+        let errorMessage = "Failed to update tags";
+        if (error instanceof Error) {
+          if ("code" in error) {
+            errorMessage = getErrorMessage(
+              error.code as keyof typeof ERROR_CODES,
+            );
+          } else {
+            errorMessage = error.message || errorMessage;
+          }
+        }
+
+        setTagUpdateError(errorMessage);
+        toast.error(errorMessage);
         throw error;
       }
     },
@@ -267,7 +291,9 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               {/* Tag visibility toggle */}
               <button
                 type="button"
-                className="p-1 rounded hover:bg-gray-200"
+                className={`p-1 rounded hover:bg-gray-200 ${
+                  isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
+                }`}
                 onClick={(e) => {
                   console.log(
                     "Tag icon clicked for newsletter:",
@@ -275,21 +301,35 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                   );
                   e.preventDefault();
                   e.stopPropagation();
-                  onToggleTagVisibility(newsletter.id, e);
+                  if (!isUpdatingTags) {
+                    onToggleTagVisibility(newsletter.id, e);
+                  }
                 }}
+                disabled={isUpdatingTags}
                 title={
-                  visibleTags.has(newsletter.id) ? "Hide tags" : "Edit tags"
+                  isUpdatingTags
+                    ? "Updating tags..."
+                    : visibleTags.has(newsletter.id)
+                      ? "Hide tags"
+                      : "Edit tags"
                 }
               >
-                <TagIcon
-                  size={16}
-                  className={`${
-                    visibleTags.has(newsletter.id)
-                      ? "text-primary-600"
-                      : "text-gray-500"
-                  } hover:text-primary-600`}
-                />
-                {visibleTags.has(newsletter.id) && (
+                {isUpdatingTags ? (
+                  <Loader2
+                    size={16}
+                    className="animate-spin text-primary-600"
+                  />
+                ) : (
+                  <TagIcon
+                    size={16}
+                    className={`${
+                      visibleTags.has(newsletter.id)
+                        ? "text-primary-600"
+                        : "text-gray-500"
+                    } hover:text-primary-600`}
+                  />
+                )}
+                {visibleTags.has(newsletter.id) && !isUpdatingTags && (
                   <span className="sr-only">(Active)</span>
                 )}
               </button>
@@ -387,6 +427,18 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
             {/* Tags display */}
             {visibleTags.has(newsletter.id) && (
               <div className="w-full mt-2" onClick={(e) => e.stopPropagation()}>
+                {tagUpdateError && (
+                  <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600">{tagUpdateError}</p>
+                    <button
+                      type="button"
+                      className="text-xs text-red-500 hover:text-red-700 underline mt-1"
+                      onClick={() => setTagUpdateError(null)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
                 <TagSelector
                   selectedTags={newsletter.tags || []}
                   onTagsChange={async (newTags) => {
@@ -398,7 +450,14 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                     // Refresh handled by parent
                   }}
                   className="mt-1"
+                  disabled={isUpdatingTags}
                 />
+                {isUpdatingTags && (
+                  <div className="flex items-center mt-2 text-sm text-gray-500">
+                    <Loader2 size={14} className="animate-spin mr-2" />
+                    Updating tags...
+                  </div>
+                )}
               </div>
             )}
 
