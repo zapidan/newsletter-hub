@@ -6,8 +6,8 @@ import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 // Cache time constants (in milliseconds) - Very short for real-time unread counts
-const STALE_TIME = 5 * 1000; // 5 seconds - very frequent updates for unread count
-const CACHE_TIME = 30 * 1000; // 30 seconds - short cache for immediate updates
+const STALE_TIME = 0; // Always fresh data for unread count
+const CACHE_TIME = 10 * 1000; // 10 seconds - very short cache for immediate updates
 
 export const useUnreadCount = (sourceId?: string | null) => {
   const auth = useContext(AuthContext);
@@ -71,7 +71,9 @@ export const useUnreadCount = (sourceId?: string | null) => {
     refetchOnMount: true,
     refetchOnReconnect: true,
     // Don't use placeholder data to ensure fresh updates
-    refetchInterval: 30 * 1000, // Refetch every 30 seconds as backup
+    refetchInterval: 10 * 1000, // Refetch every 10 seconds as backup
+    // Force refetch on every mount to ensure accuracy
+    refetchIntervalInBackground: true,
   });
 
   // Track initial load
@@ -95,21 +97,31 @@ export const useUnreadCount = (sourceId?: string | null) => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      // Force immediate invalidation and refetch
+      console.log("🔄 Invalidating unread count due to newsletter update");
+
+      // Force immediate invalidation and refetch - more aggressive
       queryClient.invalidateQueries({
-        queryKey: ["unreadCount", user.id],
+        queryKey: ["unreadCount"],
         exact: false,
-        refetchType: "active",
+        refetchType: "all", // Refetch all, not just active
       });
 
       // Also invalidate source-specific queries
       queryClient.invalidateQueries({
         queryKey: ["unreadCount", user.id, "source"],
         exact: false,
-        refetchType: "active",
+        refetchType: "all",
       });
 
-      // Force immediate refetch of current query
+      // Force immediate refetch of current query with timeout to ensure execution
+      setTimeout(() => {
+        queryClient.refetchQueries({
+          queryKey,
+          exact: true,
+        });
+      }, 100);
+
+      // Also trigger immediate refetch without timeout
       queryClient.refetchQueries({
         queryKey,
         exact: true,
@@ -189,7 +201,8 @@ export const useUnreadCountsBySource = () => {
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     refetchOnReconnect: true,
-    refetchInterval: 60 * 1000, // Refetch every minute as backup
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds as backup
+    refetchIntervalInBackground: true,
   });
 
   // Listen for newsletter updates and invalidate unread counts by source
@@ -197,14 +210,26 @@ export const useUnreadCountsBySource = () => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      // Force immediate invalidation and refetch for unread counts by source
+      console.log(
+        "🔄 Invalidating unread counts by source due to newsletter update",
+      );
+
+      // Force immediate invalidation and refetch for unread counts by source - more aggressive
       queryClient.invalidateQueries({
         queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
         exact: true,
-        refetchType: "active",
+        refetchType: "all", // Refetch all, not just active
       });
 
-      // Force immediate refetch
+      // Force immediate refetch with timeout to ensure execution
+      setTimeout(() => {
+        queryClient.refetchQueries({
+          queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
+          exact: true,
+        });
+      }, 100);
+
+      // Also trigger immediate refetch without timeout
       queryClient.refetchQueries({
         queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
         exact: true,

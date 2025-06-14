@@ -24,7 +24,6 @@ import {
 import {
   useComponentOptimizations,
   useDebouncedCallback,
-  useThrottledCallback,
   useExpensiveComputation,
 } from "@common/hooks/usePerformanceOptimizations";
 
@@ -62,39 +61,29 @@ const Inbox: React.FC = memo(() => {
   // Initialize pendingTagUpdates with tagIds from URL
   const [pendingTagUpdates, setPendingTagUpdates] = useState<string[]>(tagIds);
 
-  // Debounced filter state for preventing rapid refetches
-  const [debouncedFilter, setDebouncedFilter] = useState(filter);
-  const [debouncedSourceFilter, setDebouncedSourceFilter] =
-    useState(sourceFilter);
-  const [debouncedTimeRange, setDebouncedTimeRange] = useState(timeRange);
+  // Remove debouncing for source filters to fix race conditions
+  // Only debounce search/text input, not dropdown selections
   const [debouncedTagUpdates, setDebouncedTagUpdates] =
     useState(pendingTagUpdates);
 
-  // Cache for filtered results to share between filter states
-  const filterCacheRef = useRef<Map<string, NewsletterWithRelations[]>>(
-    new Map(),
-  );
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Custom debounce effect for filter changes
+  // Simplified debounce effect only for tag updates
   useEffect(() => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
 
     debounceTimeoutRef.current = setTimeout(() => {
-      setDebouncedFilter(filter);
-      setDebouncedSourceFilter(sourceFilter);
-      setDebouncedTimeRange(timeRange);
       setDebouncedTagUpdates([...pendingTagUpdates]);
-    }, 300); // 300ms debounce delay
+    }, 300); // 300ms debounce delay only for tags
 
     return () => {
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [filter, sourceFilter, timeRange, pendingTagUpdates]);
+  }, [pendingTagUpdates]);
 
   // Sync pendingTagUpdates with URL changes
   useEffect(() => {
@@ -129,89 +118,79 @@ const Inbox: React.FC = memo(() => {
   const { readingQueue, removeFromQueue } = useReadingQueue();
   const { newsletterSources = [] } = useNewsletterSources();
 
-  // Build newsletter filter object with performance optimization
-  const newsletterFilter = useExpensiveComputation(
-    (deps) => {
-      const filters: NewsletterFilter = {};
+  // Build newsletter filter object with immediate updates for dropdowns
+  const newsletterFilter = useMemo(() => {
+    const filters: NewsletterFilter = {};
 
-      // Handle status filter
-      switch (deps.debouncedFilter) {
-        case "unread":
-          filters.isRead = false;
-          filters.isArchived = false;
+    // Handle status filter - immediate update
+    switch (filter) {
+      case "unread":
+        filters.isRead = false;
+        filters.isArchived = false;
+        break;
+      case "liked":
+        filters.isLiked = true;
+        filters.isArchived = false;
+        break;
+      case "archived":
+        filters.isArchived = true;
+        break;
+      case "all":
+      default:
+        filters.isArchived = false;
+        break;
+    }
+
+    // Handle source filter - immediate update
+    if (sourceFilter) {
+      filters.sourceIds = [sourceFilter];
+    }
+
+    // Handle tag filter - use debounced value
+    if (debouncedTagUpdates.length > 0) {
+      filters.tagIds = debouncedTagUpdates;
+    }
+
+    // Handle time range filter - immediate update
+    if (timeRange && timeRange !== "all") {
+      const now = new Date();
+      let dateFrom: Date;
+
+      switch (timeRange) {
+        case "day":
+          dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           break;
-        case "liked":
-          filters.isLiked = true;
-          filters.isArchived = false;
+        case "week":
+          dateFrom = subWeeks(now, 1);
           break;
-        case "archived":
-          filters.isArchived = true;
+        case "month":
+          dateFrom = subMonths(now, 1);
           break;
-        case "all":
+        case "2days":
+          dateFrom = subDays(now, 2);
+          break;
         default:
-          filters.isArchived = false;
-          break;
+          dateFrom = subDays(now, 7);
       }
 
-      // Handle source filter
-      if (deps.debouncedSourceFilter) {
-        filters.sourceIds = [deps.debouncedSourceFilter];
-      }
+      filters.dateFrom = dateFrom.toISOString();
+    }
 
-      // Handle tag filter
-      if (deps.debouncedTagUpdates.length > 0) {
-        filters.tagIds = deps.debouncedTagUpdates;
-      }
+    console.log("📋 Newsletter filter computed (immediate):", {
+      originalSourceFilter: sourceFilter,
+      filters,
+      immediate: {
+        filter,
+        sourceFilter,
+        timeRange,
+      },
+      debounced: {
+        debouncedTagUpdates,
+      },
+    });
 
-      // Handle time range filter
-      if (deps.debouncedTimeRange && deps.debouncedTimeRange !== "all") {
-        const now = new Date();
-        let dateFrom: Date;
-
-        switch (deps.debouncedTimeRange) {
-          case "day":
-            dateFrom = new Date(
-              now.getFullYear(),
-              now.getMonth(),
-              now.getDate(),
-            );
-            break;
-          case "week":
-            dateFrom = subWeeks(now, 1);
-            break;
-          case "month":
-            dateFrom = subMonths(now, 1);
-            break;
-          case "2days":
-            dateFrom = subDays(now, 2);
-            break;
-          default:
-            dateFrom = subDays(now, 7);
-        }
-
-        filters.dateFrom = dateFrom.toISOString();
-      }
-
-      console.log("📋 Newsletter filter computed:", {
-        originalSourceFilter: deps.debouncedSourceFilter,
-        filters,
-        deps: {
-          debouncedFilter: deps.debouncedFilter,
-          debouncedSourceFilter: deps.debouncedSourceFilter,
-          debouncedTagUpdates: deps.debouncedTagUpdates,
-          debouncedTimeRange: deps.debouncedTimeRange,
-        },
-      });
-
-      return filters;
-    },
-    {
-      debouncedFilter,
-      debouncedSourceFilter,
-      debouncedTagUpdates,
-      debouncedTimeRange,
-    },
-  );
+    return filters;
+  }, [filter, sourceFilter, timeRange, debouncedTagUpdates]);
 
   const {
     newsletters = [],
@@ -226,7 +205,6 @@ const Inbox: React.FC = memo(() => {
     console.log("📰 Newsletters data updated:", {
       count: newsletters.length,
       sourceFilter,
-      debouncedSourceFilter,
       isLoading: isLoadingNewsletters,
       newsletters: newsletters.map((n) => ({
         id: n.id,
@@ -234,8 +212,11 @@ const Inbox: React.FC = memo(() => {
         sourceId: n.newsletter_source_id,
         sourceName: n.source?.name,
       })),
+      filterMatch: sourceFilter
+        ? newsletters.every((n) => n.newsletter_source_id === sourceFilter)
+        : true,
     });
-  }, [newsletters, sourceFilter, debouncedSourceFilter, isLoadingNewsletters]);
+  }, [newsletters, sourceFilter, isLoadingNewsletters]);
   const { user } = useAuth();
 
   // Shared newsletter action handlers
@@ -304,7 +285,7 @@ const Inbox: React.FC = memo(() => {
       ];
 
       preWarmFilters.forEach(({ filter: filterType, priority }) => {
-        if (filterType !== debouncedFilter) {
+        if (filterType !== filter) {
           // Warm cache for other filters in background
           setTimeout(() => {
             cacheManager.warmCache(user.id, priority);
@@ -312,35 +293,35 @@ const Inbox: React.FC = memo(() => {
         }
       });
     }
-  }, [cacheManager, user?.id, newsletters.length, debouncedFilter]);
+  }, [cacheManager, user?.id, newsletters.length, filter]);
 
-  // Handle source filter change with proper type and throttling
-  const handleSourceFilterChange = useThrottledCallback(
-    optimizedCallback((sourceId: string | null) => {
+  // Handle source filter change immediately without throttling
+  const handleSourceFilterChange = useCallback(
+    (sourceId: string | null) => {
       console.log("🔍 Source filter changing:", {
         from: sourceFilter,
         to: sourceId,
       });
       setSourceFilter(sourceId);
-    }, []),
-    150,
+    },
+    [sourceFilter],
   );
 
-  // Update URL when debounced filters change
+  // Update URL when filters change - immediate for dropdowns, debounced for tags
   useEffect(() => {
     const newParams = new URLSearchParams();
-    if (debouncedFilter !== "all") newParams.set("filter", debouncedFilter);
-    if (debouncedSourceFilter) newParams.set("source", debouncedSourceFilter);
-    if (debouncedTimeRange !== "all") newParams.set("time", debouncedTimeRange);
+    if (filter !== "all") newParams.set("filter", filter);
+    if (sourceFilter) newParams.set("source", sourceFilter);
+    if (timeRange !== "all") newParams.set("time", timeRange);
     if (debouncedTagUpdates.length > 0)
       newParams.set("tags", debouncedTagUpdates.join(","));
     if (newParams.toString() !== searchParams.toString()) {
       setSearchParams(newParams, { replace: true });
     }
   }, [
-    debouncedFilter,
-    debouncedSourceFilter,
-    debouncedTimeRange,
+    filter,
+    sourceFilter,
+    timeRange,
     debouncedTagUpdates,
     searchParams,
     setSearchParams,
@@ -595,116 +576,9 @@ const Inbox: React.FC = memo(() => {
       .filter((tag): tag is Tag => tag !== undefined);
   }, [debouncedTagUpdates, allUniqueTags]);
 
-  // Memoized base filtered newsletters by time range for cache sharing
-  const timeFilteredNewsletters = useMemo(() => {
-    if (!newsletters) return [];
-    if (!debouncedTimeRange || debouncedTimeRange === "all") return newsletters;
-
-    const cacheKey = `time-${debouncedTimeRange}-source-${debouncedSourceFilter || "all"}`;
-    const cached = filterCacheRef.current.get(cacheKey);
-    if (cached && cached.length > 0) return cached;
-
-    const now = new Date();
-    let startDate: Date;
-    switch (debouncedTimeRange) {
-      case "day":
-        startDate = subDays(now, 1);
-        break;
-      case "2days":
-        startDate = subDays(now, 2);
-        break;
-      case "week":
-        startDate = subWeeks(now, 1);
-        break;
-      case "month":
-        startDate = subMonths(now, 1);
-        break;
-      default:
-        startDate = new Date(0);
-    }
-
-    const filtered = newsletters.filter(
-      (newsletter: NewsletterWithRelations) => {
-        const receivedDate = new Date(newsletter.received_at);
-        return receivedDate >= startDate;
-      },
-    );
-
-    filterCacheRef.current.set(cacheKey, filtered);
-    return filtered;
-  }, [newsletters, debouncedTimeRange, debouncedSourceFilter]);
-
-  // Memoized status filtered newsletters
-  const statusFilteredNewsletters = useMemo(() => {
-    const cacheKey = `status-${debouncedFilter}-time-${debouncedTimeRange}-source-${debouncedSourceFilter || "all"}`;
-    const cached = filterCacheRef.current.get(cacheKey);
-    if (cached) return cached;
-
-    let filtered: NewsletterWithRelations[];
-    if (debouncedFilter === "unread") {
-      filtered = timeFilteredNewsletters.filter(
-        (newsletter: NewsletterWithRelations) => !newsletter.is_read,
-      );
-    } else if (debouncedFilter === "liked") {
-      filtered = timeFilteredNewsletters.filter(
-        (newsletter: NewsletterWithRelations) => newsletter.is_liked,
-      );
-    } else if (debouncedFilter === "archived") {
-      filtered = timeFilteredNewsletters.filter(
-        (newsletter: NewsletterWithRelations) => newsletter.is_archived,
-      );
-    } else {
-      filtered = timeFilteredNewsletters.filter(
-        (newsletter: NewsletterWithRelations) => !newsletter.is_archived,
-      );
-    }
-
-    filterCacheRef.current.set(cacheKey, filtered);
-    return filtered;
-  }, [
-    timeFilteredNewsletters,
-    debouncedFilter,
-    debouncedTimeRange,
-    debouncedSourceFilter,
-  ]);
-
-  // Final filtered newsletters with tag filtering and sorting
+  // Use newsletters directly from API (server-side filtering replaces client-side)
   const filteredNewsletters = useMemo(() => {
-    const selectedTagIds = debouncedTagUpdates;
-    const cacheKey = `final-${debouncedFilter}-${debouncedTimeRange}-${debouncedSourceFilter || "all"}-${selectedTagIds.join(",")}`;
-    const cached = filterCacheRef.current.get(cacheKey);
-    if (cached) return cached;
-
-    let filtered = [...statusFilteredNewsletters];
-
-    if (selectedTagIds.length > 0) {
-      filtered = filtered.filter((newsletter: NewsletterWithRelations) =>
-        selectedTagIds.every((tagId: string) =>
-          (newsletter.tags || []).some((tag: Tag) => tag?.id === tagId),
-        ),
-      );
-    }
-
-    const sorted = filtered.sort((a, b) => {
-      const dateDiff =
-        new Date(b.received_at).getTime() - new Date(a.received_at).getTime();
-      if (dateDiff !== 0) return dateDiff;
-      return a.id.localeCompare(b.id);
-    });
-
-    filterCacheRef.current.set(cacheKey, sorted);
-    return sorted;
-  }, [
-    statusFilteredNewsletters,
-    debouncedFilter,
-    debouncedTimeRange,
-    debouncedSourceFilter,
-    debouncedTagUpdates,
-  ]);
-
-  // Clear cache when newsletters data changes
-  useEffect(() => {
-    filterCacheRef.current.clear();
+    return newsletters || [];
   }, [newsletters]);
 
   // Toast auto-dismiss
@@ -1059,7 +933,7 @@ const Inbox: React.FC = memo(() => {
         </div>
         <div>Filter: {filter}</div>
         <div>Source Filter: {sourceFilter || "None"}</div>
-        <div>Debounced Source Filter: {debouncedSourceFilter || "None"}</div>
+        <div>Newsletter Filter Applied: {JSON.stringify(newsletterFilter)}</div>
         <div>Time Range: {timeRange}</div>
         <div>Tag IDs: {tagIds.length > 0 ? tagIds.join(", ") : "None"}</div>
         <div>Fetched Newsletters: {newsletters.length}</div>

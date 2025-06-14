@@ -338,7 +338,11 @@ const NewslettersPage: React.FC = () => {
     errorTogglingLike,
     bulkArchive,
     refetchNewsletters,
-  } = useNewsletters(newsletterFilter, { debug: true });
+  } = useNewsletters(newsletterFilter, {
+    debug: true,
+    refetchOnWindowFocus: false,
+    staleTime: 0, // Force fresh data on filter changes
+  });
 
   // Shared newsletter action handlers
   const {
@@ -364,17 +368,34 @@ const NewslettersPage: React.FC = () => {
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
 
   // Debug newsletters data
+  // Debug fetched newsletters and trigger refetch on filter changes
   useEffect(() => {
     console.log("📨 Fetched newsletters updated:", {
       count: fetchedNewsletters.length,
       selectedSourceId,
+      selectedGroupId,
       newsletters: fetchedNewsletters.map((n) => ({
         id: n.id,
         title: n.title,
         sourceId: n.newsletter_source_id,
       })),
     });
-  }, [fetchedNewsletters, selectedSourceId]);
+  }, [fetchedNewsletters, selectedSourceId, selectedGroupId]);
+
+  // Force refetch when filters change to ensure fresh data
+  useEffect(() => {
+    console.log("🔄 Filter changed, refetching newsletters...", {
+      selectedSourceId,
+      selectedGroupId,
+      selectedGroupSourceIds,
+    });
+    refetchNewsletters();
+  }, [
+    selectedSourceId,
+    selectedGroupId,
+    selectedGroupSourceIds,
+    refetchNewsletters,
+  ]);
 
   const handleTagClick = useCallback(
     (tag: Tag, e: React.MouseEvent) => {
