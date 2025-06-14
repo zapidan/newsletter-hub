@@ -28,6 +28,7 @@ export interface NewsletterSource {
   updated_at: string;
   is_archived?: boolean;
   newsletter_count?: number;
+  unread_count?: number;
 }
 
 export interface Newsletter {
@@ -44,6 +45,7 @@ export interface Newsletter {
   is_bookmarked?: boolean;
   user_id: string;
   newsletter_source_id?: string | null;
+  source_id?: string | null;
   source: NewsletterSource | null;
   tags?: Tag[];
   word_count: number;

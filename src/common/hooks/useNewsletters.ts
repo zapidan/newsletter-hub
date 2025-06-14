@@ -310,6 +310,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, id) => {
       cacheManager.invalidateRelatedQueries([id], "mark-as-read");
+      // Invalidate unread count queries - handled by real-time subscriptions
     },
   });
 
@@ -365,6 +366,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, id) => {
       cacheManager.invalidateRelatedQueries([id], "mark-as-unread");
+      // Invalidate unread count queries - handled by real-time subscriptions
     },
   });
 
@@ -431,6 +433,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-read");
+      // Invalidate unread count queries - handled by real-time subscriptions
     },
   });
 
@@ -497,6 +500,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-unread");
+      // Invalidate unread count queries - handled by real-time subscriptions
     },
   });
 

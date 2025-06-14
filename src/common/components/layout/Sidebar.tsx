@@ -1,11 +1,11 @@
-import { NavLink } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  Inbox, 
-  Search, 
-  TrendingUp, 
-  Settings, 
-  Menu, 
+import { NavLink } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  Inbox,
+  Search,
+  TrendingUp,
+  Settings,
+  Menu,
   X,
   Mail,
   Copy,
@@ -13,48 +13,57 @@ import {
   Tag,
   Newspaper,
   Bookmark,
-  CalendarDays
-} from 'lucide-react';
-import { useState } from 'react';
-import { useContext } from 'react';
-import { AuthContext } from '@common/contexts/AuthContext';
-import { useEmailAlias } from '@common/hooks/useEmailAlias';
-import { useUnreadCount } from '@common/hooks/useUnreadCount';
+  CalendarDays,
+} from "lucide-react";
+import { useState } from "react";
+import { useContext } from "react";
+import { AuthContext } from "@common/contexts/AuthContext";
+import { useEmailAlias } from "@common/hooks/useEmailAlias";
+import { useUnreadCount } from "@common/hooks/useUnreadCount";
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const { emailAlias, loading: emailLoading } = useEmailAlias();
-  
+
   const [copied, setCopied] = useState(false);
   // Use the optimized unread count hook
   const { unreadCount, isLoading } = useUnreadCount();
   // Only show the badge after initial load and when count > 0
-  const showUnreadBadge = !isLoading && unreadCount !== undefined && unreadCount > 0;
+  const showUnreadBadge =
+    !isLoading && unreadCount !== undefined && unreadCount > 0;
 
   const copyToClipboard = async () => {
     if (!emailAlias) return;
-    
+
     try {
       await navigator.clipboard.writeText(emailAlias);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy email:', err);
-      alert('Failed to copy email to clipboard');
+      console.error("Failed to copy email:", err);
+      alert("Failed to copy email to clipboard");
     }
   };
 
   const navLinks = [
-    { to: '/inbox', icon: <Inbox size={20} />, label: 'Inbox' },
-    { to: '/queue', icon: <Bookmark size={20} />, label: 'Reading Queue' },
-    { to: '/daily', icon: <CalendarDays size={20} />, label: 'Daily Summary' },
-    { to: '/search', icon: <Search size={20} />, label: 'Search' },
-    { to: '/trending', icon: <TrendingUp size={20} />, label: 'Trending Topics' },
-    { to: '/tags', icon: <Tag size={20} />, label: 'Tags' },
-    { to: '/newsletters', icon: <Newspaper size={20} />, label: 'Newsletter Sources' },
-    { to: '/settings', icon: <Settings size={20} />, label: 'Settings' },
+    { to: "/inbox", icon: <Inbox size={20} />, label: "Inbox" },
+    { to: "/queue", icon: <Bookmark size={20} />, label: "Reading Queue" },
+    { to: "/daily", icon: <CalendarDays size={20} />, label: "Daily Summary" },
+    { to: "/search", icon: <Search size={20} />, label: "Search" },
+    {
+      to: "/trending",
+      icon: <TrendingUp size={20} />,
+      label: "Trending Topics",
+    },
+    { to: "/tags", icon: <Tag size={20} />, label: "Tags" },
+    {
+      to: "/newsletters",
+      icon: <Newspaper size={20} />,
+      label: "Newsletter Sources",
+    },
+    { to: "/settings", icon: <Settings size={20} />, label: "Settings" },
   ];
 
   const toggleSidebar = () => {
@@ -92,21 +101,27 @@ const Sidebar = () => {
             <div className="bg-primary-500 rounded-md p-1.5">
               <Inbox className="text-white" size={18} />
             </div>
-            <h2 className="text-xl font-bold text-neutral-800">Newsletter Hub</h2>
+            <h2 className="text-xl font-bold text-neutral-800">
+              Newsletter Hub
+            </h2>
           </div>
-          
+
           {emailLoading ? (
-            <div className="text-sm text-gray-500 animate-pulse py-2">Loading your email...</div>
+            <div className="text-sm text-gray-500 animate-pulse py-2">
+              Loading your email...
+            </div>
           ) : emailAlias ? (
             <div className="w-full text-sm bg-gray-100 dark:bg-gray-700 rounded-md p-2 flex items-center justify-between">
               <div className="flex items-center flex-1 min-w-0">
                 <Mail className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
-                <span className="font-mono text-xs break-all">{emailAlias}</span>
+                <span className="font-mono text-xs break-all">
+                  {emailAlias}
+                </span>
               </div>
-              <button 
+              <button
                 onClick={copyToClipboard}
                 className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors flex-shrink-0"
-                title={copied ? 'Copied!' : 'Copy to clipboard'}
+                title={copied ? "Copied!" : "Copy to clipboard"}
                 disabled={copied}
               >
                 {copied ? (
@@ -118,53 +133,57 @@ const Sidebar = () => {
             </div>
           ) : null}
         </div>
-        
+
         <nav className="flex-1 p-4 space-y-1">
           {navLinks.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
               className={({ isActive }) => {
-                const isNewsletterDetailPage = window.location.pathname.startsWith('/newsletters/');
+                const isNewsletterDetailPage =
+                  window.location.pathname.startsWith("/newsletters/");
                 // For Inbox link, check if we're on inbox or newsletter detail page
-                if (link.to === '/inbox') {
-                  return `sidebar-link ${isActive || isNewsletterDetailPage ? 'active' : ''}`;
+                if (link.to === "/inbox") {
+                  return `sidebar-link ${isActive || isNewsletterDetailPage ? "active" : ""}`;
                 }
                 // For all other links, only use default isActive behavior if not on a newsletter detail page
-                return `sidebar-link ${!isNewsletterDetailPage && isActive ? 'active' : ''}`;
+                return `sidebar-link ${!isNewsletterDetailPage && isActive ? "active" : ""}`;
               }}
               onClick={(e) => {
                 setIsOpen(false);
                 // If already on inbox, clear filters and refresh
-                if (link.to === '/inbox' && window.location.pathname === '/inbox') {
+                if (
+                  link.to === "/inbox" &&
+                  window.location.pathname === "/inbox"
+                ) {
                   e.preventDefault();
                   // Clear URL params
-                  window.history.replaceState({}, '', '/inbox');
+                  window.history.replaceState({}, "", "/inbox");
                   // Dispatch events to clear filters and refresh
-                  window.dispatchEvent(new Event('inbox:clear-filters'));
-                  window.dispatchEvent(new Event('inbox:refresh-newsletters'));
+                  window.dispatchEvent(new Event("inbox:clear-filters"));
+                  window.dispatchEvent(new Event("inbox:refresh-newsletters"));
                 }
               }}
             >
               {link.icon}
               <span className="flex-1">{link.label}</span>
-              {link.to === '/inbox' && (
-                <span 
+              {link.to === "/inbox" && (
+                <span
                   className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full transition-all duration-200 ${
-                    showUnreadBadge 
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'opacity-0 w-0 px-0 overflow-hidden'
+                    showUnreadBadge
+                      ? "bg-primary-100 text-primary-700"
+                      : "opacity-0 w-0 px-0 overflow-hidden"
                   }`}
                   aria-live="polite"
                   aria-atomic="true"
                 >
-                  {showUnreadBadge ? unreadCount : ''}
+                  {showUnreadBadge ? unreadCount : ""}
                 </span>
               )}
             </NavLink>
           ))}
         </nav>
-        
+
         <div className="p-4 border-t border-neutral-200">
           <div className="text-xs text-neutral-500">
             Connected as

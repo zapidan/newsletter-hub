@@ -221,6 +221,19 @@ const ReadingQueuePage: React.FC = () => {
     navigate("/");
   };
 
+  // Handle newsletter click with proper navigation state
+  const handleNewsletterClick = useCallback(
+    (newsletter: NewsletterWithRelations) => {
+      navigate(`/newsletters/${newsletter.id}`, {
+        state: {
+          fromReadingQueue: true,
+          from: "/queue",
+        },
+      });
+    },
+    [navigate],
+  );
+
   // Handle error state with toast notifications
   React.useEffect(() => {
     if (error) {
@@ -527,6 +540,7 @@ const ReadingQueuePage: React.FC = () => {
                 onToggleArchive={handleToggleArchiveAction}
                 onToggleQueue={toggleInQueue}
                 onTrash={() => {}}
+                onNewsletterClick={handleNewsletterClick}
                 onUpdateTags={async (newsletterId, tagIds) => {
                   try {
                     const queueItem = readingQueue.find(

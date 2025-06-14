@@ -192,6 +192,17 @@ const Inbox: React.FC = memo(() => {
         filters.dateFrom = dateFrom.toISOString();
       }
 
+      console.log("📋 Newsletter filter computed:", {
+        originalSourceFilter: deps.debouncedSourceFilter,
+        filters,
+        deps: {
+          debouncedFilter: deps.debouncedFilter,
+          debouncedSourceFilter: deps.debouncedSourceFilter,
+          debouncedTagUpdates: deps.debouncedTagUpdates,
+          debouncedTimeRange: deps.debouncedTimeRange,
+        },
+      });
+
       return filters;
     },
     {
@@ -209,6 +220,22 @@ const Inbox: React.FC = memo(() => {
     errorNewsletters,
     refetchNewsletters,
   } = useNewsletters(newsletterFilter);
+
+  // Debug newsletters data
+  useEffect(() => {
+    console.log("📰 Newsletters data updated:", {
+      count: newsletters.length,
+      sourceFilter,
+      debouncedSourceFilter,
+      isLoading: isLoadingNewsletters,
+      newsletters: newsletters.map((n) => ({
+        id: n.id,
+        title: n.title,
+        sourceId: n.newsletter_source_id,
+        sourceName: n.source?.name,
+      })),
+    });
+  }, [newsletters, sourceFilter, debouncedSourceFilter, isLoadingNewsletters]);
   const { user } = useAuth();
 
   // Shared newsletter action handlers
@@ -230,6 +257,7 @@ const Inbox: React.FC = memo(() => {
     isBulkArchiving,
     isBulkUnarchiving,
     isBulkDeletingNewsletters,
+    isTogglingLike,
     errorTogglingLike,
     errorTogglingBookmark,
   } = useSharedNewsletterActions({
@@ -289,6 +317,10 @@ const Inbox: React.FC = memo(() => {
   // Handle source filter change with proper type and throttling
   const handleSourceFilterChange = useThrottledCallback(
     optimizedCallback((sourceId: string | null) => {
+      console.log("🔍 Source filter changing:", {
+        from: sourceFilter,
+        to: sourceId,
+      });
       setSourceFilter(sourceId);
     }, []),
     150,
@@ -396,7 +428,14 @@ const Inbox: React.FC = memo(() => {
 
   const handleToggleLikeWrapper = useCallback(
     async (newsletter: NewsletterWithRelations) => {
-      await handleToggleLike(newsletter);
+      try {
+        await handleToggleLike(newsletter);
+        // Dispatch event for unread count updates
+        window.dispatchEvent(new CustomEvent("newsletter:like-status-changed"));
+      } catch (error) {
+        console.error("Error toggling like:", error);
+        // Error is already handled by shared actions, don't rethrow
+      }
     },
     [handleToggleLike],
   );
@@ -561,7 +600,7 @@ const Inbox: React.FC = memo(() => {
     if (!newsletters) return [];
     if (!debouncedTimeRange || debouncedTimeRange === "all") return newsletters;
 
-    const cacheKey = `time-${debouncedTimeRange}`;
+    const cacheKey = `time-${debouncedTimeRange}-source-${debouncedSourceFilter || "all"}`;
     const cached = filterCacheRef.current.get(cacheKey);
     if (cached && cached.length > 0) return cached;
 
@@ -593,11 +632,11 @@ const Inbox: React.FC = memo(() => {
 
     filterCacheRef.current.set(cacheKey, filtered);
     return filtered;
-  }, [newsletters, debouncedTimeRange]);
+  }, [newsletters, debouncedTimeRange, debouncedSourceFilter]);
 
   // Memoized status filtered newsletters
   const statusFilteredNewsletters = useMemo(() => {
-    const cacheKey = `status-${debouncedFilter}-time-${debouncedTimeRange}`;
+    const cacheKey = `status-${debouncedFilter}-time-${debouncedTimeRange}-source-${debouncedSourceFilter || "all"}`;
     const cached = filterCacheRef.current.get(cacheKey);
     if (cached) return cached;
 
@@ -622,12 +661,17 @@ const Inbox: React.FC = memo(() => {
 
     filterCacheRef.current.set(cacheKey, filtered);
     return filtered;
-  }, [timeFilteredNewsletters, debouncedFilter, debouncedTimeRange]);
+  }, [
+    timeFilteredNewsletters,
+    debouncedFilter,
+    debouncedTimeRange,
+    debouncedSourceFilter,
+  ]);
 
   // Final filtered newsletters with tag filtering and sorting
   const filteredNewsletters = useMemo(() => {
     const selectedTagIds = debouncedTagUpdates;
-    const cacheKey = `final-${debouncedFilter}-${debouncedTimeRange}-${selectedTagIds.join(",")}`;
+    const cacheKey = `final-${debouncedFilter}-${debouncedTimeRange}-${debouncedSourceFilter || "all"}-${selectedTagIds.join(",")}`;
     const cached = filterCacheRef.current.get(cacheKey);
     if (cached) return cached;
 
@@ -654,6 +698,7 @@ const Inbox: React.FC = memo(() => {
     statusFilteredNewsletters,
     debouncedFilter,
     debouncedTimeRange,
+    debouncedSourceFilter,
     debouncedTagUpdates,
   ]);
 
@@ -1077,7 +1122,15 @@ const Inbox: React.FC = memo(() => {
       <div
         className={`${selectedTags.length > 0 ? "pt-2" : "pt-6"} px-6 pb-6 overflow-auto`}
       >
-        {filteredNewsletters.length === 0 ? (
+        {isLoadingNewsletters ? (
+          <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+            <p className="text-base text-neutral-400">Loading newsletters...</p>
+          </div>
+        ) : filteredNewsletters.length === 0 &&
+          !isTogglingLike &&
+          !errorTogglingLike &&
+          !errorTogglingBookmark ? (
           <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
             <Mail className="mx-auto h-14 w-14 mb-4 text-blue-300" />
             <h2 className="text-xl font-semibold mb-2">
@@ -1087,10 +1140,14 @@ const Inbox: React.FC = memo(() => {
                   ? "No liked newsletters"
                   : filter === "archived"
                     ? "No archived newsletters"
-                    : "No newsletters found"}
+                    : sourceFilter
+                      ? "No newsletters found for this source"
+                      : "No newsletters found"}
             </h2>
             <p className="text-base text-neutral-400">
-              Try adjusting your filters or check back later.
+              {sourceFilter
+                ? "Try selecting a different source or adjusting your filters."
+                : "Try adjusting your filters or check back later."}
             </p>
           </div>
         ) : (
@@ -1127,7 +1184,12 @@ const Inbox: React.FC = memo(() => {
                 visibleTags={visibleTags}
                 readingQueue={readingQueue}
                 isDeletingNewsletter={isDeletingNewsletter || false}
-                loadingStates={loadingStates}
+                loadingStates={{
+                  ...loadingStates,
+                  [newsletter.id]: isTogglingLike
+                    ? "like"
+                    : loadingStates[newsletter.id],
+                }}
                 errorTogglingLike={errorTogglingLike}
                 errorTogglingBookmark={errorTogglingBookmark}
               />

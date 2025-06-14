@@ -4,19 +4,13 @@ import {
   requireAuth,
   withPerformanceLogging,
 } from "./supabaseClient";
-import {
-  NewsletterWithRelations,
-  Newsletter,
-  NewsletterSource,
-  Tag,
-} from "../types";
+import { NewsletterWithRelations } from "../types";
 import {
   NewsletterQueryParams,
   CreateNewsletterParams,
   UpdateNewsletterParams,
   BulkUpdateNewsletterParams,
   PaginatedResponse,
-  CrudOperations,
   BatchResult,
 } from "../types/api";
 
@@ -500,6 +494,58 @@ export const newsletterApi = {
       return stats;
     });
   },
+
+  // Count newsletters by source
+  async countBySource(): Promise<Record<string, number>> {
+    return withPerformanceLogging("newsletters.countBySource", async () => {
+      const user = await requireAuth();
+
+      const { data, error } = await supabase
+        .from("newsletters")
+        .select("newsletter_source_id")
+        .eq("user_id", user.id)
+        .eq("is_archived", false);
+
+      if (error) handleSupabaseError(error);
+
+      const counts: Record<string, number> = {};
+
+      data?.forEach((newsletter) => {
+        const sourceId = newsletter.newsletter_source_id || "unknown";
+        counts[sourceId] = (counts[sourceId] || 0) + 1;
+      });
+
+      return counts;
+    });
+  },
+
+  // Get unread counts grouped by source
+  async getUnreadCountBySource(): Promise<Record<string, number>> {
+    return withPerformanceLogging(
+      "newsletters.getUnreadCountBySource",
+      async () => {
+        const user = await requireAuth();
+
+        const { data, error } = await supabase
+          .from("newsletters")
+          .select("newsletter_source_id")
+          .eq("user_id", user.id)
+          .eq("is_read", false)
+          .eq("is_archived", false);
+
+        if (error) handleSupabaseError(error);
+
+        const unreadCounts: Record<string, number> = {};
+
+        data?.forEach((newsletter) => {
+          const sourceId = newsletter.newsletter_source_id || "unknown";
+          unreadCounts[sourceId] = (unreadCounts[sourceId] || 0) + 1;
+        });
+
+        return unreadCounts;
+      },
+    );
+  },
 };
 
 // Export individual functions for backward compatibility
@@ -521,6 +567,8 @@ export const {
   getBySource: getNewslettersBySource,
   search: searchNewsletters,
   getStats: getNewsletterStats,
+  countBySource,
+  getUnreadCountBySource,
 } = newsletterApi;
 
 export default newsletterApi;

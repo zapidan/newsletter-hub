@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { useUnreadCountsBySource } from "@common/hooks/useUnreadCount";
 
 interface NewsletterSource {
   id: string;
   name: string;
+  unread_count?: number;
   // Add other source properties as needed
 }
 
@@ -18,12 +20,13 @@ export function SourceFilterDropdown({
   sources,
   selectedSourceId,
   onSourceSelect,
-  className = ''
+  className = "",
 }: SourceFilterDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { unreadCountsBySource } = useUnreadCountsBySource();
 
-  const selectedSource = selectedSourceId 
-    ? sources.find(s => s.id === selectedSourceId) 
+  const selectedSource = selectedSourceId
+    ? sources.find((s) => s.id === selectedSourceId)
     : null;
 
   return (
@@ -37,23 +40,25 @@ export function SourceFilterDropdown({
         }}
         className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-full transition-all duration-200 ${
           selectedSource
-            ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' 
-            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+            ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
+            : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
         }`}
       >
         <span>
-          {selectedSource 
-            ? `Source: ${selectedSource.name}` 
-            : 'Filter by Source'}
+          {selectedSource
+            ? `Source: ${selectedSource.name}`
+            : "Filter by Source"}
         </span>
-        <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} />
+        <ChevronDown
+          className={`h-4 w-4 transition-transform ${isOpen ? "transform rotate-180" : ""}`}
+        />
       </button>
-      
+
       {isOpen && (
         <>
           {/* Backdrop to close dropdown when clicking outside */}
-          <div 
-            className="fixed inset-0 z-40" 
+          <div
+            className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
           {/* Dropdown menu positioned relative to button */}
@@ -68,9 +73,9 @@ export function SourceFilterDropdown({
                   setIsOpen(false);
                 }}
                 className={`w-full text-left px-4 py-2 text-sm ${
-                  !selectedSourceId 
-                    ? 'bg-blue-50 text-blue-800 font-medium' 
-                    : 'text-gray-700 hover:bg-gray-100'
+                  !selectedSourceId
+                    ? "bg-blue-50 text-blue-800 font-medium"
+                    : "text-gray-700 hover:bg-gray-100"
                 }`}
               >
                 All Sources
@@ -87,11 +92,19 @@ export function SourceFilterDropdown({
                   }}
                   className={`w-full text-left px-4 py-2 text-sm ${
                     selectedSourceId === source.id
-                      ? 'bg-blue-50 text-blue-800 font-medium' 
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? "bg-blue-50 text-blue-800 font-medium"
+                      : "text-gray-700 hover:bg-gray-100"
                   }`}
                 >
-                  {source.name}
+                  <div className="flex items-center justify-between">
+                    <span>{source.name}</span>
+                    {unreadCountsBySource[source.id] &&
+                      unreadCountsBySource[source.id] > 0 && (
+                        <span className="bg-primary-100 text-primary-700 text-xs font-medium px-1.5 py-0.5 rounded-full ml-2">
+                          {unreadCountsBySource[source.id]}
+                        </span>
+                      )}
+                  </div>
                 </button>
               ))}
             </div>

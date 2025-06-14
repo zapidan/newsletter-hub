@@ -51,35 +51,60 @@ export class SharedNewsletterActionHandlers {
   ): Promise<T> {
     const opts = { ...this.defaultOptions, ...options };
     let originalData: NewsletterWithRelations | null = null;
+    let optimisticUpdateApplied = false;
 
     try {
       // Apply optimistic update if enabled
       if (opts.optimisticUpdates) {
-        originalData = await this.cacheManager.optimisticUpdate(
-          newsletterId,
-          updates,
-          operationType,
-        );
+        try {
+          originalData = await this.cacheManager.optimisticUpdate(
+            newsletterId,
+            updates,
+            operationType,
+          );
+          optimisticUpdateApplied = true;
+        } catch (optimisticError) {
+          console.warn("Failed to apply optimistic update:", optimisticError);
+          // Continue without optimistic update
+        }
       }
 
       // Perform the actual operation
       const result = await operation();
 
-      // Invalidate related queries to ensure consistency
-      await this.cacheManager.invalidateRelatedQueries(
-        [newsletterId],
-        operationType,
-      );
+      // Use gentle invalidation to prevent UI flashing
+      setTimeout(async () => {
+        await this.cacheManager.invalidateRelatedQueries(
+          [newsletterId],
+          operationType,
+        );
+      }, 100);
+
+      // Dispatch custom events for real-time updates
+      if (operationType === "mark-read" || operationType === "mark-unread") {
+        window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+      } else if (operationType === "archive" || operationType === "unarchive") {
+        window.dispatchEvent(new CustomEvent("newsletter:archived"));
+      }
 
       opts.onSuccess?.();
       return result;
     } catch (error) {
       // Revert optimistic update on error
-      if (opts.optimisticUpdates && originalData) {
-        this.cacheManager.updateNewsletterInCache({
-          id: newsletterId,
-          updates: originalData,
-        });
+      if (optimisticUpdateApplied && originalData) {
+        try {
+          this.cacheManager.updateNewsletterInCache({
+            id: newsletterId,
+            updates: originalData,
+          });
+        } catch (revertError) {
+          console.warn("Failed to revert optimistic update:", revertError);
+          // Force refresh if revert fails
+          await this.cacheManager.invalidateRelatedQueries(
+            [newsletterId],
+            "error-recovery",
+          );
+        }
       }
 
       const errorMessage =
@@ -103,30 +128,42 @@ export class SharedNewsletterActionHandlers {
     options: NewsletterActionOptions = {},
   ): Promise<T> {
     const opts = { ...this.defaultOptions, ...options };
+    let optimisticUpdateApplied = false;
 
     try {
       // Apply bulk optimistic updates if enabled
       if (opts.optimisticUpdates) {
-        this.cacheManager.batchUpdateNewsletters(
-          newsletterIds.map((id) => ({ id, updates })),
-        );
+        try {
+          this.cacheManager.batchUpdateNewsletters(
+            newsletterIds.map((id) => ({ id, updates })),
+          );
+          optimisticUpdateApplied = true;
+        } catch (optimisticError) {
+          console.warn(
+            "Failed to apply bulk optimistic update:",
+            optimisticError,
+          );
+          // Continue without optimistic update
+        }
       }
 
       // Perform the actual operation
       const result = await operation();
 
-      // Invalidate related queries to ensure consistency
-      await this.cacheManager.invalidateRelatedQueries(
-        newsletterIds,
-        operationType,
-      );
+      // Use gentle invalidation to prevent UI flashing for bulk operations
+      setTimeout(async () => {
+        await this.cacheManager.invalidateRelatedQueries(
+          newsletterIds,
+          operationType,
+        );
+      }, 150);
 
       opts.onSuccess?.();
       return result;
     } catch (error) {
       // For bulk operations, we invalidate the entire cache on error
       // as reverting individual optimistic updates is complex
-      if (opts.optimisticUpdates) {
+      if (optimisticUpdateApplied) {
         await this.cacheManager.invalidateRelatedQueries(
           newsletterIds,
           "error-recovery",
@@ -195,18 +232,26 @@ export class SharedNewsletterActionHandlers {
     const newLikedState = !newsletter.is_liked;
     return this.withOptimisticUpdate(
       newsletter.id,
-      { is_liked: newLikedState },
+      {
+        is_liked: newLikedState,
+        updated_at: new Date().toISOString(),
+      },
       () => this.handlers.toggleLike(newsletter.id),
       "toggle-like",
       {
         ...options,
+        optimisticUpdates: true, // Always use optimistic updates for like
         onSuccess: () => {
           if (options?.showToasts !== false) {
             toast.success(
               newLikedState ? "Added to liked" : "Removed from liked",
             );
           }
-          options?.onSuccess?.(newsletter);
+          options?.onSuccess?.({
+            ...newsletter,
+            is_liked: newLikedState,
+            updated_at: new Date().toISOString(),
+          });
         },
       },
     );

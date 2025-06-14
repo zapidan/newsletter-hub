@@ -62,6 +62,12 @@ export const queryKeyFactory = {
     sources: () => [...queryKeyFactory.newsletters.all(), "sources"] as const,
     source: (sourceId: string) =>
       [...queryKeyFactory.newsletters.sources(), sourceId] as const,
+    sourceCounts: () =>
+      [...queryKeyFactory.newsletters.all(), "source-counts"] as const,
+    unreadCounts: () =>
+      [...queryKeyFactory.newsletters.all(), "unread-counts"] as const,
+    unreadCountsBySource: () =>
+      [...queryKeyFactory.newsletters.unreadCounts(), "by-source"] as const,
   },
 
   // Reading queue keys
@@ -105,6 +111,14 @@ export const queryKeyFactory = {
         sourceId,
         "newsletters",
       ] as const,
+
+    // Keys for unread counts by source
+    unreadCountsBySource: () =>
+      [...queryKeyFactory.newsletters.unreadCountsBySource()] as const,
+
+    // Keys for newsletter counts by source
+    newsletterCountsBySource: () =>
+      [...queryKeyFactory.newsletters.sourceCounts()] as const,
   },
 
   // Utility functions for query key matching

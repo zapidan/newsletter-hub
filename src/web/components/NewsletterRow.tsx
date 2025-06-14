@@ -20,6 +20,7 @@ interface NewsletterRowProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onToggleLike: (newsletter: NewsletterWithRelations) => Promise<void>;
+  onToggleBookmark: (newsletter: NewsletterWithRelations) => Promise<void>;
   onToggleArchive: (id: string) => Promise<void>;
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
@@ -37,6 +38,7 @@ interface NewsletterRowProps {
   isDeletingNewsletter: boolean;
   loadingStates?: Record<string, string>;
   errorTogglingLike?: Error | null;
+  errorTogglingBookmark?: Error | null;
   isUpdatingTags?: boolean;
 }
 
@@ -45,6 +47,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   isSelected = false,
   onToggleSelect,
   onToggleLike,
+  onToggleBookmark,
   onToggleArchive,
   onToggleRead,
   onTrash,
@@ -61,6 +64,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   isDeletingNewsletter = false,
   loadingStates = {},
   errorTogglingLike,
+  errorTogglingBookmark,
   isUpdatingTags = false,
 }) => {
   const navigate = useNavigate();
@@ -264,13 +268,27 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                     ? "text-red-500"
                     : "text-gray-400 hover:text-red-500"
                 } ${errorTogglingLike ? "opacity-50 cursor-not-allowed" : ""}`}
-                onClick={async (e) => {
+                onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
-                  try {
-                    await onToggleLike(newsletter);
-                  } catch (error) {
-                    console.error("Error toggling like:", error);
+
+                  // Prevent multiple clicks
+                  if (
+                    loadingStates[newsletter.id] === "like" ||
+                    errorTogglingLike
+                  ) {
+                    return;
                   }
+
+                  // Handle like toggle with proper error handling
+                  Promise.resolve(onToggleLike(newsletter))
+                    .then(() => {
+                      // Success - UI should update via optimistic updates
+                    })
+                    .catch((error) => {
+                      console.error("Error toggling like:", error);
+                      // Error handling is done by the shared action handlers
+                    });
                 }}
                 disabled={
                   !!errorTogglingLike || loadingStates[newsletter.id] === "like"

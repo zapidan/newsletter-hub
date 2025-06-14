@@ -16,6 +16,7 @@ import {
   useNewsletterSourceGroups,
   useReadingQueue,
 } from "@common/hooks";
+import { useUnreadCountsBySource } from "@common/hooks/useUnreadCount";
 
 import { newsletterApi } from "@common/api";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
@@ -77,6 +78,8 @@ const NewslettersPage: React.FC = () => {
     archiveNewsletterSource,
     isArchivingSource,
   } = useNewsletterSources();
+
+  const { unreadCountsBySource } = useUnreadCountsBySource();
 
   useEffect(() => {
     if (newsletterSources && newsletterSources.length > 0) {
@@ -279,32 +282,39 @@ const NewslettersPage: React.FC = () => {
 
   const { readingQueue } = useReadingQueue();
 
+  // Build newsletter filter for debugging
+  const newsletterFilter = useMemo(() => {
+    const filter = {
+      isArchived: false, // Explicitly exclude archived newsletters
+      sourceIds: selectedSourceId
+        ? [selectedSourceId]
+        : selectedGroupId
+          ? selectedGroupSourceIds
+          : undefined,
+    };
+
+    console.log("📰 NewslettersPage filter:", {
+      selectedSourceId,
+      selectedGroupId,
+      selectedGroupSourceIds,
+      filter,
+    });
+
+    return filter;
+  }, [selectedSourceId, selectedGroupId, selectedGroupSourceIds]);
+
   const {
     newsletters: fetchedNewsletters = [],
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
     errorTogglingLike,
-  } = useNewsletters({
-    status: "all", // Simplified since we're handling archived state separately
-    isArchived: false, // Explicitly exclude archived newsletters
-    groupIds: selectedGroupId ? [selectedGroupId] : undefined,
-    sourceIds: selectedSourceId
-      ? [selectedSourceId]
-      : selectedGroupId
-        ? selectedGroupSourceIds
-        : undefined,
-  }) as {
-    newsletters: NewsletterWithRelations[];
-    isLoadingNewsletters: boolean;
-    isErrorNewsletters: boolean;
-    errorNewsletters: Error | null;
-    errorTogglingLike: Error | null;
-  };
+  } = useNewsletters(newsletterFilter);
 
   // Shared newsletter action handlers
   const {
     handleToggleLike,
+    handleToggleBookmark,
     handleToggleArchive,
     handleToggleRead,
     handleDeleteNewsletter,
@@ -329,13 +339,23 @@ const NewslettersPage: React.FC = () => {
 
   // Update local state when fetchedNewsletters changes, but only if the data is different
   useEffect(() => {
+    console.log("📨 Fetched newsletters updated:", {
+      count: fetchedNewsletters.length,
+      selectedSourceId,
+      newsletters: fetchedNewsletters.map((n) => ({
+        id: n.id,
+        title: n.title,
+        sourceId: n.newsletter_source_id,
+      })),
+    });
+
     if (
       fetchedNewsletters &&
       JSON.stringify(fetchedNewsletters) !== JSON.stringify(newsletters)
     ) {
       setNewsletters(fetchedNewsletters);
     }
-  }, [fetchedNewsletters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchedNewsletters, selectedSourceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTagClick = useCallback(
     (tag: Tag, e: React.MouseEvent) => {
@@ -350,6 +370,13 @@ const NewslettersPage: React.FC = () => {
       await handleToggleLike(newsletter);
     },
     [handleToggleLike],
+  );
+
+  const handleToggleBookmarkWrapper = useCallback(
+    async (newsletter: NewsletterWithRelations) => {
+      await handleToggleBookmark(newsletter);
+    },
+    [handleToggleBookmark],
   );
 
   const handleToggleSelect = useCallback(async () => {
@@ -455,6 +482,19 @@ const NewslettersPage: React.FC = () => {
       });
     },
     [],
+  );
+
+  // Handle newsletter click with proper navigation state
+  const handleNewsletterClick = useCallback(
+    (newsletter: NewsletterWithRelations) => {
+      navigate(`/newsletters/${newsletter.id}`, {
+        state: {
+          fromNewsletterSources: true,
+          from: "/newsletters",
+        },
+      });
+    },
+    [navigate],
   );
 
   useEffect(() => {
@@ -817,7 +857,14 @@ const NewslettersPage: React.FC = () => {
                           : "border-neutral-200"
                       }`}
                       style={{ minHeight: 170 }}
-                      onClick={() => setSelectedSourceId(source.id)}
+                      onClick={() => {
+                        console.log("🎯 Source selected:", {
+                          sourceId: source.id,
+                          sourceName: source.name,
+                          previousSelection: selectedSourceId,
+                        });
+                        setSelectedSourceId(source.id);
+                      }}
                     >
                       {/* Edit/Delete icons on the right, only if allowed */}
                       {showButtons && !(isEditing || isDeleting) && (
@@ -908,16 +955,24 @@ const NewslettersPage: React.FC = () => {
                           {source.domain}
                         </p>
                       </div>
-                      <div className="flex justify-center">
+                      <div className="flex justify-center flex-col gap-1">
                         {isLoadingCounts ? (
                           <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" />
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {source.newsletter_count || 0}{" "}
-                            {source.newsletter_count === 1
-                              ? "newsletter"
-                              : "newsletters"}
-                          </span>
+                          <>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {source.newsletter_count || 0}{" "}
+                              {source.newsletter_count === 1
+                                ? "newsletter"
+                                : "newsletters"}
+                            </span>
+                            {unreadCountsBySource[source.id] &&
+                              unreadCountsBySource[source.id] > 0 && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                  {unreadCountsBySource[source.id]} unread
+                                </span>
+                              )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -961,9 +1016,20 @@ const NewslettersPage: React.FC = () => {
                 </p>
               </div>
             ) : newsletters.length === 0 ? (
-              <p className="text-gray-500 italic">
-                No newsletters found for this source.
-              </p>
+              <div className="text-gray-500 italic">
+                <p>
+                  No newsletters found for this{" "}
+                  {selectedSourceId ? "source" : "group"}.
+                </p>
+                <p className="text-xs mt-1">
+                  Filter:{" "}
+                  {selectedSourceId
+                    ? `Source ID: ${selectedSourceId}`
+                    : selectedGroupId
+                      ? `Group ID: ${selectedGroupId}`
+                      : "None"}
+                </p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {newsletters.map((newsletter: NewsletterWithRelations) => (
@@ -973,6 +1039,7 @@ const NewslettersPage: React.FC = () => {
                     isSelected={false}
                     onToggleSelect={handleToggleSelect}
                     onToggleLike={handleToggleLikeWrapper}
+                    onToggleBookmark={handleToggleBookmarkWrapper}
                     onToggleArchive={handleToggleArchiveWrapper}
                     onToggleRead={handleToggleReadWrapper}
                     onToggleQueue={handleToggleQueueWrapper}
@@ -980,6 +1047,7 @@ const NewslettersPage: React.FC = () => {
                     onToggleTagVisibility={toggleTagVisibility}
                     onUpdateTags={handleUpdateTags}
                     onTagClick={handleTagClick}
+                    onNewsletterClick={handleNewsletterClick}
                     visibleTags={visibleTags}
                     readingQueue={readingQueue}
                     isInReadingQueue={readingQueue.some(

@@ -27,11 +27,36 @@ const NewsletterDetail = memo(() => {
     );
   }, [location.state]);
 
+  // Check if we came from newsletter sources page
+  const isFromNewsletterSources = useMemo(() => {
+    return (
+      location.state?.fromNewsletterSources === true ||
+      location.state?.from === "/newsletters" ||
+      (typeof location.state?.from === "string" &&
+        location.state.from.includes("/newsletters") &&
+        !location.state.from.includes("reading-queue")) ||
+      (typeof document.referrer === "string" &&
+        document.referrer.includes("/newsletters") &&
+        !document.referrer.includes("reading-queue"))
+    );
+  }, [location.state]);
+
+  // Helper function to get the correct back button text
+  const getBackButtonText = useCallback(() => {
+    if (isFromReadingQueue) {
+      return "Back to Reading Queue";
+    } else if (isFromNewsletterSources) {
+      return "Back to Newsletter Sources";
+    } else {
+      return "Back to Inbox";
+    }
+  }, [isFromReadingQueue, isFromNewsletterSources]);
+
   const handleBack = useCallback(() => {
     console.log("Navigation state:", location.state);
     console.log("Document referrer:", document.referrer);
 
-    // Check multiple indicators to determine if we came from reading queue
+    // Check multiple indicators to determine where we came from
     const fromReadingQueue =
       location.state?.fromReadingQueue === true ||
       location.state?.from === "/reading-queue" ||
@@ -40,7 +65,26 @@ const NewsletterDetail = memo(() => {
       (typeof location.state?.from === "string" &&
         location.state.from.includes("reading-queue"));
 
+    const fromNewsletterSources =
+      location.state?.fromNewsletterSources === true ||
+      location.state?.from === "/newsletters" ||
+      (typeof document.referrer === "string" &&
+        document.referrer.includes("/newsletters") &&
+        !document.referrer.includes("reading-queue")) ||
+      (typeof location.state?.from === "string" &&
+        location.state.from.includes("/newsletters") &&
+        !location.state.from.includes("reading-queue"));
+
     console.log("From reading queue:", fromReadingQueue);
+    console.log("From newsletter sources:", fromNewsletterSources);
+
+    // Determine target route
+    let targetRoute = "/inbox";
+    if (fromReadingQueue) {
+      targetRoute = "/queue";
+    } else if (fromNewsletterSources) {
+      targetRoute = "/newsletters";
+    }
 
     // Use window.history to go back first, then navigate if needed
     if (window.history.length > 1) {
@@ -50,14 +94,14 @@ const NewsletterDetail = memo(() => {
       setTimeout(() => {
         if (window.location.pathname === "/newsletters/" + id) {
           // If we're still on the same page, force navigation
-          navigate(fromReadingQueue ? "/reading-queue" : "/inbox", {
+          navigate(targetRoute, {
             replace: true,
           });
         }
       }, 100);
     } else {
       // If no history, navigate directly
-      navigate(fromReadingQueue ? "/reading-queue" : "/inbox", {
+      navigate(targetRoute, {
         replace: true,
       });
     }
@@ -231,7 +275,7 @@ const NewsletterDetail = memo(() => {
           className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
-          {isFromReadingQueue ? "Back to Reading Queue" : "Back to Inbox"}
+          {getBackButtonText()}
         </button>
         <div className="bg-red-100 text-red-700 px-4 py-3 rounded-md mb-6">
           {error}
@@ -251,7 +295,7 @@ const NewsletterDetail = memo(() => {
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
       >
         <ArrowLeft className="h-4 w-4" />
-        {isFromReadingQueue ? "Back to Reading Queue" : "Back to Inbox"}
+        {getBackButtonText()}
       </button>
 
       <div className="flex flex-col lg:flex-row gap-6">
