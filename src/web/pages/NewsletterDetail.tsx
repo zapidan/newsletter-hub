@@ -107,7 +107,7 @@ const NewsletterDetail = memo(() => {
     }
   }, [navigate, location.state, id]);
   const { updateNewsletterTags } = useTags();
-  const { getNewsletter } = useNewsletters(undefined, "all", undefined, []);
+  const { getNewsletter } = useNewsletters({}, { enabled: false });
 
   const { user } = useAuth();
 

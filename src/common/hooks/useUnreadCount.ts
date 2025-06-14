@@ -5,9 +5,9 @@ import { useContext, useEffect, useRef, useMemo } from "react";
 import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
-// Cache time constants (in milliseconds)
-const STALE_TIME = 30 * 1000; // 30 seconds - more frequent updates for unread count
-const CACHE_TIME = 5 * 60 * 1000; // 5 minutes
+// Cache time constants (in milliseconds) - Very short for real-time unread counts
+const STALE_TIME = 5 * 1000; // 5 seconds - very frequent updates for unread count
+const CACHE_TIME = 30 * 1000; // 30 seconds - short cache for immediate updates
 
 export const useUnreadCount = (sourceId?: string | null) => {
   const auth = useContext(AuthContext);
@@ -70,8 +70,8 @@ export const useUnreadCount = (sourceId?: string | null) => {
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     refetchOnReconnect: true,
-    // Keep the previous data while refetching
-    placeholderData: (previousData) => previousData ?? 0,
+    // Don't use placeholder data to ensure fresh updates
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds as backup
   });
 
   // Track initial load
@@ -95,16 +95,24 @@ export const useUnreadCount = (sourceId?: string | null) => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      // Invalidate unread count queries
+      // Force immediate invalidation and refetch
       queryClient.invalidateQueries({
         queryKey: ["unreadCount", user.id],
         exact: false,
+        refetchType: "active",
       });
 
       // Also invalidate source-specific queries
       queryClient.invalidateQueries({
         queryKey: ["unreadCount", user.id, "source"],
         exact: false,
+        refetchType: "active",
+      });
+
+      // Force immediate refetch of current query
+      queryClient.refetchQueries({
+        queryKey,
+        exact: true,
       });
     };
 
@@ -178,10 +186,10 @@ export const useUnreadCountsBySource = () => {
     enabled: !!user,
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-    placeholderData: (previousData) => previousData ?? {},
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
+    refetchInterval: 60 * 1000, // Refetch every minute as backup
   });
 
   // Listen for newsletter updates and invalidate unread counts by source
@@ -189,8 +197,15 @@ export const useUnreadCountsBySource = () => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      // Invalidate unread counts by source
+      // Force immediate invalidation and refetch for unread counts by source
       queryClient.invalidateQueries({
+        queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
+        exact: true,
+        refetchType: "active",
+      });
+
+      // Force immediate refetch
+      queryClient.refetchQueries({
         queryKey: queryKeyFactory.newsletters.unreadCountsBySource(),
         exact: true,
       });

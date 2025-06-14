@@ -180,7 +180,6 @@ const NewslettersPage: React.FC = () => {
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] =
     useState<NewsletterSourceGroup | null>(null);
-  const { bulkArchive } = useNewsletters();
 
   // Reset source selection when group is selected and vice versa
   useEffect(() => {
@@ -225,8 +224,36 @@ const NewslettersPage: React.FC = () => {
   // Get source IDs from selected group for filtering
   const selectedGroupSourceIds = React.useMemo(() => {
     if (!selectedGroupId) return [];
+
     const group = groups.find((g) => g.id === selectedGroupId);
-    return group?.sources?.map((s) => s.id) || [];
+    const sourceIds = group?.sources?.map((s) => s.id) || [];
+
+    console.group("🔍 Selected Group Sources");
+    console.log("Selected Group ID:", selectedGroupId);
+    console.log(
+      "Found Group:",
+      group
+        ? {
+            id: group.id,
+            name: group.name,
+            sourceCount: group.sources?.length || 0,
+            sources: group.sources?.map((s) => ({ id: s.id, name: s.name })),
+          }
+        : "Group not found",
+    );
+    console.log("Source IDs:", sourceIds);
+    console.log(
+      "All Groups:",
+      groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        sourceCount: g.sources?.length || 0,
+        hasSources: !!g.sources?.length,
+      })),
+    );
+    console.groupEnd();
+
+    return sourceIds;
   }, [selectedGroupId, groups]);
 
   // Clear group filter
@@ -293,12 +320,12 @@ const NewslettersPage: React.FC = () => {
           : undefined,
     };
 
-    console.log("📰 NewslettersPage filter:", {
-      selectedSourceId,
-      selectedGroupId,
-      selectedGroupSourceIds,
-      filter,
-    });
+    console.group("📰 NewslettersPage - Building Filter");
+    console.log("Selected Source ID:", selectedSourceId);
+    console.log("Selected Group ID:", selectedGroupId);
+    console.log("Selected Group Source IDs:", selectedGroupSourceIds);
+    console.log("Resulting Filter:", JSON.stringify(filter, null, 2));
+    console.groupEnd();
 
     return filter;
   }, [selectedSourceId, selectedGroupId, selectedGroupSourceIds]);
@@ -309,7 +336,9 @@ const NewslettersPage: React.FC = () => {
     isErrorNewsletters,
     errorNewsletters,
     errorTogglingLike,
-  } = useNewsletters(newsletterFilter);
+    bulkArchive,
+    refetchNewsletters,
+  } = useNewsletters(newsletterFilter, { debug: true });
 
   // Shared newsletter action handlers
   const {
@@ -332,12 +361,9 @@ const NewslettersPage: React.FC = () => {
     },
   });
 
-  const [newsletters, setNewsletters] = useState<NewsletterWithRelations[]>(
-    fetchedNewsletters || [],
-  );
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
 
-  // Update local state when fetchedNewsletters changes, but only if the data is different
+  // Debug newsletters data
   useEffect(() => {
     console.log("📨 Fetched newsletters updated:", {
       count: fetchedNewsletters.length,
@@ -348,14 +374,7 @@ const NewslettersPage: React.FC = () => {
         sourceId: n.newsletter_source_id,
       })),
     });
-
-    if (
-      fetchedNewsletters &&
-      JSON.stringify(fetchedNewsletters) !== JSON.stringify(newsletters)
-    ) {
-      setNewsletters(fetchedNewsletters);
-    }
-  }, [fetchedNewsletters, selectedSourceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchedNewsletters, selectedSourceId]);
 
   const handleTagClick = useCallback(
     (tag: Tag, e: React.MouseEvent) => {
@@ -385,50 +404,30 @@ const NewslettersPage: React.FC = () => {
 
   const handleToggleArchiveWrapper = useCallback(
     async (id: string) => {
-      const newsletter = newsletters.find((n) => n.id === id);
+      const newsletter = fetchedNewsletters.find((n) => n.id === id);
       if (!newsletter) return;
 
-      // For source view, always archive (since we only show unarchived)
-      const willArchive = selectedSourceId ? true : !newsletter.is_archived;
-
-      // Optimistically update local state
-      setNewsletters((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, is_archived: willArchive } : n)),
-      );
-
-      try {
-        await handleToggleArchive(newsletter);
-      } catch (error) {
-        // Revert optimistic update on error
-        setNewsletters(fetchedNewsletters || []);
-        throw error;
-      }
+      await handleToggleArchive(newsletter);
     },
-    [
-      handleToggleArchive,
-      newsletters,
-      selectedSourceId,
-      setNewsletters,
-      fetchedNewsletters,
-    ],
+    [handleToggleArchive, fetchedNewsletters],
   );
 
   const handleToggleReadWrapper = useCallback(
     async (id: string) => {
-      const newsletter = newsletters.find((n) => n.id === id);
+      const newsletter = fetchedNewsletters.find((n) => n.id === id);
       if (!newsletter) return;
       await handleToggleRead(newsletter);
     },
-    [handleToggleRead, newsletters],
+    [handleToggleRead, fetchedNewsletters],
   );
 
-  const handleToggleQueueWrapper = useCallback(
+  const handleToggleInQueueWrapper = useCallback(
     async (newsletterId: string) => {
-      const newsletter = newsletters.find((n) => n.id === newsletterId);
+      const newsletter = fetchedNewsletters.find((n) => n.id === newsletterId);
       if (!newsletter) return;
       await handleToggleInQueue(newsletter);
     },
-    [handleToggleInQueue, newsletters],
+    [handleToggleInQueue, fetchedNewsletters],
   );
 
   const handleTrashWrapper = useCallback(
@@ -441,18 +440,9 @@ const NewslettersPage: React.FC = () => {
         return;
       }
 
-      // Optimistically remove from local state
-      setNewsletters((prev) => prev.filter((n) => n.id !== id));
-
-      try {
-        await handleDeleteNewsletter(id);
-      } catch (error) {
-        // Restore newsletter on error
-        setNewsletters(fetchedNewsletters || []);
-        throw error;
-      }
+      await handleDeleteNewsletter(id);
     },
-    [handleDeleteNewsletter, setNewsletters, fetchedNewsletters],
+    [handleDeleteNewsletter],
   );
 
   const handleUpdateTags = useCallback(
@@ -986,22 +976,47 @@ const NewslettersPage: React.FC = () => {
         {(selectedSourceId || selectedGroupId) && (
           <section className="mt-12">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-primary-800">
+              <h3 className="text-lg font-semibold text-neutral-900">
                 {selectedSourceId
                   ? `Newsletters from this Source`
                   : `Newsletters in this Group`}
               </h3>
-              {(selectedGroupId || selectedSourceId) && (
+              <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => {
-                    setSelectedSourceId(null);
-                    setSelectedGroupId(null);
-                  }}
-                  className="text-sm text-blue-600 hover:underline"
+                  onClick={() => refetchNewsletters()}
+                  className="text-sm text-green-600 hover:underline flex items-center space-x-1"
                 >
-                  Clear filter
+                  🔄 Refresh
                 </button>
-              )}
+                {(selectedGroupId || selectedSourceId) && (
+                  <button
+                    onClick={() => {
+                      setSelectedSourceId(null);
+                      setSelectedGroupId(null);
+                    }}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Debug Info */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+              <div className="font-medium mb-1">🐛 Debug Info:</div>
+              <div>Selected Source: {selectedSourceId || "None"}</div>
+              <div>Selected Group: {selectedGroupId || "None"}</div>
+              <div>
+                Group Source IDs:{" "}
+                {selectedGroupSourceIds.length > 0
+                  ? selectedGroupSourceIds.join(", ")
+                  : "None"}
+              </div>
+              <div>Fetched Newsletters: {fetchedNewsletters.length}</div>
+              <div>Loading: {isLoadingNewsletters ? "Yes" : "No"}</div>
+              <div>Error: {isErrorNewsletters ? "Yes" : "No"}</div>
+              <div>Filter: {JSON.stringify(newsletterFilter)}</div>
             </div>
             {isLoadingNewsletters ? (
               <div className="flex justify-center items-center h-64">
@@ -1015,7 +1030,7 @@ const NewslettersPage: React.FC = () => {
                   {errorNewsletters?.message || "Unknown error"}
                 </p>
               </div>
-            ) : newsletters.length === 0 ? (
+            ) : fetchedNewsletters.length === 0 ? (
               <div className="text-gray-500 italic">
                 <p>
                   No newsletters found for this{" "}
@@ -1032,33 +1047,35 @@ const NewslettersPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {newsletters.map((newsletter: NewsletterWithRelations) => (
-                  <NewsletterRow
-                    key={newsletter.id}
-                    newsletter={newsletter}
-                    isSelected={false}
-                    onToggleSelect={handleToggleSelect}
-                    onToggleLike={handleToggleLikeWrapper}
-                    onToggleBookmark={handleToggleBookmarkWrapper}
-                    onToggleArchive={handleToggleArchiveWrapper}
-                    onToggleRead={handleToggleReadWrapper}
-                    onToggleQueue={handleToggleQueueWrapper}
-                    onTrash={handleTrashWrapper}
-                    onToggleTagVisibility={toggleTagVisibility}
-                    onUpdateTags={handleUpdateTags}
-                    onTagClick={handleTagClick}
-                    onNewsletterClick={handleNewsletterClick}
-                    visibleTags={visibleTags}
-                    readingQueue={readingQueue}
-                    isInReadingQueue={readingQueue.some(
-                      (item) => item.newsletter_id === newsletter.id,
-                    )}
-                    isDeletingNewsletter={false}
-                    loadingStates={{}}
-                    errorTogglingLike={errorTogglingLike}
-                    isUpdatingTags={isUpdatingTags}
-                  />
-                ))}
+                {fetchedNewsletters.map(
+                  (newsletter: NewsletterWithRelations) => (
+                    <NewsletterRow
+                      key={newsletter.id}
+                      newsletter={newsletter}
+                      isSelected={false}
+                      onToggleSelect={handleToggleSelect}
+                      onToggleLike={handleToggleLikeWrapper}
+                      onToggleBookmark={handleToggleBookmarkWrapper}
+                      onToggleArchive={handleToggleArchiveWrapper}
+                      onToggleRead={handleToggleReadWrapper}
+                      onToggleQueue={handleToggleInQueueWrapper}
+                      onTrash={handleTrashWrapper}
+                      onToggleTagVisibility={toggleTagVisibility}
+                      onUpdateTags={handleUpdateTags}
+                      onTagClick={handleTagClick}
+                      onNewsletterClick={handleNewsletterClick}
+                      visibleTags={visibleTags}
+                      readingQueue={readingQueue}
+                      isInReadingQueue={readingQueue.some(
+                        (item) => item.newsletter_id === newsletter.id,
+                      )}
+                      isDeletingNewsletter={false}
+                      loadingStates={{}}
+                      errorTogglingLike={errorTogglingLike}
+                      isUpdatingTags={isUpdatingTags}
+                    />
+                  ),
+                )}
               </div>
             )}
           </section>

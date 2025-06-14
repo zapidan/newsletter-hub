@@ -183,6 +183,7 @@ export const useNewsletters = (
     refetchOnWindowFocus?: boolean;
     staleTime?: number;
     cacheTime?: number;
+    debug?: boolean;
   } = {},
 ): UseNewslettersReturn => {
   const { user } = useAuth();
@@ -191,6 +192,7 @@ export const useNewsletters = (
     refetchOnWindowFocus = false,
     staleTime = CACHE_CONFIG.LIST_STALE_TIME,
     cacheTime = CACHE_CONFIG.LIST_CACHE_TIME,
+    debug = false,
   } = options;
 
   // Create cache manager instance
@@ -207,7 +209,7 @@ export const useNewsletters = (
 
   // Build API query parameters from filters
   const queryParams = useMemo(() => {
-    return {
+    const params = {
       search: filters.search,
       isRead: filters.isRead,
       isArchived: filters.isArchived,
@@ -225,7 +227,43 @@ export const useNewsletters = (
       includeTags: true,
       includeSource: true,
     };
-  }, [filters]);
+
+    // Enhanced debugging for source filtering issues
+    console.group("📝 useNewsletters - Building query params");
+    console.log("Input filters:", JSON.stringify(filters, null, 2));
+    console.log("Processed params:", JSON.stringify(params, null, 2));
+    console.log("Source filtering details:", {
+      hasSourceIds: !!filters.sourceIds,
+      sourceIds: filters.sourceIds || [],
+      sourceIdsType: Array.isArray(filters.sourceIds)
+        ? "array"
+        : typeof filters.sourceIds,
+      sourceIdsLength: Array.isArray(filters.sourceIds)
+        ? filters.sourceIds.length
+        : 0,
+      firstSourceId:
+        Array.isArray(filters.sourceIds) && filters.sourceIds.length > 0
+          ? filters.sourceIds[0]
+          : null,
+    });
+
+    // Validate source IDs
+    if (filters.sourceIds && filters.sourceIds.length > 0) {
+      const validSourceIds = filters.sourceIds.filter(
+        (id) => id && typeof id === "string",
+      );
+      if (validSourceIds.length !== filters.sourceIds.length) {
+        console.warn("⚠️ Invalid source IDs detected:", {
+          original: filters.sourceIds,
+          valid: validSourceIds,
+        });
+      }
+    }
+
+    console.groupEnd();
+
+    return params;
+  }, [filters, debug]);
 
   // Main newsletters query using the new API
   const {
@@ -235,7 +273,81 @@ export const useNewsletters = (
     refetch: refetchNewsletters,
   } = useQuery({
     queryKey,
-    queryFn: () => newsletterApi.getAll(queryParams),
+    queryFn: async () => {
+      console.group("🔍 useNewsletters - Fetching newsletters");
+      console.log("Query key:", queryKey);
+      console.log("Query params:", JSON.stringify(queryParams, null, 2));
+
+      // Detailed source filtering debug
+      if (queryParams.sourceIds && queryParams.sourceIds.length > 0) {
+        console.log("🎯 Source filtering active:", {
+          sourceIds: queryParams.sourceIds,
+          count: queryParams.sourceIds.length,
+          apiCall: `newsletterApi.getAll with sourceIds: [${queryParams.sourceIds.join(", ")}]`,
+        });
+      } else {
+        console.log("📋 No source filtering - fetching all newsletters");
+      }
+
+      try {
+        const result = await newsletterApi.getAll(queryParams);
+
+        console.log("✅ API Response:", {
+          status: "success",
+          count: result.data?.length || 0,
+          hasMore: result.hasMore,
+          total: result.count,
+          sourceBreakdown:
+            result.data?.reduce(
+              (acc, newsletter) => {
+                const sourceId = newsletter.newsletter_source_id;
+                acc[sourceId] = (acc[sourceId] || 0) + 1;
+                return acc;
+              },
+              {} as Record<string, number>,
+            ) || {},
+          firstItem: result.data?.[0]
+            ? {
+                id: result.data[0].id,
+                title: result.data[0].title,
+                sourceId: result.data[0].newsletter_source_id,
+                sourceName: result.data[0].source?.name,
+              }
+            : null,
+        });
+
+        // Validate source filtering worked
+        if (
+          queryParams.sourceIds &&
+          queryParams.sourceIds.length > 0 &&
+          result.data
+        ) {
+          const unexpectedSources = result.data.filter(
+            (newsletter) =>
+              !queryParams.sourceIds!.includes(newsletter.newsletter_source_id),
+          );
+          if (unexpectedSources.length > 0) {
+            console.warn("⚠️ Source filtering may not be working correctly:", {
+              expectedSources: queryParams.sourceIds,
+              unexpectedItems: unexpectedSources.map((n) => ({
+                id: n.id,
+                sourceId: n.newsletter_source_id,
+                sourceName: n.source?.name,
+              })),
+            });
+          } else {
+            console.log("✅ Source filtering working correctly");
+          }
+        }
+
+        return result;
+      } catch (error) {
+        console.error("❌ API Error:", error);
+        throw error;
+      } finally {
+        console.groupEnd();
+      }
+    },
     enabled: enabled && !!user,
     staleTime,
     gcTime: cacheTime,
@@ -249,6 +361,20 @@ export const useNewsletters = (
   });
 
   const newsletters = newslettersResponse?.data || [];
+
+  // Debug newsletter data
+  console.log("📊 useNewsletters - Newsletter data:", {
+    count: newsletters.length,
+    hasData: !!newslettersResponse,
+    isLoading,
+    hasError: !!errorNewsletters,
+    filters: {
+      sourceIds: queryParams.sourceIds,
+      hasSourceFilter: !!(
+        queryParams.sourceIds && queryParams.sourceIds.length > 0
+      ),
+    },
+  });
 
   // Get single newsletter function
   const getNewsletter = useCallback(
@@ -310,7 +436,8 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, id) => {
       cacheManager.invalidateRelatedQueries([id], "mark-as-read");
-      // Invalidate unread count queries - handled by real-time subscriptions
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
     },
   });
 
@@ -366,7 +493,8 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, id) => {
       cacheManager.invalidateRelatedQueries([id], "mark-as-unread");
-      // Invalidate unread count queries - handled by real-time subscriptions
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
     },
   });
 
@@ -433,7 +561,8 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-read");
-      // Invalidate unread count queries - handled by real-time subscriptions
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
     },
   });
 
@@ -500,7 +629,8 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-unread");
-      // Invalidate unread count queries - handled by real-time subscriptions
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
     },
   });
 
@@ -827,6 +957,8 @@ export const useNewsletters = (
     onSettled: (_data, _error, id) => {
       // Invalidate the queries to ensure we have fresh data
       cacheManager.invalidateRelatedQueries([id], "toggle-archive");
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:archived"));
     },
   });
 
@@ -890,6 +1022,8 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       cacheManager.invalidateRelatedQueries(ids, "bulk-archive");
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:archived"));
     },
   });
 
@@ -953,6 +1087,8 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       cacheManager.invalidateRelatedQueries(ids, "bulk-unarchive");
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:archived"));
     },
   });
 
@@ -983,6 +1119,8 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       cacheManager.invalidateRelatedQueries(ids, "bulk-delete");
+      // Dispatch event for unread count updates
+      window.dispatchEvent(new CustomEvent("newsletter:deleted"));
     },
   });
 

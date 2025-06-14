@@ -219,7 +219,7 @@ const Inbox: React.FC = memo(() => {
     isErrorNewsletters,
     errorNewsletters,
     refetchNewsletters,
-  } = useNewsletters(newsletterFilter);
+  } = useNewsletters(newsletterFilter, { debug: true });
 
   // Debug newsletters data
   useEffect(() => {
@@ -1044,6 +1044,28 @@ const Inbox: React.FC = memo(() => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Debug Info */}
+      <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+        <div className="flex justify-between items-center mb-2">
+          <div className="font-medium">🐛 Debug Info:</div>
+          <button
+            onClick={() => refetchNewsletters()}
+            className="text-sm text-green-600 hover:underline flex items-center space-x-1"
+          >
+            🔄 Refresh
+          </button>
+        </div>
+        <div>Filter: {filter}</div>
+        <div>Source Filter: {sourceFilter || "None"}</div>
+        <div>Debounced Source Filter: {debouncedSourceFilter || "None"}</div>
+        <div>Time Range: {timeRange}</div>
+        <div>Tag IDs: {tagIds.length > 0 ? tagIds.join(", ") : "None"}</div>
+        <div>Fetched Newsletters: {newsletters.length}</div>
+        <div>Loading: {isLoadingNewsletters ? "Yes" : "No"}</div>
+        <div>Error: {isErrorNewsletters ? "Yes" : "No"}</div>
+        <div>Newsletter Filter: {JSON.stringify(newsletterFilter)}</div>
       </div>
 
       {isSelecting && (

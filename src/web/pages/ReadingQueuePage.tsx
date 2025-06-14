@@ -34,7 +34,6 @@ import { SortableNewsletterRow } from "../components/reading-queue/SortableNewsl
 import { ArrowUp, ArrowDown } from "lucide-react";
 import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
 import { getCacheManager } from "@common/utils/cacheUtils";
-import { useNewsletters } from "@common/hooks";
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
@@ -57,11 +56,6 @@ const ReadingQueuePage: React.FC = () => {
     handleMarkAsUnread,
     handleToggleLike,
     handleToggleArchive,
-    handleDeleteNewsletter,
-    handleUpdateTags,
-    isMarkingAsRead,
-    isMarkingAsUnread,
-    isDeletingNewsletter,
   } = useSharedNewsletterActions({
     showToasts: true,
     optimisticUpdates: true,
@@ -147,7 +141,6 @@ const ReadingQueuePage: React.FC = () => {
 
     loadTags();
   }, [getTags, readingQueue]);
-  const { toggleLike: toggleNewsletterLike } = useNewsletters();
 
   // Check if a newsletter is in the reading queue
   const isInQueue = useCallback(
@@ -654,9 +647,6 @@ const ReadingQueuePage: React.FC = () => {
                   e.stopPropagation();
                   await toggleInQueue(id);
                   await refetch();
-                }}
-                onNewsletterClick={(newsletter) => {
-                  navigate(`/newsletters/${newsletter.id}`);
                 }}
                 className={`${!sortByDate ? "cursor-grab active:cursor-grabbing" : ""} bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow`}
                 isDraggable={!sortByDate}

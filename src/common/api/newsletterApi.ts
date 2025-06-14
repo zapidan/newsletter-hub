@@ -16,33 +16,104 @@ import {
 
 // Transform raw Supabase response to our Newsletter type
 const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
-  return {
+  // Log the raw data we receive
+  console.log("🔄 [transformNewsletterResponse] Raw data:", {
+    id: data.id,
+    newsletter_source_id: data.newsletter_source_id,
+    hasSource: !!data.newsletter_sources,
+    sourceType: typeof data.newsletter_sources,
+    rawSource: data.newsletter_sources,
+  });
+
+  // Transform the source data if it exists
+  let transformedSource = null;
+
+  // Check for the source in the nested newsletter_sources object
+  if (data.newsletter_sources) {
+    const sourceData = Array.isArray(data.newsletter_sources)
+      ? data.newsletter_sources[0]
+      : data.newsletter_sources;
+
+    if (sourceData) {
+      transformedSource = {
+        id: sourceData.id,
+        name: sourceData.name || "Unknown",
+        domain: sourceData.domain || null,
+        created_at: sourceData.created_at || new Date().toISOString(),
+        updated_at: sourceData.updated_at || new Date().toISOString(),
+        user_id: sourceData.user_id || null,
+      };
+    }
+  }
+  // Fallback to direct source property for backward compatibility
+  else if (data.source) {
+    transformedSource = {
+      id: data.source.id,
+      name: data.source.name || "Unknown",
+      domain: data.source.domain || null,
+      created_at: data.source.created_at || new Date().toISOString(),
+      updated_at: data.source.updated_at || new Date().toISOString(),
+      user_id: data.source.user_id || null,
+    };
+  }
+
+  // Transform tags if they exist
+  const transformedTags = Array.isArray(data.tags)
+    ? data.tags.map((t: any) => t.tag).filter(Boolean)
+    : [];
+
+  const result = {
     ...data,
-    source: data.source || null,
-    tags: data.tags?.map((t: any) => t.tag).filter(Boolean) || [],
+    source: transformedSource,
+    tags: transformedTags,
+    // Ensure newsletter_source_id is always set, even if null
     newsletter_source_id: data.newsletter_source_id || null,
   };
+
+  // Log the transformed data
+  console.log("✅ [transformNewsletterResponse] Transformed data:", {
+    id: result.id,
+    title: result.title,
+    sourceId: result.newsletter_source_id,
+    hasSource: !!result.source,
+    source: result.source,
+    hasTags: result.tags.length > 0,
+  });
+
+  return result;
 };
 
 // Build query based on parameters
 const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
+  // Start with base query
   let query = supabase.from("newsletters");
 
-  // Select clause
+  // Build select clause
   let selectClause = "*";
-  if (params.includeRelations || params.includeSource || params.includeTags) {
-    const relations = [];
-    if (params.includeSource) relations.push("source:newsletter_sources(*)");
-    if (params.includeTags) relations.push("tags:newsletter_tags(tag:tags(*))");
+  const relations = [];
 
-    if (relations.length > 0) {
-      selectClause = `*, ${relations.join(", ")}`;
-    }
+  // Always include source relation when sourceIds is provided or includeSource is true
+  const shouldIncludeSource =
+    params.includeSource || (params.sourceIds && params.sourceIds.length > 0);
+  if (shouldIncludeSource) {
+    // Include the relation with the source filter
+    relations.push("source:newsletter_sources(*)");
+  }
+  if (params.includeTags) relations.push("tags:newsletter_tags(tag:tags(*))");
+
+  if (relations.length > 0) {
+    selectClause = `*, ${relations.join(", ")}`;
   }
 
+  // Start with select
   query = query.select(selectClause);
 
-  // Apply filters
+  // CRITICAL: Filter by user_id first to ensure data isolation
+  if (params.user_id) {
+    query = query.eq("user_id", params.user_id);
+  }
+
+  // Apply filters with proper chaining
   if (params.search) {
     query = query.or(
       `title.ilike.%${params.search}%, content.ilike.%${params.search}%, summary.ilike.%${params.search}%`,
@@ -65,8 +136,20 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     query = query.eq("is_bookmarked", params.isBookmarked);
   }
 
+  // Apply source filter if sourceIds is provided
   if (params.sourceIds && params.sourceIds.length > 0) {
-    query = query.in("newsletter_source_id", params.sourceIds);
+    console.log("🔍 [buildNewsletterQuery] Applying source filter:", {
+      sourceIds: params.sourceIds,
+      count: params.sourceIds.length,
+    });
+
+    if (params.sourceIds.length === 1) {
+      // Single source - use eq for better performance
+      query = query.eq("newsletter_source_id", params.sourceIds[0]);
+    } else {
+      // Multiple sources - use in clause
+      query = query.in("newsletter_source_id", params.sourceIds);
+    }
   }
 
   if (params.dateFrom) {
@@ -77,28 +160,37 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     query = query.lte("received_at", params.dateTo);
   }
 
-  // Tag filtering requires a different approach due to many-to-many relationship
-  if (params.tagIds && params.tagIds.length > 0) {
-    // This will need to be handled with a separate query or join
-    // For now, we'll handle it in the post-processing
-  }
-
-  // Ordering
+  // Apply ordering
   const orderColumn = params.orderBy || "received_at";
   const ascending = params.ascending ?? false;
   query = query.order(orderColumn, { ascending });
 
-  // Pagination
+  // Apply pagination
   if (params.limit) {
     query = query.limit(params.limit);
   }
 
-  if (params.offset) {
-    query = query.range(
-      params.offset,
-      params.offset + (params.limit || 50) - 1,
-    );
+  if (params.offset !== undefined) {
+    const end = params.limit
+      ? params.offset + params.limit - 1
+      : params.offset + 50 - 1;
+    query = query.range(params.offset, end);
   }
+
+  // Debug logging
+  console.log("🔍 [buildNewsletterQuery] Final query params:", {
+    select: selectClause,
+    filters: {
+      sourceIds: params.sourceIds,
+      isArchived: params.isArchived,
+      isRead: params.isRead,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    },
+    order: { column: orderColumn, ascending },
+    limit: params.limit,
+    offset: params.offset,
+  });
 
   return query;
 };
@@ -112,19 +204,74 @@ export const newsletterApi = {
     return withPerformanceLogging("newsletters.getAll", async () => {
       const user = await requireAuth();
 
-      let query = buildNewsletterQuery(params);
-      query = query.eq("user_id", user.id);
+      console.log("🔍 [getAll] Building query with params:", {
+        ...params,
+        sourceIds: params.sourceIds || null,
+      });
+
+      // Build the query using buildNewsletterQuery
+      let query = buildNewsletterQuery({
+        ...params,
+        user_id: user.id, // Pass user_id to ensure it's included in the query
+      });
+
+      console.log("🔍 [getAll] Executing query with filters:", {
+        userId: user.id,
+        sourceId: params.sourceId || null,
+        isArchived: params.isArchived,
+        isRead: params.isRead,
+      });
 
       const { data, error, count } = await query;
 
-      if (error) handleSupabaseError(error);
+      if (error) {
+        console.error("❌ [getAll] Query error:", error);
+        handleSupabaseError(error);
+      }
 
+      console.log("🔍 [getAll] Query results:", {
+        count: data?.length || 0,
+        hasSourceId: !!params.sourceId,
+        sourceId: params.sourceId || null,
+        firstItem: data?.[0]
+          ? {
+              id: data[0].id,
+              title: data[0].title,
+              sourceId: data[0].newsletter_source_id,
+              hasSource: !!data[0].source,
+            }
+          : null,
+      });
+
+      // Log the raw response for the first item if available
+      if (data?.[0]) {
+        console.log("🔍 [getAll] First item raw data:", {
+          id: data[0].id,
+          title: data[0].title,
+          sourceId: data[0].newsletter_source_id,
+          source: data[0].source,
+          rawSource: data[0].source,
+        });
+      }
+
+      // Transform the data
       let transformedData = (data || []).map(transformNewsletterResponse);
 
+      // Log the transformed data for the first item if available
+      if (transformedData[0]) {
+        console.log("🔍 [getAll] First item transformed data:", {
+          id: transformedData[0].id,
+          title: transformedData[0].title,
+          sourceId: transformedData[0].newsletter_source_id,
+          source: transformedData[0].source,
+          rawSource: transformedData[0].source,
+        });
+      }
+
       // Handle tag filtering post-query if needed
-      if (params.tagIds && params.tagIds.length > 0) {
+      if (params.tagIds?.length) {
         transformedData = transformedData.filter((newsletter) =>
-          newsletter.tags.some((tag) => params.tagIds!.includes(tag.id)),
+          newsletter.tags?.some((tag) => params.tagIds!.includes(tag.id)),
         );
       }
 
@@ -132,7 +279,7 @@ export const newsletterApi = {
       const offset = params.offset || 0;
       const page = Math.floor(offset / limit) + 1;
 
-      return {
+      const result = {
         data: transformedData,
         count: count || transformedData.length,
         page,
@@ -141,6 +288,8 @@ export const newsletterApi = {
         nextPage: transformedData.length === limit ? page + 1 : null,
         prevPage: page > 1 ? page - 1 : null,
       };
+
+      return result;
     });
   },
 
@@ -452,7 +601,7 @@ export const newsletterApi = {
     sourceId: string,
     params: Omit<NewsletterQueryParams, "sourceIds"> = {},
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    return this.getAll({ ...params, sourceIds: [sourceId] });
+    return this.getAll({ ...params, sourceId });
   },
 
   // Search newsletters
