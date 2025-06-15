@@ -163,7 +163,8 @@ describe('useNewsletters - Action Fixes', () => {
 
       // Should still call API even if optimistic update fails
       expect(mockNewsletterApi.toggleLike).toHaveBeenCalled();
-      expect(mockCacheManager.invalidateRelatedQueries).toHaveBeenCalledWith(
+      // No longer invalidates cache to preserve filter state - relies on rollback mechanism
+      expect(mockCacheManager.invalidateRelatedQueries).not.toHaveBeenCalledWith(
         ['test-newsletter-1'],
         'toggle-like'
       );
@@ -212,6 +213,54 @@ describe('useNewsletters - Action Fixes', () => {
       const { result } = renderHook(() => useNewsletters(), { wrapper });
 
       expect(result.current.errorTogglingLike).toBeNull();
+    });
+  });
+
+  describe('filter preservation', () => {
+    it('should preserve filter state during like/unlike operations', async () => {
+      const sourceFilter = { sourceIds: ['test-source-1'] };
+      const { result } = renderHook(() => useNewsletters(sourceFilter), { wrapper });
+
+      // Mock initial newsletter data with the filter
+      const mockFilteredNewsletters = [
+        { ...mockNewsletter, id: 'filtered-1', newsletter_source_id: 'test-source-1', is_liked: false }
+      ];
+      queryClient.setQueryData(['newsletters', 'list', sourceFilter], mockFilteredNewsletters);
+
+      await act(async () => {
+        await result.current.toggleLike('filtered-1');
+      });
+
+      // Should NOT invalidate cache to preserve filter state
+      expect(mockCacheManager.invalidateRelatedQueries).not.toHaveBeenCalledWith(
+        ['filtered-1'],
+        'toggle-like'
+      );
+
+      // Should rely on optimistic updates only
+      expect(mockCacheManager.optimisticUpdateWithRollback).toHaveBeenCalled();
+    });
+
+    it('should not trigger refetch on like error when using filters', async () => {
+      const sourceFilter = { sourceIds: ['test-source-1'] };
+      const { result } = renderHook(() => useNewsletters(sourceFilter), { wrapper });
+
+      // Mock API error
+      mockNewsletterApi.toggleLike.mockRejectedValue(new Error('API Error'));
+
+      try {
+        await act(async () => {
+          await result.current.toggleLike('filtered-1');
+        });
+      } catch (error) {
+        // Expected to throw
+      }
+
+      // Should NOT invalidate cache even on error to preserve filter state
+      expect(mockCacheManager.invalidateRelatedQueries).not.toHaveBeenCalledWith(
+        ['filtered-1'],
+        'toggle-like-error'
+      );
     });
   });
 });

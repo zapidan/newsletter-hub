@@ -639,6 +639,10 @@ export const useNewsletters = (
       return true;
     },
     onMutate: async (id) => {
+      console.group("👍 toggleLike - Starting optimistic update");
+      console.log("Newsletter ID:", id);
+      console.log("Current query key:", queryKey);
+
       // Only cancel detail queries for this specific newsletter, not list queries
       await cancelQueries({
         predicate: (query) =>
@@ -665,6 +669,12 @@ export const useNewsletters = (
       const currentNewsletter = newsletterArray.find((n) => n.id === id);
       const currentLikedState = currentNewsletter?.is_liked ?? false;
       const newLikedState = !currentLikedState;
+
+      console.log("Like state change:", {
+        current: currentLikedState,
+        new: newLikedState,
+        newsletterFound: !!currentNewsletter,
+      });
 
       const rollbackFunctions: Array<() => void> = [];
 
@@ -730,6 +740,9 @@ export const useNewsletters = (
         });
       }
 
+      console.log("✅ Optimistic update completed - filter state preserved");
+      console.groupEnd();
+
       return {
         previousNewsletters: newsletterArray,
         currentLikedState,
@@ -738,10 +751,16 @@ export const useNewsletters = (
       };
     },
     onError: (_error, id, context) => {
-      console.error("Error toggling like status:", _error);
+      console.group("❌ toggleLike - Error occurred");
+      console.log("Newsletter ID:", id);
+      console.error("Error details:", _error);
 
       // Execute rollback functions if available
       if (context?.rollbackFunctions) {
+        console.log(
+          "Executing rollback functions:",
+          context.rollbackFunctions.length,
+        );
         context.rollbackFunctions.forEach((rollback) => {
           try {
             rollback();
@@ -751,14 +770,21 @@ export const useNewsletters = (
         });
       }
 
-      // Force refresh of affected queries as fallback
-      cacheManager.invalidateRelatedQueries([id], "toggle-like-error");
+      console.log(
+        "✅ Error handled with rollback - no cache invalidation, filter state preserved",
+      );
+      console.groupEnd();
+
+      // Rely on rollback mechanism to handle errors - avoid invalidation to preserve filters
     },
     onSettled: (_data, _error, id) => {
-      // Use gentle invalidation with delay to prevent empty state
-      setTimeout(() => {
-        cacheManager.invalidateRelatedQueries([id], "toggle-like");
-      }, 200);
+      console.group("🏁 toggleLike - Settled");
+      console.log("Newsletter ID:", id);
+      console.log("Success:", !_error);
+      console.log("✅ No cache invalidation - filter state preserved");
+      console.groupEnd();
+
+      // Rely on optimistic updates - no invalidation needed to preserve filter state
     },
   });
 

@@ -226,14 +226,9 @@ export class SimpleCacheManager {
         break;
 
       case "toggle-like":
-        // For like operations, use very gentle invalidation
-        // Only invalidate if we're in a liked filter view
-        setTimeout(() => {
-          this.queryClient.refetchQueries({
-            queryKey: queryKeyFactory.newsletters.lists(),
-            type: "active",
-          });
-        }, 500);
+        // For like operations, rely on optimistic updates only
+        // No cache invalidation needed since optimistic updates handle the UI
+        // This preserves filter state and prevents unnecessary refetches
         break;
 
       case "toggle-queue":
@@ -262,13 +257,9 @@ export class SimpleCacheManager {
         break;
 
       case "toggle-like-error":
-        // For error cases, force a gentle refresh
-        invalidationPromises.push(
-          this.queryClient.invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.lists(),
-            refetchType: "active",
-          }),
-        );
+        // For like error cases, rely on rollback mechanism from optimistic updates
+        // Avoid broad invalidation to preserve filter state
+        // The mutation's onError callback handles rollbacks
         break;
 
       case "toggle-queue-error":
