@@ -33,15 +33,19 @@ export class SimpleCacheManager {
   }): void {
     try {
       // Update in all newsletter list queries
-      this.queryClient.setQueriesData<NewsletterWithRelations[] | undefined>(
+      this.queryClient.setQueriesData<any>(
         { queryKey: queryKeyFactory.newsletters.lists() },
         (oldData) => {
-          if (!Array.isArray(oldData)) return oldData;
-          return oldData.map((newsletter) =>
-            newsletter.id === update.id
-              ? { ...newsletter, ...update.updates }
-              : newsletter,
-          );
+          if (!oldData || !oldData.data || !Array.isArray(oldData.data))
+            return oldData;
+          return {
+            ...oldData,
+            data: oldData.data.map((newsletter: any) =>
+              newsletter.id === update.id
+                ? { ...newsletter, ...update.updates }
+                : newsletter,
+            ),
+          };
         },
       );
 

@@ -217,27 +217,12 @@ export const useNewsletters = (
       includeSource: true,
     };
 
-    // Enhanced debugging for source filtering issues
-    console.group("📝 useNewsletters - Building query params");
-    console.log("Input filters:", JSON.stringify(filters, null, 2));
-    console.log("Processed params:", JSON.stringify(params, null, 2));
-    console.log("Source filtering details:", {
-      hasSourceIds: !!filters.sourceIds,
-      sourceIds: filters.sourceIds || [],
-      sourceIdsType: Array.isArray(filters.sourceIds)
-        ? "array"
-        : typeof filters.sourceIds,
-      sourceIdsLength: Array.isArray(filters.sourceIds)
-        ? filters.sourceIds.length
-        : 0,
-      firstSourceId:
-        Array.isArray(filters.sourceIds) && filters.sourceIds.length > 0
-          ? filters.sourceIds[0]
-          : null,
-    });
-
-    // Validate source IDs
-    if (filters.sourceIds && filters.sourceIds.length > 0) {
+    // Validate source IDs in development
+    if (
+      process.env.NODE_ENV === "development" &&
+      filters.sourceIds &&
+      filters.sourceIds.length > 0
+    ) {
       const validSourceIds = filters.sourceIds.filter(
         (id) => id && typeof id === "string",
       );
@@ -248,8 +233,6 @@ export const useNewsletters = (
         });
       }
     }
-
-    console.groupEnd();
 
     return params;
   }, [filters, debug]);
@@ -263,50 +246,12 @@ export const useNewsletters = (
   } = useQuery({
     queryKey,
     queryFn: async () => {
-      console.group("🔍 useNewsletters - Fetching newsletters");
-      console.log("Query key:", queryKey);
-      console.log("Query params:", JSON.stringify(queryParams, null, 2));
-
-      // Detailed source filtering debug
-      if (queryParams.sourceIds && queryParams.sourceIds.length > 0) {
-        console.log("🎯 Source filtering active:", {
-          sourceIds: queryParams.sourceIds,
-          count: queryParams.sourceIds.length,
-          apiCall: `newsletterApi.getAll with sourceIds: [${queryParams.sourceIds.join(", ")}]`,
-        });
-      } else {
-        console.log("📋 No source filtering - fetching all newsletters");
-      }
-
       try {
         const result = await newsletterApi.getAll(queryParams);
 
-        console.log("✅ API Response:", {
-          status: "success",
-          count: result.data?.length || 0,
-          hasMore: result.hasMore,
-          total: result.count,
-          sourceBreakdown:
-            result.data?.reduce(
-              (acc, newsletter) => {
-                const sourceId = newsletter.newsletter_source_id;
-                acc[sourceId] = (acc[sourceId] || 0) + 1;
-                return acc;
-              },
-              {} as Record<string, number>,
-            ) || {},
-          firstItem: result.data?.[0]
-            ? {
-                id: result.data[0].id,
-                title: result.data[0].title,
-                sourceId: result.data[0].newsletter_source_id,
-                sourceName: result.data[0].source?.name,
-              }
-            : null,
-        });
-
-        // Validate source filtering worked
+        // Validate source filtering in development
         if (
+          process.env.NODE_ENV === "development" &&
           queryParams.sourceIds &&
           queryParams.sourceIds.length > 0 &&
           result.data
@@ -324,8 +269,6 @@ export const useNewsletters = (
                 sourceName: n.source?.name,
               })),
             });
-          } else {
-            console.log("✅ Source filtering working correctly");
           }
         }
 
@@ -333,8 +276,6 @@ export const useNewsletters = (
       } catch (error) {
         console.error("❌ API Error:", error);
         throw error;
-      } finally {
-        console.groupEnd();
       }
     },
     enabled: enabled && !!user,
@@ -350,20 +291,6 @@ export const useNewsletters = (
   });
 
   const newsletters = newslettersResponse?.data || [];
-
-  // Debug newsletter data
-  console.log("📊 useNewsletters - Newsletter data:", {
-    count: newsletters.length,
-    hasData: !!newslettersResponse,
-    isLoading,
-    hasError: !!errorNewsletters,
-    filters: {
-      sourceIds: queryParams.sourceIds,
-      hasSourceFilter: !!(
-        queryParams.sourceIds && queryParams.sourceIds.length > 0
-      ),
-    },
-  });
 
   // Get single newsletter function
   const getNewsletter = useCallback(
@@ -639,152 +566,51 @@ export const useNewsletters = (
       return true;
     },
     onMutate: async (id) => {
-      console.group("👍 toggleLike - Starting optimistic update");
-      console.log("Newsletter ID:", id);
-      console.log("Current query key:", queryKey);
-
-      // Only cancel detail queries for this specific newsletter, not list queries
       await cancelQueries({
         predicate: (query) =>
+          queryKeyFactory.matchers.isNewsletterListKey(
+            query.queryKey as unknown[],
+          ) ||
           queryKeyFactory.matchers.isNewsletterDetailKey(
             query.queryKey as unknown[],
             id,
           ),
       });
 
-      // Store current state for rollback
       const queryData = getQueryData<any>(queryKey);
-      const previousNewsletters = Array.isArray(queryData?.data)
-        ? queryData.data
-        : Array.isArray(queryData)
-          ? queryData
-          : [];
-
-      // Ensure previousNewsletters is always an array
-      const newsletterArray = Array.isArray(previousNewsletters)
-        ? previousNewsletters
-        : [];
+      const previousNewsletters = queryData?.data || [];
 
       // Find the current newsletter to get its like status
-      const currentNewsletter = newsletterArray.find((n) => n.id === id);
+      const currentNewsletter = previousNewsletters.find((n) => n.id === id);
       const currentLikedState = currentNewsletter?.is_liked ?? false;
       const newLikedState = !currentLikedState;
 
-      console.log("Like state change:", {
-        current: currentLikedState,
-        new: newLikedState,
-        newsletterFound: !!currentNewsletter,
+      cacheManager.updateNewsletterInCache({
+        id,
+        updates: {
+          is_liked: newLikedState,
+          updated_at: new Date().toISOString(),
+        },
       });
 
-      const rollbackFunctions: Array<() => void> = [];
-
-      try {
-        // Update newsletter list optimistically with rollback
-        const listResult = await cacheManager.optimisticUpdateWithRollback<
-          NewsletterWithRelations[]
-        >([...queryKey], (data) => {
-          // Always return a valid array, even if data is undefined
-          const currentData = Array.isArray(data) ? data : [];
-          return currentData.map((newsletter) =>
-            newsletter.id === id
-              ? { ...newsletter, is_liked: newLikedState }
-              : newsletter,
-          );
-        });
-
-        if (listResult?.rollback) {
-          rollbackFunctions.push(listResult.rollback);
-        }
-
-        // Update individual newsletter queries with rollback
-        const detailQueries = cacheManager.queryClient.getQueryCache().findAll({
-          predicate: (query) =>
-            queryKeyFactory.matchers.isNewsletterDetailKey(
-              query.queryKey as unknown[],
-              id,
-            ),
-        });
-
-        for (const query of detailQueries) {
-          try {
-            const detailResult =
-              await cacheManager.optimisticUpdateWithRollback<NewsletterWithRelations>(
-                Array.from(query.queryKey),
-                (data) => {
-                  if (!data) return data;
-                  return { ...data, is_liked: newLikedState };
-                },
-              );
-
-            if (detailResult?.rollback) {
-              rollbackFunctions.push(detailResult.rollback);
-            }
-          } catch (detailError) {
-            console.warn(
-              "Failed to update individual newsletter query:",
-              query.queryKey,
-              detailError,
-            );
-            // Continue with other queries even if one fails
-          }
-        }
-      } catch (error) {
-        console.error("Optimistic update failed:", error);
-        // Execute any rollback functions that were successfully created
-        rollbackFunctions.forEach((rollback) => {
-          try {
-            rollback();
-          } catch (rollbackError) {
-            console.error("Rollback failed:", rollbackError);
-          }
-        });
-      }
-
-      console.log("✅ Optimistic update completed - filter state preserved");
-      console.groupEnd();
-
-      return {
-        previousNewsletters: newsletterArray,
-        currentLikedState,
-        newLikedState,
-        rollbackFunctions,
-      };
+      return { previousNewsletters };
     },
-    onError: (_error, id, context) => {
-      console.group("❌ toggleLike - Error occurred");
-      console.log("Newsletter ID:", id);
-      console.error("Error details:", _error);
-
-      // Execute rollback functions if available
-      if (context?.rollbackFunctions) {
-        console.log(
-          "Executing rollback functions:",
-          context.rollbackFunctions.length,
-        );
-        context.rollbackFunctions.forEach((rollback) => {
-          try {
-            rollback();
-          } catch (rollbackError) {
-            console.error("Error during rollback:", rollbackError);
-          }
-        });
+    onError: (_err, id, context) => {
+      if (context?.previousNewsletters) {
+        const newsletter = context.previousNewsletters.find((n) => n.id === id);
+        if (newsletter) {
+          cacheManager.updateNewsletterInCache({
+            id,
+            updates: {
+              is_liked: newsletter.is_liked,
+              updated_at: newsletter.updated_at,
+            },
+          });
+        }
       }
-
-      console.log(
-        "✅ Error handled with rollback - no cache invalidation, filter state preserved",
-      );
-      console.groupEnd();
-
-      // Rely on rollback mechanism to handle errors - avoid invalidation to preserve filters
     },
     onSettled: (_data, _error, id) => {
-      console.group("🏁 toggleLike - Settled");
-      console.log("Newsletter ID:", id);
-      console.log("Success:", !_error);
-      console.log("✅ No cache invalidation - filter state preserved");
-      console.groupEnd();
-
-      // Rely on optimistic updates - no invalidation needed to preserve filter state
+      // No cache invalidation needed to preserve filter state
     },
   });
 
