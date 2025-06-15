@@ -193,8 +193,16 @@ const Inbox: React.FC = memo(() => {
     return filters;
   }, [filter, sourceFilter, timeRange, debouncedTagUpdates]);
 
+  // Stable newsletter list with preserved order
+  const [stableNewsletters, setStableNewsletters] = useState<
+    NewsletterWithRelations[]
+  >([]);
+
+  // Stable keys for newsletter rows to prevent unnecessary re-renders
+  const [stableKeys, setStableKeys] = useState<Map<string, string>>(new Map());
+
   const {
-    newsletters = [],
+    newsletters: rawNewsletters = [],
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
@@ -204,6 +212,61 @@ const Inbox: React.FC = memo(() => {
     refetchOnWindowFocus: false,
     staleTime: 0, // Force fresh data on filter changes
   });
+
+  // Update stable newsletter list while preserving order
+  useEffect(() => {
+    if (rawNewsletters.length === 0 && !isLoadingNewsletters) {
+      setStableNewsletters([]);
+      return;
+    }
+
+    if (rawNewsletters.length > 0) {
+      setStableNewsletters((prevStable) => {
+        const updatedNewsletters: NewsletterWithRelations[] = [];
+
+        // First, add existing newsletters in their current order
+        const existingIds = new Set(rawNewsletters.map((n) => n.id));
+
+        // Keep existing newsletters in their current order
+        prevStable.forEach((newsletter) => {
+          if (existingIds.has(newsletter.id)) {
+            const updated = rawNewsletters.find((n) => n.id === newsletter.id);
+            if (updated) {
+              updatedNewsletters.push(updated);
+            }
+          }
+        });
+
+        // Add new newsletters at the end
+        rawNewsletters.forEach((newsletter) => {
+          if (!updatedNewsletters.find((n) => n.id === newsletter.id)) {
+            updatedNewsletters.push(newsletter);
+          }
+        });
+
+        return updatedNewsletters;
+      });
+    }
+  }, [rawNewsletters, isLoadingNewsletters]);
+
+  const newsletters = stableNewsletters;
+
+  // Generate stable keys for newsletters
+  const newsletterIds = useMemo(
+    () => newsletters.map((n) => n.id).join(","),
+    [newsletters],
+  );
+  useEffect(() => {
+    setStableKeys((prev) => {
+      const newKeys = new Map(prev);
+      newsletters.forEach((newsletter) => {
+        if (!newKeys.has(newsletter.id)) {
+          newKeys.set(newsletter.id, `${newsletter.id}-${Date.now()}`);
+        }
+      });
+      return newKeys;
+    });
+  }, [newsletterIds, newsletters]);
 
   // Debug newsletters data
   useEffect(() => {
@@ -297,7 +360,7 @@ const Inbox: React.FC = memo(() => {
   const baseActions = useSharedNewsletterActions({
     showToasts: true,
     optimisticUpdates: true,
-    onSuccess: (newsletter) => {
+    onSuccess: () => {
       // Ensure filters are preserved after successful actions
       if (cacheManager) {
         // Use smart invalidation that respects current filter context
@@ -339,68 +402,65 @@ const Inbox: React.FC = memo(() => {
     },
   });
 
-  // Create filter-aware action wrapper
-  const createFilterAwareAction = useCallback(
-    (actionFn: (...args: any[]) => Promise<any>, actionName: string) => {
-      return async (...args: any[]) => {
-        const currentUrl = window.location.href;
-        const currentFilterState = {
-          filter,
-          sourceFilter,
-          timeRange,
-          tagIds: debouncedTagUpdates,
-        };
+  // Helper function to preserve URL parameters after actions
+  const preserveFilterParams = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    let hasChanges = false;
 
-        try {
-          console.log(`🔒 Executing filter-aware ${actionName}...`, {
-            currentFilterState,
-            url: currentUrl,
-          });
+    if (filter !== "all") {
+      if (params.get("filter") !== filter) {
+        params.set("filter", filter);
+        hasChanges = true;
+      }
+    } else {
+      if (params.has("filter")) {
+        params.delete("filter");
+        hasChanges = true;
+      }
+    }
 
-          // Execute the action with immediate feedback
-          const result = actionFn(...args);
+    if (sourceFilter) {
+      if (params.get("source") !== sourceFilter) {
+        params.set("source", sourceFilter);
+        hasChanges = true;
+      }
+    } else {
+      if (params.has("source")) {
+        params.delete("source");
+        hasChanges = true;
+      }
+    }
 
-          // Don't wait for the action to complete for responsiveness
-          result
-            .then(() => {
-              // Ensure filters are preserved after action completes
-              if (window.location.href !== currentUrl) {
-                console.warn(
-                  `🔄 Navigation detected during ${actionName}, restoring...`,
-                );
-                window.history.replaceState({}, "", currentUrl);
-              }
+    if (timeRange !== "all") {
+      if (params.get("time") !== timeRange) {
+        params.set("time", timeRange);
+        hasChanges = true;
+      }
+    } else {
+      if (params.has("time")) {
+        params.delete("time");
+        hasChanges = true;
+      }
+    }
 
-              // Clear toast after successful action
-              setTimeout(() => setToast(null), 3000);
-            })
-            .catch((error) => {
-              console.error(`❌ ${actionName} failed:`, error);
+    if (debouncedTagUpdates.length > 0) {
+      const tagString = debouncedTagUpdates.join(",");
+      if (params.get("tags") !== tagString) {
+        params.set("tags", tagString);
+        hasChanges = true;
+      }
+    } else {
+      if (params.has("tags")) {
+        params.delete("tags");
+        hasChanges = true;
+      }
+    }
 
-              // Restore URL if changed
-              if (window.location.href !== currentUrl) {
-                window.history.replaceState({}, "", currentUrl);
-              }
-
-              setToast({ type: "error", message: (error as Error).message });
-            });
-
-          return result;
-        } catch (error) {
-          console.error(`❌ ${actionName} sync error:`, error);
-
-          // Restore URL if changed
-          if (window.location.href !== currentUrl) {
-            window.history.replaceState({}, "", currentUrl);
-          }
-
-          setToast({ type: "error", message: (error as Error).message });
-          throw error;
-        }
-      };
-    },
-    [filter, sourceFilter, timeRange, debouncedTagUpdates],
-  );
+    if (hasChanges) {
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [filter, sourceFilter, timeRange, debouncedTagUpdates]);
 
   // Extract all needed properties from base actions
   const {
@@ -425,47 +485,206 @@ const Inbox: React.FC = memo(() => {
   } = baseActions;
 
   // Create filter-aware versions of the actions
-  const handleToggleLike = useMemo(
-    () => createFilterAwareAction(baseHandleToggleLike, "toggleLike"),
-    [baseHandleToggleLike, createFilterAwareAction],
+  const handleToggleLike = useCallback(
+    async (newsletter: NewsletterWithRelations) => {
+      // Optimistic update for liked filter
+      if (filter === "liked") {
+        setStableNewsletters((prev) => {
+          const updated = [...prev];
+          const index = updated.findIndex((n) => n.id === newsletter.id);
+          if (index > -1) {
+            const updatedNewsletter = { ...updated[index], is_liked: true };
+            updated.splice(index, 1);
+            updated.unshift(updatedNewsletter);
+            return updated;
+          }
+          return prev;
+        });
+      }
+
+      try {
+        await baseHandleToggleLike(newsletter);
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletter liked" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ toggleLike failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleToggleLike, filter, preserveFilterParams],
   );
-  const handleToggleArchive = useMemo(
-    () => createFilterAwareAction(baseHandleToggleArchive, "toggleArchive"),
-    [baseHandleToggleArchive, createFilterAwareAction],
+
+  const handleToggleArchive = useCallback(
+    async (id: string) => {
+      // Optimistic update for archived filter
+      if (filter === "archived") {
+        setStableNewsletters((prev) => {
+          const updated = [...prev];
+          const index = updated.findIndex((n) => n.id === id);
+          if (index > -1) {
+            const updatedNewsletter = { ...updated[index], is_archived: true };
+            updated.splice(index, 1);
+            updated.unshift(updatedNewsletter);
+            return updated;
+          }
+          return prev;
+        });
+      }
+
+      try {
+        const newsletter = newsletters.find((n) => n.id === id);
+        if (newsletter) {
+          await baseHandleToggleArchive(newsletter);
+        }
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletter archived" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ toggleArchive failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleToggleArchive, filter, preserveFilterParams, newsletters],
   );
-  const handleToggleRead = useMemo(
-    () => createFilterAwareAction(baseHandleToggleRead, "toggleRead"),
-    [baseHandleToggleRead, createFilterAwareAction],
+
+  const handleToggleRead = useCallback(
+    async (id: string) => {
+      try {
+        const newsletter = newsletters.find((n) => n.id === id);
+        if (newsletter) {
+          await baseHandleToggleRead(newsletter);
+        }
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletter updated" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ toggleRead failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleToggleRead, preserveFilterParams, newsletters],
   );
-  const handleDeleteNewsletter = useMemo(
-    () =>
-      createFilterAwareAction(baseHandleDeleteNewsletter, "deleteNewsletter"),
-    [baseHandleDeleteNewsletter, createFilterAwareAction],
+
+  const handleDeleteNewsletter = useCallback(
+    async (id: string) => {
+      try {
+        await baseHandleDeleteNewsletter(id);
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletter deleted" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ deleteNewsletter failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleDeleteNewsletter, preserveFilterParams],
   );
-  const handleToggleInQueue = useMemo(
-    () => createFilterAwareAction(baseHandleToggleInQueue, "toggleInQueue"),
-    [baseHandleToggleInQueue, createFilterAwareAction],
+
+  const handleToggleInQueue = useCallback(
+    async (newsletterId: string) => {
+      try {
+        const newsletter = newsletters.find((n) => n.id === newsletterId);
+        const isCurrentlyInQueue = readingQueue.some(
+          (item) => item.newsletter_id === newsletterId,
+        );
+        if (newsletter) {
+          await baseHandleToggleInQueue(newsletter, isCurrentlyInQueue);
+        }
+        preserveFilterParams();
+        setToast({ type: "success", message: "Queue updated" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ toggleInQueue failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleToggleInQueue, preserveFilterParams, newsletters, readingQueue],
   );
-  const handleBulkMarkAsRead = useMemo(
-    () => createFilterAwareAction(baseHandleBulkMarkAsRead, "bulkMarkAsRead"),
-    [baseHandleBulkMarkAsRead, createFilterAwareAction],
+
+  const handleBulkMarkAsRead = useCallback(
+    async (ids: string[]) => {
+      try {
+        await baseHandleBulkMarkAsRead(ids);
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletters marked as read" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ bulkMarkAsRead failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleBulkMarkAsRead, preserveFilterParams],
   );
-  const handleBulkMarkAsUnread = useMemo(
-    () =>
-      createFilterAwareAction(baseHandleBulkMarkAsUnread, "bulkMarkAsUnread"),
-    [baseHandleBulkMarkAsUnread, createFilterAwareAction],
+
+  const handleBulkMarkAsUnread = useCallback(
+    async (ids: string[]) => {
+      try {
+        await baseHandleBulkMarkAsUnread(ids);
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletters marked as unread" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ bulkMarkAsUnread failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleBulkMarkAsUnread, preserveFilterParams],
   );
-  const handleBulkArchive = useMemo(
-    () => createFilterAwareAction(baseHandleBulkArchive, "bulkArchive"),
-    [baseHandleBulkArchive, createFilterAwareAction],
+
+  const handleBulkArchive = useCallback(
+    async (ids: string[]) => {
+      try {
+        await baseHandleBulkArchive(ids);
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletters archived" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ bulkArchive failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleBulkArchive, preserveFilterParams],
   );
-  const handleBulkUnarchive = useMemo(
-    () => createFilterAwareAction(baseHandleBulkUnarchive, "bulkUnarchive"),
-    [baseHandleBulkUnarchive, createFilterAwareAction],
+
+  const handleBulkUnarchive = useCallback(
+    async (ids: string[]) => {
+      try {
+        await baseHandleBulkUnarchive(ids);
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletters unarchived" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ bulkUnarchive failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleBulkUnarchive, preserveFilterParams],
   );
-  const handleBulkDelete = useMemo(
-    () => createFilterAwareAction(baseHandleBulkDelete, "bulkDelete"),
-    [baseHandleBulkDelete, createFilterAwareAction],
+
+  const handleBulkDelete = useCallback(
+    async (ids: string[]) => {
+      try {
+        await baseHandleBulkDelete(ids);
+        preserveFilterParams();
+        setToast({ type: "success", message: "Newsletters deleted" });
+        setTimeout(() => setToast(null), 3000);
+      } catch (error) {
+        console.error("❌ bulkDelete failed:", error);
+        setToast({ type: "error", message: (error as Error).message });
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [baseHandleBulkDelete, preserveFilterParams],
   );
 
   // Initialize cache manager for advanced operations
@@ -585,20 +804,16 @@ const Inbox: React.FC = memo(() => {
   // Newsletter row action handlers (using shared handlers) with memoization
   const handleToggleArchiveWrapper = optimizedCallback(
     async (id: string) => {
-      const newsletter = newsletters.find((n) => n.id === id);
-      if (!newsletter) return;
-      await handleToggleArchive(newsletter);
+      await handleToggleArchive(id);
     },
-    [handleToggleArchive, newsletters],
+    [handleToggleArchive],
   );
 
   const handleToggleReadWrapper = optimizedCallback(
     async (id: string) => {
-      const newsletter = newsletters.find((n) => n.id === id);
-      if (!newsletter) return;
-      await handleToggleRead(newsletter);
+      await handleToggleRead(id);
     },
-    [handleToggleRead, newsletters],
+    [handleToggleRead],
   );
 
   const handleTrash = optimizedCallback(
@@ -610,17 +825,9 @@ const Inbox: React.FC = memo(() => {
 
   const handleToggleQueue = useCallback(
     async (id: string) => {
-      const newsletter = newsletters.find((n) => n.id === id);
-      if (!newsletter) return;
-
-      // Check current queue status using actual reading queue data
-      const isCurrentlyInQueue = readingQueue.some(
-        (item) => item.newsletter_id === id,
-      );
-
-      await handleToggleInQueue(newsletter, isCurrentlyInQueue);
+      await handleToggleInQueue(id);
     },
-    [handleToggleInQueue, newsletters, readingQueue],
+    [handleToggleInQueue],
   );
 
   const handleToggleLikeWrapper = useCallback(
@@ -1150,7 +1357,7 @@ const Inbox: React.FC = memo(() => {
         <div>Is Loading: {isLoadingNewsletters ? "Yes" : "No"}</div>
         <div>Is Error: {isErrorNewsletters ? "Yes" : "No"}</div>
         <div>User ID: {user?.id || "None"}</div>
-        <div>Query Enabled: {!!user ? "Yes" : "No"}</div>
+        <div>Query Enabled: {user ? "Yes" : "No"}</div>
         <button
           onClick={() => {
             console.log("Manual refetch triggered");
@@ -1277,7 +1484,7 @@ const Inbox: React.FC = memo(() => {
             };
             return (
               <NewsletterRow
-                key={newsletter.id}
+                key={stableKeys.get(newsletter.id) || newsletter.id}
                 newsletter={newsletterWithRelations}
                 isSelected={isSelecting && selectedIds.has(newsletter.id)}
                 onToggleSelect={toggleSelect}
@@ -1298,7 +1505,7 @@ const Inbox: React.FC = memo(() => {
                 showTags
                 visibleTags={visibleTags}
                 readingQueue={readingQueue}
-                isDeletingNewsletter={isDeletingNewsletter || false}
+                isDeletingNewsletter={Boolean(isDeletingNewsletter)}
                 loadingStates={{
                   ...loadingStates,
                   [newsletter.id]: isTogglingLike

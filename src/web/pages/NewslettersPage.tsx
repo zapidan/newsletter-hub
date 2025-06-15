@@ -16,7 +16,10 @@ import {
   useNewsletterSourceGroups,
   useReadingQueue,
 } from "@common/hooks";
-import { useUnreadCountsBySource } from "@common/hooks/useUnreadCount";
+import {
+  useUnreadCountsBySource,
+  useTotalCountsBySource,
+} from "@common/hooks/useUnreadCount";
 
 import { newsletterApi } from "@common/api";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
@@ -80,6 +83,7 @@ const NewslettersPage: React.FC = () => {
   } = useNewsletterSources();
 
   const { unreadCountsBySource } = useUnreadCountsBySource();
+  const { totalCountsBySource } = useTotalCountsBySource();
 
   useEffect(() => {
     if (newsletterSources && newsletterSources.length > 0) {
@@ -97,10 +101,8 @@ const NewslettersPage: React.FC = () => {
       const popularSources = sourcesWithCounts
         .filter(
           (source) =>
-            (source as NewsletterSource & { newsletter_count?: number })
-              .newsletter_count &&
-            (source as NewsletterSource & { newsletter_count?: number })
-              .newsletter_count! > 5,
+            totalCountsBySource[source.id] &&
+            totalCountsBySource[source.id] > 5,
         )
         .slice(0, 3);
 
@@ -120,7 +122,7 @@ const NewslettersPage: React.FC = () => {
         );
       });
     }
-  }, [cacheManager, sourcesWithCounts]);
+  }, [cacheManager, sourcesWithCounts, totalCountsBySource]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -331,7 +333,7 @@ const NewslettersPage: React.FC = () => {
   }, [selectedSourceId, selectedGroupId, selectedGroupSourceIds]);
 
   const {
-    newsletters: fetchedNewsletters = [],
+    newsletters: rawNewsletters = [],
     isLoadingNewsletters,
     isErrorNewsletters,
     errorNewsletters,
@@ -343,6 +345,48 @@ const NewslettersPage: React.FC = () => {
     refetchOnWindowFocus: false,
     staleTime: 0, // Force fresh data on filter changes
   });
+
+  // Stable newsletter list with preserved order
+  const [stableNewsletters, setStableNewsletters] = useState<
+    NewsletterWithRelations[]
+  >([]);
+
+  // Update stable newsletter list while preserving order
+  useEffect(() => {
+    if (rawNewsletters.length === 0 && !isLoadingNewsletters) {
+      setStableNewsletters([]);
+      return;
+    }
+
+    if (rawNewsletters.length > 0) {
+      setStableNewsletters((prevStable) => {
+        const updatedNewsletters: NewsletterWithRelations[] = [];
+
+        // First, add existing newsletters in their current order
+        const existingIds = new Set(rawNewsletters.map((n) => n.id));
+
+        // Keep existing newsletters in their current order
+        prevStable.forEach((newsletter) => {
+          if (existingIds.has(newsletter.id)) {
+            const updated = rawNewsletters.find((n) => n.id === newsletter.id);
+            if (updated) {
+              updatedNewsletters.push(updated);
+            }
+          }
+        });
+
+        // Add new newsletters at the end
+        rawNewsletters.forEach((newsletter) => {
+          if (!updatedNewsletters.find((n) => n.id === newsletter.id)) {
+            updatedNewsletters.push(newsletter);
+          }
+        });
+        return updatedNewsletters;
+      });
+    }
+  }, [rawNewsletters, isLoadingNewsletters]);
+
+  const fetchedNewsletters = stableNewsletters;
 
   // Shared newsletter action handlers
   const {
@@ -365,6 +409,26 @@ const NewslettersPage: React.FC = () => {
   });
 
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
+
+  // Stable keys for newsletter rows to prevent unnecessary re-renders
+  const [stableKeys, setStableKeys] = useState<Map<string, string>>(new Map());
+
+  // Generate stable keys for newsletters
+  const newsletterIds = useMemo(
+    () => fetchedNewsletters.map((n) => n.id).join(","),
+    [fetchedNewsletters],
+  );
+  useEffect(() => {
+    setStableKeys((prev) => {
+      const newKeys = new Map(prev);
+      fetchedNewsletters.forEach((newsletter) => {
+        if (!newKeys.has(newsletter.id)) {
+          newKeys.set(newsletter.id, `${newsletter.id}-${Date.now()}`);
+        }
+      });
+      return newKeys;
+    });
+  }, [newsletterIds, fetchedNewsletters]);
 
   // Debug newsletters data
   // Debug fetched newsletters and trigger refetch on filter changes
@@ -403,10 +467,39 @@ const NewslettersPage: React.FC = () => {
     [navigate],
   );
 
-  // Newsletter action wrapper handlers
+  // Newsletter action wrapper handlers with optimistic updates
   const handleToggleLikeWrapper = useCallback(
     async (newsletter: NewsletterWithRelations) => {
-      await handleToggleLike(newsletter);
+      // Optimistic update for immediate feedback
+      setStableNewsletters((prev) => {
+        const updated = [...prev];
+        const index = updated.findIndex((n) => n.id === newsletter.id);
+        if (index > -1) {
+          updated[index] = {
+            ...updated[index],
+            is_liked: !updated[index].is_liked,
+          };
+        }
+        return updated;
+      });
+
+      try {
+        await handleToggleLike(newsletter);
+      } catch (error) {
+        // Revert optimistic update on error
+        setStableNewsletters((prev) => {
+          const updated = [...prev];
+          const index = updated.findIndex((n) => n.id === newsletter.id);
+          if (index > -1) {
+            updated[index] = {
+              ...updated[index],
+              is_liked: !updated[index].is_liked,
+            };
+          }
+          return updated;
+        });
+        throw error;
+      }
     },
     [handleToggleLike],
   );
@@ -420,7 +513,36 @@ const NewslettersPage: React.FC = () => {
       const newsletter = fetchedNewsletters.find((n) => n.id === id);
       if (!newsletter) return;
 
-      await handleToggleArchive(newsletter);
+      // Optimistic update for immediate feedback
+      setStableNewsletters((prev) => {
+        const updated = [...prev];
+        const index = updated.findIndex((n) => n.id === id);
+        if (index > -1) {
+          updated[index] = {
+            ...updated[index],
+            is_archived: !updated[index].is_archived,
+          };
+        }
+        return updated;
+      });
+
+      try {
+        await handleToggleArchive(newsletter);
+      } catch (error) {
+        // Revert optimistic update on error
+        setStableNewsletters((prev) => {
+          const updated = [...prev];
+          const index = updated.findIndex((n) => n.id === id);
+          if (index > -1) {
+            updated[index] = {
+              ...updated[index],
+              is_archived: !updated[index].is_archived,
+            };
+          }
+          return updated;
+        });
+        throw error;
+      }
     },
     [handleToggleArchive, fetchedNewsletters],
   );
@@ -429,7 +551,37 @@ const NewslettersPage: React.FC = () => {
     async (id: string) => {
       const newsletter = fetchedNewsletters.find((n) => n.id === id);
       if (!newsletter) return;
-      await handleToggleRead(newsletter);
+
+      // Optimistic update for immediate feedback
+      setStableNewsletters((prev) => {
+        const updated = [...prev];
+        const index = updated.findIndex((n) => n.id === id);
+        if (index > -1) {
+          updated[index] = {
+            ...updated[index],
+            is_read: !updated[index].is_read,
+          };
+        }
+        return updated;
+      });
+
+      try {
+        await handleToggleRead(newsletter);
+      } catch (error) {
+        // Revert optimistic update on error
+        setStableNewsletters((prev) => {
+          const updated = [...prev];
+          const index = updated.findIndex((n) => n.id === id);
+          if (index > -1) {
+            updated[index] = {
+              ...updated[index],
+              is_read: !updated[index].is_read,
+            };
+          }
+          return updated;
+        });
+        throw error;
+      }
     },
     [handleToggleRead, fetchedNewsletters],
   );
@@ -444,7 +596,12 @@ const NewslettersPage: React.FC = () => {
         (item) => item.newsletter_id === newsletterId,
       );
 
-      await handleToggleInQueue(newsletter, isCurrentlyInQueue);
+      try {
+        await handleToggleInQueue(newsletter, isCurrentlyInQueue);
+      } catch (error) {
+        console.error("Error toggling queue status:", error);
+        toast.error("Failed to update queue status");
+      }
     },
     [handleToggleInQueue, fetchedNewsletters, readingQueue],
   );
@@ -970,8 +1127,8 @@ const NewslettersPage: React.FC = () => {
                         ) : (
                           <>
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {source.newsletter_count || 0}{" "}
-                              {source.newsletter_count === 1
+                              {totalCountsBySource[source.id] || 0}{" "}
+                              {(totalCountsBySource[source.id] || 0) === 1
                                 ? "newsletter"
                                 : "newsletters"}
                             </span>
@@ -1069,7 +1226,7 @@ const NewslettersPage: React.FC = () => {
                 {fetchedNewsletters.map(
                   (newsletter: NewsletterWithRelations) => (
                     <NewsletterRow
-                      key={newsletter.id}
+                      key={stableKeys.get(newsletter.id) || newsletter.id}
                       newsletter={newsletter}
                       isSelected={false}
                       onToggleSelect={handleToggleSelect}

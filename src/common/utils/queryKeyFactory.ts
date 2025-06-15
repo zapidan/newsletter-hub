@@ -68,6 +68,12 @@ export const queryKeyFactory = {
       [...queryKeyFactory.newsletters.all(), "unread-counts"] as const,
     unreadCountsBySource: () =>
       [...queryKeyFactory.newsletters.unreadCounts(), "by-source"] as const,
+    totalCountsBySource: () =>
+      [
+        ...queryKeyFactory.newsletters.all(),
+        "total-counts",
+        "by-source",
+      ] as const,
   },
 
   // Reading queue keys

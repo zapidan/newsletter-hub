@@ -628,7 +628,7 @@ export const newsletterApi = {
     });
   },
 
-  // Count newsletters by source
+  // Count newsletters by source (excluding archived)
   async countBySource(): Promise<Record<string, number>> {
     return withPerformanceLogging("newsletters.countBySource", async () => {
       const user = await requireAuth();
@@ -648,8 +648,45 @@ export const newsletterApi = {
         counts[sourceId] = (counts[sourceId] || 0) + 1;
       });
 
+      console.log(
+        "📊 Newsletter counts by source (archived excluded):",
+        counts,
+      );
+
       return counts;
     });
+  },
+
+  // Get total counts grouped by source (excluding archived)
+  async getTotalCountBySource(): Promise<Record<string, number>> {
+    return withPerformanceLogging(
+      "newsletters.getTotalCountBySource",
+      async () => {
+        const user = await requireAuth();
+
+        const { data, error } = await supabase
+          .from("newsletters")
+          .select("newsletter_source_id")
+          .eq("user_id", user.id)
+          .eq("is_archived", false);
+
+        if (error) handleSupabaseError(error);
+
+        const totalCounts: Record<string, number> = {};
+
+        data?.forEach((newsletter) => {
+          const sourceId = newsletter.newsletter_source_id || "unknown";
+          totalCounts[sourceId] = (totalCounts[sourceId] || 0) + 1;
+        });
+
+        console.log(
+          "📊 Total newsletter counts by source (archived excluded):",
+          totalCounts,
+        );
+
+        return totalCounts;
+      },
+    );
   },
 
   // Get unread counts grouped by source

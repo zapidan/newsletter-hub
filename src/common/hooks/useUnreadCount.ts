@@ -274,3 +274,104 @@ export const useUnreadCountsBySource = () => {
     error,
   };
 };
+
+// Hook for getting total counts by all sources (excluding archived newsletters)
+export const useTotalCountsBySource = () => {
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
+  const queryClient = useQueryClient();
+
+  // Initialize cache manager safely
+  const cacheManager = useMemo(() => {
+    return getCacheManagerSafe();
+  }, []);
+
+  const queryKey = useMemo(
+    () => queryKeyFactory.newsletters.totalCountsBySource(),
+    [],
+  );
+
+  const {
+    data: totalCountsBySource = {},
+    isLoading,
+    isError,
+    error,
+  } = useQuery<Record<string, number>, Error>({
+    queryKey,
+    queryFn: async () => {
+      if (!user) return {};
+
+      try {
+        return await newsletterApi.getTotalCountBySource();
+      } catch (error) {
+        console.error("Error fetching total counts by source:", error);
+        throw error;
+      }
+    },
+    enabled: !!user,
+    staleTime: STALE_TIME,
+    gcTime: CACHE_TIME,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds as backup
+    refetchIntervalInBackground: true,
+  });
+
+  // Listen for newsletter updates and invalidate total counts by source
+  useEffect(() => {
+    if (!user) return;
+
+    const handleNewsletterUpdate = () => {
+      console.log(
+        "🔄 Invalidating total counts by source due to newsletter update",
+      );
+
+      // Force immediate invalidation and refetch for total counts by source - more aggressive
+      queryClient.invalidateQueries({
+        queryKey: queryKeyFactory.newsletters.totalCountsBySource(),
+        exact: true,
+        refetchType: "all", // Refetch all, not just active
+      });
+
+      // Force immediate and thorough refetch for source counts
+      Promise.resolve().then(async () => {
+        await queryClient.invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.totalCountsBySource(),
+          exact: true,
+          refetchType: "all",
+        });
+
+        await queryClient.refetchQueries({
+          queryKey: queryKeyFactory.newsletters.totalCountsBySource(),
+          exact: true,
+          type: "all",
+        });
+      });
+    };
+
+    // Listen for custom events from newsletter actions
+    window.addEventListener(
+      "newsletter:read-status-changed",
+      handleNewsletterUpdate,
+    );
+    window.addEventListener("newsletter:archived", handleNewsletterUpdate);
+    window.addEventListener("newsletter:deleted", handleNewsletterUpdate);
+
+    return () => {
+      window.removeEventListener(
+        "newsletter:read-status-changed",
+        handleNewsletterUpdate,
+      );
+      window.removeEventListener("newsletter:archived", handleNewsletterUpdate);
+      window.removeEventListener("newsletter:deleted", handleNewsletterUpdate);
+    };
+  }, [user, queryClient]);
+
+  return {
+    totalCountsBySource,
+    isLoading,
+    isError,
+    error,
+  };
+};
