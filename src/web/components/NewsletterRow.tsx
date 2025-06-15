@@ -1,18 +1,11 @@
 import React, { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
-import {
-  Heart,
-  BookmarkIcon,
-  Tag as TagIcon,
-  Archive,
-  ArchiveX,
-  Trash,
-  Loader2,
-} from "lucide-react";
+import { Tag as TagIcon, Loader2 } from "lucide-react";
 import { NewsletterWithRelations, Tag } from "@common/types";
 import { usePrefetchNewsletterDetail } from "@common/hooks/useNewsletterDetail";
 import TagSelector from "./TagSelector";
+import NewsletterActions from "./NewsletterActions";
 import { getErrorMessage, ERROR_CODES } from "@common/constants/errorMessages";
 
 interface NewsletterRowProps {
@@ -55,13 +48,10 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   onToggleTagVisibility,
   onUpdateTags,
   onTagClick,
-  onRemoveFromQueue,
   onNewsletterClick,
   isInReadingQueue = false,
   showCheckbox = false,
   visibleTags,
-  readingQueue = [],
-  isDeletingNewsletter = false,
   loadingStates = {},
   errorTogglingLike,
   errorTogglingBookmark,
@@ -112,22 +102,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
       onTagClick(tag, e);
     },
     [onTagClick],
-  );
-
-  const handleToggleQueue = useCallback(
-    async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      try {
-        if (onToggleQueue) {
-          await onToggleQueue(newsletter.id);
-        } else if (isInReadingQueue && onRemoveFromQueue) {
-          onRemoveFromQueue(e, newsletter.id);
-        }
-      } catch (error) {
-        console.error("Error toggling queue status:", error);
-      }
-    },
-    [onToggleQueue, onRemoveFromQueue, isInReadingQueue, newsletter.id],
   );
 
   const handleUpdateTags = useCallback(
@@ -260,68 +234,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
             </div>
             {/* Action buttons */}
             <div className="flex items-center gap-1 mt-1">
-              {/* Like button */}
-              <button
-                type="button"
-                className={`p-1.5 transition-colors ${
-                  newsletter.is_liked
-                    ? "text-red-500"
-                    : "text-gray-400 hover:text-red-500"
-                } ${errorTogglingLike ? "opacity-50 cursor-not-allowed" : ""}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-
-                  // Prevent multiple clicks
-                  if (
-                    loadingStates[newsletter.id] === "like" ||
-                    errorTogglingLike
-                  ) {
-                    return;
-                  }
-
-                  // Handle like toggle with comprehensive error handling and navigation prevention
-                  (async () => {
-                    try {
-                      // Store current location to detect unwanted navigation
-                      const currentLocation = window.location.href;
-
-                      await onToggleLike(newsletter);
-
-                      // Ensure we stay on the same page
-                      if (window.location.href !== currentLocation) {
-                        console.warn(
-                          "🔄 Unexpected navigation detected, restoring location",
-                        );
-                        window.history.replaceState({}, "", currentLocation);
-                      }
-
-                      // Success - UI should update via optimistic updates
-                    } catch (error) {
-                      console.error("Error toggling like:", error);
-                      // Prevent any navigation or page reload
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Error handling is done by the shared action handlers
-                    }
-                  })();
-                }}
-                disabled={
-                  !!errorTogglingLike || loadingStates[newsletter.id] === "like"
-                }
-                title={newsletter.is_liked ? "Unlike" : "Like"}
-              >
-                {loadingStates[newsletter.id] === "like" ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
-                ) : (
-                  <Heart
-                    className="h-4 w-4"
-                    fill={newsletter.is_liked ? "#EF4444" : "none"}
-                    stroke={newsletter.is_liked ? "#EF4444" : "#9CA3AF"}
-                    strokeWidth={1.5}
-                  />
-                )}
-              </button>
               {/* Tag visibility toggle */}
               <button
                 type="button"
@@ -367,92 +279,22 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                   <span className="sr-only">(Active)</span>
                 )}
               </button>
-              {/* Reading queue button */}
-              <button
-                type="button"
-                className={`p-1 rounded-full hover:bg-gray-200 transition-colors ${
-                  loadingStates[newsletter.id] === "queue" ? "opacity-50" : ""
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleQueue(e);
-                }}
-                disabled={loadingStates[newsletter.id] === "queue"}
-                title={
-                  readingQueue.some(
-                    (item) => item.newsletter_id === newsletter.id,
-                  )
-                    ? "Remove from reading queue"
-                    : "Add to reading queue"
-                }
-              >
-                {loadingStates[newsletter.id] === "queue" ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
-                ) : (
-                  <BookmarkIcon
-                    className="h-4 w-4"
-                    fill={isInReadingQueue ? "#3B82F6" : "none"}
-                    stroke={isInReadingQueue ? "#3B82F6" : "#9CA3AF"}
-                    strokeWidth={1.5}
-                  />
-                )}
-              </button>
-              {/* Archive/Unarchive button */}
-              <button
-                type="button"
-                className={`p-1 rounded-full hover:bg-gray-200 transition-colors ${
-                  loadingStates[newsletter.id] === "archive" ? "opacity-50" : ""
-                }`}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    await onToggleArchive(newsletter.id);
-                  } catch (error) {
-                    console.error("Error toggling archive:", error);
-                  }
-                }}
-                disabled={loadingStates[newsletter.id] === "archive"}
-                title={newsletter.is_archived ? "Unarchive" : "Archive"}
-              >
-                {loadingStates[newsletter.id] === "archive" ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
-                ) : newsletter.is_archived ? (
-                  <ArchiveX className="h-4 w-4 text-green-700" />
-                ) : (
-                  <Archive className="h-4 w-4 text-amber-700" />
-                )}
-              </button>
-              {/* Trash button for archived newsletters */}
-              {newsletter.is_archived && (
-                <button
-                  type="button"
-                  className={`p-1 rounded-full hover:bg-red-100 transition-colors ${
-                    isDeletingNewsletter ||
-                    loadingStates[newsletter.id] === "delete"
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    try {
-                      onTrash(newsletter.id);
-                    } catch (error) {
-                      console.error("Error deleting newsletter:", error);
-                    }
-                  }}
-                  title="Delete permanently"
-                  disabled={
-                    isDeletingNewsletter ||
-                    loadingStates[newsletter.id] === "delete"
-                  }
-                >
-                  {loadingStates[newsletter.id] === "delete" ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
-                  ) : (
-                    <Trash className="h-4 w-4 text-red-600" />
-                  )}
-                </button>
-              )}
+
+              {/* Newsletter Actions Component */}
+              <NewsletterActions
+                newsletter={newsletter}
+                onToggleLike={onToggleLike}
+                onToggleBookmark={onToggleBookmark}
+                onToggleArchive={onToggleArchive}
+                onToggleRead={onToggleRead}
+                onTrash={onTrash}
+                onToggleQueue={onToggleQueue}
+                loadingStates={loadingStates}
+                errorTogglingLike={errorTogglingLike}
+                errorTogglingBookmark={errorTogglingBookmark}
+                isInReadingQueue={isInReadingQueue}
+                compact={true}
+              />
             </div>
             <div className="text-sm text-gray-700 mb-2 line-clamp-2">
               {newsletter.summary}
