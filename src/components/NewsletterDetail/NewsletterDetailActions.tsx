@@ -103,9 +103,6 @@ export const NewsletterDetailActions: React.FC<
         await handleMarkAsRead(localNewsletter.id);
       }
 
-      toast.success(
-        localNewsletter.is_read ? "Marked as unread" : "Marked as read",
-      );
     } catch (error) {
       console.error("Error toggling read status:", error);
       // Revert optimistic update
@@ -139,10 +136,6 @@ export const NewsletterDetailActions: React.FC<
 
     try {
       await handleToggleLike(localNewsletter);
-
-      toast.success(
-        localNewsletter.is_liked ? "Removed from liked" : "Added to liked",
-      );
     } catch (error) {
       console.error("Failed to update like status:", error);
       // Revert optimistic update
@@ -171,10 +164,6 @@ export const NewsletterDetailActions: React.FC<
 
     try {
       await handleToggleInQueue(localNewsletter, isInQueue);
-
-      toast.success(
-        isInQueue ? "Removed from reading queue" : "Added to reading queue",
-      );
     } catch (error) {
       console.error("Error toggling queue:", error);
       // Revert optimistic update on error
@@ -207,8 +196,6 @@ export const NewsletterDetailActions: React.FC<
 
     try {
       await handleToggleArchive(localNewsletter);
-
-      toast.success("Newsletter archived");
     } catch (error) {
       console.error("Error archiving newsletter:", error);
       // Revert optimistic update
@@ -242,8 +229,6 @@ export const NewsletterDetailActions: React.FC<
 
     try {
       await handleToggleArchive(localNewsletter);
-
-      toast.success("Newsletter unarchived");
     } catch (error) {
       console.error("Error unarchiving newsletter:", error);
       // Revert optimistic update
@@ -274,7 +259,6 @@ export const NewsletterDetailActions: React.FC<
 
     try {
       await handleDeleteNewsletter(localNewsletter.id);
-      toast.success("Newsletter deleted permanently");
 
       // Navigate back after deletion
       if (isFromReadingQueue) {
