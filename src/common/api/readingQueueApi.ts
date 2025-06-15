@@ -1,5 +1,10 @@
-import { supabase, handleSupabaseError, requireAuth, withPerformanceLogging } from './supabaseClient';
-import { ReadingQueueItem, Tag } from '../types';
+import {
+  supabase,
+  handleSupabaseError,
+  requireAuth,
+  withPerformanceLogging,
+} from "./supabaseClient";
+import { ReadingQueueItem, Tag } from "../types";
 
 // Transform raw Supabase response to ReadingQueueItem
 const transformQueueItem = (data: {
@@ -8,8 +13,38 @@ const transformQueueItem = (data: {
   newsletter_id: string;
   position: number;
   added_at: string;
-  newsletters: any;
+  newsletters: {
+    id: string;
+    title: string;
+    summary: string;
+    content: string;
+    image_url: string;
+    received_at: string;
+    updated_at: string;
+    newsletter_source_id: string;
+    user_id: string;
+    is_read: boolean;
+    is_archived: boolean;
+    is_liked: boolean;
+    is_bookmarked: boolean;
+    word_count: number;
+    estimated_read_time: number;
+    newsletter_sources?: any;
+    tags?: any[];
+  };
 }): ReadingQueueItem => {
+  if (!data.newsletters) {
+    const errorMsg = `Newsletter with id ${data.newsletter_id} not found in reading queue item ${data.id}. The newsletter may have been deleted.`;
+    console.error(`[ReadingQueue] ${errorMsg}`, {
+      queueItemId: data.id,
+      newsletterId: data.newsletter_id,
+      userId: data.user_id,
+      position: data.position,
+      addedAt: data.added_at,
+    });
+    throw new Error(errorMsg);
+  }
+
   return {
     id: data.id,
     user_id: data.user_id,
@@ -26,15 +61,15 @@ const transformQueueItem = (data: {
       updated_at: data.newsletters.updated_at,
       newsletter_source_id: data.newsletters.newsletter_source_id,
       user_id: data.newsletters.user_id,
-      is_read: data.newsletters.is_read,
-      is_archived: data.newsletters.is_archived,
-      is_liked: data.newsletters.is_liked,
-      is_bookmarked: data.newsletters.is_bookmarked,
+      is_read: Boolean(data.newsletters.is_read),
+      is_archived: Boolean(data.newsletters.is_archived),
+      is_liked: Boolean(data.newsletters.is_liked),
+      is_bookmarked: Boolean(data.newsletters.is_bookmarked),
       word_count: data.newsletters.word_count,
       estimated_read_time: data.newsletters.estimated_read_time,
       source: data.newsletters.newsletter_sources || null,
-      tags: []
-    }
+      tags: data.newsletters.tags || [],
+    },
   };
 };
 
@@ -42,12 +77,13 @@ const transformQueueItem = (data: {
 export const readingQueueApi = {
   // Get all reading queue items for the current user
   async getAll(): Promise<ReadingQueueItem[]> {
-    return withPerformanceLogging('readingQueue.getAll', async () => {
+    return withPerformanceLogging("readingQueue.getAll", async () => {
       const user = await requireAuth();
 
       const { data: queueItems, error: queueError } = await supabase
-        .from('reading_queue')
-        .select(`
+        .from("reading_queue")
+        .select(
+          `
           *,
           newsletters (
             *,
@@ -55,23 +91,80 @@ export const readingQueueApi = {
               *
             )
           )
-        `)
-        .eq('user_id', user.id)
-        .order('position', { ascending: true });
+        `,
+        )
+        .eq("user_id", user.id)
+        .order("position", { ascending: true });
 
       if (queueError) handleSupabaseError(queueError);
       if (!queueItems?.length) return [];
 
+      // Filter out queue items with null newsletters first
+      const invalidItems = queueItems.filter((item) => !item.newsletters);
+      const validQueueItems = queueItems.filter((item) => item.newsletters);
+
+      // Log data integrity issues and clean up orphaned items
+      if (invalidItems.length > 0) {
+        console.warn(
+          `[ReadingQueue] Found ${invalidItems.length} queue items with null newsletters, cleaning up:`,
+          invalidItems.map((item) => ({
+            id: item.id,
+            newsletter_id: item.newsletter_id,
+            user_id: item.user_id,
+            position: item.position,
+          })),
+        );
+
+        // Automatically clean up orphaned items
+        try {
+          const orphanedIds = invalidItems.map((item) => item.id);
+          const { error: cleanupError } = await supabase
+            .from("reading_queue")
+            .delete()
+            .in("id", orphanedIds)
+            .eq("user_id", user.id);
+
+          if (cleanupError) {
+            console.error(
+              "[ReadingQueue] Failed to cleanup orphaned items:",
+              cleanupError,
+            );
+          } else {
+            console.log(
+              `[ReadingQueue] Successfully cleaned up ${orphanedIds.length} orphaned items`,
+            );
+          }
+        } catch (cleanupError) {
+          console.error("[ReadingQueue] Cleanup error:", cleanupError);
+        }
+      }
+
+      if (!validQueueItems.length) {
+        if (queueItems.length > 0) {
+          console.warn(
+            `[ReadingQueue] All ${queueItems.length} queue items had null newsletters for user ${user.id}`,
+          );
+        }
+        return [];
+      }
+
       // Fetch tags for all newsletters in the queue
-      const newsletterIds = queueItems.map((item) => item.newsletter_id);
-      const { data: newsletterTags } = await supabase
-        .from('newsletter_tags')
-        .select('newsletter_id, tags(*)')
-        .in('newsletter_id', newsletterIds);
+      const newsletterIds = validQueueItems
+        .map((item) => item.newsletter_id)
+        .filter((id) => id != null); // Filter out null/undefined newsletter_ids
+
+      let newsletterTags: Array<{ newsletter_id: string; tags: Tag }> = [];
+      if (newsletterIds.length > 0) {
+        const { data } = await supabase
+          .from("newsletter_tags")
+          .select("newsletter_id, tags(*)")
+          .in("newsletter_id", newsletterIds);
+        newsletterTags = data || [];
+      }
 
       // Create a map of newsletter ID to tags
       const tagsMap = new Map<string, Tag[]>();
-      newsletterTags?.forEach((nt: any) => {
+      newsletterTags.forEach((nt: { newsletter_id: string; tags: Tag }) => {
         if (!tagsMap.has(nt.newsletter_id)) {
           tagsMap.set(nt.newsletter_id, []);
         }
@@ -80,51 +173,66 @@ export const readingQueueApi = {
         }
       });
 
-      return queueItems.map((item) => {
-        const transformedItem = transformQueueItem(item);
-        // Add tags to the newsletter
-        transformedItem.newsletter.tags = tagsMap.get(item.newsletter_id) || [];
-        return transformedItem;
+      return validQueueItems.map((item) => {
+        try {
+          const transformedItem = transformQueueItem(item);
+          // Add tags to the newsletter
+          transformedItem.newsletter.tags =
+            tagsMap.get(item.newsletter_id) || [];
+          return transformedItem;
+        } catch (error) {
+          console.error(
+            `[ReadingQueue] Failed to transform queue item ${item.id}:`,
+            error,
+          );
+          throw error;
+        }
       });
     });
   },
 
   // Add a newsletter to the reading queue
   async add(newsletterId: string): Promise<ReadingQueueItem> {
-    return withPerformanceLogging('readingQueue.add', async () => {
+    return withPerformanceLogging("readingQueue.add", async () => {
       const user = await requireAuth();
+
+      // Validate newsletter ID
+      if (!newsletterId) {
+        throw new Error("Newsletter ID is required");
+      }
 
       // Check if already in queue
       const { data: existingItem } = await supabase
-        .from('reading_queue')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('newsletter_id', newsletterId)
+        .from("reading_queue")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("newsletter_id", newsletterId)
         .maybeSingle();
 
       if (existingItem) {
-        throw new Error('Newsletter is already in reading queue');
+        throw new Error("Newsletter is already in reading queue");
       }
 
       // Get the current max position
       const { data: maxPosition } = await supabase
-        .from('reading_queue')
-        .select('position')
-        .eq('user_id', user.id)
-        .order('position', { ascending: false })
+        .from("reading_queue")
+        .select("position")
+        .eq("user_id", user.id)
+        .order("position", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       const newPosition = (maxPosition?.position || 0) + 1;
 
       const { data: insertedData, error } = await supabase
-        .from('reading_queue')
+        .from("reading_queue")
         .insert({
           user_id: user.id,
           newsletter_id: newsletterId,
           position: newPosition,
         })
-        .select(`
+        .select(
+          `
           *,
           newsletters (
             *,
@@ -132,19 +240,27 @@ export const readingQueueApi = {
               *
             )
           )
-        `)
+        `,
+        )
         .single();
 
       if (error) handleSupabaseError(error);
 
-      // Fetch tags for the newsletter
-      const { data: newsletterTags } = await supabase
-        .from('newsletter_tags')
-        .select('tags(*)')
-        .eq('newsletter_id', newsletterId);
+      // Fetch tags for the newsletter (only if newsletter ID is valid)
+      let newsletterTags: Array<{ tags: Tag }> = [];
+      if (newsletterId) {
+        const { data } = await supabase
+          .from("newsletter_tags")
+          .select("tags(*)")
+          .eq("newsletter_id", newsletterId);
+        newsletterTags = data || [];
+      }
 
       const transformedItem = transformQueueItem(insertedData);
-      transformedItem.newsletter.tags = newsletterTags?.map((nt: any) => nt.tags as Tag).filter(Boolean) || [];
+      transformedItem.newsletter.tags =
+        newsletterTags
+          ?.map((nt: { tags: Tag }) => nt.tags as Tag)
+          .filter(Boolean) || [];
 
       return transformedItem;
     });
@@ -152,14 +268,14 @@ export const readingQueueApi = {
 
   // Remove an item from the reading queue
   async remove(queueItemId: string): Promise<boolean> {
-    return withPerformanceLogging('readingQueue.remove', async () => {
+    return withPerformanceLogging("readingQueue.remove", async () => {
       const user = await requireAuth();
 
       const { error } = await supabase
-        .from('reading_queue')
+        .from("reading_queue")
         .delete()
-        .eq('id', queueItemId)
-        .eq('user_id', user.id);
+        .eq("id", queueItemId)
+        .eq("user_id", user.id);
 
       if (error) handleSupabaseError(error);
 
@@ -169,20 +285,18 @@ export const readingQueueApi = {
 
   // Reorder reading queue items
   async reorder(updates: { id: string; position: number }[]): Promise<boolean> {
-    return withPerformanceLogging('readingQueue.reorder', async () => {
+    return withPerformanceLogging("readingQueue.reorder", async () => {
       const user = await requireAuth();
 
       // Update the positions
-      const { error } = await supabase
-        .from('reading_queue')
-        .upsert(
-          updates.map(({ id, position }) => ({
-            id,
-            position,
-            user_id: user.id,
-          })),
-          { onConflict: 'id' }
-        );
+      const { error } = await supabase.from("reading_queue").upsert(
+        updates.map(({ id, position }) => ({
+          id,
+          position,
+          user_id: user.id,
+        })),
+        { onConflict: "id" },
+      );
 
       if (error) handleSupabaseError(error);
 
@@ -192,13 +306,13 @@ export const readingQueueApi = {
 
   // Clear all items from reading queue
   async clear(): Promise<boolean> {
-    return withPerformanceLogging('readingQueue.clear', async () => {
+    return withPerformanceLogging("readingQueue.clear", async () => {
       const user = await requireAuth();
 
       const { error } = await supabase
-        .from('reading_queue')
+        .from("reading_queue")
         .delete()
-        .eq('user_id', user.id);
+        .eq("user_id", user.id);
 
       if (error) handleSupabaseError(error);
 
@@ -208,12 +322,13 @@ export const readingQueueApi = {
 
   // Get reading queue item by ID
   async getById(id: string): Promise<ReadingQueueItem | null> {
-    return withPerformanceLogging('readingQueue.getById', async () => {
+    return withPerformanceLogging("readingQueue.getById", async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from('reading_queue')
-        .select(`
+        .from("reading_queue")
+        .select(
+          `
           *,
           newsletters (
             *,
@@ -221,13 +336,14 @@ export const readingQueueApi = {
               *
             )
           )
-        `)
-        .eq('id', id)
-        .eq('user_id', user.id)
+        `,
+        )
+        .eq("id", id)
+        .eq("user_id", user.id)
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') {
+        if (error.code === "PGRST116") {
           return null; // Not found
         }
         handleSupabaseError(error);
@@ -235,14 +351,21 @@ export const readingQueueApi = {
 
       if (!data) return null;
 
-      // Fetch tags for the newsletter
-      const { data: newsletterTags } = await supabase
-        .from('newsletter_tags')
-        .select('tags(*)')
-        .eq('newsletter_id', data.newsletter_id);
+      // Fetch tags for the newsletter (only if newsletter ID is valid)
+      let newsletterTags: Array<{ tags: Tag }> = [];
+      if (data.newsletter_id) {
+        const { data: tagsData } = await supabase
+          .from("newsletter_tags")
+          .select("tags(*)")
+          .eq("newsletter_id", data.newsletter_id);
+        newsletterTags = tagsData || [];
+      }
 
       const transformedItem = transformQueueItem(data);
-      transformedItem.newsletter.tags = newsletterTags?.map((nt: any) => nt.tags as Tag).filter(Boolean) || [];
+      transformedItem.newsletter.tags =
+        newsletterTags
+          ?.map((nt: { tags: Tag }) => nt.tags as Tag)
+          .filter(Boolean) || [];
 
       return transformedItem;
     });
@@ -250,14 +373,14 @@ export const readingQueueApi = {
 
   // Check if a newsletter is in the reading queue
   async isInQueue(newsletterId: string): Promise<boolean> {
-    return withPerformanceLogging('readingQueue.isInQueue', async () => {
+    return withPerformanceLogging("readingQueue.isInQueue", async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from('reading_queue')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('newsletter_id', newsletterId)
+        .from("reading_queue")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("newsletter_id", newsletterId)
         .maybeSingle();
 
       if (error) handleSupabaseError(error);
@@ -272,13 +395,13 @@ export const readingQueueApi = {
     unread: number;
     read: number;
   }> {
-    return withPerformanceLogging('readingQueue.getStats', async () => {
+    return withPerformanceLogging("readingQueue.getStats", async () => {
       const items = await this.getAll();
 
       const stats = {
         total: items.length,
-        unread: items.filter(item => !item.newsletter.is_read).length,
-        read: items.filter(item => item.newsletter.is_read).length,
+        unread: items.filter((item) => !item.newsletter.is_read).length,
+        read: items.filter((item) => item.newsletter.is_read).length,
       };
 
       return stats;
@@ -286,14 +409,17 @@ export const readingQueueApi = {
   },
 
   // Move item to specific position
-  async moveToPosition(queueItemId: string, newPosition: number): Promise<boolean> {
-    return withPerformanceLogging('readingQueue.moveToPosition', async () => {
+  async moveToPosition(
+    queueItemId: string,
+    newPosition: number,
+  ): Promise<boolean> {
+    return withPerformanceLogging("readingQueue.moveToPosition", async () => {
       // Get all queue items to calculate new positions
       const items = await this.getAll();
-      const itemToMove = items.find(item => item.id === queueItemId);
+      const itemToMove = items.find((item) => item.id === queueItemId);
 
       if (!itemToMove) {
-        throw new Error('Queue item not found');
+        throw new Error("Queue item not found");
       }
 
       // Calculate new positions for all items
@@ -323,6 +449,55 @@ export const readingQueueApi = {
       return this.reorder(updates);
     });
   },
+
+  // Clean up orphaned reading queue items (where newsletters have been deleted)
+  async cleanupOrphanedItems(): Promise<{ removedCount: number }> {
+    return withPerformanceLogging(
+      "readingQueue.cleanupOrphanedItems",
+      async () => {
+        const user = await requireAuth();
+
+        // Find queue items with null newsletters by doing a LEFT JOIN
+        const { data: orphanedItems, error } = await supabase
+          .from("reading_queue")
+          .select(
+            `
+          id,
+          newsletter_id,
+          newsletters!left(id)
+        `,
+          )
+          .eq("user_id", user.id)
+          .is("newsletters.id", null);
+
+        if (error) handleSupabaseError(error);
+
+        if (!orphanedItems || orphanedItems.length === 0) {
+          return { removedCount: 0 };
+        }
+
+        console.warn(
+          `[ReadingQueue] Found ${orphanedItems.length} orphaned queue items, cleaning up...`,
+          orphanedItems.map((item) => ({
+            id: item.id,
+            newsletter_id: item.newsletter_id,
+          })),
+        );
+
+        // Remove orphaned items
+        const orphanedIds = orphanedItems.map((item) => item.id);
+        const { error: deleteError } = await supabase
+          .from("reading_queue")
+          .delete()
+          .in("id", orphanedIds)
+          .eq("user_id", user.id);
+
+        if (deleteError) handleSupabaseError(deleteError);
+
+        return { removedCount: orphanedItems.length };
+      },
+    );
+  },
 };
 
 // Export individual functions for backward compatibility
@@ -337,5 +512,8 @@ export const {
   getStats: getReadingQueueStats,
   moveToPosition: moveQueueItemToPosition,
 } = readingQueueApi;
+
+export const cleanupOrphanedReadingQueueItems =
+  readingQueueApi.cleanupOrphanedItems;
 
 export default readingQueueApi;

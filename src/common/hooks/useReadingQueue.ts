@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext, useCallback, useMemo, useRef } from "react";
-import type { NewsletterWithRelations, ReadingQueueItem } from "@common/types";
+import type { ReadingQueueItem } from "@common/types";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
 import { getCacheManagerSafe } from "../utils/cacheUtils";
 import { readingQueueApi } from "@common/api/readingQueueApi";
@@ -52,58 +52,6 @@ interface QueueItemFromDB {
   newsletters: NewsletterFromDB;
 }
 
-const transformQueueItem = (item: QueueItemFromDB): ReadingQueueItem => {
-  const newsletter = item.newsletters;
-
-  if (!newsletter) {
-    throw new Error("Newsletter data is missing from queue item");
-  }
-
-  // Transform the newsletter data
-  const transformedNewsletter: NewsletterWithRelations = {
-    id: newsletter.id,
-    title: newsletter.title,
-    summary: newsletter.summary,
-    content: newsletter.content,
-    url: "", // Not available in this context
-    author: "", // Not available in this context
-    published_at: newsletter.received_at,
-    created_at: newsletter.created_at,
-    updated_at: newsletter.updated_at,
-    is_read: newsletter.is_read,
-    is_liked: newsletter.is_liked,
-    is_archived: newsletter.is_archived,
-    is_bookmarked: true, // Since it's in the reading queue
-    user_id: newsletter.user_id,
-    newsletter_source_id: newsletter.newsletter_source_id,
-    newsletter_source: newsletter.newsletter_sources
-      ? {
-          id: newsletter.newsletter_sources.id,
-          name: newsletter.newsletter_sources.name,
-          url: newsletter.newsletter_sources.domain,
-          description: "",
-          is_active: true,
-          is_archived: false,
-          last_fetched_at: null,
-          created_at: newsletter.newsletter_sources.created_at,
-          updated_at: newsletter.newsletter_sources.updated_at,
-          user_id: newsletter.newsletter_sources.user_id,
-        }
-      : null,
-    tags: newsletter.tags || [],
-  };
-
-  return {
-    id: item.id,
-    position: item.position,
-    user_id: item.user_id,
-    newsletter_id: item.newsletter_id,
-    created_at: item.created_at,
-    updated_at: item.updated_at,
-    newsletter: transformedNewsletter,
-  };
-};
-
 export const useReadingQueue = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
@@ -149,6 +97,29 @@ export const useReadingQueue = () => {
       return await readingQueueApi.getAll();
     } catch (error) {
       console.error("Error fetching reading queue:", error);
+
+      // Handle specific error types
+      if (error instanceof Error) {
+        // If it's a null newsletter error, it means data integrity issues
+        if (error.message.includes("not found in reading queue item")) {
+          console.warn(
+            "[ReadingQueue] Data integrity issue detected, returning empty queue",
+          );
+          // Could potentially trigger a cleanup here if needed
+          return [];
+        }
+
+        // If it's a network/auth error, re-throw to let React Query handle retries
+        if (
+          error.message.includes("JWT") ||
+          error.message.includes("auth") ||
+          error.message.includes("network")
+        ) {
+          throw error;
+        }
+      }
+
+      // For other errors, return empty array to prevent UI breaks
       return [];
     }
   }, []);
@@ -167,6 +138,18 @@ export const useReadingQueue = () => {
     staleTime: 1 * 60 * 1000, // 1 minute
     gcTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      // Don't retry on data integrity errors
+      if (
+        error instanceof Error &&
+        error.message.includes("not found in reading queue item")
+      ) {
+        return false;
+      }
+      // Retry up to 3 times for other errors
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   // Add to reading queue
@@ -444,6 +427,31 @@ export const useReadingQueue = () => {
     },
   });
 
+  // Cleanup orphaned items
+  const cleanupOrphanedItems = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("User not authenticated");
+      return readingQueueApi.cleanupOrphanedItems();
+    },
+    onSuccess: (result) => {
+      if (result.removedCount > 0) {
+        console.log(
+          `[ReadingQueue] Cleaned up ${result.removedCount} orphaned items`,
+        );
+        // Refetch the queue to get the updated state
+        refetch();
+      }
+    },
+    onError: (error) => {
+      console.error("[ReadingQueue] Failed to cleanup orphaned items:", error);
+    },
+    onSettled: () => {
+      safeCacheCall((manager) =>
+        manager.invalidateRelatedQueries([], "queue-cleanup"),
+      );
+    },
+  });
+
   return {
     // Data
     readingQueue,
@@ -460,6 +468,7 @@ export const useReadingQueue = () => {
     markAsRead: markAsRead.mutateAsync,
     markAsUnread: markAsUnread.mutateAsync,
     updateTags: updateTags.mutateAsync,
+    cleanupOrphanedItems: cleanupOrphanedItems.mutateAsync,
 
     // Loading states
     isAdding: addToQueue.isPending,
@@ -469,6 +478,7 @@ export const useReadingQueue = () => {
     isMarkingAsRead: markAsRead.isPending,
     isMarkingAsUnread: markAsUnread.isPending,
     isUpdatingTags: updateTags.isPending,
+    isCleaningUp: cleanupOrphanedItems.isPending,
 
     // Utils
     refetch,
