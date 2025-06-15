@@ -42,7 +42,6 @@ interface SupabaseNewsletterResponse {
   is_read: boolean;
   is_liked: boolean;
   is_archived: boolean;
-  is_bookmarked?: boolean;
   user_id: string;
   newsletter_source_id?: string | null;
   word_count: number;

@@ -1,7 +1,6 @@
-import { Newsletter } from '@common/types';
-import { format } from 'date-fns';
-import { Archive, ArchiveX } from 'lucide-react';
-
+import { Newsletter } from "@common/types";
+import { format } from "date-fns";
+import { Archive, ArchiveX } from "lucide-react";
 
 // TODO: not currently used
 // From the git history, we can see that NewsletterCard was previously used in:
@@ -10,7 +9,7 @@ import { Archive, ArchiveX } from 'lucide-react';
 // NewsletterDetail.tsx - For displaying a single newsletter
 interface NewsletterCardProps {
   newsletter: Newsletter;
-  showBookmark?: boolean;
+  showQueueButton?: boolean;
   isInQueue?: boolean;
   onToggleQueue?: (newsletterId: string, addToQueue: boolean) => void;
   onToggleArchive?: (newsletterId: string, isArchived: boolean) => void;
@@ -20,14 +19,14 @@ interface NewsletterCardProps {
 
 const NewsletterCard = ({
   newsletter,
-  showBookmark = true,
+  showQueueButton = true,
   isInQueue = false,
   onToggleQueue,
   onToggleArchive,
   showArchiveButton = true,
   showSource = false,
 }: NewsletterCardProps) => {
-  const handleBookmarkClick = (e: React.MouseEvent) => {
+  const handleQueueClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onToggleQueue) {
       onToggleQueue(newsletter.id, !isInQueue);
@@ -45,7 +44,7 @@ const NewsletterCard = ({
           />
         </div>
       )}
-      
+
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-2">
           <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
@@ -59,7 +58,7 @@ const NewsletterCard = ({
                   onToggleArchive(newsletter.id, !newsletter.is_archived);
                 }}
                 className="text-gray-400 hover:text-amber-500 transition-colors"
-                title={newsletter.is_archived ? 'Unarchive' : 'Archive'}
+                title={newsletter.is_archived ? "Unarchive" : "Archive"}
               >
                 {newsletter.is_archived ? (
                   <ArchiveX className="h-5 w-5" />
@@ -68,16 +67,16 @@ const NewsletterCard = ({
                 )}
               </button>
             )}
-            {showBookmark && (
+            {showQueueButton && (
               <button
-                onClick={handleBookmarkClick}
+                onClick={handleQueueClick}
                 className="text-gray-400 hover:text-yellow-500 transition-colors"
-                title={isInQueue ? 'Remove from queue' : 'Add to queue'}
+                title={isInQueue ? "Remove from queue" : "Add to queue"}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className="h-5 w-5"
-                  fill={isInQueue ? 'currentColor' : 'none'}
+                  fill={isInQueue ? "currentColor" : "none"}
                   viewBox="0 0 24 24"
                   stroke="currentColor"
                 >
@@ -92,26 +91,28 @@ const NewsletterCard = ({
             )}
           </div>
         </div>
-        
+
         <div className="text-sm text-gray-500 mb-2">
           {newsletter.source ? (
             <>
               <span className="font-medium">{newsletter.source.name}</span>
               {newsletter.source.domain && (
-                <span className="text-gray-400 ml-2">• {newsletter.source.domain}</span>
+                <span className="text-gray-400 ml-2">
+                  • {newsletter.source.domain}
+                </span>
               )}
             </>
           ) : (
             <span>Unknown Source</span>
           )}
         </div>
-        
+
         {newsletter.received_at && (
           <p className="text-xs text-gray-400 mt-auto">
-            {format(new Date(newsletter.received_at), 'MMM d, yyyy')}
+            {format(new Date(newsletter.received_at), "MMM d, yyyy")}
           </p>
         )}
-        
+
         {newsletter.tags && newsletter.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {newsletter.tags.map((tag) => (

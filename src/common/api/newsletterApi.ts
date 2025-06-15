@@ -132,10 +132,6 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     query = query.eq("is_liked", params.isLiked);
   }
 
-  if (params.isBookmarked !== undefined) {
-    query = query.eq("is_bookmarked", params.isBookmarked);
-  }
-
   // Apply source filter if sourceIds is provided
   if (params.sourceIds && params.sourceIds.length > 0) {
     console.log("🔍 [buildNewsletterQuery] Applying source filter:", {
@@ -217,7 +213,7 @@ export const newsletterApi = {
 
       console.log("🔍 [getAll] Executing query with filters:", {
         userId: user.id,
-        sourceId: params.sourceId || null,
+        sourceIds: params.sourceIds || null,
         isArchived: params.isArchived,
         isRead: params.isRead,
       });
@@ -231,8 +227,8 @@ export const newsletterApi = {
 
       console.log("🔍 [getAll] Query results:", {
         count: data?.length || 0,
-        hasSourceId: !!params.sourceId,
-        sourceId: params.sourceId || null,
+        hasSourceIds: !!params.sourceIds,
+        sourceIds: params.sourceIds || null,
         firstItem: data?.[0]
           ? {
               id: data[0].id,
@@ -578,16 +574,6 @@ export const newsletterApi = {
     return this.update({ id, is_liked: !newsletter.is_liked });
   },
 
-  // Toggle bookmark status
-  async toggleBookmark(id: string): Promise<NewsletterWithRelations> {
-    const newsletter = await this.getById(id, false);
-    if (!newsletter) {
-      throw new Error("Newsletter not found");
-    }
-
-    return this.update({ id, is_bookmarked: !newsletter.is_bookmarked });
-  },
-
   // Get newsletters by tag
   async getByTag(
     tagId: string,
@@ -601,7 +587,7 @@ export const newsletterApi = {
     sourceId: string,
     params: Omit<NewsletterQueryParams, "sourceIds"> = {},
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    return this.getAll({ ...params, sourceId });
+    return this.getAll({ ...params, sourceIds: [sourceId] });
   },
 
   // Search newsletters
@@ -619,14 +605,13 @@ export const newsletterApi = {
     unread: number;
     archived: number;
     liked: number;
-    bookmarked: number;
   }> {
     return withPerformanceLogging("newsletters.getStats", async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
         .from("newsletters")
-        .select("is_read, is_archived, is_liked, is_bookmarked")
+        .select("is_read, is_archived, is_liked")
         .eq("user_id", user.id);
 
       if (error) handleSupabaseError(error);
@@ -637,7 +622,6 @@ export const newsletterApi = {
         unread: data?.filter((n) => !n.is_read).length || 0,
         archived: data?.filter((n) => n.is_archived).length || 0,
         liked: data?.filter((n) => n.is_liked).length || 0,
-        bookmarked: data?.filter((n) => n.is_bookmarked).length || 0,
       };
 
       return stats;
@@ -711,7 +695,6 @@ export const {
   bulkArchive,
   bulkUnarchive,
   toggleLike,
-  toggleBookmark,
   getByTag: getNewslettersByTag,
   getBySource: getNewslettersBySource,
   search: searchNewsletters,

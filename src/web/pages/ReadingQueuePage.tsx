@@ -55,7 +55,6 @@ const ReadingQueuePage: React.FC = () => {
     handleMarkAsRead,
     handleMarkAsUnread,
     handleToggleLike,
-    handleToggleBookmark,
     handleToggleArchive,
   } = useSharedNewsletterActions({
     showToasts: true,
@@ -363,27 +362,6 @@ const ReadingQueuePage: React.FC = () => {
     [handleToggleArchive, validQueueItems, cacheManager],
   );
 
-  // Handle toggling bookmark status with shared actions
-  const handleToggleBookmarkAction = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      try {
-        await handleToggleBookmark(newsletter);
-
-        // Smart cache invalidation
-        if (cacheManager) {
-          cacheManager.smartInvalidate({
-            operation: "toggle-bookmark",
-            newsletterIds: [newsletter.id],
-            priority: "high",
-          });
-        }
-      } catch (error) {
-        console.error("Failed to toggle bookmark status:", error);
-      }
-    },
-    [handleToggleBookmark, cacheManager],
-  );
-
   // Toggle sort mode between manual and date
   const toggleSortMode = useCallback(() => {
     setSortByDate((prev) => !prev);
@@ -552,7 +530,6 @@ const ReadingQueuePage: React.FC = () => {
                 newsletter={item.newsletter as any}
                 onToggleRead={handleToggleRead}
                 onToggleLike={handleToggleLikeAction}
-                onToggleBookmark={handleToggleBookmarkAction}
                 onToggleArchive={handleToggleArchiveAction}
                 onToggleQueue={toggleInQueue}
                 onTrash={() => {}}

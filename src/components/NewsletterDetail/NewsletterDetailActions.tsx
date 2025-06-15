@@ -48,7 +48,7 @@ export const NewsletterDetailActions: React.FC<
 
   // Enhanced loading states
   const [isLiking, setIsLiking] = useState(false);
-  const [isBookmarking, setIsBookmarking] = useState(false);
+  const [isTogglingQueue, setIsTogglingQueue] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isTogglingReadStatus, setIsTogglingReadStatus] = useState(false);
 
@@ -134,39 +134,28 @@ export const NewsletterDetailActions: React.FC<
     newsletter,
   ]);
 
-  const handleToggleBookmark = useCallback(async () => {
-    if (!localNewsletter?.id || isBookmarking) return;
+  const handleToggleQueue = useCallback(async () => {
+    if (!localNewsletter?.id || isTogglingQueue) return;
 
-    setIsBookmarking(true);
-
-    // Optimistic update to local state
-    const optimisticNewsletter = {
-      ...localNewsletter,
-      is_bookmarked: !localNewsletter.is_bookmarked,
-    };
-    setLocalNewsletter(optimisticNewsletter);
-    onNewsletterUpdate(optimisticNewsletter);
+    setIsTogglingQueue(true);
 
     try {
-      await handleToggleInQueue(localNewsletter);
+      await handleToggleInQueue(localNewsletter, isFromReadingQueue);
 
       toast.success(
-        localNewsletter.is_bookmarked
+        isFromReadingQueue
           ? "Removed from reading queue"
           : "Added to reading queue",
       );
     } catch (error) {
-      console.error("Error toggling bookmark:", error);
-      // Revert optimistic update
-      setLocalNewsletter(newsletter);
-      onNewsletterUpdate(newsletter);
+      console.error("Error toggling queue:", error);
       toast.error("Failed to update reading queue");
     } finally {
-      setIsBookmarking(false);
+      setIsTogglingQueue(false);
     }
   }, [
     localNewsletter,
-    isBookmarking,
+    isTogglingQueue,
     handleToggleInQueue,
     onNewsletterUpdate,
     newsletter,
@@ -315,27 +304,23 @@ export const NewsletterDetailActions: React.FC<
 
       {/* Bookmark Toggle */}
       <button
-        onClick={handleToggleBookmark}
-        disabled={isBookmarking}
+        onClick={handleToggleQueue}
+        disabled={isTogglingQueue}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          localNewsletter?.is_bookmarked
+          isFromReadingQueue
             ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
         }`}
-        aria-label={
-          localNewsletter?.is_bookmarked ? "Remove from queue" : "Add to queue"
-        }
+        aria-label={isFromReadingQueue ? "Remove from queue" : "Add to queue"}
       >
-        {isBookmarking && (
+        {isTogglingQueue && (
           <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
         <BookmarkIcon
-          className={`h-4 w-4 ${localNewsletter?.is_bookmarked ? "fill-yellow-500" : "fill-none"}`}
+          className={`h-4 w-4 ${isFromReadingQueue ? "fill-yellow-500" : "fill-none"}`}
           stroke="currentColor"
         />
-        <span>
-          {localNewsletter?.is_bookmarked ? "Saved" : "Save for later"}
-        </span>
+        <span>{isFromReadingQueue ? "Saved" : "Save for later"}</span>
       </button>
 
       {/* Archive/Unarchive Toggle */}

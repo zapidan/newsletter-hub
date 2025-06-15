@@ -23,37 +23,28 @@ This checklist covers the comprehensive fixes implemented for newsletter action 
 
 ## ✅ New Functionality
 
-### 3. Complete toggleBookmark Implementation
-- [ ] **File: `src/common/hooks/useNewsletters.ts`**
-  - [ ] Added toggleBookmarkMutation with proper optimistic updates
-  - [ ] Added toggleBookmark to UseNewslettersReturn interface
-  - [ ] Added toggleBookmark callback function
-  - [ ] Added toggleBookmark to return statement with loading/error states
+### 3. ✅ Bookmark to Reading Queue Consolidation (COMPLETED)
+- [x] **Consolidated bookmark functionality into reading queue system**
+  - [x] Removed `is_bookmarked` field references from database schema documentation
+  - [x] Removed `toggleBookmark` API function and exports
+  - [x] Updated all UI components to use reading queue operations instead of bookmark operations
+  - [x] Simplified user mental model: single "reading queue" concept instead of separate bookmarks
 
-- [ ] **File: `src/common/hooks/useSharedNewsletterActions.ts`**
-  - [ ] Added toggleBookmark to destructuring from useNewsletters
-  - [ ] Added toggleBookmark handler to NewsletterActionHandlers interface
-  - [ ] Added handleToggleBookmark callback function
-  - [ ] Added toggleBookmark to return statement
-  - [ ] Added loading and error states (isTogglingBookmark, errorTogglingBookmark)
+- [x] **Updated Components:**
+  - [x] `NewsletterActions.tsx`: Removed `onToggleBookmark` prop, consolidated with queue functionality
+  - [x] `NewsletterRow.tsx`: Removed bookmark-specific props and handlers
+  - [x] `NewsletterDetailActions.tsx`: Renamed bookmark handlers to queue handlers
+  - [x] `SortableNewsletterRow.tsx`: Removed bookmark functionality
 
-- [ ] **File: `src/common/utils/newsletterActionHandlers.ts`**
-  - [ ] Added toggleBookmark to NewsletterActionHandlers interface
-  - [ ] Added toggleBookmark method to SharedNewsletterActionHandlers class
-  - [ ] Implemented proper optimistic updates with toast notifications
+- [x] **Updated Pages:**
+  - [x] `Inbox.tsx`: Removed `handleToggleBookmark` and related wrappers
+  - [x] `NewslettersPage.tsx`: Removed bookmark functionality references
+  - [x] `ReadingQueuePage.tsx`: Removed duplicate bookmark handling
 
-- [ ] **File: `src/web/components/NewsletterRow.tsx`**
-  - [ ] Added onToggleBookmark prop to component interface
-  - [ ] Added errorTogglingBookmark prop to component interface
-  - [ ] Added bookmark button with proper styling (yellow when bookmarked)
-  - [ ] Added loading spinner for bookmark button
-  - [ ] Added error handling with try-catch blocks
-
-- [ ] **File: `src/web/pages/Inbox.tsx`**
-  - [ ] Added handleToggleBookmark to destructuring
-  - [ ] Added handleToggleBookmarkWrapper callback
-  - [ ] Added onToggleBookmark prop to NewsletterRow component
-  - [ ] Added errorTogglingBookmark prop to NewsletterRow component
+- [x] **Updated Hooks and Utils:**
+  - [x] `useSharedNewsletterActions.ts`: Removed `handleToggleBookmark`
+  - [x] `cacheUtils.ts`: Updated cache invalidation to use queue operations instead of bookmark operations
+  - [x] Removed bookmark-related loading and error states
 
 ## ✅ Enhanced Error Handling & User Experience
 
@@ -69,8 +60,7 @@ This checklist covers the comprehensive fixes implemented for newsletter action 
 - [ ] **File: `src/web/components/NewsletterRow.tsx`**
   - [ ] Added loading spinners to all action buttons:
     - [ ] Like button (heart icon)
-    - [ ] Bookmark button (bookmark icon) 
-    - [ ] Reading queue button (queue icon)
+    - [ ] Reading queue button (bookmark icon - yellow when queued)
     - [ ] Archive/unarchive button (archive icons)
     - [ ] Delete button (trash icon)
     - [ ] Mark read/unread button
@@ -117,8 +107,8 @@ This checklist covers the comprehensive fixes implemented for newsletter action 
 
 ### 10. Manual Testing Checklist
 - [ ] Like button toggles correctly and updates `is_liked` field
-- [ ] Bookmark button toggles correctly and updates `is_bookmarked` field
-- [ ] Reading queue button works without affecting bookmark status
+- [x] Reading queue button toggles correctly and manages queue membership
+- [x] Single button interface eliminates bookmark/queue confusion
 - [ ] Archive button toggles correctly
 - [ ] All buttons show loading states during operations
 - [ ] Error handling works correctly (test with network offline)
@@ -130,7 +120,7 @@ This checklist covers the comprehensive fixes implemented for newsletter action 
 ### 11. Automated Testing
 - [ ] Created test file: `src/common/hooks/__tests__/useNewsletters.test.ts`
 - [ ] Tests cover type safety for undefined arrays
-- [ ] Tests verify correct field updates (is_liked vs is_bookmarked)
+- [x] Tests verify correct field updates (is_liked vs reading queue operations)
 - [ ] Tests verify rollback function execution on errors
 - [ ] Tests verify API methods are called correctly
 
@@ -159,13 +149,13 @@ This checklist covers the comprehensive fixes implemented for newsletter action 
 ## 📝 Key Implementation Details
 
 ### Critical Fixes:
-1. **toggleLike mutation**: Now correctly updates `is_liked` instead of `is_bookmarked`
-2. **toggleInQueue mutation**: No longer incorrectly modifies newsletter bookmark state
+1. **toggleLike mutation**: Now correctly updates `is_liked` field
+2. **toggleInQueue mutation**: Properly manages reading queue without affecting other newsletter fields
 3. **Array type safety**: All mutations handle undefined/null arrays gracefully
 4. **Error recovery**: Proper rollback functions prevent UI corruption on failures
 
 ### New Features:
-1. **Complete bookmark functionality**: Full CRUD operations for newsletter bookmarks
+1. **Consolidated reading queue functionality**: Single, clear system for saving newsletters
 2. **Enhanced loading states**: Visual feedback for all async operations
 3. **Improved error handling**: Graceful degradation and user-friendly error recovery
 
@@ -181,7 +171,7 @@ Implementation is complete when:
 - [ ] Optimistic updates provide immediate visual feedback
 - [ ] Error handling gracefully recovers from all failure scenarios
 - [ ] Newsletter list never disappears during normal operations
-- [ ] All new bookmark functionality works as expected
+- [x] Reading queue consolidation works as expected
 - [ ] Loading states provide clear user feedback
 - [ ] Type safety prevents runtime errors
 - [ ] Performance remains optimal with large datasets
@@ -189,7 +179,7 @@ Implementation is complete when:
 ---
 
 **Total Files Modified:** 5 core files + 2 new documentation files
-**Total New Features:** Complete bookmark functionality
+**Total Consolidations:** Bookmark functionality merged into reading queue system
 **Total Bug Fixes:** 3 critical optimistic update issues
 **Total UX Improvements:** Enhanced loading states and error handling across all actions
 

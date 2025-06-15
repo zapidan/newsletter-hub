@@ -933,7 +933,6 @@ Update an existing newsletter.
   - `is_read?: boolean`
   - `is_archived?: boolean`
   - `is_liked?: boolean`
-  - `is_bookmarked?: boolean`
   - `tag_ids?: string[]`
 
 **Returns:** `Promise<NewsletterWithRelations>`

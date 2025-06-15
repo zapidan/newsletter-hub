@@ -23,7 +23,6 @@ const mockNewsletter: NewsletterWithRelations = {
   summary: 'Test summary',
   is_read: false,
   is_liked: false,
-  is_bookmarked: false,
   is_archived: false,
   received_at: '2024-01-01T00:00:00Z',
   created_at: '2024-01-01T00:00:00Z',
@@ -73,7 +72,6 @@ describe('useNewsletters - Action Fixes', () => {
 
     // Mock successful API calls
     mockNewsletterApi.toggleLike.mockResolvedValue(mockNewsletter);
-    mockNewsletterApi.toggleBookmark.mockResolvedValue(mockNewsletter);
 
     // Mock optimistic update with rollback
     mockCacheManager.optimisticUpdateWithRollback.mockResolvedValue({
@@ -110,7 +108,6 @@ describe('useNewsletters - Action Fixes', () => {
       const updatedData = updateFn(mockNewsletters);
 
       expect(updatedData[0].is_liked).toBe(true);
-      expect(updatedData[0].is_bookmarked).toBe(false); // Should not change
     });
 
     it('should handle undefined previousNewsletters gracefully', async () => {
@@ -150,53 +147,7 @@ describe('useNewsletters - Action Fixes', () => {
     });
   });
 
-  describe('toggleBookmark mutation', () => {
-    it('should properly update is_bookmarked field in optimistic update', async () => {
-      const { result } = renderHook(() => useNewsletters(), { wrapper });
 
-      // Mock initial newsletter data
-      const mockNewsletters = [{ ...mockNewsletter, is_bookmarked: false }];
-      queryClient.setQueryData(['newsletters', 'list', {}], mockNewsletters);
-
-      await act(async () => {
-        await result.current.toggleBookmark('test-newsletter-1');
-      });
-
-      // Verify optimistic update was called
-      expect(mockCacheManager.optimisticUpdateWithRollback).toHaveBeenCalled();
-
-      // Get the update function and test it
-      const updateFn = mockCacheManager.optimisticUpdateWithRollback.mock.calls[0][1];
-      const updatedData = updateFn(mockNewsletters);
-
-      expect(updatedData[0].is_bookmarked).toBe(true);
-      expect(updatedData[0].is_liked).toBe(false); // Should not change
-    });
-
-    it('should call correct API method', async () => {
-      const { result } = renderHook(() => useNewsletters(), { wrapper });
-
-      await act(async () => {
-        await result.current.toggleBookmark('test-newsletter-1');
-      });
-
-      expect(mockNewsletterApi.toggleBookmark).toHaveBeenCalledWith('test-newsletter-1');
-    });
-
-    it('should handle array type safety correctly', async () => {
-      const { result } = renderHook(() => useNewsletters(), { wrapper });
-
-      // Test with non-array data
-      queryClient.setQueryData(['newsletters', 'list', {}], null);
-
-      await act(async () => {
-        await result.current.toggleBookmark('test-newsletter-1');
-      });
-
-      // Should not throw error and should handle gracefully
-      expect(mockNewsletterApi.toggleBookmark).toHaveBeenCalled();
-    });
-  });
 
   describe('error handling and fallbacks', () => {
     it('should invalidate cache on optimistic update failure', async () => {
@@ -255,14 +206,12 @@ describe('useNewsletters - Action Fixes', () => {
       const { result } = renderHook(() => useNewsletters(), { wrapper });
 
       expect(typeof result.current.isTogglingLike).toBe('boolean');
-      expect(typeof result.current.isTogglingBookmark).toBe('boolean');
     });
 
     it('should expose error states correctly', () => {
       const { result } = renderHook(() => useNewsletters(), { wrapper });
 
       expect(result.current.errorTogglingLike).toBeNull();
-      expect(result.current.errorTogglingBookmark).toBeNull();
     });
   });
 });

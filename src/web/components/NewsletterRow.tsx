@@ -13,7 +13,7 @@ interface NewsletterRowProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onToggleLike: (newsletter: NewsletterWithRelations) => Promise<void>;
-  onToggleBookmark: (newsletter: NewsletterWithRelations) => Promise<void>;
+
   onToggleArchive: (id: string) => Promise<void>;
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
@@ -31,7 +31,7 @@ interface NewsletterRowProps {
   isDeletingNewsletter: boolean;
   loadingStates?: Record<string, string>;
   errorTogglingLike?: Error | null;
-  errorTogglingBookmark?: Error | null;
+
   isUpdatingTags?: boolean;
 }
 
@@ -40,7 +40,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   isSelected = false,
   onToggleSelect,
   onToggleLike,
-  onToggleBookmark,
+
   onToggleArchive,
   onToggleRead,
   onTrash,
@@ -54,7 +54,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   visibleTags,
   loadingStates = {},
   errorTogglingLike,
-  errorTogglingBookmark,
+
   isUpdatingTags = false,
 }) => {
   const navigate = useNavigate();
@@ -284,14 +284,12 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
               <NewsletterActions
                 newsletter={newsletter}
                 onToggleLike={onToggleLike}
-                onToggleBookmark={onToggleBookmark}
                 onToggleArchive={onToggleArchive}
                 onToggleRead={onToggleRead}
                 onTrash={onTrash}
                 onToggleQueue={onToggleQueue}
                 loadingStates={loadingStates}
                 errorTogglingLike={errorTogglingLike}
-                errorTogglingBookmark={errorTogglingBookmark}
                 isInReadingQueue={isInReadingQueue}
                 compact={true}
               />

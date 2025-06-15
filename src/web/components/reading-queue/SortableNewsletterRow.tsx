@@ -25,7 +25,6 @@ interface NewsletterRowProps extends React.HTMLAttributes<HTMLDivElement> {
   onToggleSelect?: (id: string) => Promise<void>;
   onToggleRead?: (id: string) => Promise<void>;
   onToggleLike?: (id: string) => Promise<void>;
-  onToggleBookmark?: (newsletter: NewsletterWithRelations) => Promise<void>;
   onToggleArchive?: (id: string) => Promise<void>;
   onTrash?: (id: string) => void;
   onToggleQueue?: (id: string) => Promise<void>;
@@ -49,7 +48,6 @@ const defaultVoid = () => {};
 const defaultTagClick = () => {};
 const defaultToggleTagVisibility = () => {};
 const defaultRemoveFromQueue = () => {};
-const defaultBookmarkPromise = async () => {};
 
 export const SortableNewsletterRow: React.FC<
   NewsletterRowProps & { id: string; isDraggable?: boolean }
@@ -61,7 +59,7 @@ export const SortableNewsletterRow: React.FC<
   onToggleSelect = defaultPromise,
   onToggleRead = defaultPromise,
   onToggleLike = defaultPromise,
-  onToggleBookmark = defaultBookmarkPromise,
+
   onToggleArchive = defaultPromise,
   onTrash = defaultVoid,
   onToggleQueue = defaultPromise,
@@ -107,20 +105,6 @@ export const SortableNewsletterRow: React.FC<
       }
     },
     [onToggleLike],
-  );
-
-  // Handle the bookmark toggle with proper typing
-  const handleToggleBookmark = useCallback(
-    async (newsletterItem: NewsletterWithRelations) => {
-      try {
-        if (onToggleBookmark) {
-          await onToggleBookmark(newsletterItem);
-        }
-      } catch (error) {
-        console.error("Error toggling bookmark:", error);
-      }
-    },
-    [onToggleBookmark],
   );
 
   // Handle the queue toggle with proper typing
@@ -188,7 +172,6 @@ export const SortableNewsletterRow: React.FC<
             onToggleSelect={onToggleSelect}
             onToggleRead={onToggleRead}
             onToggleLike={handleToggleLike}
-            onToggleBookmark={handleToggleBookmark}
             onToggleArchive={onToggleArchive}
             onTrash={onTrash}
             onToggleQueue={handleToggleQueue}

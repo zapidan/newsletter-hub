@@ -198,16 +198,7 @@ export const useReadingQueue = () => {
     onSuccess: (_data, newsletterId) => {
       if (!user) return;
 
-      // Update newsletter cache to reflect bookmark status
-      safeCacheCall((manager) =>
-        manager.updateNewsletterInCache(
-          {
-            id: newsletterId,
-            updates: { is_bookmarked: true },
-          },
-          { optimistic: false, invalidateRelated: true },
-        ),
-      );
+      // Reading queue status is now managed separately from newsletter properties
     },
     onSettled: () => {
       if (!user) return;
@@ -263,16 +254,7 @@ export const useReadingQueue = () => {
     onSuccess: (_data, _queueItemId, context) => {
       if (!user || !context?.removedItem) return;
 
-      // Update newsletter cache to reflect bookmark status
-      safeCacheCall((manager) =>
-        manager.updateNewsletterInCache(
-          {
-            id: context.removedItem.newsletter.id,
-            updates: { is_bookmarked: false },
-          },
-          { optimistic: false, invalidateRelated: true },
-        ),
-      );
+      // Reading queue status is now managed separately from newsletter properties
     },
     onSettled: () => {
       if (!user) return;

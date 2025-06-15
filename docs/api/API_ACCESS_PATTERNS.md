@@ -148,7 +148,6 @@ const updatedNewsletter = await newsletterApi.update({
 // Use specific methods when available
 await newsletterApi.markAsRead(id);
 await newsletterApi.toggleArchive(id);
-await newsletterApi.toggleBookmark(id);
 ```
 
 ### Deleting Data

@@ -6,7 +6,6 @@ export interface NewsletterActionHandlers {
   markAsRead: (id: string) => Promise<void>;
   markAsUnread: (id: string) => Promise<void>;
   toggleLike: (id: string) => Promise<void>;
-  toggleBookmark: (id: string) => Promise<void>;
   toggleArchive: (id: string) => Promise<void>;
   deleteNewsletter: (id: string) => Promise<void>;
   toggleInQueue: (id: string) => Promise<void>;
@@ -257,32 +256,6 @@ export class SharedNewsletterActionHandlers {
     );
   }
 
-  async toggleBookmark(
-    newsletter: NewsletterWithRelations,
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
-    const newBookmarkedState = !newsletter.is_bookmarked;
-    return this.withOptimisticUpdate(
-      newsletter.id,
-      { is_bookmarked: newBookmarkedState },
-      () => this.handlers.toggleBookmark(newsletter.id),
-      "toggle-bookmark",
-      {
-        ...options,
-        onSuccess: () => {
-          if (options?.showToasts !== false) {
-            toast.success(
-              newBookmarkedState
-                ? "Added to bookmarks"
-                : "Removed from bookmarks",
-            );
-          }
-          options?.onSuccess?.(newsletter);
-        },
-      },
-    );
-  }
-
   async toggleArchive(
     newsletter: NewsletterWithRelations,
     options?: NewsletterActionOptions,
@@ -349,28 +322,30 @@ export class SharedNewsletterActionHandlers {
 
   async toggleInQueue(
     newsletter: NewsletterWithRelations,
+    isInQueue: boolean,
     options?: NewsletterActionOptions,
   ): Promise<void> {
-    const newQueueState = !newsletter.is_bookmarked;
-    return this.withOptimisticUpdate(
-      newsletter.id,
-      { is_bookmarked: newQueueState },
-      () => this.handlers.toggleInQueue(newsletter.id),
-      "toggle-queue",
-      {
-        ...options,
-        onSuccess: () => {
-          if (options?.showToasts !== false) {
-            toast.success(
-              newQueueState
-                ? "Added to reading queue"
-                : "Removed from reading queue",
-            );
-          }
-          options?.onSuccess?.(newsletter);
-        },
-      },
-    );
+    try {
+      await this.handlers.toggleInQueue(newsletter.id);
+
+      if (options?.showToasts !== false) {
+        toast.success(
+          isInQueue ? "Removed from reading queue" : "Added to reading queue",
+        );
+      }
+
+      options?.onSuccess?.(newsletter);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "An error occurred";
+      if (options?.showToasts !== false) {
+        toast.error(`Failed to update reading queue: ${errorMessage}`);
+      }
+      options?.onError?.(
+        error instanceof Error ? error : new Error(errorMessage),
+      );
+      throw error;
+    }
   }
 
   async updateTags(

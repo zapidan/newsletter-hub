@@ -347,7 +347,6 @@ const NewslettersPage: React.FC = () => {
   // Shared newsletter action handlers
   const {
     handleToggleLike,
-    handleToggleBookmark,
     handleToggleArchive,
     handleToggleRead,
     handleDeleteNewsletter,
@@ -412,13 +411,6 @@ const NewslettersPage: React.FC = () => {
     [handleToggleLike],
   );
 
-  const handleToggleBookmarkWrapper = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      await handleToggleBookmark(newsletter);
-    },
-    [handleToggleBookmark],
-  );
-
   const handleToggleSelect = useCallback(async () => {
     // Implementation
   }, []);
@@ -446,9 +438,15 @@ const NewslettersPage: React.FC = () => {
     async (newsletterId: string) => {
       const newsletter = fetchedNewsletters.find((n) => n.id === newsletterId);
       if (!newsletter) return;
-      await handleToggleInQueue(newsletter);
+
+      // Check current queue status using actual reading queue data
+      const isCurrentlyInQueue = readingQueue.some(
+        (item) => item.newsletter_id === newsletterId,
+      );
+
+      await handleToggleInQueue(newsletter, isCurrentlyInQueue);
     },
-    [handleToggleInQueue, fetchedNewsletters],
+    [handleToggleInQueue, fetchedNewsletters, readingQueue],
   );
 
   const handleTrashWrapper = useCallback(
@@ -1076,7 +1074,6 @@ const NewslettersPage: React.FC = () => {
                       isSelected={false}
                       onToggleSelect={handleToggleSelect}
                       onToggleLike={handleToggleLikeWrapper}
-                      onToggleBookmark={handleToggleBookmarkWrapper}
                       onToggleArchive={handleToggleArchiveWrapper}
                       onToggleRead={handleToggleReadWrapper}
                       onToggleQueue={handleToggleInQueueWrapper}

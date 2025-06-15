@@ -13,14 +13,12 @@ import { NewsletterWithRelations } from "@common/types";
 interface NewsletterActionsProps {
   newsletter: NewsletterWithRelations;
   onToggleLike: (newsletter: NewsletterWithRelations) => Promise<void>;
-  onToggleBookmark: (newsletter: NewsletterWithRelations) => Promise<void>;
   onToggleArchive: (id: string) => Promise<void>;
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
   onToggleQueue?: (newsletterId: string) => Promise<void>;
   loadingStates?: Record<string, string>;
   errorTogglingLike?: Error | null;
-  errorTogglingBookmark?: Error | null;
   isInReadingQueue?: boolean;
   showTrashButton?: boolean;
   showQueueButton?: boolean;
@@ -31,14 +29,12 @@ interface NewsletterActionsProps {
 const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   newsletter,
   onToggleLike,
-  onToggleBookmark,
   onToggleArchive,
   onToggleRead,
   onTrash,
   onToggleQueue,
   loadingStates = {},
   errorTogglingLike,
-  errorTogglingBookmark,
   isInReadingQueue = false,
   showTrashButton = true,
   showQueueButton = true,
@@ -196,11 +192,6 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       {/* Error States */}
       {errorTogglingLike && (
         <div className="text-red-500 text-xs" title="Error toggling like">
-          ⚠️
-        </div>
-      )}
-      {errorTogglingBookmark && (
-        <div className="text-red-500 text-xs" title="Error toggling bookmark">
           ⚠️
         </div>
       )}

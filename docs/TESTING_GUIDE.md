@@ -7,7 +7,7 @@ This guide provides step-by-step instructions to manually test the fixes impleme
 The following issues have been addressed:
 1. Fixed `previousNewsletters.find is not a function` error
 2. Fixed newsletter list disappearing during optimistic updates
-3. Added complete toggleBookmark functionality
+3. Consolidated bookmark functionality into reading queue system
 4. Enhanced error handling and fallback states
 5. Improved loading states and user feedback
 
@@ -50,41 +50,43 @@ The following issues have been addressed:
   - ✅ Button is disabled during the operation
   - ✅ Loading state clears after operation completes
 
-### 2. Toggle Bookmark Functionality (NEW)
+### 2. Reading Queue Functionality (UPDATED)
 
-**Test Case 2.1: Basic Bookmark Toggle**
+**Test Case 2.1: Basic Queue Toggle**
 - **Steps:**
   1. Navigate to the Inbox page
-  2. Find a newsletter and locate the bookmark button (should be next to the like button)
-  3. Click the bookmark button
-  4. Verify the bookmark icon changes color (yellow when bookmarked)
-  5. Refresh the page and verify the bookmark state persists
-  6. Click the bookmark button again to remove bookmark
-  7. Verify the bookmark icon returns to gray
+  2. Find a newsletter and locate the reading queue button (bookmark-style icon)
+  3. Click the reading queue button
+  4. Verify the icon changes color (yellow when in queue)
+  5. Navigate to the Reading Queue page to verify newsletter appears
+  6. Return to Inbox and click the button again to remove from queue
+  7. Verify the icon returns to gray and newsletter is removed from queue
 
 - **Expected Results:**
-  - ✅ Bookmark button exists and is visible
-  - ✅ Bookmark icon updates immediately (optimistic update)
-  - ✅ Changes persist after page refresh
+  - ✅ Reading queue button exists and is clearly visible
+  - ✅ Queue icon updates immediately (optimistic update)
+  - ✅ Changes persist across page navigation
   - ✅ Newsletter list remains visible throughout the operation
+  - ✅ Newsletter appears/disappears from Reading Queue page correctly
 
-**Test Case 2.2: Bookmark Button Loading State**
+**Test Case 2.2: Queue Button Loading State**
 - **Steps:**
-  1. Click the bookmark button
+  1. Click the reading queue button
   2. Observe the button during the API call
   
 - **Expected Results:**
-  - ✅ Button shows a loading spinner while processing
-  - ✅ Button is disabled during the operation
-  - ✅ Loading state clears after operation completes
+  - ✅ Button shows loading spinner during API call
+  - ✅ Button is disabled during loading
+  - ✅ Loading state clears after completion
 
+### 3. Reading Queue Integration
 ### 3. Reading Queue Functionality
 
 **Test Case 3.1: Add/Remove from Queue**
 - **Steps:**
   1. Find a newsletter not in the reading queue
-  2. Click the reading queue button (bookmark-style icon, different from bookmark)
-  3. Verify the icon changes to indicate it's in the queue (blue color)
+  2. Click the reading queue button (yellow bookmark-style icon)
+  3. Verify the icon changes to indicate it's in the queue (filled yellow)
   4. Navigate to the Reading Queue page
   5. Verify the newsletter appears in the queue
   6. Return to Inbox and click the queue button again to remove
@@ -93,7 +95,7 @@ The following issues have been addressed:
 - **Expected Results:**
   - ✅ Queue button updates immediately
   - ✅ Newsletter appears/disappears from queue correctly
-  - ✅ No incorrect updates to newsletter bookmark status
+  - ✅ Single button interface eliminates confusion
   - ✅ Newsletter list remains visible throughout the operation
 
 ### 4. Archive/Unarchive Functionality
@@ -118,7 +120,7 @@ The following issues have been addressed:
 - **Steps:**
   1. Open browser developer tools → Network tab
   2. Set network to "Offline" or "Slow 3G"
-  3. Try to like/bookmark/archive a newsletter
+  3. Try to like/add to queue/archive a newsletter
   4. Observe the behavior
   5. Restore network connection
 
@@ -170,7 +172,6 @@ The following issues have been addressed:
 - **Steps:**
   1. Select a newsletter and perform multiple actions in sequence:
      - Like the newsletter
-     - Bookmark it
      - Add to reading queue
      - Archive it
      - Unarchive it
@@ -197,7 +198,7 @@ The following issues have been addressed:
 - ❌ "No newsletters available" message appearing during actions
 - ❌ Console errors mentioning `previousNewsletters.find`
 - ❌ Newsletter list disappearing during optimistic updates
-- ❌ Actions updating wrong fields (e.g., like affecting bookmark status)
+- ❌ Actions updating wrong fields (e.g., like affecting queue status)
 - ❌ Buttons remaining in loading state indefinitely
 - ❌ UI crashes or unresponsive behavior
 
@@ -243,7 +244,7 @@ Testing is successful when:
 3. Error handling gracefully recovers from failures
 4. No console errors occur during normal operations
 5. UI remains responsive and consistent
-6. All new bookmark functionality works as expected
+6. Consolidated reading queue functionality works as expected
 
 ## 🚨 Reporting Issues
 
@@ -256,4 +257,4 @@ If you encounter any issues during testing:
 ---
 
 *Last updated: 2024-01-XX*
-*Testing covers fixes for: optimistic updates, type safety, bookmark functionality, error handling*
+*Testing covers fixes for: optimistic updates, type safety, reading queue consolidation, error handling*

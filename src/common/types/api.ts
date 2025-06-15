@@ -50,7 +50,6 @@ export interface FilterParams {
   isRead?: boolean;
   isArchived?: boolean;
   isLiked?: boolean;
-  isBookmarked?: boolean;
   tagIds?: string[];
   sourceIds?: string[];
   groupIds?: string[];
@@ -97,7 +96,6 @@ export interface UpdateNewsletterParams {
   is_read?: boolean;
   is_liked?: boolean;
   is_archived?: boolean;
-  is_bookmarked?: boolean;
   tag_ids?: string[];
 }
 
@@ -107,7 +105,6 @@ export interface BulkUpdateNewsletterParams {
     is_read: boolean;
     is_liked: boolean;
     is_archived: boolean;
-    is_bookmarked: boolean;
   }>;
 }
 

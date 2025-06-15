@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Mail, X } from "lucide-react";
 import { subDays, subWeeks, subMonths } from "date-fns";
+
 import { InboxFilters } from "@web/components/InboxFilters";
 import BulkSelectionActions from "@web/components/BulkSelectionActions";
 import { useNewsletters } from "@common/hooks/useNewsletters";
@@ -404,7 +405,6 @@ const Inbox: React.FC = memo(() => {
   // Extract all needed properties from base actions
   const {
     handleToggleLike: baseHandleToggleLike,
-    handleToggleBookmark: baseHandleToggleBookmark,
     handleToggleArchive: baseHandleToggleArchive,
     handleToggleRead: baseHandleToggleRead,
     handleDeleteNewsletter: baseHandleDeleteNewsletter,
@@ -421,19 +421,13 @@ const Inbox: React.FC = memo(() => {
     isBulkUnarchiving,
     isBulkDeletingNewsletters,
     isTogglingLike,
-    isTogglingBookmark,
     errorTogglingLike,
-    errorTogglingBookmark,
   } = baseActions;
 
   // Create filter-aware versions of the actions
   const handleToggleLike = useMemo(
     () => createFilterAwareAction(baseHandleToggleLike, "toggleLike"),
     [baseHandleToggleLike, createFilterAwareAction],
-  );
-  const handleToggleBookmark = useMemo(
-    () => createFilterAwareAction(baseHandleToggleBookmark, "toggleBookmark"),
-    [baseHandleToggleBookmark, createFilterAwareAction],
   );
   const handleToggleArchive = useMemo(
     () => createFilterAwareAction(baseHandleToggleArchive, "toggleArchive"),
@@ -618,9 +612,15 @@ const Inbox: React.FC = memo(() => {
     async (id: string) => {
       const newsletter = newsletters.find((n) => n.id === id);
       if (!newsletter) return;
-      await handleToggleInQueue(newsletter);
+
+      // Check current queue status using actual reading queue data
+      const isCurrentlyInQueue = readingQueue.some(
+        (item) => item.newsletter_id === id,
+      );
+
+      await handleToggleInQueue(newsletter, isCurrentlyInQueue);
     },
-    [handleToggleInQueue, newsletters],
+    [handleToggleInQueue, newsletters, readingQueue],
   );
 
   const handleToggleLikeWrapper = useCallback(
@@ -635,13 +635,6 @@ const Inbox: React.FC = memo(() => {
       }
     },
     [handleToggleLike],
-  );
-
-  const handleToggleBookmarkWrapper = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      await handleToggleBookmark(newsletter);
-    },
-    [handleToggleBookmark],
   );
 
   const handleUpdateTags = useCallback(
@@ -1253,8 +1246,7 @@ const Inbox: React.FC = memo(() => {
           </div>
         ) : filteredNewsletters.length === 0 &&
           !isTogglingLike &&
-          !errorTogglingLike &&
-          !errorTogglingBookmark ? (
+          !errorTogglingLike ? (
           <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
             <Mail className="mx-auto h-14 w-14 mb-4 text-blue-300" />
             <h2 className="text-xl font-semibold mb-2">
@@ -1290,7 +1282,6 @@ const Inbox: React.FC = memo(() => {
                 isSelected={isSelecting && selectedIds.has(newsletter.id)}
                 onToggleSelect={toggleSelect}
                 onToggleLike={handleToggleLikeWrapper}
-                onToggleBookmark={handleToggleBookmarkWrapper}
                 onToggleArchive={handleToggleArchiveWrapper}
                 onToggleRead={handleToggleReadWrapper}
                 onTrash={handleTrash}
@@ -1312,12 +1303,9 @@ const Inbox: React.FC = memo(() => {
                   ...loadingStates,
                   [newsletter.id]: isTogglingLike
                     ? "like"
-                    : isTogglingBookmark
-                      ? "bookmark"
-                      : loadingStates[newsletter.id],
+                    : loadingStates[newsletter.id],
                 }}
                 errorTogglingLike={errorTogglingLike}
-                errorTogglingBookmark={errorTogglingBookmark}
               />
             );
           })

@@ -34,7 +34,6 @@ export {
   bulkArchive,
   bulkUnarchive,
   toggleLike,
-  toggleBookmark,
   getNewslettersByTag,
   getNewslettersBySource,
   searchNewsletters,

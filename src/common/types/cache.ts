@@ -9,7 +9,6 @@ export interface NewsletterFilter {
   isRead?: boolean;
   isArchived?: boolean;
   isLiked?: boolean;
-  isBookmarked?: boolean;
 
   // Relationship filters
   tagIds?: string[];
@@ -30,7 +29,7 @@ export interface NewsletterFilter {
   ascending?: boolean;
 
   // Legacy support - can be used for quick filtering
-  status?: "all" | "unread" | "liked" | "archived" | "bookmarked";
+  status?: "all" | "unread" | "liked" | "archived";
 }
 
 // Legacy type for backward compatibility

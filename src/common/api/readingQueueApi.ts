@@ -26,7 +26,6 @@ const transformQueueItem = (data: {
     is_read: boolean;
     is_archived: boolean;
     is_liked: boolean;
-    is_bookmarked: boolean;
     word_count: number;
     estimated_read_time: number;
     newsletter_sources?: any;
@@ -64,7 +63,6 @@ const transformQueueItem = (data: {
       is_read: Boolean(data.newsletters.is_read),
       is_archived: Boolean(data.newsletters.is_archived),
       is_liked: Boolean(data.newsletters.is_liked),
-      is_bookmarked: Boolean(data.newsletters.is_bookmarked),
       word_count: data.newsletters.word_count,
       estimated_read_time: data.newsletters.estimated_read_time,
       source: data.newsletters.newsletter_sources || null,

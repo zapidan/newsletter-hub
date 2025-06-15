@@ -45,7 +45,6 @@ CREATE TABLE newsletters (
   is_read BOOLEAN DEFAULT FALSE,
   is_liked BOOLEAN DEFAULT FALSE,
   is_archived BOOLEAN DEFAULT FALSE,
-  is_bookmarked BOOLEAN DEFAULT FALSE,
   received_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

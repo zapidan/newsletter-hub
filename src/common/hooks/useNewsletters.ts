@@ -105,16 +105,6 @@ interface UseNewslettersReturn {
   isTogglingLike: boolean;
   errorTogglingLike: Error | null;
 
-  // Bookmark mutations
-  toggleBookmark: UseMutateAsyncFunction<
-    boolean,
-    Error,
-    string,
-    PreviousNewslettersState
-  >;
-  isTogglingBookmark: boolean;
-  errorTogglingBookmark: Error | null;
-
   // Archive mutations
   toggleArchive: UseMutateAsyncFunction<
     boolean,
@@ -214,7 +204,6 @@ export const useNewsletters = (
       isRead: filters.isRead,
       isArchived: filters.isArchived,
       isLiked: filters.isLiked,
-      isBookmarked: filters.isBookmarked,
       tagIds: filters.tagIds,
       sourceIds: filters.sourceIds,
       dateFrom: filters.dateFrom,
@@ -769,144 +758,6 @@ export const useNewsletters = (
       // Use gentle invalidation with delay to prevent empty state
       setTimeout(() => {
         cacheManager.invalidateRelatedQueries([id], "toggle-like");
-      }, 200);
-    },
-  });
-
-  // Toggle bookmark mutation
-  const toggleBookmarkMutation = useMutation<
-    boolean,
-    Error,
-    string,
-    PreviousNewslettersState
-  >({
-    mutationFn: async (id: string) => {
-      await newsletterApi.toggleBookmark(id);
-      return true;
-    },
-    onMutate: async (id) => {
-      // Cancel any outgoing refetches to avoid race conditions
-      await cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          queryKeyFactory.matchers.isNewsletterDetailKey(
-            query.queryKey as unknown[],
-            id,
-          ),
-      });
-
-      // Store current state for rollback
-      const queryData = getQueryData<any>(queryKey);
-      const previousNewsletters = Array.isArray(queryData?.data)
-        ? queryData.data
-        : Array.isArray(queryData)
-          ? queryData
-          : [];
-
-      // Ensure previousNewsletters is always an array
-      const newsletterArray = Array.isArray(previousNewsletters)
-        ? previousNewsletters
-        : [];
-
-      // Find the current newsletter to get its bookmark status
-      const currentNewsletter = newsletterArray.find((n) => n.id === id);
-      const currentBookmarkedState = currentNewsletter?.is_bookmarked ?? false;
-      const newBookmarkedState = !currentBookmarkedState;
-
-      const rollbackFunctions: Array<() => void> = [];
-
-      try {
-        // Update newsletter list optimistically with rollback
-        const listResult = await cacheManager.optimisticUpdateWithRollback<
-          NewsletterWithRelations[]
-        >([...queryKey], (data) => {
-          // Always return a valid array, even if data is undefined
-          const currentData = Array.isArray(data) ? data : [];
-          return currentData.map((newsletter) =>
-            newsletter.id === id
-              ? { ...newsletter, is_bookmarked: newBookmarkedState }
-              : newsletter,
-          );
-        });
-
-        if (listResult?.rollback) {
-          rollbackFunctions.push(listResult.rollback);
-        }
-
-        // Update individual newsletter queries with rollback
-        const detailQueries = cacheManager.queryClient.getQueryCache().findAll({
-          predicate: (query) =>
-            queryKeyFactory.matchers.isNewsletterDetailKey(
-              query.queryKey as unknown[],
-              id,
-            ),
-        });
-
-        for (const query of detailQueries) {
-          try {
-            const detailResult =
-              await cacheManager.optimisticUpdateWithRollback<NewsletterWithRelations>(
-                Array.from(query.queryKey),
-                (data) => {
-                  if (!data) return data;
-                  return { ...data, is_bookmarked: newBookmarkedState };
-                },
-              );
-
-            if (detailResult?.rollback) {
-              rollbackFunctions.push(detailResult.rollback);
-            }
-          } catch (detailError) {
-            console.warn(
-              "Failed to update individual newsletter query:",
-              query.queryKey,
-              detailError,
-            );
-            // Continue with other queries even if one fails
-          }
-        }
-      } catch (error) {
-        console.error("Optimistic update failed:", error);
-        // Execute any rollback functions that were successfully created
-        rollbackFunctions.forEach((rollback) => {
-          try {
-            rollback();
-          } catch (rollbackError) {
-            console.error("Rollback failed:", rollbackError);
-          }
-        });
-      }
-
-      return {
-        previousNewsletters: newsletterArray,
-        currentBookmarkedState,
-        newBookmarkedState,
-        rollbackFunctions,
-      };
-    },
-    onError: (_error, id, context) => {
-      console.error("Error toggling bookmark status:", _error);
-
-      // Execute rollback functions if available
-      if (context?.rollbackFunctions) {
-        context.rollbackFunctions.forEach((rollback) => {
-          try {
-            rollback();
-          } catch (rollbackError) {
-            console.error("Error during rollback:", rollbackError);
-          }
-        });
-      }
-
-      // Force refresh of affected queries as fallback
-      cacheManager.invalidateRelatedQueries([id], "toggle-bookmark-error");
-    },
-    onSettled: (_data, _error, id) => {
-      // Use gentle invalidation with delay to prevent empty state
-      setTimeout(() => {
-        cacheManager.invalidateRelatedQueries([id], "toggle-bookmark");
       }, 200);
     },
   });
@@ -1548,16 +1399,6 @@ export const useNewsletters = (
     [toggleLikeMutation],
   );
 
-  const toggleBookmark = useCallback(
-    async (
-      id: string,
-      options?: MutateOptions<boolean, Error, string, PreviousNewslettersState>,
-    ) => {
-      return toggleBookmarkMutation.mutateAsync(id, options);
-    },
-    [toggleBookmarkMutation],
-  );
-
   const toggleArchive = useCallback(
     async (
       id: string,
@@ -1643,11 +1484,6 @@ export const useNewsletters = (
     toggleLike,
     isTogglingLike: toggleLikeMutation.isPending,
     errorTogglingLike: toggleLikeMutation.error,
-
-    // Bookmark mutation
-    toggleBookmark,
-    isTogglingBookmark: toggleBookmarkMutation.isPending,
-    errorTogglingBookmark: toggleBookmarkMutation.error,
 
     // Archive mutations
     toggleArchive,

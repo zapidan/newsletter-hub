@@ -226,8 +226,7 @@ export class SimpleCacheManager {
         break;
 
       case "toggle-like":
-      case "toggle-bookmark":
-        // For like/bookmark operations, use very gentle invalidation
+        // For like operations, use very gentle invalidation
         // Only invalidate if we're in a liked filter view
         setTimeout(() => {
           this.queryClient.refetchQueries({
@@ -235,17 +234,6 @@ export class SimpleCacheManager {
             type: "active",
           });
         }, 500);
-        break;
-
-      case "toggle-like-error":
-      case "toggle-bookmark-error":
-        // For error cases, force a gentle refresh
-        invalidationPromises.push(
-          this.queryClient.invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.lists(),
-            refetchType: "active",
-          }),
-        );
         break;
 
       case "toggle-queue":
@@ -257,9 +245,41 @@ export class SimpleCacheManager {
       case "queue-mark-unread":
       case "queue-update-tags":
       case "queue-cleanup":
+        // For all queue operations, invalidate reading queue and newsletter lists
         invalidationPromises.push(
           this.queryClient.invalidateQueries({
-            queryKey: queryKeyFactory.queue.lists(),
+            queryKey: queryKeyFactory.queue.all(),
+            refetchType: "active",
+          })
+        );
+        // Also refresh the newsletter lists to reflect any queue changes
+        setTimeout(() => {
+          this.queryClient.refetchQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+            type: "active",
+          });
+        }, 100);
+        break;
+
+      case "toggle-like-error":
+        // For error cases, force a gentle refresh
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+            refetchType: "active",
+          }),
+        );
+        break;
+
+      case "toggle-queue-error":
+        // For queue error cases, force refresh of both lists and queue
+        invalidationPromises.push(
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.lists(),
+            refetchType: "active",
+          }),
+          this.queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.queue.all(),
             refetchType: "active",
           }),
         );
