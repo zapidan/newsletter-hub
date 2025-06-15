@@ -1,5 +1,6 @@
 import { toast } from "react-hot-toast";
 import { getCacheManager } from "./cacheUtils";
+import { readingQueueApi } from "@common/api";
 import type { NewsletterWithRelations } from "@common/types";
 
 export interface NewsletterActionHandlers {
@@ -326,7 +327,30 @@ export class SharedNewsletterActionHandlers {
     options?: NewsletterActionOptions,
   ): Promise<void> {
     try {
-      await this.handlers.toggleInQueue(newsletter.id);
+      // Use the isInQueue parameter to determine the correct action
+      if (isInQueue) {
+        // Remove from queue - find the queue item first
+        const queueItems = await readingQueueApi.getAll();
+        const queueItem = queueItems.find(
+          (item) => item.newsletter_id === newsletter.id,
+        );
+        if (queueItem) {
+          await readingQueueApi.remove(queueItem.id);
+        } else {
+          throw new Error("Newsletter not found in reading queue");
+        }
+      } else {
+        // Add to queue
+        await readingQueueApi.add(newsletter.id);
+      }
+
+      // Invalidate reading queue cache after successful operation
+      setTimeout(async () => {
+        await this.cacheManager.invalidateRelatedQueries(
+          [newsletter.id],
+          "toggle-queue",
+        );
+      }, 100);
 
       if (options?.showToasts !== false) {
         toast.success(
@@ -336,6 +360,12 @@ export class SharedNewsletterActionHandlers {
 
       options?.onSuccess?.(newsletter);
     } catch (error) {
+      // Force cache refresh on error to ensure consistency
+      await this.cacheManager.invalidateRelatedQueries(
+        [newsletter.id],
+        "toggle-queue-error",
+      );
+
       const errorMessage =
         error instanceof Error ? error.message : "An error occurred";
       if (options?.showToasts !== false) {

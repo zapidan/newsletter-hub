@@ -58,7 +58,7 @@ export class SimpleCacheManager {
       // Cross-feature sync: update newsletter in reading queue
       if (this.config.enableCrossFeatureSync) {
         this.queryClient.setQueriesData<ReadingQueueItem[] | undefined>(
-          { queryKey: queryKeyFactory.queue.lists() },
+          { queryKey: queryKeyFactory.queue.all() },
           (oldData) => {
             if (!Array.isArray(oldData)) return oldData;
             return oldData.map((queueItem) =>
@@ -250,7 +250,7 @@ export class SimpleCacheManager {
           this.queryClient.invalidateQueries({
             queryKey: queryKeyFactory.queue.all(),
             refetchType: "active",
-          })
+          }),
         );
         // Also refresh the newsletter lists to reflect any queue changes
         setTimeout(() => {
@@ -374,7 +374,7 @@ export class SimpleCacheManager {
       case "queue-action":
         // For reading queue actions, invalidate queue and unread counts
         this.queryClient.invalidateQueries({
-          queryKey: queryKeyFactory.queue.lists(),
+          queryKey: queryKeyFactory.queue.all(),
           refetchType: priority === "high" ? "active" : "none",
         });
         this.queryClient.invalidateQueries({
@@ -476,7 +476,7 @@ export class SimpleCacheManager {
 
     // Remove from reading queue if present
     this.queryClient.setQueriesData<ReadingQueueItem[]>(
-      { queryKey: queryKeyFactory.queue.lists() },
+      { queryKey: queryKeyFactory.queue.all() },
       (oldData) => {
         if (!Array.isArray(oldData)) return oldData;
         return oldData.filter(
@@ -593,7 +593,7 @@ export class SimpleCacheManager {
 
   clearReadingQueueCache(): void {
     this.queryClient.invalidateQueries({
-      queryKey: queryKeyFactory.queue.lists(),
+      queryKey: queryKeyFactory.queue.all(),
       refetchType: "active",
     });
   }
@@ -700,7 +700,7 @@ export class SimpleCacheManager {
           );
         case "reading-queue":
           return this.queryClient.invalidateQueries({
-            queryKey: queryKeyFactory.queue.lists(),
+            queryKey: queryKeyFactory.queue.all(),
             refetchType: "active",
           });
         case "unread-count":

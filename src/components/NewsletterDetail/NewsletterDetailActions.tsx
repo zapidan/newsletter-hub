@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
+import { readingQueueApi } from "@common/api/readingQueueApi";
 import type { NewsletterWithRelations } from "@common/types";
 
 interface NewsletterDetailActionsProps {
@@ -52,10 +53,35 @@ export const NewsletterDetailActions: React.FC<
   const [isArchiving, setIsArchiving] = useState(false);
   const [isTogglingReadStatus, setIsTogglingReadStatus] = useState(false);
 
+  // Track actual queue status
+  const [isInQueue, setIsInQueue] = useState<boolean>(isFromReadingQueue);
+  const [isCheckingQueue, setIsCheckingQueue] = useState(false);
+
   // Sync local state with props when newsletter changes
   useEffect(() => {
     setLocalNewsletter(newsletter);
   }, [newsletter]);
+
+  // Check actual queue status when newsletter changes
+  useEffect(() => {
+    const checkQueueStatus = async () => {
+      if (!newsletter?.id) return;
+
+      setIsCheckingQueue(true);
+      try {
+        const inQueue = await readingQueueApi.isInQueue(newsletter.id);
+        setIsInQueue(inQueue);
+      } catch (error) {
+        console.error("Error checking queue status:", error);
+        // Fallback to prop value if API fails
+        setIsInQueue(isFromReadingQueue);
+      } finally {
+        setIsCheckingQueue(false);
+      }
+    };
+
+    checkQueueStatus();
+  }, [newsletter?.id, isFromReadingQueue]);
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingReadStatus) return;
@@ -135,20 +161,24 @@ export const NewsletterDetailActions: React.FC<
   ]);
 
   const handleToggleQueue = useCallback(async () => {
-    if (!localNewsletter?.id || isTogglingQueue) return;
+    if (!localNewsletter?.id || isTogglingQueue || isCheckingQueue) return;
 
     setIsTogglingQueue(true);
 
+    // Optimistic update for immediate UI feedback
+    const newQueueStatus = !isInQueue;
+    setIsInQueue(newQueueStatus);
+
     try {
-      await handleToggleInQueue(localNewsletter, isFromReadingQueue);
+      await handleToggleInQueue(localNewsletter, isInQueue);
 
       toast.success(
-        isFromReadingQueue
-          ? "Removed from reading queue"
-          : "Added to reading queue",
+        isInQueue ? "Removed from reading queue" : "Added to reading queue",
       );
     } catch (error) {
       console.error("Error toggling queue:", error);
+      // Revert optimistic update on error
+      setIsInQueue(isInQueue);
       toast.error("Failed to update reading queue");
     } finally {
       setIsTogglingQueue(false);
@@ -156,9 +186,9 @@ export const NewsletterDetailActions: React.FC<
   }, [
     localNewsletter,
     isTogglingQueue,
+    isCheckingQueue,
+    isInQueue,
     handleToggleInQueue,
-    onNewsletterUpdate,
-    newsletter,
   ]);
 
   const handleArchive = useCallback(async () => {
@@ -176,7 +206,7 @@ export const NewsletterDetailActions: React.FC<
     onNewsletterUpdate(optimisticNewsletter);
 
     try {
-      await handleToggleArchive(localNewsletter, true);
+      await handleToggleArchive(localNewsletter);
 
       toast.success("Newsletter archived");
     } catch (error) {
@@ -211,7 +241,7 @@ export const NewsletterDetailActions: React.FC<
     onNewsletterUpdate(optimisticNewsletter);
 
     try {
-      await handleToggleArchive(localNewsletter, false);
+      await handleToggleArchive(localNewsletter);
 
       toast.success("Newsletter unarchived");
     } catch (error) {
@@ -305,22 +335,22 @@ export const NewsletterDetailActions: React.FC<
       {/* Bookmark Toggle */}
       <button
         onClick={handleToggleQueue}
-        disabled={isTogglingQueue}
+        disabled={isTogglingQueue || isCheckingQueue}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          isFromReadingQueue
+          isInQueue
             ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
         }`}
-        aria-label={isFromReadingQueue ? "Remove from queue" : "Add to queue"}
+        aria-label={isInQueue ? "Remove from queue" : "Add to queue"}
       >
-        {isTogglingQueue && (
+        {(isTogglingQueue || isCheckingQueue) && (
           <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
         <BookmarkIcon
-          className={`h-4 w-4 ${isFromReadingQueue ? "fill-yellow-500" : "fill-none"}`}
+          className={`h-4 w-4 ${isInQueue ? "fill-yellow-500" : "fill-none"}`}
           stroke="currentColor"
         />
-        <span>{isFromReadingQueue ? "Saved" : "Save for later"}</span>
+        <span>{isInQueue ? "Saved" : "Save for later"}</span>
       </button>
 
       {/* Archive/Unarchive Toggle */}

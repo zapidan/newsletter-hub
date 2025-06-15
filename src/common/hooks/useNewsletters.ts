@@ -1075,7 +1075,9 @@ export const useNewsletters = (
     mutationFn: async (id: string) => {
       // Get current queue status from cache first, then API if needed
       const queueItems =
-        getQueryData<ReadingQueueItem[]>(queryKeyFactory.queue.lists()) || [];
+        getQueryData<ReadingQueueItem[]>(
+          queryKeyFactory.queue.list(user?.id || ""),
+        ) || [];
       let isInQueue = queueItems.some((item) => item.newsletter_id === id);
 
       // If cache is empty or unreliable, check API
@@ -1127,14 +1129,16 @@ export const useNewsletters = (
         : [];
 
       const queueItems =
-        getQueryData<ReadingQueueItem[]>(queryKeyFactory.queue.lists()) || [];
+        getQueryData<ReadingQueueItem[]>(
+          queryKeyFactory.queue.list(user?.id || ""),
+        ) || [];
       const wasInQueue = queueItems.some((item) => item.newsletter_id === id);
 
       // Note: We don't need to update newsletter lists since queue status
       // is managed separately through ReadingQueueItem table
 
       // Apply optimistic updates to reading queue with better error handling
-      const queueQueryKey = queryKeyFactory.queue.lists();
+      const queueQueryKey = queryKeyFactory.queue.list(user?.id || "");
       try {
         const result = await cacheManager.optimisticUpdateWithRollback<
           ReadingQueueItem[]
