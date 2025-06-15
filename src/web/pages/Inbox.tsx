@@ -106,6 +106,7 @@ const Inbox: React.FC = memo(() => {
   const selectionDebounceRef = useRef<NodeJS.Timeout>();
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [isActionInProgress, setIsActionInProgress] = useState(false);
 
   // Loading states derived from actual hook states
   const loadingStates = useMemo(() => {
@@ -286,8 +287,14 @@ const Inbox: React.FC = memo(() => {
     });
   }, [newsletters, sourceFilter, isLoadingNewsletters]);
 
-  // Force refetch when filters change to ensure fresh data
+  // Force refetch when filters change to ensure fresh data (but not during actions)
   useEffect(() => {
+    // Skip refetch if action is in progress to preserve optimistic updates
+    if (isActionInProgress) {
+      console.log("🔄 Skipping refetch - action in progress");
+      return;
+    }
+
     console.log("🔄 Filter changed, refetching newsletters...", {
       filter,
       sourceFilter,
@@ -308,6 +315,7 @@ const Inbox: React.FC = memo(() => {
     debouncedTagUpdates,
     newsletterFilter,
     refetchNewsletters,
+    isActionInProgress,
   ]);
 
   // Store current filter context for actions
@@ -487,6 +495,8 @@ const Inbox: React.FC = memo(() => {
   // Create filter-aware versions of the actions
   const handleToggleLike = useCallback(
     async (newsletter: NewsletterWithRelations) => {
+      setIsActionInProgress(true);
+
       // Optimistic update for liked filter
       if (filter === "liked") {
         setStableNewsletters((prev) => {
@@ -511,6 +521,8 @@ const Inbox: React.FC = memo(() => {
         console.error("❌ toggleLike failed:", error);
         setToast({ type: "error", message: (error as Error).message });
         setTimeout(() => setToast(null), 5000);
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [baseHandleToggleLike, filter, preserveFilterParams],
@@ -518,33 +530,73 @@ const Inbox: React.FC = memo(() => {
 
   const handleToggleArchive = useCallback(
     async (id: string) => {
-      // Optimistic update for archived filter
+      setIsActionInProgress(true);
+
+      const newsletter = newsletters.find((n) => n.id === id);
+      if (!newsletter) {
+        setIsActionInProgress(false);
+        return;
+      }
+
+      const isCurrentlyArchived = newsletter.is_archived;
+      const willBeArchived = !isCurrentlyArchived;
+
+      // Optimistic update based on current state
       if (filter === "archived") {
-        setStableNewsletters((prev) => {
-          const updated = [...prev];
-          const index = updated.findIndex((n) => n.id === id);
-          if (index > -1) {
-            const updatedNewsletter = { ...updated[index], is_archived: true };
-            updated.splice(index, 1);
-            updated.unshift(updatedNewsletter);
-            return updated;
-          }
-          return prev;
-        });
+        if (isCurrentlyArchived) {
+          // Unarchiving in archive view - remove from list
+          setStableNewsletters((prev) => prev.filter((n) => n.id !== id));
+        } else {
+          // Archiving in archive view - add to top
+          setStableNewsletters((prev) => {
+            const updated = [...prev];
+            const index = updated.findIndex((n) => n.id === id);
+            if (index > -1) {
+              const updatedNewsletter = {
+                ...updated[index],
+                is_archived: true,
+              };
+              updated.splice(index, 1);
+              updated.unshift(updatedNewsletter);
+              return updated;
+            }
+            return prev;
+          });
+        }
+      } else if (!isCurrentlyArchived && willBeArchived) {
+        // Archiving in non-archive view - remove from current view
+        setStableNewsletters((prev) => prev.filter((n) => n.id !== id));
       }
 
       try {
-        const newsletter = newsletters.find((n) => n.id === id);
-        if (newsletter) {
-          await baseHandleToggleArchive(newsletter);
-        }
+        await baseHandleToggleArchive(newsletter);
         preserveFilterParams();
-        setToast({ type: "success", message: "Newsletter archived" });
+
+        const successMessage = willBeArchived
+          ? "Newsletter archived"
+          : "Newsletter unarchived";
+        setToast({ type: "success", message: successMessage });
         setTimeout(() => setToast(null), 3000);
       } catch (error) {
         console.error("❌ toggleArchive failed:", error);
         setToast({ type: "error", message: (error as Error).message });
         setTimeout(() => setToast(null), 5000);
+
+        // Revert optimistic update on error
+        if (filter === "archived") {
+          if (isCurrentlyArchived) {
+            // Restore newsletter to list if unarchive failed
+            setStableNewsletters((prev) => [newsletter, ...prev]);
+          } else {
+            // Remove from top if archive failed
+            setStableNewsletters((prev) => prev.filter((n) => n.id !== id));
+          }
+        } else if (!isCurrentlyArchived && willBeArchived) {
+          // Restore newsletter to list if archive failed
+          setStableNewsletters((prev) => [newsletter, ...prev]);
+        }
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [baseHandleToggleArchive, filter, preserveFilterParams, newsletters],
@@ -552,6 +604,8 @@ const Inbox: React.FC = memo(() => {
 
   const handleToggleRead = useCallback(
     async (id: string) => {
+      setIsActionInProgress(true);
+
       try {
         const newsletter = newsletters.find((n) => n.id === id);
         if (newsletter) {
@@ -564,6 +618,8 @@ const Inbox: React.FC = memo(() => {
         console.error("❌ toggleRead failed:", error);
         setToast({ type: "error", message: (error as Error).message });
         setTimeout(() => setToast(null), 5000);
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [baseHandleToggleRead, preserveFilterParams, newsletters],
@@ -587,6 +643,8 @@ const Inbox: React.FC = memo(() => {
 
   const handleToggleInQueue = useCallback(
     async (newsletterId: string) => {
+      setIsActionInProgress(true);
+
       try {
         const newsletter = newsletters.find((n) => n.id === newsletterId);
         const isCurrentlyInQueue = readingQueue.some(
@@ -602,6 +660,8 @@ const Inbox: React.FC = memo(() => {
         console.error("❌ toggleInQueue failed:", error);
         setToast({ type: "error", message: (error as Error).message });
         setTimeout(() => setToast(null), 5000);
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [baseHandleToggleInQueue, preserveFilterParams, newsletters, readingQueue],

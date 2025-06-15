@@ -409,6 +409,7 @@ const NewslettersPage: React.FC = () => {
   });
 
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
+  const [isActionInProgress, setIsActionInProgress] = useState(false);
 
   // Stable keys for newsletter rows to prevent unnecessary re-renders
   const [stableKeys, setStableKeys] = useState<Map<string, string>>(new Map());
@@ -445,8 +446,14 @@ const NewslettersPage: React.FC = () => {
     });
   }, [fetchedNewsletters, selectedSourceId, selectedGroupId]);
 
-  // Force refetch when filters change to ensure fresh data
+  // Force refetch when filters change to ensure fresh data (but not during actions)
   useEffect(() => {
+    // Skip refetch if action is in progress to preserve optimistic updates
+    if (isActionInProgress) {
+      console.log("🔄 Skipping refetch - action in progress");
+      return;
+    }
+
     console.log("🔄 Filter changed, refetching newsletters...", {
       selectedSourceId,
       selectedGroupId,
@@ -458,6 +465,7 @@ const NewslettersPage: React.FC = () => {
     selectedGroupId,
     selectedGroupSourceIds,
     refetchNewsletters,
+    isActionInProgress,
   ]);
 
   const handleTagClick = useCallback(
@@ -470,6 +478,8 @@ const NewslettersPage: React.FC = () => {
   // Newsletter action wrapper handlers with optimistic updates
   const handleToggleLikeWrapper = useCallback(
     async (newsletter: NewsletterWithRelations) => {
+      setIsActionInProgress(true);
+
       // Optimistic update for immediate feedback
       setStableNewsletters((prev) => {
         const updated = [...prev];
@@ -485,6 +495,9 @@ const NewslettersPage: React.FC = () => {
 
       try {
         await handleToggleLike(newsletter);
+        toast.success(
+          newsletter.is_liked ? "Newsletter unliked" : "Newsletter liked",
+        );
       } catch (error) {
         // Revert optimistic update on error
         setStableNewsletters((prev) => {
@@ -499,6 +512,8 @@ const NewslettersPage: React.FC = () => {
           return updated;
         });
         throw error;
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [handleToggleLike],
@@ -510,38 +525,65 @@ const NewslettersPage: React.FC = () => {
 
   const handleToggleArchiveWrapper = useCallback(
     async (id: string) => {
+      setIsActionInProgress(true);
+
       const newsletter = fetchedNewsletters.find((n) => n.id === id);
-      if (!newsletter) return;
+      if (!newsletter) {
+        setIsActionInProgress(false);
+        return;
+      }
 
-      // Optimistic update for immediate feedback
-      setStableNewsletters((prev) => {
-        const updated = [...prev];
-        const index = updated.findIndex((n) => n.id === id);
-        if (index > -1) {
-          updated[index] = {
-            ...updated[index],
-            is_archived: !updated[index].is_archived,
-          };
-        }
-        return updated;
-      });
+      const isCurrentlyArchived = newsletter.is_archived;
+      const willBeArchived = !isCurrentlyArchived;
 
-      try {
-        await handleToggleArchive(newsletter);
-      } catch (error) {
-        // Revert optimistic update on error
+      // Optimistic update - remove from current view since this page shows non-archived
+      if (willBeArchived) {
+        // Archiving - remove from list since this page shows non-archived
+        setStableNewsletters((prev) => prev.filter((n) => n.id !== id));
+      } else {
+        // Unarchiving - newsletter should appear if it matches current filters
+        // For now, just update the status
         setStableNewsletters((prev) => {
           const updated = [...prev];
           const index = updated.findIndex((n) => n.id === id);
           if (index > -1) {
             updated[index] = {
               ...updated[index],
-              is_archived: !updated[index].is_archived,
+              is_archived: false,
             };
           }
           return updated;
         });
+      }
+
+      try {
+        await handleToggleArchive(newsletter);
+        const successMessage = willBeArchived
+          ? "Newsletter archived"
+          : "Newsletter unarchived";
+        toast.success(successMessage);
+      } catch (error) {
+        // Revert optimistic update on error
+        if (willBeArchived) {
+          // Restore newsletter to list if archive failed
+          setStableNewsletters((prev) => [newsletter, ...prev]);
+        } else {
+          // Revert unarchive
+          setStableNewsletters((prev) => {
+            const updated = [...prev];
+            const index = updated.findIndex((n) => n.id === id);
+            if (index > -1) {
+              updated[index] = {
+                ...updated[index],
+                is_archived: true,
+              };
+            }
+            return updated;
+          });
+        }
         throw error;
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [handleToggleArchive, fetchedNewsletters],
@@ -549,8 +591,13 @@ const NewslettersPage: React.FC = () => {
 
   const handleToggleReadWrapper = useCallback(
     async (id: string) => {
+      setIsActionInProgress(true);
+
       const newsletter = fetchedNewsletters.find((n) => n.id === id);
-      if (!newsletter) return;
+      if (!newsletter) {
+        setIsActionInProgress(false);
+        return;
+      }
 
       // Optimistic update for immediate feedback
       setStableNewsletters((prev) => {
@@ -567,6 +614,9 @@ const NewslettersPage: React.FC = () => {
 
       try {
         await handleToggleRead(newsletter);
+        toast.success(
+          newsletter.is_read ? "Marked as unread" : "Marked as read",
+        );
       } catch (error) {
         // Revert optimistic update on error
         setStableNewsletters((prev) => {
@@ -581,6 +631,8 @@ const NewslettersPage: React.FC = () => {
           return updated;
         });
         throw error;
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [handleToggleRead, fetchedNewsletters],
@@ -588,8 +640,13 @@ const NewslettersPage: React.FC = () => {
 
   const handleToggleInQueueWrapper = useCallback(
     async (newsletterId: string) => {
+      setIsActionInProgress(true);
+
       const newsletter = fetchedNewsletters.find((n) => n.id === newsletterId);
-      if (!newsletter) return;
+      if (!newsletter) {
+        setIsActionInProgress(false);
+        return;
+      }
 
       // Check current queue status using actual reading queue data
       const isCurrentlyInQueue = readingQueue.some(
@@ -598,9 +655,14 @@ const NewslettersPage: React.FC = () => {
 
       try {
         await handleToggleInQueue(newsletter, isCurrentlyInQueue);
+        toast.success(
+          isCurrentlyInQueue ? "Removed from queue" : "Added to queue",
+        );
       } catch (error) {
         console.error("Error toggling queue status:", error);
         toast.error("Failed to update queue status");
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [handleToggleInQueue, fetchedNewsletters, readingQueue],

@@ -15,7 +15,9 @@ import {
 } from "../types/api";
 
 // Transform raw Supabase response to our Newsletter type
-const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
+const transformNewsletterResponse = (
+  data: Record<string, unknown>,
+): NewsletterWithRelations => {
   // Log the raw data we receive
   console.log("🔄 [transformNewsletterResponse] Raw data:", {
     id: data.id,
@@ -59,7 +61,9 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
 
   // Transform tags if they exist
   const transformedTags = Array.isArray(data.tags)
-    ? data.tags.map((t: any) => t.tag).filter(Boolean)
+    ? data.tags
+        .map((t: { tag: Record<string, unknown> }) => t.tag)
+        .filter(Boolean)
     : [];
 
   const result = {
@@ -67,8 +71,8 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
     source: transformedSource,
     tags: transformedTags,
     // Ensure newsletter_source_id is always set, even if null
-    newsletter_source_id: data.newsletter_source_id || null,
-  };
+    newsletter_source_id: (data.newsletter_source_id as string) || null,
+  } as NewsletterWithRelations;
 
   // Log the transformed data
   console.log("✅ [transformNewsletterResponse] Transformed data:", {
@@ -85,9 +89,6 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
 
 // Build query based on parameters
 const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
-  // Start with base query
-  let query = supabase.from("newsletters");
-
   // Build select clause
   let selectClause = "*";
   const relations = [];
@@ -105,8 +106,10 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     selectClause = `*, ${relations.join(", ")}`;
   }
 
-  // Start with select
-  query = query.select(selectClause);
+  // Start with base query and select
+  let query = supabase
+    .from("newsletters")
+    .select(selectClause, { count: "exact" });
 
   // CRITICAL: Filter by user_id first to ensure data isolation
   if (params.user_id) {
@@ -206,7 +209,7 @@ export const newsletterApi = {
       });
 
       // Build the query using buildNewsletterQuery
-      let query = buildNewsletterQuery({
+      const query = buildNewsletterQuery({
         ...params,
         user_id: user.id, // Pass user_id to ensure it's included in the query
       });
@@ -218,7 +221,8 @@ export const newsletterApi = {
         isRead: params.isRead,
       });
 
-      const { data, error, count } = await query;
+      const queryResult = await query;
+      const { data, error, count } = queryResult;
 
       if (error) {
         console.error("❌ [getAll] Query error:", error);
@@ -231,27 +235,30 @@ export const newsletterApi = {
         sourceIds: params.sourceIds || null,
         firstItem: data?.[0]
           ? {
-              id: data[0].id,
-              title: data[0].title,
-              sourceId: data[0].newsletter_source_id,
-              hasSource: !!data[0].source,
+              id: (data[0] as any).id,
+              title: (data[0] as any).title,
+              sourceId: (data[0] as any).newsletter_source_id,
+              hasSource: !!(data[0] as any).source,
             }
           : null,
       });
 
       // Log the raw response for the first item if available
       if (data?.[0]) {
+        const firstItem = data[0] as any;
         console.log("🔍 [getAll] First item raw data:", {
-          id: data[0].id,
-          title: data[0].title,
-          sourceId: data[0].newsletter_source_id,
-          source: data[0].source,
-          rawSource: data[0].source,
+          id: firstItem.id,
+          title: firstItem.title,
+          sourceId: firstItem.newsletter_source_id,
+          source: firstItem.source,
+          rawSource: firstItem.source,
         });
       }
 
       // Transform the data
-      let transformedData = (data || []).map(transformNewsletterResponse);
+      let transformedData = (data || [])
+        .map((item: any) => transformNewsletterResponse(item))
+        .filter(Boolean);
 
       // Log the transformed data for the first item if available
       if (transformedData[0]) {
@@ -398,7 +405,7 @@ export const newsletterApi = {
       }
 
       // Update the newsletter
-      const { data: newsletter, error: updateError } = await supabase
+      const { error: updateError } = await supabase
         .from("newsletters")
         .update({
           ...updateData,
@@ -643,7 +650,7 @@ export const newsletterApi = {
 
       const counts: Record<string, number> = {};
 
-      data?.forEach((newsletter) => {
+      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
         const sourceId = newsletter.newsletter_source_id || "unknown";
         counts[sourceId] = (counts[sourceId] || 0) + 1;
       });
@@ -674,7 +681,7 @@ export const newsletterApi = {
 
         const totalCounts: Record<string, number> = {};
 
-        data?.forEach((newsletter) => {
+        data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
           const sourceId = newsletter.newsletter_source_id || "unknown";
           totalCounts[sourceId] = (totalCounts[sourceId] || 0) + 1;
         });
@@ -707,7 +714,7 @@ export const newsletterApi = {
 
         const unreadCounts: Record<string, number> = {};
 
-        data?.forEach((newsletter) => {
+        data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
           const sourceId = newsletter.newsletter_source_id || "unknown";
           unreadCounts[sourceId] = (unreadCounts[sourceId] || 0) + 1;
         });
