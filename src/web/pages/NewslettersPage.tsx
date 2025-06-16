@@ -717,15 +717,45 @@ const NewslettersPage: React.FC = () => {
 
   // Handle newsletter click with proper navigation state
   const handleNewsletterClick = useCallback(
-    (newsletter: NewsletterWithRelations) => {
-      navigate(`/newsletters/${newsletter.id}`, {
-        state: {
-          fromNewsletterSources: true,
-          from: "/newsletters",
-        },
-      });
+    async (newsletter: NewsletterWithRelations) => {
+      try {
+        // Mark as read if unread
+        if (!newsletter.is_read) {
+          try {
+            await handleToggleRead(newsletter);
+          } catch (readError) {
+            console.error("Failed to mark newsletter as read:", readError);
+          }
+        }
+
+        // Archive the newsletter when opened from sources
+        if (!newsletter.is_archived) {
+          try {
+            await handleToggleArchive(newsletter);
+          } catch (archiveError) {
+            console.error("Failed to archive newsletter:", archiveError);
+          }
+        }
+
+        // Navigate to the newsletter detail
+        navigate(`/newsletters/${newsletter.id}`, {
+          state: {
+            fromNewsletterSources: true,
+            from: "/newsletters",
+          },
+        });
+      } catch (error) {
+        console.error("Unexpected error in newsletter click handler:", error);
+        // Still navigate even if other actions fail
+        navigate(`/newsletters/${newsletter.id}`, {
+          state: {
+            fromNewsletterSources: true,
+            from: "/newsletters",
+          },
+        });
+      }
     },
-    [navigate],
+    [navigate, handleToggleRead, handleToggleArchive],
   );
 
   useEffect(() => {

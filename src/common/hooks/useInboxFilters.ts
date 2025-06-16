@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useFilters } from "@common/contexts/FilterContext";
 import { useNewsletters } from "@common/hooks/useNewsletters";
 import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
@@ -185,7 +191,9 @@ export const useInboxFilters = (
 
   // Handle tag click with toggle logic
   const handleTagClick = useCallback(
-    (tagId: string) => {
+    (tag: Tag, e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      const tagId = tag.id;
       const currentTags = pendingTagUpdates;
       const isCurrentlySelected = currentTags.includes(tagId);
       const newTags = isCurrentlySelected
