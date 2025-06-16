@@ -604,7 +604,7 @@ export const newsletterApi = {
     query: string,
     params: Omit<NewsletterQueryParams, "search"> = {},
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    return this.getAll({ ...params, search: query });
+    return newsletterApi.getAll({ ...params, search: query });
   },
 
   // Get reading statistics
