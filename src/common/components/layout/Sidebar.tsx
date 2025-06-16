@@ -74,7 +74,7 @@ const Sidebar = () => {
     <>
       {/* Mobile menu button - only visible on mobile */}
       <button
-        className="md:hidden fixed top-4 left-4 z-30 p-2 rounded-md bg-white shadow-md text-neutral-700"
+        className="md:hidden fixed top-6 left-6 z-30 btn btn-secondary p-2.5 rounded-xl bg-white/95 backdrop-blur-sm shadow-lg border border-slate-200/60 text-slate-700"
         onClick={toggleSidebar}
         aria-label="Toggle menu"
       >
@@ -84,7 +84,7 @@ const Sidebar = () => {
       {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-20"
+          className="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-20"
           onClick={toggleSidebar}
         />
       )}
@@ -94,33 +94,38 @@ const Sidebar = () => {
         initial={{ x: -280 }}
         animate={{ x: isOpen || window.innerWidth >= 768 ? 0 : -280 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        className={`fixed md:static inset-y-0 left-0 z-20 w-64 bg-white border-r border-neutral-200 flex flex-col`}
+        className={`fixed md:static inset-y-0 left-0 z-20 w-72 bg-white/95 backdrop-blur-sm border-r border-slate-200/60 flex flex-col shadow-xl md:shadow-none`}
       >
-        <div className="p-4 border-b border-neutral-200">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="bg-primary-500 rounded-md p-1.5">
-              <Inbox className="text-white" size={18} />
+        <div className="p-6 border-b border-slate-200/60">
+          <div className="flex items-center space-x-3 mb-6">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-2 shadow-sm">
+              <Inbox className="text-white" size={20} />
             </div>
-            <h2 className="text-xl font-bold text-neutral-800">
+            <h2 className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
               Newsletter Hub
             </h2>
           </div>
 
           {emailLoading ? (
-            <div className="text-sm text-gray-500 animate-pulse py-2">
-              Loading your email...
+            <div className="text-sm text-slate-500 animate-pulse py-3 px-4 bg-slate-50 rounded-lg">
+              <div className="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <span className="ml-2">Loading your email...</span>
             </div>
           ) : emailAlias ? (
-            <div className="w-full text-sm bg-gray-100 dark:bg-gray-700 rounded-md p-2 flex items-center justify-between">
+            <div className="w-full text-sm bg-gradient-to-r from-slate-50 to-blue-50/50 border border-slate-200/60 rounded-xl p-3 flex items-center justify-between transition-all hover:shadow-sm">
               <div className="flex items-center flex-1 min-w-0">
-                <Mail className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
-                <span className="font-mono text-xs break-all">
+                <Mail className="w-4 h-4 mr-3 text-slate-400 flex-shrink-0" />
+                <span className="font-mono text-xs break-all text-slate-700">
                   {emailAlias}
                 </span>
               </div>
               <button
                 onClick={copyToClipboard}
-                className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white transition-colors flex-shrink-0"
+                className="btn btn-ghost btn-xs ml-2 p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all flex-shrink-0"
                 title={copied ? "Copied!" : "Copy to clipboard"}
                 disabled={copied}
               >
@@ -134,7 +139,7 @@ const Sidebar = () => {
           ) : null}
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-6 space-y-2">
           {navLinks.map((link) => (
             <NavLink
               key={link.to}
@@ -169,9 +174,9 @@ const Sidebar = () => {
               <span className="flex-1">{link.label}</span>
               {link.to === "/inbox" && (
                 <span
-                  className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full transition-all duration-200 ${
+                  className={`ml-auto text-xs font-semibold px-2 py-1 rounded-full transition-all duration-200 shadow-sm ${
                     showUnreadBadge
-                      ? "bg-primary-100 text-primary-700"
+                      ? "bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 border border-blue-200/50"
                       : "opacity-0 w-0 px-0 overflow-hidden"
                   }`}
                   aria-live="polite"
@@ -184,10 +189,10 @@ const Sidebar = () => {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-neutral-200">
-          <div className="text-xs text-neutral-500">
+        <div className="p-6 border-t border-slate-200/60 bg-gradient-to-r from-slate-50/50 to-transparent">
+          <div className="text-xs text-slate-500">
             Connected as
-            <div className="font-medium text-neutral-700 truncate">
+            <div className="font-medium text-slate-700 truncate mt-1 text-sm">
               {user?.email}
             </div>
           </div>
