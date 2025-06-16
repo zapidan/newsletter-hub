@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useFilters } from '@common/contexts/FilterContext';
-import { useNewsletters } from '@common/hooks/useNewsletters';
-import { useNewsletterSources } from '@common/hooks/useNewsletterSources';
-import { useTags } from '@common/hooks/useTags';
-import type { NewsletterWithRelations, Tag } from '@common/types';
-import type { TimeRange } from '@web/components/TimeFilter';
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useFilters } from "@common/contexts/FilterContext";
+import { useNewsletters } from "@common/hooks/useNewsletters";
+import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
+import { useTags } from "@common/hooks/useTags";
+import type { NewsletterWithRelations, Tag } from "@common/types";
+import type { TimeRange } from "@web/components/TimeFilter";
 
 export interface InboxFiltersState {
-  filter: 'all' | 'unread' | 'liked' | 'archived';
+  filter: "all" | "unread" | "liked" | "archived";
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
@@ -18,7 +18,7 @@ export interface InboxFiltersState {
 }
 
 export interface InboxFiltersActions {
-  setFilter: (filter: 'all' | 'unread' | 'liked' | 'archived') => void;
+  setFilter: (filter: "all" | "unread" | "liked" | "archived") => void;
   setSourceFilter: (sourceId: string | null) => void;
   setTimeRange: (range: TimeRange) => void;
   setTagIds: (tagIds: string[]) => void;
@@ -38,8 +38,10 @@ export interface UseInboxFiltersOptions {
   preserveUrlOnActions?: boolean;
 }
 
-export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersActions {
-  newsletterFilter: ReturnType<typeof useFilters>['newsletterFilter'];
+export interface UseInboxFiltersReturn
+  extends InboxFiltersState,
+    InboxFiltersActions {
+  newsletterFilter: ReturnType<typeof useFilters>["newsletterFilter"];
   hasActiveFilters: boolean;
   isFilterActive: (filterName: keyof InboxFiltersState) => boolean;
   newsletterSources: Array<{ id: string; name: string }>;
@@ -47,7 +49,9 @@ export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersAc
   isLoadingSources: boolean;
 }
 
-export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxFiltersReturn => {
+export const useInboxFilters = (
+  options: UseInboxFiltersOptions = {},
+): UseInboxFiltersReturn => {
   const {
     debounceMs = 300,
     autoLoadTags = true,
@@ -85,10 +89,15 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
 
   // Hooks
   const { getTags } = useTags();
-  const { newsletterSources = [], isLoading: isLoadingSources } = useNewsletterSources();
+  const { newsletterSources = [], isLoading: isLoadingSources } =
+    useNewsletterSources();
 
   // Sync pendingTagUpdates with URL changes
   useEffect(() => {
+    console.log("🏷️ [useInboxFilters] URL tagIds changed:", {
+      tagIds,
+      pendingTagUpdates,
+    });
     setPendingTagUpdates(tagIds);
   }, [tagIds]);
 
@@ -99,9 +108,14 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     }
 
     debounceTimeoutRef.current = setTimeout(() => {
+      console.log("🏷️ [useInboxFilters] Debounce timeout fired:", {
+        pendingTagUpdates,
+        currentTagIds: tagIds,
+        willUpdate: pendingTagUpdates.join(",") !== tagIds.join(","),
+      });
       setDebouncedTagIds([...pendingTagUpdates]);
       // Update the actual filter state after debounce
-      if (pendingTagUpdates.join(',') !== tagIds.join(',')) {
+      if (pendingTagUpdates.join(",") !== tagIds.join(",")) {
         setTagIds(pendingTagUpdates);
       }
     }, debounceMs);
@@ -118,13 +132,18 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
 
   useEffect(() => {
     if (autoLoadTags) {
+      console.log("🏷️ [useInboxFilters] Loading tags...");
       setIsLoadingTags(true);
       getTags()
         .then((tags) => {
+          console.log("🏷️ [useInboxFilters] Tags loaded:", {
+            count: tags?.length || 0,
+            tags: tags?.map((t) => ({ id: t.id, name: t.name })) || [],
+          });
           setAllTags(tags || []);
         })
         .catch((error) => {
-          console.error('Failed to load tags:', error);
+          console.error("Failed to load tags:", error);
           setAllTags([]);
         })
         .finally(() => {
@@ -138,10 +157,10 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     const visible = new Set<string>();
 
     // Add currently selected tags
-    debouncedTagIds.forEach(tagId => visible.add(tagId));
+    debouncedTagIds.forEach((tagId) => visible.add(tagId));
 
     // Add tags from pending updates
-    pendingTagUpdates.forEach(tagId => visible.add(tagId));
+    pendingTagUpdates.forEach((tagId) => visible.add(tagId));
 
     setVisibleTags(visible);
   }, [debouncedTagIds, pendingTagUpdates]);
@@ -152,31 +171,48 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   }, []);
 
   // Handle tag click with toggle logic
-  const handleTagClick = useCallback((tagId: string) => {
-    const currentTags = pendingTagUpdates;
-    const newTags = currentTags.includes(tagId)
-      ? currentTags.filter(id => id !== tagId)
-      : [...currentTags, tagId];
+  const handleTagClick = useCallback(
+    (tagId: string) => {
+      console.log("🏷️ [useInboxFilters] Tag clicked:", {
+        tagId,
+        currentTags: pendingTagUpdates,
+      });
+      const currentTags = pendingTagUpdates;
+      const newTags = currentTags.includes(tagId)
+        ? currentTags.filter((id) => id !== tagId)
+        : [...currentTags, tagId];
 
-    updateTagDebounced(newTags);
-  }, [pendingTagUpdates, updateTagDebounced]);
+      console.log("🏷️ [useInboxFilters] New tags after toggle:", newTags);
+      updateTagDebounced(newTags);
+    },
+    [pendingTagUpdates, updateTagDebounced],
+  );
 
   // Enhanced filter actions that work with debounced tags
-  const enhancedToggleTag = useCallback((tagId: string) => {
-    handleTagClick(tagId);
-  }, [handleTagClick]);
+  const enhancedToggleTag = useCallback(
+    (tagId: string) => {
+      handleTagClick(tagId);
+    },
+    [handleTagClick],
+  );
 
-  const enhancedAddTag = useCallback((tagId: string) => {
-    const currentTags = pendingTagUpdates;
-    if (!currentTags.includes(tagId)) {
-      updateTagDebounced([...currentTags, tagId]);
-    }
-  }, [pendingTagUpdates, updateTagDebounced]);
+  const enhancedAddTag = useCallback(
+    (tagId: string) => {
+      const currentTags = pendingTagUpdates;
+      if (!currentTags.includes(tagId)) {
+        updateTagDebounced([...currentTags, tagId]);
+      }
+    },
+    [pendingTagUpdates, updateTagDebounced],
+  );
 
-  const enhancedRemoveTag = useCallback((tagId: string) => {
-    const currentTags = pendingTagUpdates;
-    updateTagDebounced(currentTags.filter(id => id !== tagId));
-  }, [pendingTagUpdates, updateTagDebounced]);
+  const enhancedRemoveTag = useCallback(
+    (tagId: string) => {
+      const currentTags = pendingTagUpdates;
+      updateTagDebounced(currentTags.filter((id) => id !== tagId));
+    },
+    [pendingTagUpdates, updateTagDebounced],
+  );
 
   const enhancedClearTags = useCallback(() => {
     updateTagDebounced([]);
@@ -189,29 +225,32 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   }, [resetFilters]);
 
   // Custom isFilterActive that considers debounced state
-  const enhancedIsFilterActive = useCallback((filterName: keyof InboxFiltersState): boolean => {
-    switch (filterName) {
-      case 'filter':
-        return filter !== 'all';
-      case 'sourceFilter':
-        return sourceFilter !== null;
-      case 'timeRange':
-        return timeRange !== 'all';
-      case 'tagIds':
-      case 'debouncedTagIds':
-      case 'pendingTagUpdates':
-        return debouncedTagIds.length > 0 || pendingTagUpdates.length > 0;
-      default:
-        return false;
-    }
-  }, [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]);
+  const enhancedIsFilterActive = useCallback(
+    (filterName: keyof InboxFiltersState): boolean => {
+      switch (filterName) {
+        case "filter":
+          return filter !== "all";
+        case "sourceFilter":
+          return sourceFilter !== null;
+        case "timeRange":
+          return timeRange !== "all";
+        case "tagIds":
+        case "debouncedTagIds":
+        case "pendingTagUpdates":
+          return debouncedTagIds.length > 0 || pendingTagUpdates.length > 0;
+        default:
+          return false;
+      }
+    },
+    [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates],
+  );
 
   // Enhanced hasActiveFilters that considers debounced state
   const enhancedHasActiveFilters = useMemo(() => {
     return (
-      filter !== 'all' ||
+      filter !== "all" ||
       sourceFilter !== null ||
-      timeRange !== 'all' ||
+      timeRange !== "all" ||
       debouncedTagIds.length > 0 ||
       pendingTagUpdates.length > 0
     );

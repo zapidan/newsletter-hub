@@ -1,18 +1,24 @@
-import React, { createContext, useContext, useCallback, useMemo, useEffect } from 'react';
-import { subDays, subWeeks, subMonths } from 'date-fns';
-import { useInboxUrlParams } from '@common/hooks/useUrlParams';
-import type { NewsletterFilter } from '@common/types/cache';
-import type { TimeRange } from '@web/components/TimeFilter';
+import React, {
+  createContext,
+  useContext,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
+import { subDays, subWeeks, subMonths } from "date-fns";
+import { useInboxUrlParams } from "@common/hooks/useUrlParams";
+import type { NewsletterFilter } from "@common/types/cache";
+import type { TimeRange } from "@web/components/TimeFilter";
 
 export interface FilterState {
-  filter: 'all' | 'unread' | 'liked' | 'archived';
+  filter: "all" | "unread" | "liked" | "archived";
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
 }
 
 export interface FilterActions {
-  setFilter: (filter: FilterState['filter']) => void;
+  setFilter: (filter: FilterState["filter"]) => void;
   setSourceFilter: (sourceId: string | null) => void;
   setTimeRange: (range: TimeRange) => void;
   setTagIds: (tagIds: string[]) => void;
@@ -34,7 +40,10 @@ const FilterContext = createContext<FilterContextType | undefined>(undefined);
 
 interface FilterProviderProps {
   children: React.ReactNode;
-  onFilterChange?: (filters: FilterState, newsletterFilter: NewsletterFilter) => void;
+  onFilterChange?: (
+    filters: FilterState,
+    newsletterFilter: NewsletterFilter,
+  ) => void;
   debounceTagsMs?: number;
 }
 
@@ -46,12 +55,24 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   const { params, updateParams, resetParams } = useInboxUrlParams();
 
   // Extract filter state from URL params
-  const filterState: FilterState = useMemo(() => ({
-    filter: params.filter || 'all',
-    sourceFilter: params.source || null,
-    timeRange: params.time || 'all',
-    tagIds: params.tags || [],
-  }), [params]);
+  const filterState: FilterState = useMemo(() => {
+    console.log("🔍 [FilterContext] Parsing URL params:", {
+      rawParams: params,
+      tagsParam: params.tags,
+      tagsType: typeof params.tags,
+      tagsLength: Array.isArray(params.tags) ? params.tags.length : "not array",
+    });
+
+    const result = {
+      filter: params.filter || "all",
+      sourceFilter: params.source || null,
+      timeRange: params.time || "all",
+      tagIds: params.tags || [],
+    };
+
+    console.log("🔍 [FilterContext] Filter state result:", result);
+    return result;
+  }, [params]);
 
   // Generate newsletter filter object
   const newsletterFilter = useMemo(() => {
@@ -59,18 +80,18 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
     // Handle status filter
     switch (filterState.filter) {
-      case 'unread':
+      case "unread":
         filters.isRead = false;
         filters.isArchived = false;
         break;
-      case 'liked':
+      case "liked":
         filters.isLiked = true;
         filters.isArchived = false;
         break;
-      case 'archived':
+      case "archived":
         filters.isArchived = true;
         break;
-      case 'all':
+      case "all":
       default:
         filters.isArchived = false;
         break;
@@ -87,21 +108,21 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     }
 
     // Handle time range filter
-    if (filterState.timeRange && filterState.timeRange !== 'all') {
+    if (filterState.timeRange && filterState.timeRange !== "all") {
       const now = new Date();
       let dateFrom: Date;
 
       switch (filterState.timeRange) {
-        case 'day':
+        case "day":
           dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           break;
-        case 'week':
+        case "week":
           dateFrom = subWeeks(now, 1);
           break;
-        case 'month':
+        case "month":
           dateFrom = subMonths(now, 1);
           break;
-        case '2days':
+        case "2days":
           dateFrom = subDays(now, 2);
           break;
         default:
@@ -117,65 +138,98 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   // Check if any filters are active (non-default)
   const hasActiveFilters = useMemo(() => {
     return (
-      filterState.filter !== 'all' ||
+      filterState.filter !== "all" ||
       filterState.sourceFilter !== null ||
-      filterState.timeRange !== 'all' ||
+      filterState.timeRange !== "all" ||
       filterState.tagIds.length > 0
     );
   }, [filterState]);
 
   // Check if a specific filter is active
-  const isFilterActive = useCallback((filterName: keyof FilterState): boolean => {
-    switch (filterName) {
-      case 'filter':
-        return filterState.filter !== 'all';
-      case 'sourceFilter':
-        return filterState.sourceFilter !== null;
-      case 'timeRange':
-        return filterState.timeRange !== 'all';
-      case 'tagIds':
-        return filterState.tagIds.length > 0;
-      default:
-        return false;
-    }
-  }, [filterState]);
+  const isFilterActive = useCallback(
+    (filterName: keyof FilterState): boolean => {
+      switch (filterName) {
+        case "filter":
+          return filterState.filter !== "all";
+        case "sourceFilter":
+          return filterState.sourceFilter !== null;
+        case "timeRange":
+          return filterState.timeRange !== "all";
+        case "tagIds":
+          return filterState.tagIds.length > 0;
+        default:
+          return false;
+      }
+    },
+    [filterState],
+  );
 
   // Action creators
-  const setFilter = useCallback((filter: FilterState['filter']) => {
-    updateParams({ filter });
-  }, [updateParams]);
+  const setFilter = useCallback(
+    (filter: FilterState["filter"]) => {
+      updateParams({ filter });
+    },
+    [updateParams],
+  );
 
-  const setSourceFilter = useCallback((sourceId: string | null) => {
-    updateParams({ source: sourceId });
-  }, [updateParams]);
+  const setSourceFilter = useCallback(
+    (sourceId: string | null) => {
+      updateParams({ source: sourceId });
+    },
+    [updateParams],
+  );
 
-  const setTimeRange = useCallback((range: TimeRange) => {
-    updateParams({ time: range });
-  }, [updateParams]);
+  const setTimeRange = useCallback(
+    (range: TimeRange) => {
+      updateParams({ time: range });
+    },
+    [updateParams],
+  );
 
-  const setTagIds = useCallback((tagIds: string[]) => {
-    updateParams({ tags: tagIds });
-  }, [updateParams]);
+  const setTagIds = useCallback(
+    (tagIds: string[]) => {
+      console.log("🔍 [FilterContext] setTagIds called:", {
+        tagIds,
+        length: tagIds.length,
+      });
+      updateParams({ tags: tagIds });
+    },
+    [updateParams],
+  );
 
-  const toggleTag = useCallback((tagId: string) => {
-    const currentTags = filterState.tagIds;
-    const newTags = currentTags.includes(tagId)
-      ? currentTags.filter(id => id !== tagId)
-      : [...currentTags, tagId];
-    setTagIds(newTags);
-  }, [filterState.tagIds, setTagIds]);
+  const toggleTag = useCallback(
+    (tagId: string) => {
+      console.log("🔍 [FilterContext] toggleTag called:", {
+        tagId,
+        currentTags: filterState.tagIds,
+      });
+      const currentTags = filterState.tagIds;
+      const newTags = currentTags.includes(tagId)
+        ? currentTags.filter((id) => id !== tagId)
+        : [...currentTags, tagId];
+      console.log("🔍 [FilterContext] toggleTag new tags:", newTags);
+      setTagIds(newTags);
+    },
+    [filterState.tagIds, setTagIds],
+  );
 
-  const addTag = useCallback((tagId: string) => {
-    const currentTags = filterState.tagIds;
-    if (!currentTags.includes(tagId)) {
-      setTagIds([...currentTags, tagId]);
-    }
-  }, [filterState.tagIds, setTagIds]);
+  const addTag = useCallback(
+    (tagId: string) => {
+      const currentTags = filterState.tagIds;
+      if (!currentTags.includes(tagId)) {
+        setTagIds([...currentTags, tagId]);
+      }
+    },
+    [filterState.tagIds, setTagIds],
+  );
 
-  const removeTag = useCallback((tagId: string) => {
-    const currentTags = filterState.tagIds;
-    setTagIds(currentTags.filter(id => id !== tagId));
-  }, [filterState.tagIds, setTagIds]);
+  const removeTag = useCallback(
+    (tagId: string) => {
+      const currentTags = filterState.tagIds;
+      setTagIds(currentTags.filter((id) => id !== tagId));
+    },
+    [filterState.tagIds, setTagIds],
+  );
 
   const clearTags = useCallback(() => {
     setTagIds([]);
@@ -185,19 +239,28 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     resetParams();
   }, [resetParams]);
 
-  const updateFilters = useCallback((updates: Partial<FilterState>) => {
-    const urlUpdates: any = {};
+  const updateFilters = useCallback(
+    (updates: Partial<FilterState>) => {
+      const urlUpdates: any = {};
 
-    if ('filter' in updates) urlUpdates.filter = updates.filter;
-    if ('sourceFilter' in updates) urlUpdates.source = updates.sourceFilter;
-    if ('timeRange' in updates) urlUpdates.time = updates.timeRange;
-    if ('tagIds' in updates) urlUpdates.tags = updates.tagIds;
+      if ("filter" in updates) urlUpdates.filter = updates.filter;
+      if ("sourceFilter" in updates) urlUpdates.source = updates.sourceFilter;
+      if ("timeRange" in updates) urlUpdates.time = updates.timeRange;
+      if ("tagIds" in updates) urlUpdates.tags = updates.tagIds;
 
-    updateParams(urlUpdates);
-  }, [updateParams]);
+      updateParams(urlUpdates);
+    },
+    [updateParams],
+  );
 
   // Notify parent of filter changes
   useEffect(() => {
+    console.log("🔍 [FilterContext] Filter state changed:", {
+      filterState,
+      newsletterFilter,
+      hasTagFilter:
+        newsletterFilter.tagIds && newsletterFilter.tagIds.length > 0,
+    });
     if (onFilterChange) {
       onFilterChange(filterState, newsletterFilter);
     }
@@ -233,7 +296,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 export const useFilters = (): FilterContextType => {
   const context = useContext(FilterContext);
   if (context === undefined) {
-    throw new Error('useFilters must be used within a FilterProvider');
+    throw new Error("useFilters must be used within a FilterProvider");
   }
   return context;
 };
@@ -255,7 +318,8 @@ export const useTimeFilter = () => {
 };
 
 export const useTagFilter = () => {
-  const { tagIds, setTagIds, toggleTag, addTag, removeTag, clearTags } = useFilters();
+  const { tagIds, setTagIds, toggleTag, addTag, removeTag, clearTags } =
+    useFilters();
   return { tagIds, setTagIds, toggleTag, addTag, removeTag, clearTags };
 };
 

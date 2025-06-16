@@ -1,7 +1,13 @@
-import { useSearchParams } from 'react-router-dom';
-import { useCallback, useMemo } from 'react';
+import { useSearchParams } from "react-router-dom";
+import { useCallback, useMemo } from "react";
 
-export type ParamValue = string | number | boolean | string[] | null | undefined;
+export type ParamValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | null
+  | undefined;
 
 export interface ParamConfig<T extends Record<string, ParamValue>> {
   [key: string]: {
@@ -19,7 +25,7 @@ export interface UseUrlParamsOptions {
 
 export function useUrlParams<T extends Record<string, ParamValue>>(
   config: ParamConfig<T>,
-  options: UseUrlParamsOptions = {}
+  options: UseUrlParamsOptions = {},
 ) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { replace = true } = options;
@@ -27,6 +33,11 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
   // Parse current URL parameters based on config
   const params = useMemo(() => {
     const result = {} as T;
+
+    console.log("🔗 [useUrlParams] Parsing URL params:", {
+      searchParams: Object.fromEntries(searchParams.entries()),
+      config: Object.keys(config),
+    });
 
     for (const [key, paramConfig] of Object.entries(config)) {
       const urlValue = searchParams.get(key);
@@ -37,66 +48,119 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
         result[key as keyof T] = paramConfig.deserialize(urlValue);
       } else {
         // Default deserialization logic
-        result[key as keyof T] = deserializeValue(urlValue, paramConfig.defaultValue) as T[keyof T];
+        result[key as keyof T] = deserializeValue(
+          urlValue,
+          paramConfig.defaultValue,
+        ) as T[keyof T];
+      }
+
+      if (key === "tags") {
+        console.log("🏷️ [useUrlParams] Tags param processing:", {
+          key,
+          urlValue,
+          hasCustomDeserialize: !!paramConfig.deserialize,
+          defaultValue: paramConfig.defaultValue,
+          resultValue: result[key as keyof T],
+        });
       }
     }
 
+    console.log("🔗 [useUrlParams] Final parsed params:", result);
     return result;
   }, [searchParams, config]);
 
   // Update URL parameters
-  const updateParams = useCallback((
-    updates: Partial<T> | ((current: T) => Partial<T>)
-  ) => {
-    const currentParams = params;
-    const newParams = typeof updates === 'function' ? updates(currentParams) : updates;
+  const updateParams = useCallback(
+    (updates: Partial<T> | ((current: T) => Partial<T>)) => {
+      const currentParams = params;
+      const newParams =
+        typeof updates === "function" ? updates(currentParams) : updates;
 
-    setSearchParams(prevParams => {
-      const newSearchParams = new URLSearchParams(prevParams);
+      console.log("🔗 [useUrlParams] Updating params:", {
+        currentParams,
+        newParams,
+        hasTagsUpdate: "tags" in newParams,
+      });
 
-      // Update each parameter
-      for (const [key, value] of Object.entries(newParams)) {
-        const paramConfig = config[key];
-        if (!paramConfig) continue;
+      setSearchParams(
+        (prevParams) => {
+          const newSearchParams = new URLSearchParams(prevParams);
 
-        const defaultValue = paramConfig.defaultValue;
-        const omitIfDefault = paramConfig.omitIfDefault ?? true;
+          // Update each parameter
+          for (const [key, value] of Object.entries(newParams)) {
+            const paramConfig = config[key];
+            if (!paramConfig) continue;
 
-        // Check if we should omit this parameter
-        if (omitIfDefault && (value === defaultValue || value === null || value === undefined)) {
-          newSearchParams.delete(key);
-        } else {
-          // Serialize the value
-          const serializedValue = paramConfig.serialize
-            ? paramConfig.serialize(value as T[keyof T])
-            : serializeValue(value);
+            const defaultValue = paramConfig.defaultValue;
+            const omitIfDefault = paramConfig.omitIfDefault ?? true;
 
-          if (serializedValue !== null) {
-            newSearchParams.set(key, serializedValue);
-          } else {
-            newSearchParams.delete(key);
+            // Check if we should omit this parameter
+            if (
+              omitIfDefault &&
+              (value === defaultValue || value === null || value === undefined)
+            ) {
+              newSearchParams.delete(key);
+            } else {
+              // Serialize the value
+              const serializedValue = paramConfig.serialize
+                ? paramConfig.serialize(value as T[keyof T])
+                : serializeValue(value);
+
+              if (serializedValue !== null) {
+                newSearchParams.set(key, serializedValue);
+              } else {
+                newSearchParams.delete(key);
+              }
+            }
+
+            if (key === "tags") {
+              console.log("🏷️ [useUrlParams] Tags param update:", {
+                key,
+                value,
+                defaultValue,
+                omitIfDefault,
+                shouldOmit:
+                  omitIfDefault &&
+                  (value === defaultValue ||
+                    value === null ||
+                    value === undefined),
+                serializedValue: paramConfig.serialize
+                  ? paramConfig.serialize(value as T[keyof T])
+                  : serializeValue(value),
+              });
+            }
           }
-        }
-      }
 
-      return newSearchParams;
-    }, { replace });
-  }, [params, config, setSearchParams, replace]);
+          console.log(
+            "🔗 [useUrlParams] New search params:",
+            Object.fromEntries(newSearchParams.entries()),
+          );
+          return newSearchParams;
+        },
+        { replace },
+      );
+    },
+    [params, config, setSearchParams, replace],
+  );
 
   // Update a single parameter
-  const updateParam = useCallback(<K extends keyof T>(
-    key: K,
-    value: T[K] | ((current: T[K]) => T[K])
-  ) => {
-    const currentValue = params[key];
-    const newValue = typeof value === 'function' ? (value as Function)(currentValue) : value;
-    updateParams({ [key]: newValue } as Partial<T>);
-  }, [params, updateParams]);
+  const updateParam = useCallback(
+    <K extends keyof T>(key: K, value: T[K] | ((current: T[K]) => T[K])) => {
+      const currentValue = params[key];
+      const newValue =
+        typeof value === "function" ? (value as Function)(currentValue) : value;
+      updateParams({ [key]: newValue } as Partial<T>);
+    },
+    [params, updateParams],
+  );
 
   // Get a single parameter
-  const getParam = useCallback(<K extends keyof T>(key: K): T[K] => {
-    return params[key];
-  }, [params]);
+  const getParam = useCallback(
+    <K extends keyof T>(key: K): T[K] => {
+      return params[key];
+    },
+    [params],
+  );
 
   // Reset all parameters to defaults
   const resetParams = useCallback(() => {
@@ -140,7 +204,7 @@ function serializeValue(value: ParamValue): string | null {
   }
 
   if (Array.isArray(value)) {
-    return value.length > 0 ? value.join(',') : null;
+    return value.length > 0 ? value.join(",") : null;
   }
 
   return String(value);
@@ -149,14 +213,14 @@ function serializeValue(value: ParamValue): string | null {
 // Default deserialization logic
 function deserializeValue(value: string, defaultValue: ParamValue): ParamValue {
   if (Array.isArray(defaultValue)) {
-    return value ? value.split(',').filter(Boolean) : [];
+    return value ? value.split(",").filter(Boolean) : [];
   }
 
-  if (typeof defaultValue === 'boolean') {
-    return value === 'true';
+  if (typeof defaultValue === "boolean") {
+    return value === "true";
   }
 
-  if (typeof defaultValue === 'number') {
+  if (typeof defaultValue === "number") {
     const num = Number(value);
     return isNaN(num) ? defaultValue : num;
   }
@@ -166,9 +230,11 @@ function deserializeValue(value: string, defaultValue: ParamValue): ParamValue {
 
 // Specialized hook for inbox filters
 export function useInboxUrlParams() {
+  console.log("🔗 [useInboxUrlParams] Hook called");
+
   return useUrlParams({
     filter: {
-      defaultValue: 'all' as const,
+      defaultValue: "all" as const,
       omitIfDefault: true,
     },
     source: {
@@ -176,14 +242,28 @@ export function useInboxUrlParams() {
       omitIfDefault: true,
     },
     time: {
-      defaultValue: 'all' as const,
+      defaultValue: "all" as const,
       omitIfDefault: true,
     },
     tags: {
       defaultValue: [] as string[],
       omitIfDefault: true,
-      serialize: (value: string[]) => value.length > 0 ? value.join(',') : null,
-      deserialize: (value: string) => value ? value.split(',').filter(Boolean) : [],
+      serialize: (value: string[]) => {
+        const result = value.length > 0 ? value.join(",") : null;
+        console.log("🏷️ [useInboxUrlParams] Serializing tags:", {
+          value,
+          result,
+        });
+        return result;
+      },
+      deserialize: (value: string) => {
+        const result = value ? value.split(",").filter(Boolean) : [];
+        console.log("🏷️ [useInboxUrlParams] Deserializing tags:", {
+          value,
+          result,
+        });
+        return result;
+      },
     },
   });
 }
@@ -197,11 +277,11 @@ export function useReadingQueueUrlParams() {
       deserialize: (value: string) => Math.max(1, parseInt(value, 10) || 1),
     },
     sort: {
-      defaultValue: 'created_at' as const,
+      defaultValue: "created_at" as const,
       omitIfDefault: true,
     },
     order: {
-      defaultValue: 'desc' as const,
+      defaultValue: "desc" as const,
       omitIfDefault: true,
     },
   });

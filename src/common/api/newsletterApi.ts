@@ -271,11 +271,42 @@ export const newsletterApi = {
         });
       }
 
-      // Handle tag filtering post-query if needed
+      // Handle tag filtering post-query with AND logic (newsletters must have ALL specified tags)
       if (params.tagIds?.length) {
-        transformedData = transformedData.filter((newsletter) =>
-          newsletter.tags?.some((tag) => params.tagIds!.includes(tag.id)),
-        );
+        console.log("🏷️ [getAll] Applying tag filter:", {
+          requestedTagIds: params.tagIds,
+          newsletterCount: transformedData.length,
+          sampleNewsletterTags:
+            transformedData[0]?.tags?.map((t) => ({
+              id: t.id,
+              name: t.name,
+            })) || null,
+        });
+
+        const beforeFilterCount = transformedData.length;
+        transformedData = transformedData.filter((newsletter) => {
+          const hasAllTags = params.tagIds!.every((tagId) => {
+            const hasTag = newsletter.tags?.some((tag) => tag.id === tagId);
+            if (!hasTag) {
+              console.log("🏷️ [getAll] Newsletter missing tag:", {
+                newsletterId: newsletter.id,
+                newsletterTitle: newsletter.title,
+                missingTagId: tagId,
+                newsletterTags:
+                  newsletter.tags?.map((t) => ({ id: t.id, name: t.name })) ||
+                  [],
+              });
+            }
+            return hasTag;
+          });
+          return hasAllTags;
+        });
+
+        console.log("🏷️ [getAll] Tag filter results:", {
+          beforeCount: beforeFilterCount,
+          afterCount: transformedData.length,
+          filteredOut: beforeFilterCount - transformedData.length,
+        });
       }
 
       const limit = params.limit || 50;
