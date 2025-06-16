@@ -43,6 +43,30 @@ export const queryKeyFactory = {
         ? ([...baseKey, filters] as const)
         : baseKey;
     },
+    infinites: () =>
+      [...queryKeyFactory.newsletters.all(), "infinite"] as const,
+    infinite: (filter: NewsletterFilter) => {
+      const baseKey = [...queryKeyFactory.newsletters.infinites()] as const;
+
+      // Build filters object for infinite query
+      const filters: Record<string, unknown> = {};
+      if (filter.search) filters.search = filter.search;
+      if (filter.isRead !== undefined) filters.isRead = filter.isRead;
+      if (filter.isArchived !== undefined)
+        filters.isArchived = filter.isArchived;
+      if (filter.isLiked !== undefined) filters.isLiked = filter.isLiked;
+      if (filter.tagIds?.length) filters.tagIds = [...filter.tagIds].sort();
+      if (filter.sourceIds?.length)
+        filters.sourceIds = [...filter.sourceIds].sort();
+      if (filter.dateFrom) filters.dateFrom = filter.dateFrom;
+      if (filter.dateTo) filters.dateTo = filter.dateTo;
+      if (filter.orderBy) filters.orderBy = filter.orderBy;
+      if (filter.ascending !== undefined) filters.ascending = filter.ascending;
+
+      return Object.keys(filters).length > 0
+        ? ([...baseKey, filters] as const)
+        : baseKey;
+    },
     details: () => [...queryKeyFactory.newsletters.all(), "detail"] as const,
     detail: (id: string) =>
       [...queryKeyFactory.newsletters.details(), id] as const,
@@ -135,6 +159,15 @@ export const queryKeyFactory = {
         queryKey.length >= 2 &&
         queryKey[0] === "newsletters" &&
         queryKey[1] === "list"
+      );
+    },
+
+    // Check if a query key matches newsletter infinite pattern
+    isNewsletterInfiniteKey: (queryKey: unknown[]): boolean => {
+      return (
+        queryKey.length >= 2 &&
+        queryKey[0] === "newsletters" &&
+        queryKey[1] === "infinite"
       );
     },
 

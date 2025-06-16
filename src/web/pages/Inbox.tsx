@@ -1,26 +1,17 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
+import React, { memo, useCallback, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail } from "lucide-react";
+import { useToast } from "../../common/contexts/ToastContext";
+import { NewsletterWithRelations } from "../../common/types";
+import { useInfiniteNewsletters } from "../../common/hooks/infiniteScroll";
+import { useInboxFilters } from "../../common/hooks/useInboxFilters";
+import { useReadingQueue } from "../../common/hooks/useReadingQueue";
+import { useErrorHandling } from "../../common/hooks/useErrorHandling";
+import { useBulkLoadingStates } from "../../common/hooks/useLoadingStates";
+import { useSharedNewsletterActions } from "../../common/hooks/useSharedNewsletterActions";
+import { InfiniteNewsletterList } from "../components/InfiniteScroll";
+import { InboxFilters } from "../components/InboxFilters";
+import BulkSelectionActions from "../components/BulkSelectionActions";
 
-import { InboxFilters } from "@web/components/InboxFilters";
-import BulkSelectionActions from "@web/components/BulkSelectionActions";
-import NewsletterRow from "@web/components/NewsletterRow";
-import LoadingScreen from "@common/components/common/LoadingScreen";
-
-import { useNewsletters } from "@common/hooks/useNewsletters";
-import { useReadingQueue } from "@common/hooks/useReadingQueue";
-import { useInboxFilters } from "@common/hooks/useInboxFilters";
-import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
-import { useErrorHandling } from "@common/hooks/useErrorHandling";
-import { useBulkLoadingStates } from "@common/hooks/useLoadingStates";
-
-import { useToast } from "@common/contexts/ToastContext";
-import { useAuth } from "@common/contexts";
-
-import type { NewsletterWithRelations } from "@common/types";
-import { getCacheManager } from "@common/utils/cacheUtils";
-
-// Separate component for selected tags display
 const SelectedTagsDisplay: React.FC<{
   selectedTags: Array<{ id: string; name: string; color: string }>;
   onRemoveTag: (tagId: string) => void;
@@ -29,107 +20,103 @@ const SelectedTagsDisplay: React.FC<{
   if (selectedTags.length === 0) return null;
 
   return (
-    <div className="px-6 pt-6">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-blue-900">
-            Active Tag Filters ({selectedTags.length})
-          </h3>
+    <div className="flex flex-wrap items-center gap-2 mb-4 p-4 bg-blue-50 rounded-lg">
+      <span className="text-sm font-medium text-blue-900">Active filters:</span>
+      {selectedTags.map((tag) => (
+        <span
+          key={tag.id}
+          className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded-full text-xs font-medium border border-blue-200"
+          style={{ color: tag.color }}
+        >
+          {tag.name}
           <button
-            onClick={onClearAll}
-            className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+            onClick={() => onRemoveTag(tag.id)}
+            className="ml-1 text-gray-400 hover:text-gray-600 focus:outline-none"
           >
-            Clear all filters
+            ×
           </button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {selectedTags.map((tag) => (
-            <span
-              key={tag.id}
-              className="inline-flex items-center rounded-full px-2.5 py-1 text-sm font-medium cursor-pointer hover:opacity-80"
-              style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-            >
-              {tag.name}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveTag(tag.id);
-                }}
-                className="ml-1.5 text-gray-400 hover:text-gray-600 focus:outline-none"
-                title="Remove this filter"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-        <p className="text-xs text-blue-600 mt-2">
-          Showing newsletters matching{" "}
-          {selectedTags.length === 1 ? "this tag" : "any of these tags"}. Click
-          tag names in newsletter rows to add more filters.
-        </p>
-      </div>
+        </span>
+      ))}
+      <button
+        onClick={onClearAll}
+        className="text-xs text-blue-600 hover:text-blue-800 underline"
+      >
+        Clear all
+      </button>
     </div>
   );
 });
 
-// Separate component for empty state
 const EmptyState: React.FC<{
   filter: string;
   sourceFilter: string | null;
-}> = memo(({ filter, sourceFilter }) => {
-  const getEmptyMessage = () => {
-    if (filter === "unread") return "No unread newsletters";
-    if (filter === "liked") return "No liked newsletters";
-    if (filter === "archived") return "No archived newsletters";
-    if (sourceFilter) return "No newsletters found for this source";
-    return "No newsletters found";
-  };
-
-  const getEmptyDescription = () => {
-    if (sourceFilter) {
-      return "Try selecting a different source or adjusting your filters.";
-    }
-    return "Try adjusting your filters or check back later.";
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
-      <Mail className="mx-auto h-14 w-14 mb-4 text-blue-300" />
-      <h2 className="text-xl font-semibold mb-2">{getEmptyMessage()}</h2>
-      <p className="text-base text-neutral-400">{getEmptyDescription()}</p>
-    </div>
-  );
-});
-
-// Separate component for error state
-const ErrorState: React.FC<{
-  error: Error | null;
-  onRetry: () => void;
-}> = memo(({ error, onRetry }) => (
-  <div className="flex flex-col items-center justify-center h-screen bg-neutral-50 p-4">
-    <div className="text-center">
-      <Mail className="mx-auto h-16 w-16 text-red-500 mb-4" />
-      <h2 className="text-2xl font-semibold text-neutral-800 mb-2">
-        Error Loading Newsletters
-      </h2>
-      <p className="text-neutral-600 mb-6">
-        {error?.message || "Something went wrong. Please try again later."}
-      </p>
-      <button
-        onClick={onRetry}
-        className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
+}> = memo(({ filter, sourceFilter }) => (
+  <div className="flex flex-col items-center justify-center py-16 text-center">
+    <div className="text-gray-400 mb-4">
+      <svg
+        className="w-16 h-16 mx-auto"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
       >
-        Try Again
-      </button>
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2m16-7H4m16 0l-2-2m-12 2l2-2"
+        />
+      </svg>
     </div>
+    <h3 className="text-lg font-medium text-gray-900 mb-2">
+      {filter === "all" && !sourceFilter
+        ? "No newsletters yet"
+        : `No ${filter === "all" ? "" : filter} newsletters found`}
+    </h3>
+    <p className="text-sm text-gray-500 max-w-md">
+      {filter === "all" && !sourceFilter
+        ? "Subscribe to some newsletter sources to see content here."
+        : "Try adjusting your filters or check back later for new content."}
+    </p>
   </div>
 ));
 
-// Main Inbox component - now focused primarily on rendering
+const ErrorState: React.FC<{
+  error: Error;
+  onRetry: () => void;
+}> = memo(({ error, onRetry }) => (
+  <div className="flex flex-col items-center justify-center py-16 text-center">
+    <div className="text-red-500 mb-4">
+      <svg
+        className="w-16 h-16 mx-auto mb-4"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+        />
+      </svg>
+      <p className="text-lg font-medium text-gray-900 mb-2">
+        Something went wrong
+      </p>
+      <p className="text-sm text-gray-500 mb-4">
+        {error.message || "Failed to load newsletters"}
+      </p>
+    </div>
+    <button
+      onClick={onRetry}
+      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+    >
+      Try Again
+    </button>
+  </div>
+));
+
 const Inbox: React.FC = memo(() => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { showError } = useToast();
 
   // Filter management using our new context and hooks
@@ -150,15 +137,22 @@ const Inbox: React.FC = memo(() => {
     handleTagClick,
   } = useInboxFilters();
 
-  // Newsletter data
+  // Infinite newsletter data
   const {
-    newsletters: rawNewsletters,
-    isLoadingNewsletters,
-    errorNewsletters,
-    refetchNewsletters,
-  } = useNewsletters(newsletterFilter, {
+    newsletters,
+    isLoading,
+    isLoadingMore,
+    error: errorNewsletters,
+    hasNextPage,
+    fetchNextPage,
+    refetch: refetchNewsletters,
+    totalCount,
+  } = useInfiniteNewsletters(newsletterFilter, {
+    enabled: true,
     refetchOnWindowFocus: false,
     staleTime: 0,
+    pageSize: 25, // Load 25 newsletters per page
+    debug: process.env.NODE_ENV === "development",
   });
 
   // Reading queue
@@ -255,90 +249,6 @@ const Inbox: React.FC = memo(() => {
   // Tag error handling state
   const [tagUpdateError, setTagUpdateError] = useState<string | null>(null);
 
-  // Action progress state to prevent refetching during actions
-  const [isActionInProgress, setIsActionInProgress] = useState(false);
-
-  // Stable newsletter list
-  const [stableNewsletters, setStableNewsletters] = useState<
-    NewsletterWithRelations[]
-  >([]);
-  const [stableKeys, setStableKeys] = useState<Map<string, string>>(new Map());
-
-  // Force refetch when filters change to ensure fresh data (but not during actions)
-  useEffect(() => {
-    // Skip refetch if action is in progress to preserve optimistic updates
-    if (isActionInProgress) {
-      console.log("🔄 Skipping refetch - action in progress");
-      return;
-    }
-
-    console.log("🔄 Filter changed, refetching newsletters...", {
-      filter,
-      sourceFilter,
-      timeRange,
-      debouncedTagIds,
-    });
-
-    refetchNewsletters();
-  }, [
-    filter,
-    sourceFilter,
-    timeRange,
-    debouncedTagIds,
-    newsletterFilter,
-    refetchNewsletters,
-    isActionInProgress,
-  ]);
-
-  // Update stable newsletter list while preserving order
-  useEffect(() => {
-    if (rawNewsletters.length === 0 && !isLoadingNewsletters) {
-      setStableNewsletters([]);
-      setStableKeys(new Map());
-      return;
-    }
-
-    if (rawNewsletters.length > 0) {
-      setStableNewsletters((prevStable) => {
-        const updatedNewsletters: NewsletterWithRelations[] = [];
-        const existingIds = new Set(rawNewsletters.map((n) => n.id));
-
-        // Keep existing newsletters in their current order
-        prevStable.forEach((newsletter) => {
-          if (existingIds.has(newsletter.id)) {
-            const updated = rawNewsletters.find((n) => n.id === newsletter.id);
-            if (updated) {
-              updatedNewsletters.push(updated);
-            }
-          }
-        });
-
-        // Add new newsletters at the end
-        rawNewsletters.forEach((newsletter) => {
-          if (!updatedNewsletters.find((n) => n.id === newsletter.id)) {
-            updatedNewsletters.push(newsletter);
-          }
-        });
-
-        return updatedNewsletters;
-      });
-
-      // Update stable keys for new newsletters only
-      setStableKeys((prev) => {
-        const newKeys = new Map(prev);
-        const timestamp = Date.now();
-        rawNewsletters.forEach((newsletter) => {
-          if (!newKeys.has(newsletter.id)) {
-            newKeys.set(newsletter.id, `${newsletter.id}-${timestamp}`);
-          }
-        });
-        return newKeys;
-      });
-    }
-  }, [rawNewsletters, isLoadingNewsletters]);
-
-  const newsletters = stableNewsletters;
-
   // Get selected tag objects for display
   const selectedTags = useMemo(() => {
     return debouncedTagIds
@@ -394,78 +304,94 @@ const Inbox: React.FC = memo(() => {
   // Bulk action handlers using our enhanced shared actions
   const handleBulkMarkAsRead = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    setIsActionInProgress(true);
 
     try {
       const ids = Array.from(selectedIds);
       await newsletterActions.handleBulkMarkAsRead(ids);
       preserveFilterParams();
       clearSelection();
-    } finally {
-      setTimeout(() => setIsActionInProgress(false), 100);
+    } catch (error) {
+      handleError(error, {
+        category: "business",
+        severity: "medium",
+        context: { action: "bulkMarkAsRead", ids: Array.from(selectedIds) },
+      });
     }
   }, [
     selectedIds,
-    newsletterActions.handleBulkMarkAsRead,
+    newsletterActions,
     preserveFilterParams,
     clearSelection,
+    handleError,
   ]);
 
   const handleBulkMarkAsUnread = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    setIsActionInProgress(true);
 
     try {
       const ids = Array.from(selectedIds);
       await newsletterActions.handleBulkMarkAsUnread(ids);
       preserveFilterParams();
       clearSelection();
-    } finally {
-      setTimeout(() => setIsActionInProgress(false), 100);
+    } catch (error) {
+      handleError(error, {
+        category: "business",
+        severity: "medium",
+        context: { action: "bulkMarkAsUnread", ids: Array.from(selectedIds) },
+      });
     }
   }, [
     selectedIds,
-    newsletterActions.handleBulkMarkAsUnread,
+    newsletterActions,
     preserveFilterParams,
     clearSelection,
+    handleError,
   ]);
 
   const handleBulkArchive = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    setIsActionInProgress(true);
 
     try {
       const ids = Array.from(selectedIds);
       await newsletterActions.handleBulkArchive(ids);
       preserveFilterParams();
       clearSelection();
-    } finally {
-      setTimeout(() => setIsActionInProgress(false), 100);
+    } catch (error) {
+      handleError(error, {
+        category: "business",
+        severity: "medium",
+        context: { action: "bulkArchive", ids: Array.from(selectedIds) },
+      });
     }
   }, [
     selectedIds,
-    newsletterActions.handleBulkArchive,
+    newsletterActions,
     preserveFilterParams,
     clearSelection,
+    handleError,
   ]);
 
   const handleBulkUnarchive = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    setIsActionInProgress(true);
 
     try {
       const ids = Array.from(selectedIds);
       await newsletterActions.handleBulkUnarchive(ids);
       preserveFilterParams();
       clearSelection();
-    } finally {
-      setTimeout(() => setIsActionInProgress(false), 100);
+    } catch (error) {
+      handleError(error, {
+        category: "business",
+        severity: "medium",
+        context: { action: "bulkUnarchive", ids: Array.from(selectedIds) },
+      });
     }
   }, [
     selectedIds,
-    newsletterActions.handleBulkUnarchive,
+    newsletterActions,
     preserveFilterParams,
     clearSelection,
+    handleError,
   ]);
 
   const handleBulkDelete = useCallback(async () => {
@@ -479,28 +405,29 @@ const Inbox: React.FC = memo(() => {
       return;
     }
 
-    setIsActionInProgress(true);
-
     try {
       const ids = Array.from(selectedIds);
       await newsletterActions.handleBulkDelete(ids);
       preserveFilterParams();
       clearSelection();
-    } finally {
-      setTimeout(() => setIsActionInProgress(false), 100);
+    } catch (error) {
+      handleError(error, {
+        category: "business",
+        severity: "high",
+        context: { action: "bulkDelete", ids: Array.from(selectedIds) },
+      });
     }
   }, [
     selectedIds,
-    newsletterActions.handleBulkDelete,
+    newsletterActions,
     preserveFilterParams,
     clearSelection,
+    handleError,
   ]);
 
   // Individual newsletter handlers
   const handleNewsletterClick = useCallback(
     async (newsletter: NewsletterWithRelations) => {
-      setIsActionInProgress(true);
-
       try {
         // Mark as read if unread
         if (!newsletter.is_read) {
@@ -533,8 +460,6 @@ const Inbox: React.FC = memo(() => {
         console.error("Unexpected error in newsletter click handler:", error);
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`);
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [navigate, newsletterActions, preserveFilterParams],
@@ -597,229 +522,134 @@ const Inbox: React.FC = memo(() => {
     [],
   );
 
-  // Filter-aware wrapper functions that preserve URL parameters
-  const handleToggleLikeWrapper = useCallback(
+  // Enhanced newsletter action handlers with proper error handling
+  const handleToggleLike = useCallback(
     async (newsletter: NewsletterWithRelations) => {
-      setIsActionInProgress(true);
-
-      // Optimistic update for liked filter
-      if (filter === "liked") {
-        setStableNewsletters((prev) => {
-          const updated = [...prev];
-          const index = updated.findIndex((n) => n.id === newsletter.id);
-          if (index > -1) {
-            const updatedNewsletter = { ...updated[index], is_liked: true };
-            updated.splice(index, 1);
-            updated.unshift(updatedNewsletter);
-            return updated;
-          }
-          return prev;
-        });
-      }
-
       try {
         await newsletterActions.handleToggleLike(newsletter);
         preserveFilterParams();
         // Dispatch event for unread count updates
         window.dispatchEvent(new CustomEvent("newsletter:like-status-changed"));
       } catch (error) {
-        console.error("❌ toggleLike failed:", error);
-        // Revert optimistic update on error
-        if (filter === "liked") {
-          await refetchNewsletters();
-        }
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
+        handleError(error, {
+          category: "business",
+          severity: "low",
+          context: { action: "toggleLike", newsletterId: newsletter.id },
+        });
       }
     },
-    [newsletterActions, filter, preserveFilterParams, refetchNewsletters],
+    [newsletterActions, preserveFilterParams, handleError],
   );
 
-  const handleToggleArchiveWrapper = useCallback(
+  const handleToggleArchive = useCallback(
     async (newsletter: NewsletterWithRelations) => {
-      setIsActionInProgress(true);
-
-      const isCurrentlyArchived = newsletter.is_archived;
-      const willBeArchived = !isCurrentlyArchived;
-
-      // Optimistic update based on current state
-      if (filter === "archived") {
-        if (isCurrentlyArchived) {
-          // Unarchiving in archive view - remove from list
-          setStableNewsletters((prev) =>
-            prev.filter((n) => n.id !== newsletter.id),
-          );
-        } else {
-          // Archiving in archive view - add to top
-          setStableNewsletters((prev) => {
-            const updated = [...prev];
-            const index = updated.findIndex((n) => n.id === newsletter.id);
-            if (index > -1) {
-              const updatedNewsletter = {
-                ...updated[index],
-                is_archived: true,
-              };
-              updated.splice(index, 1);
-              updated.unshift(updatedNewsletter);
-              return updated;
-            }
-            return prev;
-          });
-        }
-      } else if (!isCurrentlyArchived && willBeArchived) {
-        // Archiving in non-archive view - remove from current view
-        setStableNewsletters((prev) =>
-          prev.filter((n) => n.id !== newsletter.id),
-        );
-      }
-
       try {
         await newsletterActions.handleToggleArchive(newsletter);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ toggleArchive failed:", error);
-        // Revert optimistic update on error by refetching
-        if (isCurrentlyArchived) {
-          // Restore newsletter to list if unarchive failed
-          setStableNewsletters((prev) => [newsletter, ...prev]);
-        } else if (!isCurrentlyArchived && willBeArchived) {
-          // Restore newsletter to list if archive failed
-          setStableNewsletters((prev) => [newsletter, ...prev]);
-        }
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
+        handleError(error, {
+          category: "business",
+          severity: "medium",
+          context: { action: "toggleArchive", newsletterId: newsletter.id },
+        });
       }
     },
-    [newsletterActions, filter, preserveFilterParams],
+    [newsletterActions, preserveFilterParams, handleError],
   );
 
-  const handleToggleReadWrapper = useCallback(
+  const handleToggleRead = useCallback(
     async (newsletter: NewsletterWithRelations) => {
-      setIsActionInProgress(true);
-
       try {
         await newsletterActions.handleToggleRead(newsletter);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ toggleRead failed:", error);
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
+        handleError(error, {
+          category: "business",
+          severity: "medium",
+          context: { action: "toggleRead", newsletterId: newsletter.id },
+        });
       }
     },
-    [newsletterActions, preserveFilterParams],
+    [newsletterActions, preserveFilterParams, handleError],
   );
 
-  const handleDeleteNewsletterWrapper = useCallback(
+  const handleDeleteNewsletter = useCallback(
     async (newsletterId: string) => {
-      setIsActionInProgress(true);
-
       try {
         await newsletterActions.handleDeleteNewsletter(newsletterId);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ deleteNewsletter failed:", error);
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
+        handleError(error, {
+          category: "business",
+          severity: "high",
+          context: { action: "deleteNewsletter", newsletterId },
+        });
       }
     },
-    [newsletterActions, preserveFilterParams],
+    [newsletterActions, preserveFilterParams, handleError],
   );
 
-  const handleToggleQueueWrapper = useCallback(
+  const handleToggleQueue = useCallback(
     async (newsletter: NewsletterWithRelations, isInQueue: boolean) => {
-      setIsActionInProgress(true);
-
       try {
         await newsletterActions.handleToggleInQueue(newsletter, isInQueue);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ toggleInQueue failed:", error);
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
+        handleError(error, {
+          category: "business",
+          severity: "medium",
+          context: { action: "toggleInQueue", newsletterId: newsletter.id },
+        });
       }
     },
-    [newsletterActions, preserveFilterParams],
+    [newsletterActions, preserveFilterParams, handleError],
   );
 
-  // Newsletter row action handlers
-  const createNewsletterRowActions = useCallback(
-    (newsletter: NewsletterWithRelations, isInQueue: boolean) => ({
-      onToggleSelect: () => toggleSelect(newsletter.id),
-      onToggleLike: () => handleToggleLikeWrapper(newsletter),
-      onToggleArchive: () => handleToggleArchiveWrapper(newsletter),
-      onToggleRead: () => handleToggleReadWrapper(newsletter),
-      onTrash: () => handleDeleteNewsletterWrapper(newsletter.id),
-      onToggleQueue: () => handleToggleQueueWrapper(newsletter, isInQueue),
-      onUpdateTags: async (newsletterId: string, tagIds: string[]) => {
-        setIsActionInProgress(true);
-
-        try {
-          setTagUpdateError(null);
-          await newsletterActions.handleUpdateTags(newsletterId, tagIds);
-          preserveFilterParams();
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Failed to update tags";
-          setTagUpdateError(errorMessage);
-          throw error;
-        } finally {
-          setTimeout(() => setIsActionInProgress(false), 100);
-        }
-      },
-      onToggleTagVisibility: toggleTagVisibility,
-      onTagClick: handleTagClick,
-      onRemoveFromQueue: (e: React.MouseEvent) =>
-        handleRemoveFromQueue(e, newsletter.id),
-      onRowClick: (newsletter: NewsletterWithRelations) =>
-        handleNewsletterClick(newsletter),
-      onMouseEnter: handleNewsletterMouseEnter,
-    }),
-    [
-      toggleSelect,
-      handleToggleLikeWrapper,
-      handleToggleArchiveWrapper,
-      handleToggleReadWrapper,
-      handleDeleteNewsletterWrapper,
-      handleToggleQueueWrapper,
-      newsletterActions,
-      preserveFilterParams,
-      toggleTagVisibility,
-      handleTagClick,
-      handleRemoveFromQueue,
-      handleNewsletterClick,
-      handleNewsletterMouseEnter,
-      setTagUpdateError,
-    ],
+  const handleUpdateTags = useCallback(
+    async (newsletterId: string, tagIds: string[]) => {
+      try {
+        setTagUpdateError(null);
+        await newsletterActions.handleUpdateTags(newsletterId, tagIds);
+        preserveFilterParams();
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to update tags";
+        setTagUpdateError(errorMessage);
+        handleError(error, {
+          category: "business",
+          severity: "medium",
+          context: { action: "updateTags", newsletterId, tagIds },
+        });
+      }
+    },
+    [newsletterActions, preserveFilterParams, handleError],
   );
 
-  // Cache warming effects
-  const cacheManager = useMemo(() => {
-    try {
-      return getCacheManager();
-    } catch {
-      return null;
+  // Handle load more for infinite scroll
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isLoadingMore) {
+      fetchNextPage();
     }
-  }, []);
+  }, [hasNextPage, isLoadingMore, fetchNextPage]);
 
-  useEffect(() => {
-    if (cacheManager && user?.id) {
-      cacheManager.warmCache(user.id, "high");
-    }
-  }, [cacheManager, user?.id]);
+  // Handle retry for infinite scroll
+  const handleRetry = useCallback(() => {
+    refetchNewsletters();
+  }, [refetchNewsletters]);
 
   // Loading state
-  if (isLoadingNewsletters && newsletters.length === 0) {
-    return <LoadingScreen />;
+  if (isLoading && newsletters.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+        <p className="text-base text-neutral-400">Loading newsletters...</p>
+      </div>
+    );
   }
 
-  // Error state
-  if (errorNewsletters) {
-    return <ErrorState error={errorNewsletters} onRetry={refetchNewsletters} />;
+  // Error state for initial load
+  if (errorNewsletters && newsletters.length === 0) {
+    return <ErrorState error={errorNewsletters} onRetry={handleRetry} />;
   }
 
   const showArchived = filter === "archived";
@@ -829,7 +659,14 @@ const Inbox: React.FC = memo(() => {
       {/* Header */}
       <div className="flex flex-col space-y-4 mb-6">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
+            {totalCount > 0 && (
+              <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                {newsletters.length} of {totalCount} loaded
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <InboxFilters
               filter={filter}
@@ -880,62 +717,58 @@ const Inbox: React.FC = memo(() => {
         onClearAll={resetFilters}
       />
 
-      {/* Newsletter List */}
-      <div
-        className={`${selectedTags.length > 0 ? "pt-2" : "pt-6"} px-6 pb-6 overflow-auto`}
-      >
-        {isLoadingNewsletters && newsletters.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-base text-neutral-400">Loading newsletters...</p>
-          </div>
-        ) : newsletters.length === 0 ? (
+      {/* Newsletter List with Infinite Scroll */}
+      <div className={`${selectedTags.length > 0 ? "pt-2" : "pt-6"} px-6 pb-6`}>
+        {newsletters.length === 0 && !isLoading ? (
           <EmptyState filter={filter} sourceFilter={sourceFilter} />
         ) : (
-          newsletters.map((newsletter) => {
-            const newsletterWithRelations: NewsletterWithRelations = {
-              ...newsletter,
-              newsletter_source_id: newsletter.newsletter_source_id || null,
-              source: newsletter.source || null,
-              tags: newsletter.tags || [],
-              is_archived: newsletter.is_archived || false,
-            };
-
-            const isInQueue = readingQueue.some(
-              (item) => item.newsletter_id === newsletter.id,
-            );
-
-            const rowActions = createNewsletterRowActions(
-              newsletterWithRelations,
-              isInQueue,
-            );
-
-            return (
-              <NewsletterRow
-                key={stableKeys.get(newsletter.id) || newsletter.id}
-                newsletter={newsletterWithRelations}
-                isSelected={isSelecting && selectedIds.has(newsletter.id)}
-                showCheckbox={isSelecting}
-                showTags
-                isInReadingQueue={isInQueue}
-                readingQueue={readingQueue}
-                visibleTags={visibleTags}
-                isDeletingNewsletter={newsletterActions.isDeletingNewsletter}
-                loadingStates={{}} // Loading states now managed by actions
-                errorTogglingLike={null} // Errors now handled by error context
-                isUpdatingTags={newsletterActions.isUpdatingTags}
-                tagUpdateError={tagUpdateError}
-                onDismissTagError={handleDismissTagError}
-                {...rowActions}
-              />
-            );
-          })
+          <InfiniteNewsletterList
+            newsletters={newsletters}
+            isLoading={isLoading}
+            isLoadingMore={isLoadingMore}
+            hasNextPage={hasNextPage}
+            totalCount={totalCount}
+            error={errorNewsletters}
+            onLoadMore={handleLoadMore}
+            onRetry={handleRetry}
+            // Selection state
+            selectedIds={selectedIds}
+            isSelecting={isSelecting}
+            readingQueue={readingQueue}
+            visibleTags={visibleTags}
+            // Newsletter actions
+            onRowClick={handleNewsletterClick}
+            onToggleSelect={toggleSelect}
+            onToggleLike={handleToggleLike}
+            onToggleArchive={handleToggleArchive}
+            onToggleRead={handleToggleRead}
+            onTrash={handleDeleteNewsletter}
+            onToggleQueue={handleToggleQueue}
+            onUpdateTags={handleUpdateTags}
+            onToggleTagVisibility={toggleTagVisibility}
+            onTagClick={handleTagClick}
+            onRemoveFromQueue={handleRemoveFromQueue}
+            onMouseEnter={handleNewsletterMouseEnter}
+            // Loading states
+            isDeletingNewsletter={() => newsletterActions.isDeletingNewsletter}
+            isUpdatingTags={() => newsletterActions.isUpdatingTags}
+            loadingStates={{}}
+            // Error states
+            errorTogglingLike={null}
+            tagUpdateError={tagUpdateError}
+            onDismissTagError={handleDismissTagError}
+            // Display options
+            showTags={true}
+            showCheckbox={isSelecting}
+            // Infinite scroll options
+            threshold={0.1}
+            rootMargin="100px"
+            className="max-w-none"
+          />
         )}
       </div>
     </div>
   );
 });
-
-Inbox.displayName = "Inbox";
 
 export default Inbox;

@@ -9,6 +9,7 @@ export * from "./useReadingQueue";
 export * from "./useTags";
 export * from "./useUnreadCount";
 export * from "./useUrlParams";
+export * from "./infiniteScroll";
 export * from "./useInboxFilters";
 export * from "./useErrorHandling";
 export * from "./useLoadingStates";
