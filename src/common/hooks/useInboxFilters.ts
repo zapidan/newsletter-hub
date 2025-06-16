@@ -95,8 +95,7 @@ export const useInboxFilters = (
 
   // Hooks
   const { getTags } = useTags();
-  const { newsletterSources = [], isLoading: isLoadingSources } =
-    useNewsletterSources();
+  const { newsletterSources = [], isLoadingSources } = useNewsletterSources();
 
   // Sync pendingTagUpdates with URL changes
   useEffect(() => {
@@ -189,8 +188,8 @@ export const useInboxFilters = (
     [allTags],
   );
 
-  // Handle tag click with toggle logic
-  const handleTagClick = useCallback(
+  // Internal function for handling tag clicks with Tag object
+  const handleTagClickInternal = useCallback(
     (tag: Tag, e?: React.MouseEvent) => {
       console.log("🏷️ [DEBUG] Tag clicked:", {
         tagId: tag.id,
@@ -218,6 +217,17 @@ export const useInboxFilters = (
       updateTagDebounced(newTags);
     },
     [pendingTagUpdates, updateTagDebounced, allTags.length],
+  );
+
+  // Handle tag click with toggle logic - matches interface signature
+  const handleTagClick = useCallback(
+    (tagId: string) => {
+      const tag = allTags.find((t) => t.id === tagId);
+      if (tag) {
+        handleTagClickInternal(tag);
+      }
+    },
+    [allTags, handleTagClickInternal],
   );
 
   // Enhanced filter actions that work with debounced tags
