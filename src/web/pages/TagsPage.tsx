@@ -81,20 +81,24 @@ const TagsPage: React.FC = () => {
         limit: 1000, // Get a large number for the tags page
       });
     },
-  staleTime: 5 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 
   const newslettersData = newslettersResponse?.data || [];
 
   // Compute newsletters-by-tag mapping and use tags with usage stats
   const { tagsWithCount, newslettersByTag } = useMemo(() => {
-    
-    // Map tag_id to array of newsletters
+    // Map tag_id to array of newsletters (excluding archived ones)
     const newslettersMap: Record<string, Newsletter[]> = {};
 
     if (Array.isArray(newslettersData)) {
-      // Build newsletters-by-tag mapping from the newsletters data
+      // Build newsletters-by-tag mapping from the newsletters data, excluding archived newsletters
       newslettersData.forEach((newsletter: Newsletter) => {
+        // Skip archived newsletters
+        if (newsletter.is_archived) {
+          return;
+        }
+
         if (newsletter.tags && Array.isArray(newsletter.tags)) {
           newsletter.tags.forEach((tag: Tag) => {
             if (!newslettersMap[tag.id]) {

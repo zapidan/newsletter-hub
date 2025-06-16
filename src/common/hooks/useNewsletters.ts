@@ -46,6 +46,25 @@ const CACHE_CONFIG = {
   MAX_RETRIES: 3,
 };
 
+// Utility function for safe predicate checks
+const createSafePredicate = (ids: string[] | undefined) => (query: any) => {
+  if (!ids || !Array.isArray(ids)) {
+    return queryKeyFactory.matchers.isNewsletterListKey(
+      query.queryKey as unknown[],
+    );
+  }
+
+  return (
+    queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
+    ids.some((id) =>
+      queryKeyFactory.matchers.isNewsletterDetailKey(
+        query.queryKey as unknown[],
+        id,
+      ),
+    )
+  );
+};
+
 interface UseNewslettersReturn {
   // Single newsletter operations
   getNewsletter: (id: string) => Promise<NewsletterWithRelations | null>;
@@ -422,6 +441,11 @@ export const useNewsletters = (
     PreviousNewslettersState
   >({
     mutationFn: async (ids: string[]) => {
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new Error(
+          "Invalid or empty newsletter IDs provided for bulk mark as read",
+        );
+      }
       const result = await newsletterApi.bulkUpdate({
         ids,
         updates: { is_read: true },
@@ -430,16 +454,7 @@ export const useNewsletters = (
     },
     onMutate: async (ids) => {
       await cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          ids.some((id) =>
-            queryKeyFactory.matchers.isNewsletterDetailKey(
-              query.queryKey as unknown[],
-              id,
-            ),
-          ),
+        predicate: createSafePredicate(ids),
       });
 
       const previousNewsletters =
@@ -490,6 +505,11 @@ export const useNewsletters = (
     PreviousNewslettersState
   >({
     mutationFn: async (ids: string[]) => {
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new Error(
+          "Invalid or empty newsletter IDs provided for bulk mark as unread",
+        );
+      }
       const result = await newsletterApi.bulkUpdate({
         ids,
         updates: { is_read: false },
@@ -498,16 +518,7 @@ export const useNewsletters = (
     },
     onMutate: async (ids) => {
       await cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          ids.some((id) =>
-            queryKeyFactory.matchers.isNewsletterDetailKey(
-              query.queryKey as unknown[],
-              id,
-            ),
-          ),
+        predicate: createSafePredicate(ids),
       });
 
       const queryData = getQueryData<any>(queryKey);
@@ -750,21 +761,17 @@ export const useNewsletters = (
     PreviousNewslettersState
   >({
     mutationFn: async (ids: string[]) => {
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new Error(
+          "Invalid or empty newsletter IDs provided for bulk archive",
+        );
+      }
       const result = await newsletterApi.bulkArchive(ids);
       return result.successCount === ids.length;
     },
     onMutate: async (ids) => {
       await cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          ids.some((id) =>
-            queryKeyFactory.matchers.isNewsletterDetailKey(
-              query.queryKey as unknown[],
-              id,
-            ),
-          ),
+        predicate: createSafePredicate(ids),
       });
 
       const queryData = getQueryData<any>(queryKey);
@@ -819,21 +826,17 @@ export const useNewsletters = (
     PreviousNewslettersState
   >({
     mutationFn: async (ids: string[]) => {
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new Error(
+          "Invalid or empty newsletter IDs provided for bulk unarchive",
+        );
+      }
       const result = await newsletterApi.bulkUnarchive(ids);
       return result.successCount === ids.length;
     },
     onMutate: async (ids) => {
       await cancelQueries({
-        predicate: (query) =>
-          queryKeyFactory.matchers.isNewsletterListKey(
-            query.queryKey as unknown[],
-          ) ||
-          ids.some((id) =>
-            queryKeyFactory.matchers.isNewsletterDetailKey(
-              query.queryKey as unknown[],
-              id,
-            ),
-          ),
+        predicate: createSafePredicate(ids),
       });
 
       const queryData = getQueryData<any>(queryKey);
@@ -901,12 +904,19 @@ export const useNewsletters = (
   >({
     mutationFn: async (ids: string[]) => {
       // Delete each newsletter individually since we don't have a bulk delete in the API yet
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        throw new Error(
+          "Invalid or empty newsletter IDs provided for bulk delete",
+        );
+      }
       const promises = ids.map((id) => newsletterApi.delete(id));
       await Promise.all(promises);
       return true;
     },
     onSettled: (_data, _error, ids) => {
-      cacheManager.invalidateRelatedQueries(ids, "bulk-delete");
+      if (ids && Array.isArray(ids)) {
+        cacheManager.invalidateRelatedQueries(ids, "bulk-delete");
+      }
       // Dispatch event for unread count updates
       window.dispatchEvent(new CustomEvent("newsletter:deleted"));
     },

@@ -1,28 +1,28 @@
-import React, { useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "react-hot-toast";
+import React, { useCallback } from "react";
 import { Tag as TagIcon, Loader2 } from "lucide-react";
 import { NewsletterWithRelations, Tag } from "@common/types";
-import { usePrefetchNewsletterDetail } from "@common/hooks/useNewsletterDetail";
 import TagSelector from "./TagSelector";
 import NewsletterActions from "./NewsletterActions";
-import { getErrorMessage, ERROR_CODES } from "@common/constants/errorMessages";
 
 interface NewsletterRowProps {
   newsletter: NewsletterWithRelations;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onToggleLike: (newsletter: NewsletterWithRelations) => Promise<void>;
-
   onToggleArchive: (id: string) => Promise<void>;
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
   onToggleQueue: (newsletterId: string) => Promise<void>;
   onToggleTagVisibility: (id: string, e: React.MouseEvent) => void;
-  onUpdateTags: (newsletterId: string, tagIds: string[]) => Promise<void>;
+  onUpdateTags: (newsletterId: string, tagIds: string[]) => void;
   onTagClick: (tag: Tag, e: React.MouseEvent) => void;
   onRemoveFromQueue?: (e: React.MouseEvent, id: string) => void;
   onNewsletterClick?: (newsletter: NewsletterWithRelations) => void;
+  onRowClick?: (
+    newsletter: NewsletterWithRelations,
+    e: React.MouseEvent,
+  ) => void;
+  onMouseEnter?: (newsletter: NewsletterWithRelations) => void;
   isInReadingQueue: boolean;
   showCheckbox?: boolean;
   showTags?: boolean;
@@ -31,8 +31,9 @@ interface NewsletterRowProps {
   isDeletingNewsletter: boolean;
   loadingStates?: Record<string, string>;
   errorTogglingLike?: Error | null;
-
   isUpdatingTags?: boolean;
+  tagUpdateError?: string | null;
+  onDismissTagError?: () => void;
 }
 
 const NewsletterRow: React.FC<NewsletterRowProps> = ({
@@ -40,7 +41,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   isSelected = false,
   onToggleSelect,
   onToggleLike,
-
   onToggleArchive,
   onToggleRead,
   onTrash,
@@ -49,50 +49,28 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   onUpdateTags,
   onTagClick,
   onNewsletterClick,
+  onRowClick,
+  onMouseEnter,
   isInReadingQueue = false,
   showCheckbox = false,
   visibleTags,
   loadingStates = {},
   errorTogglingLike,
-
   isUpdatingTags = false,
+  tagUpdateError,
+  onDismissTagError,
 }) => {
-  const navigate = useNavigate();
-  const { prefetchNewsletter } = usePrefetchNewsletterDetail();
-  const [tagUpdateError, setTagUpdateError] = useState<string | null>(null);
-
-  const handleRowClick = async (e: React.MouseEvent) => {
+  const handleRowClick = (e: React.MouseEvent) => {
     // Only proceed if the click wasn't on a button or link
     const target = e.target as HTMLElement;
     if (target.closest("button") || target.closest("a")) {
       return;
     }
 
-    try {
-      // Mark as read if unread
-      if (!newsletter.is_read && onToggleRead) {
-        await onToggleRead(newsletter.id);
-      }
-
-      // Archive the newsletter when opened from the inbox
-      if (onToggleArchive && !newsletter.is_archived) {
-        await onToggleArchive(newsletter.id);
-      }
-
-      // Proceed with navigation
-      if (onNewsletterClick) {
-        onNewsletterClick(newsletter);
-      } else {
-        navigate(`/newsletters/${newsletter.id}`);
-      }
-    } catch (error) {
-      console.error("Error handling newsletter click:", error);
-      // Still navigate even if marking as read or archiving fails
-      if (onNewsletterClick) {
-        onNewsletterClick(newsletter);
-      } else {
-        navigate(`/newsletters/${newsletter.id}`);
-      }
+    if (onRowClick) {
+      onRowClick(newsletter, e);
+    } else if (onNewsletterClick) {
+      onNewsletterClick(newsletter);
     }
   };
 
@@ -105,59 +83,22 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   );
 
   const handleUpdateTags = useCallback(
-    async (tagIds: string[]) => {
-      setTagUpdateError(null);
-
-      try {
-        await onUpdateTags(newsletter.id, tagIds);
-        toast.success("Tags updated successfully");
-      } catch (error) {
-        console.error("Error updating tags:", error);
-
-        // Extract user-friendly error message
-        let errorMessage = "Failed to update tags";
-        if (error instanceof Error) {
-          if ("code" in error) {
-            errorMessage = getErrorMessage(
-              error.code as keyof typeof ERROR_CODES,
-            );
-          } else {
-            errorMessage = error.message || errorMessage;
-          }
-        }
-
-        setTagUpdateError(errorMessage);
-        toast.error(errorMessage);
-        throw error;
-      }
+    (tagIds: string[]) => {
+      onUpdateTags(newsletter.id, tagIds);
     },
     [onUpdateTags, newsletter.id],
   );
 
-  // Prefetch newsletter details on hover for better performance
   const handleMouseEnter = useCallback(() => {
-    // Only prefetch if the newsletter is unread (more likely to be opened)
-    // or if it's not archived (archived newsletters are less likely to be opened)
-    if (!newsletter.is_read || !newsletter.is_archived) {
-      prefetchNewsletter(newsletter.id, { priority: !newsletter.is_read });
+    if (onMouseEnter) {
+      onMouseEnter(newsletter);
     }
-  }, [
-    prefetchNewsletter,
-    newsletter.id,
-    newsletter.is_read,
-    newsletter.is_archived,
-  ]);
-
-  const handleMouseLeave = useCallback(() => {
-    // Could implement cleanup logic here if needed
-    // For now, we let the cache handle cleanup based on its own policies
-  }, []);
+  }, [onMouseEnter, newsletter]);
 
   return (
     <div
       onClick={handleRowClick}
       onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${
         !newsletter.is_read
           ? "bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200"
@@ -304,20 +245,22 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 {tagUpdateError && (
                   <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md">
                     <p className="text-sm text-red-600">{tagUpdateError}</p>
-                    <button
-                      type="button"
-                      className="text-xs text-red-500 hover:text-red-700 underline mt-1"
-                      onClick={() => setTagUpdateError(null)}
-                    >
-                      Dismiss
-                    </button>
+                    {onDismissTagError && (
+                      <button
+                        type="button"
+                        className="text-xs text-red-500 hover:text-red-700 underline mt-1"
+                        onClick={onDismissTagError}
+                      >
+                        Dismiss
+                      </button>
+                    )}
                   </div>
                 )}
                 <TagSelector
                   selectedTags={newsletter.tags || []}
-                  onTagsChange={async (newTags) => {
+                  onTagsChange={(newTags) => {
                     const tagIds = newTags.map((tag) => tag.id);
-                    await handleUpdateTags(tagIds);
+                    handleUpdateTags(tagIds);
                   }}
                   onTagClick={handleTagClick}
                   onTagDeleted={() => {

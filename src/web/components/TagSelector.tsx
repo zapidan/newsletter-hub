@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Tag } from '@common/types';
-import { useTags } from '@common/hooks/useTags';
-import { Plus, X, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { Tag } from "@common/types";
+import { useTags } from "@common/hooks/useTags";
+import { Plus, X, Trash2 } from "lucide-react";
 
 type TagSelectorProps = {
   selectedTags: Tag[];
@@ -13,26 +13,26 @@ type TagSelectorProps = {
 };
 
 const colors = [
-  '#3b82f6', // blue-500
-  '#ef4444', // red-500
-  '#10b981', // emerald-500
-  '#f59e0b', // amber-500
-  '#8b5cf6', // violet-500
-  '#ec4899', // pink-500
-  '#14b8a6', // teal-500
-  '#f97316', // orange-500
+  "#3b82f6", // blue-500
+  "#ef4444", // red-500
+  "#10b981", // emerald-500
+  "#f59e0b", // amber-500
+  "#8b5cf6", // violet-500
+  "#ec4899", // pink-500
+  "#14b8a6", // teal-500
+  "#f97316", // orange-500
 ];
 
-export default function TagSelector({ 
-  selectedTags, 
-  onTagsChange, 
-  onTagDeleted, 
+export default function TagSelector({
+  selectedTags,
+  onTagsChange,
+  onTagDeleted,
   onTagClick,
-  className = '',
-  disabled = false
+  className = "",
+  disabled = false,
 }: TagSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [newTagName, setNewTagName] = useState('');
+  const [newTagName, setNewTagName] = useState("");
   const [selectedColor, setSelectedColor] = useState(colors[0]);
   const { getTags, createTag, deleteTag } = useTags();
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
@@ -50,26 +50,30 @@ export default function TagSelector({
   // Close dropdown when clicking outside or pressing Escape
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isOpen && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        isOpen &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (isOpen && event.key === 'Escape') {
+      if (isOpen && event.key === "Escape") {
         setIsOpen(false);
       }
     };
 
     // Only add event listeners if the dropdown is open
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscape);
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
 
       // Cleanup function to remove event listeners
       return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        document.removeEventListener('keydown', handleEscape);
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleEscape);
       };
     }
   }, [isOpen]);
@@ -79,13 +83,13 @@ export default function TagSelector({
 
     try {
       // Check if tag already exists
-      const existingTag = availableTags.find(tag => 
-        tag.name.toLowerCase() === newTagName.toLowerCase()
+      const existingTag = availableTags.find(
+        (tag) => tag.name.toLowerCase() === newTagName.toLowerCase(),
       );
 
       if (existingTag) {
         // Add existing tag if not already selected
-        if (!selectedTags.some(tag => tag.id === existingTag.id)) {
+        if (!selectedTags.some((tag) => tag.id === existingTag.id)) {
           onTagsChange([...selectedTags, existingTag]);
         }
       } else {
@@ -96,69 +100,93 @@ export default function TagSelector({
         });
 
         if (newTag) {
-          setAvailableTags(prev => [...prev, newTag]);
+          setAvailableTags((prev) => [...prev, newTag]);
           onTagsChange([...selectedTags, newTag]);
         }
       }
 
-      setNewTagName('');
+      setNewTagName("");
       setIsOpen(false);
     } catch (error) {
-      console.error('Error adding tag:', error);
+      console.error("Error adding tag:", error);
     }
-  }, [newTagName, selectedColor, availableTags, selectedTags, onTagsChange, createTag]);
+  }, [
+    newTagName,
+    selectedColor,
+    availableTags,
+    selectedTags,
+    onTagsChange,
+    createTag,
+  ]);
 
-  const handleRemoveTag = useCallback((tagId: string) => {
-    onTagsChange(selectedTags.filter(tag => tag.id !== tagId));
-  }, [selectedTags, onTagsChange]);
+  const handleRemoveTag = useCallback(
+    (tagId: string) => {
+      onTagsChange(selectedTags.filter((tag) => tag.id !== tagId));
+    },
+    [selectedTags, onTagsChange],
+  );
 
-  const handleDeleteTag = useCallback(async (tagId: string, tagName: string) => {
-    if (!window.confirm(`Are you sure you want to delete the tag "${tagName}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      const tagToDelete = availableTags.find(tag => tag.id === tagId);
-      if (!tagToDelete) return;
-
-      const success = await deleteTag(tagId);
-      if (success) {
-        // Update local state
-        setAvailableTags(prev => prev.filter(tag => tag.id !== tagId));
-        
-        // Remove from selected tags if it's selected
-        const wasSelected = selectedTags.some(tag => tag.id === tagId);
-        if (wasSelected) {
-          const newSelectedTags = selectedTags.filter(tag => tag.id !== tagId);
-          onTagsChange(newSelectedTags);
-        }
-        
-        // Notify parent component
-        onTagDeleted?.(tagToDelete);
+  const handleDeleteTag = useCallback(
+    async (tagId: string, tagName: string) => {
+      if (
+        !window.confirm(
+          `Are you sure you want to delete the tag "${tagName}"? This action cannot be undone.`,
+        )
+      ) {
+        return;
       }
-    } catch (err) {
-      console.error('Failed to delete tag:', err);
-      alert('Failed to delete tag. Please try again.');
-    }
-  }, [deleteTag, selectedTags, onTagsChange, onTagDeleted, availableTags]);
 
-  const toggleTag = useCallback((tag: Tag) => {
-    const isSelected = selectedTags.some(t => t.id === tag.id);
-    if (isSelected) {
-      handleRemoveTag(tag.id);
-    } else {
-      onTagsChange([...selectedTags, tag]);
-    }
-    setIsOpen(false);
-  }, [selectedTags, onTagsChange, handleRemoveTag]);
+      try {
+        const tagToDelete = availableTags.find((tag) => tag.id === tagId);
+        if (!tagToDelete) return;
+
+        const success = await deleteTag(tagId);
+        if (success) {
+          // Update local state
+          setAvailableTags((prev) => prev.filter((tag) => tag.id !== tagId));
+
+          // Remove from selected tags if it's selected
+          const wasSelected = selectedTags.some((tag) => tag.id === tagId);
+          if (wasSelected) {
+            const newSelectedTags = selectedTags.filter(
+              (tag) => tag.id !== tagId,
+            );
+            onTagsChange(newSelectedTags);
+          }
+
+          // Notify parent component
+          onTagDeleted?.(tagToDelete);
+        }
+      } catch (err) {
+        console.error("Failed to delete tag:", err);
+        alert("Failed to delete tag. Please try again.");
+      }
+    },
+    [deleteTag, selectedTags, onTagsChange, onTagDeleted, availableTags],
+  );
+
+  const toggleTag = useCallback(
+    (tag: Tag) => {
+      const isSelected = selectedTags.some((t) => t.id === tag.id);
+      if (isSelected) {
+        handleRemoveTag(tag.id);
+      } else {
+        onTagsChange([...selectedTags, tag]);
+      }
+      setIsOpen(false);
+    },
+    [selectedTags, onTagsChange, handleRemoveTag],
+  );
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      <div className={`flex flex-wrap items-center gap-2 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div
+        className={`flex flex-wrap items-center gap-2 ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+      >
         {selectedTags.map((tag) => (
           <div
             key={tag.id}
-            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 mb-2 ${onTagClick ? 'cursor-pointer hover:opacity-80' : ''}`}
+            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 mb-2 ${onTagClick ? "cursor-pointer hover:opacity-80" : ""}`}
             style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
             onClick={onTagClick ? (e) => onTagClick(tag, e) : undefined}
           >
@@ -194,7 +222,7 @@ export default function TagSelector({
                 type="text"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
                 placeholder="Create new tag"
                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 autoFocus
@@ -209,11 +237,11 @@ export default function TagSelector({
               </button>
             </div>
             <div className="flex flex-wrap gap-1 mt-2">
-              {colors.map(color => (
+              {colors.map((color) => (
                 <button
                   key={color}
                   type="button"
-                  className={`w-5 h-5 rounded-full border-2 ${selectedColor === color ? 'border-gray-800' : 'border-transparent'}`}
+                  className={`w-5 h-5 rounded-full border-2 ${selectedColor === color ? "border-gray-800" : "border-transparent"}`}
                   style={{ backgroundColor: color }}
                   onClick={() => setSelectedColor(color)}
                   title={color}
@@ -222,20 +250,25 @@ export default function TagSelector({
             </div>
           </div>
           <div className="max-h-48 overflow-y-auto">
-            {availableTags.filter(tag => !selectedTags.some(t => t.id === tag.id)).length > 0 ? (
+            {availableTags.filter(
+              (tag) => !selectedTags.some((t) => t.id === tag.id),
+            ).length > 0 ? (
               <div className="p-1">
                 {availableTags
-                  .filter(tag => !selectedTags.some(t => t.id === tag.id))
-                  .map(tag => (
-                    <div key={`tag-${tag.id}`} className="group flex items-center justify-between w-full hover:bg-gray-100">
+                  .filter((tag) => !selectedTags.some((t) => t.id === tag.id))
+                  .map((tag) => (
+                    <div
+                      key={`tag-${tag.id}`}
+                      className="group flex items-center justify-between w-full hover:bg-gray-100"
+                    >
                       <button
                         key={tag.id}
                         type="button"
                         onClick={() => toggleTag(tag)}
                         className="flex-1 text-left px-3 py-2 text-sm flex items-center"
                       >
-                        <span 
-                          className="w-3 h-3 rounded-full mr-2 flex-shrink-0" 
+                        <span
+                          className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
                           style={{ backgroundColor: tag.color }}
                         />
                         <span className="truncate">{tag.name}</span>

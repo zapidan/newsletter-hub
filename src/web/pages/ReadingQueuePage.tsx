@@ -527,14 +527,14 @@ const ReadingQueuePage: React.FC = () => {
               <SortableNewsletterRow
                 key={item.id}
                 id={item.id}
-                newsletter={item.newsletter as any}
+                newsletter={item.newsletter}
                 onToggleRead={handleToggleRead}
                 onToggleLike={handleToggleLikeAction}
                 onToggleArchive={handleToggleArchiveAction}
                 onToggleQueue={toggleInQueue}
                 onTrash={() => {}}
                 onNewsletterClick={(newsletter) => {
-                  handleNewsletterClick(newsletter as any);
+                  handleNewsletterClick(newsletter);
                 }}
                 onUpdateTags={async (newsletterId, tagIds) => {
                   try {

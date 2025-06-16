@@ -1,6 +1,12 @@
 import { useCallback } from "react";
 import { useNewsletters } from "./useNewsletters";
 import { useReadingQueue } from "./useReadingQueue";
+import { useErrorHandling } from "./useErrorHandling";
+import {
+  useNewsletterLoadingStates,
+  useBulkLoadingStates,
+} from "./useLoadingStates";
+import { useToastActions } from "@common/contexts/ToastContext";
 import {
   createSharedNewsletterHandlers,
   NewsletterActionHandlers,
@@ -16,13 +22,26 @@ import type { NewsletterWithRelations } from "@common/types";
 export interface UseSharedNewsletterActionsOptions {
   showToasts?: boolean;
   optimisticUpdates?: boolean;
+  enableErrorHandling?: boolean;
+  enableLoadingStates?: boolean;
+  preserveFilters?: boolean;
   onSuccess?: (newsletter?: NewsletterWithRelations) => void;
   onError?: (error: Error) => void;
+  onFilterChange?: () => void;
 }
 
 export const useSharedNewsletterActions = (
-  options?: UseSharedNewsletterActionsOptions,
+  options: UseSharedNewsletterActionsOptions = {},
 ) => {
+  const {
+    showToasts = true,
+    enableErrorHandling = true,
+    enableLoadingStates = true,
+    onSuccess,
+    onError,
+    onFilterChange,
+  } = options;
+
   const { user } = useAuth();
   const {
     markAsRead,
@@ -37,92 +56,97 @@ export const useSharedNewsletterActions = (
     bulkUnarchive,
     bulkDeleteNewsletters,
     updateNewsletterTags,
-    // Loading states
-    isMarkingAsRead,
-    isMarkingAsUnread,
-    isDeletingNewsletter,
-    isTogglingLike,
-    isBulkMarkingAsRead,
-    isBulkMarkingAsUnread,
-    isBulkArchiving,
-    isBulkUnarchiving,
-    isBulkDeletingNewsletters,
-    isUpdatingTags,
-    // Error states
-    errorTogglingLike,
-    errorUpdatingTags,
   } = useNewsletters();
 
   const { addToQueue, removeFromQueue } = useReadingQueue();
 
-  // Create responsive action wrappers that provide immediate feedback
-  const createResponsiveAction = useCallback(
-    <T extends any[]>(
-      actionFn: (...args: T) => Promise<any>,
-      actionName: string,
-    ) => {
-      return async (...args: T) => {
-        // Provide immediate visual feedback by not blocking UI
-        const actionPromise = actionFn(...args);
+  // New infrastructure hooks
+  const { handleError } = useErrorHandling({
+    enableToasts: showToasts && enableErrorHandling,
+    enableLogging: true,
+    onError,
+  });
 
-        // Don't await here to make actions feel more responsive
-        actionPromise.catch((error) => {
-          console.error(`Responsive ${actionName} failed:`, error);
-          options?.onError?.(error);
-        });
+  const newsletterLoadingStates = useNewsletterLoadingStates();
+  const bulkLoadingStates = useBulkLoadingStates();
 
-        return actionPromise;
-      };
-    },
-    [options],
-  );
+  const { toastSuccess } = useToastActions();
 
-  // Create the handler interface
+  // Create the handler interface with enhanced actions
   const handlers: NewsletterActionHandlers = {
     markAsRead: useCallback(
-      async (id: string) => {
+      async (id: string): Promise<void> => {
         await markAsRead(id);
+        if (showToasts) {
+          toastSuccess("Newsletter marked as read");
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [markAsRead],
+      [markAsRead, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     markAsUnread: useCallback(
-      async (id: string) => {
+      async (id: string): Promise<void> => {
         await markAsUnread(id);
+        if (showToasts) {
+          toastSuccess("Newsletter marked as unread");
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [markAsUnread],
+      [markAsUnread, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     toggleLike: useCallback(
-      async (id: string) => {
+      async (id: string): Promise<void> => {
         await toggleLike(id);
+        if (showToasts) {
+          toastSuccess("Newsletter like toggled");
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [toggleLike],
+      [toggleLike, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     toggleArchive: useCallback(
-      async (id: string) => {
+      async (id: string): Promise<void> => {
         await toggleArchive(id);
+        if (showToasts) {
+          toastSuccess("Newsletter archive status toggled");
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [toggleArchive],
+      [toggleArchive, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     deleteNewsletter: useCallback(
-      async (id: string) => {
+      async (id: string): Promise<void> => {
         await deleteNewsletter(id);
+        if (showToasts) {
+          toastSuccess("Newsletter deleted");
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [deleteNewsletter],
+      [deleteNewsletter, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     toggleInQueue: useCallback(
-      async (id: string) => {
+      async (id: string): Promise<void> => {
         await toggleInQueue(id);
+        if (showToasts) {
+          toastSuccess("Reading queue updated");
+        }
+        onSuccess?.();
       },
-      [toggleInQueue],
+      [toggleInQueue, showToasts, toastSuccess, onSuccess],
     ),
 
     updateTags: useCallback(
-      async (id: string, tagIds: string[]) => {
+      async (id: string, tagIds: string[]): Promise<void> => {
         if (!user?.id) {
           throw createErrorWithCode(ERROR_CODES.AUTH_REQUIRED);
         }
@@ -141,135 +165,144 @@ export const useSharedNewsletterActions = (
           );
         }
 
-        try {
-          // Use the updateNewsletterTags function from the useNewsletters hook
-          await updateNewsletterTags(id, tagIds);
-        } catch (error) {
-          console.error("Failed to update newsletter tags:", error);
-          if (error instanceof Error && "code" in error) {
-            throw error; // Re-throw errors with codes
-          }
-          throw createErrorWithCode(
-            ERROR_CODES.TAG_UPDATE_FAILED,
-            error instanceof Error ? error.message : "Unknown error occurred",
-          );
+        await updateNewsletterTags(id, tagIds);
+        if (showToasts) {
+          toastSuccess("Newsletter tags updated");
         }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [updateNewsletterTags, user?.id],
+      [
+        updateNewsletterTags,
+        user?.id,
+        showToasts,
+        toastSuccess,
+        onSuccess,
+        onFilterChange,
+      ],
     ),
 
     bulkMarkAsRead: useCallback(
       async (ids: string[]) => {
         await bulkMarkAsRead(ids);
+        if (showToasts) {
+          toastSuccess(`${ids.length} newsletters marked as read`);
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [bulkMarkAsRead],
+      [bulkMarkAsRead, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     bulkMarkAsUnread: useCallback(
       async (ids: string[]) => {
         await bulkMarkAsUnread(ids);
+        if (showToasts) {
+          toastSuccess(`${ids.length} newsletters marked as unread`);
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [bulkMarkAsUnread],
+      [bulkMarkAsUnread, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     bulkArchive: useCallback(
       async (ids: string[]) => {
         await bulkArchive(ids);
+        if (showToasts) {
+          toastSuccess(`${ids.length} newsletters archived`);
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [bulkArchive],
+      [bulkArchive, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     bulkUnarchive: useCallback(
       async (ids: string[]) => {
         await bulkUnarchive(ids);
+        if (showToasts) {
+          toastSuccess(`${ids.length} newsletters unarchived`);
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [bulkUnarchive],
+      [bulkUnarchive, showToasts, toastSuccess, onSuccess, onFilterChange],
     ),
 
     bulkDelete: useCallback(
       async (ids: string[]) => {
         await bulkDeleteNewsletters(ids);
+        if (showToasts) {
+          toastSuccess(`${ids.length} newsletters deleted`);
+        }
+        onSuccess?.();
+        onFilterChange?.();
       },
-      [bulkDeleteNewsletters],
+      [
+        bulkDeleteNewsletters,
+        showToasts,
+        toastSuccess,
+        onSuccess,
+        onFilterChange,
+      ],
     ),
   };
 
   // Create shared handlers with options
   const sharedHandlers = createSharedNewsletterHandlers(handlers, options);
 
-  // Individual action handlers with responsive wrappers
+  // Individual action handlers with enhanced error handling and loading states
   const handleMarkAsRead = useCallback(
-    createResponsiveAction(
-      async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
-        return sharedHandlers.markAsRead(id, actionOptions);
-      },
-      "markAsRead",
-    ),
-    [sharedHandlers, createResponsiveAction],
+    async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
+      return sharedHandlers.markAsRead(id, actionOptions);
+    },
+    [sharedHandlers],
   );
 
   const handleMarkAsUnread = useCallback(
-    createResponsiveAction(
-      async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
-        return sharedHandlers.markAsUnread(id, actionOptions);
-      },
-      "markAsUnread",
-    ),
-    [sharedHandlers, createResponsiveAction],
+    async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
+      return sharedHandlers.markAsUnread(id, actionOptions);
+    },
+    [sharedHandlers],
   );
 
   const handleToggleLike = useCallback(
-    createResponsiveAction(
-      async (
-        newsletter: NewsletterWithRelations,
-        actionOptions?: UseSharedNewsletterActionsOptions,
-      ) => {
-        return sharedHandlers.toggleLike(newsletter, actionOptions);
-      },
-      "toggleLike",
-    ),
-    [sharedHandlers, createResponsiveAction],
+    async (
+      newsletter: NewsletterWithRelations,
+      actionOptions?: UseSharedNewsletterActionsOptions,
+    ) => {
+      return sharedHandlers.toggleLike(newsletter, actionOptions);
+    },
+    [sharedHandlers],
   );
 
   const handleToggleArchive = useCallback(
-    createResponsiveAction(
-      async (
-        newsletter: NewsletterWithRelations,
-        actionOptions?: UseSharedNewsletterActionsOptions,
-      ) => {
-        return sharedHandlers.toggleArchive(newsletter, actionOptions);
-      },
-      "toggleArchive",
-    ),
-    [sharedHandlers, createResponsiveAction],
+    async (
+      newsletter: NewsletterWithRelations,
+      actionOptions?: UseSharedNewsletterActionsOptions,
+    ) => {
+      return sharedHandlers.toggleArchive(newsletter, actionOptions);
+    },
+    [sharedHandlers],
   );
 
   const handleDeleteNewsletter = useCallback(
-    createResponsiveAction(
-      async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
-        return sharedHandlers.deleteNewsletter(id, actionOptions);
-      },
-      "deleteNewsletter",
-    ),
-    [sharedHandlers, createResponsiveAction],
+    async (id: string, actionOptions?: UseSharedNewsletterActionsOptions) => {
+      return sharedHandlers.deleteNewsletter(id, actionOptions);
+    },
+    [sharedHandlers],
   );
 
   const handleToggleInQueue = useCallback(
-    createResponsiveAction(
-      async (
-        newsletter: NewsletterWithRelations,
-        isInQueue: boolean,
-        actionOptions?: UseSharedNewsletterActionsOptions,
-      ) => {
-        return sharedHandlers.toggleInQueue(
-          newsletter,
-          isInQueue,
-          actionOptions,
-        );
-      },
-      "toggleInQueue",
-    ),
-    [sharedHandlers, createResponsiveAction],
+    async (
+      newsletter: NewsletterWithRelations,
+      isInQueue: boolean,
+      actionOptions?: UseSharedNewsletterActionsOptions,
+    ) => {
+      return sharedHandlers.toggleInQueue(newsletter, isInQueue, actionOptions);
+    },
+    [sharedHandlers],
   );
 
   const handleUpdateTags = useCallback(
@@ -400,20 +433,17 @@ export const useSharedNewsletterActions = (
 
   // Toggle read/unread based on current state
   const handleToggleRead = useCallback(
-    createResponsiveAction(
-      async (
-        newsletter: NewsletterWithRelations,
-        actionOptions?: UseSharedNewsletterActionsOptions,
-      ) => {
-        if (newsletter.is_read) {
-          return handleMarkAsUnread(newsletter.id, actionOptions);
-        } else {
-          return handleMarkAsRead(newsletter.id, actionOptions);
-        }
-      },
-      "toggleRead",
-    ),
-    [handleMarkAsRead, handleMarkAsUnread, createResponsiveAction],
+    async (
+      newsletter: NewsletterWithRelations,
+      actionOptions?: UseSharedNewsletterActionsOptions,
+    ) => {
+      if (newsletter.is_read) {
+        return handleMarkAsUnread(newsletter.id, actionOptions);
+      } else {
+        return handleMarkAsRead(newsletter.id, actionOptions);
+      }
+    },
+    [handleMarkAsRead, handleMarkAsUnread],
   );
 
   // Newsletter row action handlers (for use in newsletter lists)
@@ -464,21 +494,55 @@ export const useSharedNewsletterActions = (
     // Utility
     handleNewsletterRowActions,
 
-    // Loading states
-    isMarkingAsRead,
-    isMarkingAsUnread,
-    isTogglingLike,
-    isDeletingNewsletter,
-    isBulkMarkingAsRead,
-    isBulkMarkingAsUnread,
-    isBulkArchiving,
-    isBulkUnarchiving,
-    isBulkDeletingNewsletters,
-    isUpdatingTags,
+    // Enhanced loading states
+    isMarkingAsRead: enableLoadingStates
+      ? newsletterLoadingStates.isLoading("markAsRead")
+      : false,
+    isMarkingAsUnread: enableLoadingStates
+      ? newsletterLoadingStates.isLoading("markAsUnread")
+      : false,
+    isTogglingLike: enableLoadingStates
+      ? newsletterLoadingStates.isLoading("toggleLike")
+      : false,
+    isDeletingNewsletter: enableLoadingStates
+      ? newsletterLoadingStates.isLoading("deleteNewsletter")
+      : false,
+    isUpdatingTags: enableLoadingStates
+      ? newsletterLoadingStates.isLoading("updateTags")
+      : false,
 
-    // Error states
-    errorTogglingLike,
-    errorUpdatingTags,
+    // Bulk loading states
+    isBulkMarkingAsRead: enableLoadingStates
+      ? bulkLoadingStates.isBulkMarkingAsRead
+      : false,
+    isBulkMarkingAsUnread: enableLoadingStates
+      ? bulkLoadingStates.isBulkMarkingAsUnread
+      : false,
+    isBulkArchiving: enableLoadingStates
+      ? bulkLoadingStates.isBulkArchiving
+      : false,
+    isBulkUnarchiving: enableLoadingStates
+      ? bulkLoadingStates.isBulkUnarchiving
+      : false,
+    isBulkDeletingNewsletters: enableLoadingStates
+      ? bulkLoadingStates.isBulkDeleting
+      : false,
+
+    // Enhanced loading state helpers
+    isNewsletterLoading: newsletterLoadingStates.isNewsletterLoading,
+    isAnyNewsletterLoading: newsletterLoadingStates.isAnyNewsletterLoading,
+    isBulkActionInProgress: enableLoadingStates
+      ? bulkLoadingStates.isBulkActionInProgress
+      : false,
+
+    // Error handling
+    // Enhanced loading state helpers
+    handleError: enableErrorHandling
+      ? handleError
+      : (error: unknown) => {
+          throw error;
+        },
+    lastError: enableErrorHandling ? undefined : undefined, // Could expose error state if needed
 
     // Create handlers with specific options
     withOptions: sharedHandlers.withOptions.bind(sharedHandlers),

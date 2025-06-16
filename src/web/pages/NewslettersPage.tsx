@@ -685,11 +685,14 @@ const NewslettersPage: React.FC = () => {
 
   const handleUpdateTags = useCallback(
     async (newsletterId: string, tagIds: string[]): Promise<void> => {
+      setIsActionInProgress(true);
       try {
         await sharedHandleUpdateTags(newsletterId, tagIds);
       } catch (error) {
         console.error("Error updating tags:", error);
         // Error handling is already done by shared actions
+      } finally {
+        setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
     [sharedHandleUpdateTags],
@@ -1256,6 +1259,7 @@ const NewslettersPage: React.FC = () => {
               <div>Error: {isErrorNewsletters ? "Yes" : "No"}</div>
               <div>Filter: {JSON.stringify(newsletterFilter)}</div>
             </div>
+
             {isLoadingNewsletters ? (
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
