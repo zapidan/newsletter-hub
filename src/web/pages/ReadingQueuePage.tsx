@@ -8,7 +8,12 @@ import React, {
 import { useReadingQueue } from "@common/hooks/useReadingQueue";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import { useNavigate } from "react-router-dom";
-import { ReadingQueueItem, Tag, NewsletterWithRelations } from "@common/types";
+import {
+  ReadingQueueItem,
+  Tag,
+  NewsletterWithRelations,
+  NewsletterSource,
+} from "@common/types";
 import { toast } from "react-hot-toast";
 import { useTags } from "@common/hooks/useTags";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
@@ -214,17 +219,68 @@ const ReadingQueuePage: React.FC = () => {
     navigate("/");
   };
 
+  // Handle toggling read status with shared actions
+  const handleToggleRead = useCallback(
+    async (newsletterId: string) => {
+      try {
+        const item = validQueueItems.find(
+          (item) => item.newsletter.id === newsletterId,
+        );
+        if (!item) return;
+
+        if (item.newsletter.is_read) {
+          await handleMarkAsUnread(newsletterId);
+        } else {
+          await handleMarkAsRead(newsletterId);
+        }
+
+        // Smart cache invalidation
+        if (cacheManager) {
+          cacheManager.smartInvalidate({
+            operation: "queue-mark-read",
+            newsletterIds: [newsletterId],
+            priority: "high",
+          });
+        }
+      } catch (error) {
+        console.error("Error toggling read status:", error);
+      }
+    },
+    [handleMarkAsRead, handleMarkAsUnread, validQueueItems, cacheManager],
+  );
+
   // Handle newsletter click with proper navigation state
   const handleNewsletterClick = useCallback(
-    (newsletter: NewsletterWithRelations) => {
-      navigate(`/newsletters/${newsletter.id}`, {
-        state: {
-          fromReadingQueue: true,
-          from: "/queue",
-        },
-      });
+    async (newsletter: NewsletterWithRelations) => {
+      try {
+        // Mark as read if unread (but don't archive in reading queue)
+        if (!newsletter.is_read) {
+          try {
+            await handleToggleRead(newsletter.id);
+          } catch (readError) {
+            console.error("Failed to mark newsletter as read:", readError);
+          }
+        }
+
+        // Navigate to the newsletter detail
+        navigate(`/newsletters/${newsletter.id}`, {
+          state: {
+            fromReadingQueue: true,
+            from: "/queue",
+          },
+        });
+      } catch (error) {
+        console.error("Unexpected error in newsletter click handler:", error);
+        // Still navigate even if marking as read fails
+        navigate(`/newsletters/${newsletter.id}`, {
+          state: {
+            fromReadingQueue: true,
+            from: "/queue",
+          },
+        });
+      }
     },
-    [navigate],
+    [navigate, handleToggleRead],
   );
 
   // Handle error state with toast notifications
@@ -272,36 +328,6 @@ const ReadingQueuePage: React.FC = () => {
       }
     },
     [validQueueItems, reorderQueue],
-  );
-
-  // Handle toggling read status with shared actions
-  const handleToggleRead = useCallback(
-    async (newsletterId: string) => {
-      try {
-        const item = validQueueItems.find(
-          (item) => item.newsletter.id === newsletterId,
-        );
-        if (!item) return;
-
-        if (item.newsletter.is_read) {
-          await handleMarkAsUnread(newsletterId);
-        } else {
-          await handleMarkAsRead(newsletterId);
-        }
-
-        // Smart cache invalidation
-        if (cacheManager) {
-          cacheManager.smartInvalidate({
-            operation: "queue-mark-read",
-            newsletterIds: [newsletterId],
-            priority: "high",
-          });
-        }
-      } catch (error) {
-        console.error("Error toggling read status:", error);
-      }
-    },
-    [handleMarkAsRead, handleMarkAsUnread, validQueueItems, cacheManager],
   );
 
   // Handle toggling like status with shared actions
@@ -523,143 +549,169 @@ const ReadingQueuePage: React.FC = () => {
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-3 w-full">
-            {sortedItems.map((item) => (
-              <SortableNewsletterRow
-                key={item.id}
-                id={item.id}
-                newsletter={item.newsletter}
-                onToggleRead={handleToggleRead}
-                onToggleLike={handleToggleLikeAction}
-                onToggleArchive={handleToggleArchiveAction}
-                onToggleQueue={toggleInQueue}
-                onTrash={() => {}}
-                onNewsletterClick={(newsletter) => {
-                  handleNewsletterClick(newsletter);
-                }}
-                onUpdateTags={async (newsletterId, tagIds) => {
-                  try {
-                    const queueItem = readingQueue.find(
-                      (item) => item.newsletter.id === newsletterId,
-                    );
-                    if (!queueItem) {
-                      toast.error("Newsletter not found in queue");
-                      return;
-                    }
+            {sortedItems.map((item) => {
+              // Convert NewsletterWithRelations to Newsletter type for SortableNewsletterRow
+              const newsletter = {
+                ...item.newsletter,
+                newsletter_source_id:
+                  item.newsletter.newsletter_source_id || null,
+                source: item.newsletter.source || null,
+                tags: item.newsletter.tags || [],
+              } as {
+                [key: string]: unknown;
+                source?: NewsletterSource | null;
+                newsletter_source_id?: string | null;
+                tags?: Tag[];
+                user_newsletter_tags?: Tag[];
+              } & typeof item.newsletter;
 
-                    // Optimistically update the UI with the new tags
-                    const updatedTags = allTags.filter((tag) =>
-                      tagIds.includes(tag.id),
-                    );
-
-                    // Update the cache with the new tags
-                    setQueryData(
-                      ["readingQueue", user?.id],
-                      (old: ReadingQueueItem[] = []) =>
-                        old.map((item) => {
-                          if (item.newsletter.id === newsletterId) {
-                            return {
-                              ...item,
-                              newsletter: {
-                                ...item.newsletter,
-                                tags: updatedTags,
-                                // Update the user_newsletter_tags array if it exists
-                                user_newsletter_tags: updatedTags.map(
-                                  (tag) => ({
-                                    id: `${newsletterId}-${tag.id}`,
-                                    newsletter_id: newsletterId,
-                                    tag_id: tag.id,
-                                    created_at: new Date().toISOString(),
-                                    updated_at: new Date().toISOString(),
-                                  }),
-                                ),
-                              },
-                            };
-                          }
-                          return item;
-                        }),
-                    );
-
-                    // Get current tag IDs for the newsletter
-                    const currentTagIds =
-                      queueItem.newsletter.tags?.map((tag: Tag) => tag.id) ||
-                      [];
-
-                    // Update tags in the database
-                    if (user) {
-                      try {
-                        const result = await updateNewsletterTags(
-                          newsletterId,
-                          tagIds,
-                          currentTagIds,
-                          user.id,
-                        );
-
-                        // Show success message with details
-                        const message = [
-                          result.added > 0 &&
-                            `${result.added} tag${result.added !== 1 ? "s" : ""} added`,
-                          result.removed > 0 &&
-                            `${result.removed} tag${result.removed !== 1 ? "s" : ""} removed`,
-                        ]
-                          .filter(Boolean)
-                          .join(", ");
-
-                        toast.success(
-                          `Tags updated: ${message || "No changes"}`,
-                        );
-
-                        // Refresh the queue to ensure we have the latest data
-                        await refetch();
-                      } catch (error) {
-                        console.error("Error updating tags:", error);
-                        toast.error(
-                          error instanceof Error
-                            ? error.message
-                            : "Failed to update tags",
-                        );
-                        // Revert optimistic update on error
-                        await refetch();
+              return (
+                <SortableNewsletterRow
+                  key={item.id}
+                  id={item.id}
+                  newsletter={newsletter}
+                  onToggleRead={handleToggleRead}
+                  onToggleLike={handleToggleLikeAction}
+                  onToggleArchive={handleToggleArchiveAction}
+                  onToggleQueue={toggleInQueue}
+                  onTrash={() => {}}
+                  onNewsletterClick={(newsletter) => {
+                    // Convert back to NewsletterWithRelations for handleNewsletterClick
+                    const newsletterWithRelations = {
+                      ...newsletter,
+                      newsletter_source_id:
+                        newsletter.newsletter_source_id || null,
+                      source: newsletter.source || null,
+                      tags: newsletter.tags || [],
+                      is_archived: newsletter.is_archived || false,
+                    } as NewsletterWithRelations;
+                    handleNewsletterClick(newsletterWithRelations);
+                  }}
+                  onUpdateTags={async (newsletterId, tagIds) => {
+                    try {
+                      const queueItem = readingQueue.find(
+                        (item) => item.newsletter.id === newsletterId,
+                      );
+                      if (!queueItem) {
+                        toast.error("Newsletter not found in queue");
+                        return;
                       }
-                    } else {
-                      throw new Error("User not authenticated");
+
+                      // Optimistically update the UI with the new tags
+                      const updatedTags = allTags.filter((tag) =>
+                        tagIds.includes(tag.id),
+                      );
+
+                      // Update the cache with the new tags
+                      setQueryData(
+                        ["readingQueue", user?.id],
+                        (old: ReadingQueueItem[] = []) =>
+                          old.map((item) => {
+                            if (item.newsletter.id === newsletterId) {
+                              return {
+                                ...item,
+                                newsletter: {
+                                  ...item.newsletter,
+                                  tags: updatedTags,
+                                  // Update the user_newsletter_tags array if it exists
+                                  user_newsletter_tags: updatedTags.map(
+                                    (tag) => ({
+                                      id: `${newsletterId}-${tag.id}`,
+                                      newsletter_id: newsletterId,
+                                      tag_id: tag.id,
+                                      created_at: new Date().toISOString(),
+                                      updated_at: new Date().toISOString(),
+                                    }),
+                                  ),
+                                },
+                              };
+                            }
+                            return item;
+                          }),
+                      );
+
+                      // Get current tag IDs for the newsletter
+                      const currentTagIds =
+                        queueItem.newsletter.tags?.map((tag: Tag) => tag.id) ||
+                        [];
+
+                      // Update tags in the database
+                      if (user) {
+                        try {
+                          const result = await updateNewsletterTags(
+                            newsletterId,
+                            tagIds,
+                            currentTagIds,
+                            user.id,
+                          );
+
+                          // Show success message with details
+                          const message = [
+                            result.added > 0 &&
+                              `${result.added} tag${result.added !== 1 ? "s" : ""} added`,
+                            result.removed > 0 &&
+                              `${result.removed} tag${result.removed !== 1 ? "s" : ""} removed`,
+                          ]
+                            .filter(Boolean)
+                            .join(", ");
+
+                          toast.success(
+                            `Tags updated: ${message || "No changes"}`,
+                          );
+
+                          // Refresh the queue to ensure we have the latest data
+                          await refetch();
+                        } catch (error) {
+                          console.error("Error updating tags:", error);
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Failed to update tags",
+                          );
+                          // Revert optimistic update on error
+                          await refetch();
+                        }
+                      } else {
+                        throw new Error("User not authenticated");
+                      }
+                    } catch (error) {
+                      console.error("Error updating tags:", error);
+                      toast.error("Failed to update tags");
+                      // Revert optimistic update on error
+                      await refetch();
                     }
-                  } catch (error) {
-                    console.error("Error updating tags:", error);
-                    toast.error("Failed to update tags");
-                    // Revert optimistic update on error
+                  }}
+                  onTagClick={(tag, e) => {
+                    handleTagClickWithNavigation(tag, navigate, "/inbox", e);
+                  }}
+                  onToggleTagVisibility={(id, e) => {
+                    e.stopPropagation();
+                    setVisibleTags((prev) => {
+                      const newSet = new Set(prev);
+                      if (newSet.has(id)) {
+                        newSet.delete(id);
+                      } else {
+                        newSet.add(id);
+                      }
+                      return newSet;
+                    });
+                  }}
+                  onRemoveFromQueue={async (e, id) => {
+                    e.stopPropagation();
+                    await toggleInQueue(id);
                     await refetch();
-                  }
-                }}
-                onTagClick={(tag, e) => {
-                  handleTagClickWithNavigation(tag, navigate, "/inbox", e);
-                }}
-                onToggleTagVisibility={(id, e) => {
-                  e.stopPropagation();
-                  setVisibleTags((prev) => {
-                    const newSet = new Set(prev);
-                    if (newSet.has(id)) {
-                      newSet.delete(id);
-                    } else {
-                      newSet.add(id);
-                    }
-                    return newSet;
-                  });
-                }}
-                onRemoveFromQueue={async (e, id) => {
-                  e.stopPropagation();
-                  await toggleInQueue(id);
-                  await refetch();
-                }}
-                className={`${!sortByDate ? "cursor-grab active:cursor-grabbing" : ""} bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow`}
-                isDraggable={!sortByDate}
-                showCheckbox={false}
-                showTags={true}
-                visibleTags={visibleTags}
-                readingQueue={readingQueue}
-                isDeletingNewsletter={false}
-                isInReadingQueue={true}
-              />
-            ))}
+                  }}
+                  className={`${!sortByDate ? "cursor-grab active:cursor-grabbing" : ""} bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow`}
+                  isDraggable={!sortByDate}
+                  showCheckbox={false}
+                  showTags={true}
+                  visibleTags={visibleTags}
+                  readingQueue={readingQueue}
+                  isDeletingNewsletter={false}
+                  isInReadingQueue={true}
+                />
+              );
+            })}
           </div>
         </SortableContext>
       </DndContext>
