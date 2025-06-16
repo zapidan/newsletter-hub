@@ -140,38 +140,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                <button
-                  type="button"
-                  className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-                    newsletter.is_read
-                      ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
-                      : "bg-green-100 text-green-700 hover:bg-green-200"
-                  } ${
-                    loadingStates[newsletter.id] === "read" ? "opacity-50" : ""
-                  }`}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      await onToggleRead(newsletter.id);
-                    } catch (error) {
-                      console.error("Error toggling read status:", error);
-                    }
-                  }}
-                  disabled={loadingStates[newsletter.id] === "read"}
-                >
-                  {loadingStates[newsletter.id] === "read" ? (
-                    <div className="inline-flex items-center">
-                      <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent mr-1" />
-                      {newsletter.is_read ? "Marking..." : "Marking..."}
-                    </div>
-                  ) : (
-                    <>
-                      {newsletter.is_read ? "Mark as Unread" : "Mark as Read"}
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
             {/* Action buttons */}
             <div className="flex items-center gap-1 mt-1">
