@@ -94,10 +94,6 @@ export const useInboxFilters = (
 
   // Sync pendingTagUpdates with URL changes
   useEffect(() => {
-    console.log("🏷️ [useInboxFilters] URL tagIds changed:", {
-      tagIds,
-      pendingTagUpdates,
-    });
     setPendingTagUpdates(tagIds);
   }, [tagIds]);
 
@@ -108,11 +104,6 @@ export const useInboxFilters = (
     }
 
     debounceTimeoutRef.current = setTimeout(() => {
-      console.log("🏷️ [useInboxFilters] Debounce timeout fired:", {
-        pendingTagUpdates,
-        currentTagIds: tagIds,
-        willUpdate: pendingTagUpdates.join(",") !== tagIds.join(","),
-      });
       setDebouncedTagIds([...pendingTagUpdates]);
       // Update the actual filter state after debounce
       if (pendingTagUpdates.join(",") !== tagIds.join(",")) {
@@ -132,18 +123,21 @@ export const useInboxFilters = (
 
   useEffect(() => {
     if (autoLoadTags) {
-      console.log("🏷️ [useInboxFilters] Loading tags...");
       setIsLoadingTags(true);
       getTags()
         .then((tags) => {
-          console.log("🏷️ [useInboxFilters] Tags loaded:", {
-            count: tags?.length || 0,
-            tags: tags?.map((t) => ({ id: t.id, name: t.name })) || [],
-          });
-          setAllTags(tags || []);
+          if (tags && tags.length > 0) {
+            setAllTags(tags);
+          } else {
+            console.warn(
+              "No tags loaded - this might affect tag filtering functionality",
+            );
+            setAllTags([]);
+          }
         })
         .catch((error) => {
-          console.error("Failed to load tags:", error);
+          console.error("Failed to load tags for inbox filters:", error);
+          // Show error to user if needed
           setAllTags([]);
         })
         .finally(() => {
@@ -166,23 +160,38 @@ export const useInboxFilters = (
   }, [debouncedTagIds, pendingTagUpdates]);
 
   // Enhanced tag update function with debouncing
-  const updateTagDebounced = useCallback((newTagIds: string[]) => {
-    setPendingTagUpdates(newTagIds);
-  }, []);
+  const updateTagDebounced = useCallback(
+    (newTagIds: string[]) => {
+      // Validate tag IDs exist in allTags if we have tags loaded
+      if (allTags.length > 0) {
+        const validTagIds = newTagIds.filter((tagId) =>
+          allTags.some((tag) => tag.id === tagId),
+        );
+        if (validTagIds.length !== newTagIds.length) {
+          console.warn("Some tag IDs not found in available tags:", {
+            requested: newTagIds,
+            valid: validTagIds,
+            available: allTags.map((t) => t.id),
+          });
+        }
+        setPendingTagUpdates(validTagIds);
+      } else {
+        // If tags aren't loaded yet, accept all tag IDs
+        setPendingTagUpdates(newTagIds);
+      }
+    },
+    [allTags],
+  );
 
   // Handle tag click with toggle logic
   const handleTagClick = useCallback(
     (tagId: string) => {
-      console.log("🏷️ [useInboxFilters] Tag clicked:", {
-        tagId,
-        currentTags: pendingTagUpdates,
-      });
       const currentTags = pendingTagUpdates;
-      const newTags = currentTags.includes(tagId)
+      const isCurrentlySelected = currentTags.includes(tagId);
+      const newTags = isCurrentlySelected
         ? currentTags.filter((id) => id !== tagId)
         : [...currentTags, tagId];
 
-      console.log("🏷️ [useInboxFilters] New tags after toggle:", newTags);
       updateTagDebounced(newTags);
     },
     [pendingTagUpdates, updateTagDebounced],

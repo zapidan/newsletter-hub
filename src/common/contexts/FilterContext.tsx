@@ -55,24 +55,15 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   const { params, updateParams, resetParams } = useInboxUrlParams();
 
   // Extract filter state from URL params
-  const filterState: FilterState = useMemo(() => {
-    console.log("🔍 [FilterContext] Parsing URL params:", {
-      rawParams: params,
-      tagsParam: params.tags,
-      tagsType: typeof params.tags,
-      tagsLength: Array.isArray(params.tags) ? params.tags.length : "not array",
-    });
-
-    const result = {
+  const filterState: FilterState = useMemo(
+    () => ({
       filter: params.filter || "all",
       sourceFilter: params.source || null,
       timeRange: params.time || "all",
       tagIds: params.tags || [],
-    };
-
-    console.log("🔍 [FilterContext] Filter state result:", result);
-    return result;
-  }, [params]);
+    }),
+    [params],
+  );
 
   // Generate newsletter filter object
   const newsletterFilter = useMemo(() => {
@@ -188,10 +179,6 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
   const setTagIds = useCallback(
     (tagIds: string[]) => {
-      console.log("🔍 [FilterContext] setTagIds called:", {
-        tagIds,
-        length: tagIds.length,
-      });
       updateParams({ tags: tagIds });
     },
     [updateParams],
@@ -199,15 +186,10 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
   const toggleTag = useCallback(
     (tagId: string) => {
-      console.log("🔍 [FilterContext] toggleTag called:", {
-        tagId,
-        currentTags: filterState.tagIds,
-      });
       const currentTags = filterState.tagIds;
       const newTags = currentTags.includes(tagId)
         ? currentTags.filter((id) => id !== tagId)
         : [...currentTags, tagId];
-      console.log("🔍 [FilterContext] toggleTag new tags:", newTags);
       setTagIds(newTags);
     },
     [filterState.tagIds, setTagIds],
@@ -255,12 +237,6 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
   // Notify parent of filter changes
   useEffect(() => {
-    console.log("🔍 [FilterContext] Filter state changed:", {
-      filterState,
-      newsletterFilter,
-      hasTagFilter:
-        newsletterFilter.tagIds && newsletterFilter.tagIds.length > 0,
-    });
     if (onFilterChange) {
       onFilterChange(filterState, newsletterFilter);
     }

@@ -34,11 +34,6 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
   const params = useMemo(() => {
     const result = {} as T;
 
-    console.log("🔗 [useUrlParams] Parsing URL params:", {
-      searchParams: Object.fromEntries(searchParams.entries()),
-      config: Object.keys(config),
-    });
-
     for (const [key, paramConfig] of Object.entries(config)) {
       const urlValue = searchParams.get(key);
 
@@ -53,19 +48,8 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
           paramConfig.defaultValue,
         ) as T[keyof T];
       }
-
-      if (key === "tags") {
-        console.log("🏷️ [useUrlParams] Tags param processing:", {
-          key,
-          urlValue,
-          hasCustomDeserialize: !!paramConfig.deserialize,
-          defaultValue: paramConfig.defaultValue,
-          resultValue: result[key as keyof T],
-        });
-      }
     }
 
-    console.log("🔗 [useUrlParams] Final parsed params:", result);
     return result;
   }, [searchParams, config]);
 
@@ -75,12 +59,6 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
       const currentParams = params;
       const newParams =
         typeof updates === "function" ? updates(currentParams) : updates;
-
-      console.log("🔗 [useUrlParams] Updating params:", {
-        currentParams,
-        newParams,
-        hasTagsUpdate: "tags" in newParams,
-      });
 
       setSearchParams(
         (prevParams) => {
@@ -112,29 +90,8 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
                 newSearchParams.delete(key);
               }
             }
-
-            if (key === "tags") {
-              console.log("🏷️ [useUrlParams] Tags param update:", {
-                key,
-                value,
-                defaultValue,
-                omitIfDefault,
-                shouldOmit:
-                  omitIfDefault &&
-                  (value === defaultValue ||
-                    value === null ||
-                    value === undefined),
-                serializedValue: paramConfig.serialize
-                  ? paramConfig.serialize(value as T[keyof T])
-                  : serializeValue(value),
-              });
-            }
           }
 
-          console.log(
-            "🔗 [useUrlParams] New search params:",
-            Object.fromEntries(newSearchParams.entries()),
-          );
           return newSearchParams;
         },
         { replace },
@@ -230,8 +187,6 @@ function deserializeValue(value: string, defaultValue: ParamValue): ParamValue {
 
 // Specialized hook for inbox filters
 export function useInboxUrlParams() {
-  console.log("🔗 [useInboxUrlParams] Hook called");
-
   return useUrlParams({
     filter: {
       defaultValue: "all" as const,
@@ -248,22 +203,10 @@ export function useInboxUrlParams() {
     tags: {
       defaultValue: [] as string[],
       omitIfDefault: true,
-      serialize: (value: string[]) => {
-        const result = value.length > 0 ? value.join(",") : null;
-        console.log("🏷️ [useInboxUrlParams] Serializing tags:", {
-          value,
-          result,
-        });
-        return result;
-      },
-      deserialize: (value: string) => {
-        const result = value ? value.split(",").filter(Boolean) : [];
-        console.log("🏷️ [useInboxUrlParams] Deserializing tags:", {
-          value,
-          result,
-        });
-        return result;
-      },
+      serialize: (value: string[]) =>
+        value.length > 0 ? value.join(",") : null,
+      deserialize: (value: string) =>
+        value ? value.split(",").filter(Boolean) : [],
     },
   });
 }

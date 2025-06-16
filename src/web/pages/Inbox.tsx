@@ -499,29 +499,86 @@ const Inbox: React.FC = memo(() => {
   // Individual newsletter handlers
   const handleNewsletterClick = useCallback(
     async (newsletter: NewsletterWithRelations) => {
+      console.log("📰 [Newsletter Click] Starting click handler:", {
+        id: newsletter.id,
+        title: newsletter.title,
+        isRead: newsletter.is_read,
+        isArchived: newsletter.is_archived,
+      });
+
       setIsActionInProgress(true);
 
       try {
+        let readActionSuccess = true;
+        let archiveActionSuccess = true;
+
         // Mark as read if unread
         if (!newsletter.is_read) {
-          await newsletterActions.handleToggleRead(newsletter);
+          console.log("📰 [Newsletter Click] Marking as read...");
+          try {
+            await newsletterActions.handleToggleRead(newsletter);
+            console.log("✅ [Newsletter Click] Successfully marked as read");
+          } catch (readError) {
+            console.error(
+              "❌ [Newsletter Click] Failed to mark as read:",
+              readError,
+            );
+            readActionSuccess = false;
+          }
+        } else {
+          console.log("📰 [Newsletter Click] Already read, skipping");
         }
 
         // Archive the newsletter when opened from the inbox
         if (!newsletter.is_archived) {
-          await newsletterActions.handleToggleArchive(newsletter);
+          console.log("📰 [Newsletter Click] Archiving newsletter...");
+          try {
+            await newsletterActions.handleToggleArchive(newsletter);
+            console.log("✅ [Newsletter Click] Successfully archived");
+          } catch (archiveError) {
+            console.error(
+              "❌ [Newsletter Click] Failed to archive:",
+              archiveError,
+            );
+            archiveActionSuccess = false;
+          }
+        } else {
+          console.log("📰 [Newsletter Click] Already archived, skipping");
         }
 
-        preserveFilterParams();
+        // Preserve filter parameters before navigation
+        try {
+          preserveFilterParams();
+          console.log("✅ [Newsletter Click] Filter params preserved");
+        } catch (filterError) {
+          console.error(
+            "❌ [Newsletter Click] Failed to preserve filters:",
+            filterError,
+          );
+        }
 
         // Navigate to the newsletter detail
+        console.log("📰 [Newsletter Click] Navigating to detail page...");
         navigate(`/newsletters/${newsletter.id}`);
+
+        console.log("✅ [Newsletter Click] Click handler completed:", {
+          readActionSuccess,
+          archiveActionSuccess,
+          navigated: true,
+        });
       } catch (error) {
-        console.error("Error handling newsletter click:", error);
-        // Still navigate even if marking as read or archiving fails
+        console.error(
+          "❌ [Newsletter Click] Unexpected error in click handler:",
+          error,
+        );
+        // Still navigate even if other actions fail
+        console.log("📰 [Newsletter Click] Navigating despite errors...");
         navigate(`/newsletters/${newsletter.id}`);
       } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
+        setTimeout(() => {
+          setIsActionInProgress(false);
+          console.log("📰 [Newsletter Click] Action progress cleared");
+        }, 100);
       }
     },
     [navigate, newsletterActions, preserveFilterParams],
