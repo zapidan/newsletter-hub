@@ -192,6 +192,14 @@ export const useInboxFilters = (
   // Handle tag click with toggle logic
   const handleTagClick = useCallback(
     (tag: Tag, e?: React.MouseEvent) => {
+      console.log("🏷️ [DEBUG] Tag clicked:", {
+        tagId: tag.id,
+        tagName: tag.name,
+        eventType: e?.type,
+        currentPendingTags: pendingTagUpdates,
+        allTagsLoaded: allTags.length,
+      });
+
       e?.stopPropagation();
       const tagId = tag.id;
       const currentTags = pendingTagUpdates;
@@ -200,9 +208,16 @@ export const useInboxFilters = (
         ? currentTags.filter((id) => id !== tagId)
         : [...currentTags, tagId];
 
+      console.log("🏷️ [DEBUG] Tag toggle result:", {
+        wasSelected: isCurrentlySelected,
+        action: isCurrentlySelected ? "REMOVE" : "ADD",
+        oldTags: currentTags,
+        newTags: newTags,
+      });
+
       updateTagDebounced(newTags);
     },
-    [pendingTagUpdates, updateTagDebounced],
+    [pendingTagUpdates, updateTagDebounced, allTags.length],
   );
 
   // Enhanced filter actions that work with debounced tags
