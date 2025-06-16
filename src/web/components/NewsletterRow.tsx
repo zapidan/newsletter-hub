@@ -101,9 +101,9 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
       onMouseEnter={handleMouseEnter}
       className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${
         !newsletter.is_read
-          ? "bg-blue-300 border-l-4 border-blue-800 hover:bg-blue-400 shadow-lg shadow-blue-200"
-          : "bg-white border border-neutral-200 hover:bg-neutral-50"
-      } ${isSelected ? "ring-2 ring-primary-400" : ""}`}
+          ? "bg-blue-50/60 border-l-3 border-blue-500 hover:bg-blue-100/50"
+          : "bg-white hover:bg-neutral-50"
+      } ${isSelected ? "ring-2 ring-primary-400" : ""} border border-neutral-200`}
     >
       {showCheckbox && onToggleSelect && (
         <input
@@ -126,7 +126,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
             className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
           />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-base truncate">
                   {newsletter.title || "No subject"}
@@ -140,68 +140,68 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                   )}
                 </div>
               </div>
-            </div>
-            {/* Action buttons */}
-            <div className="flex items-center gap-1 mt-1">
-              {/* Tag visibility toggle */}
-              <button
-                type="button"
-                className={`p-1 rounded hover:bg-gray-200 ${
-                  isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-                onClick={(e) => {
-                  console.log(
-                    "Tag icon clicked for newsletter:",
-                    newsletter.id,
-                  );
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!isUpdatingTags) {
-                    onToggleTagVisibility(newsletter.id, e);
+              {/* Action buttons moved to upper right */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {/* Tag visibility toggle */}
+                <button
+                  type="button"
+                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${
+                    isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  onClick={(e) => {
+                    console.log(
+                      "Tag icon clicked for newsletter:",
+                      newsletter.id,
+                    );
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!isUpdatingTags) {
+                      onToggleTagVisibility(newsletter.id, e);
+                    }
+                  }}
+                  disabled={isUpdatingTags}
+                  title={
+                    isUpdatingTags
+                      ? "Updating tags..."
+                      : visibleTags.has(newsletter.id)
+                        ? "Hide tags"
+                        : "Edit tags"
                   }
-                }}
-                disabled={isUpdatingTags}
-                title={
-                  isUpdatingTags
-                    ? "Updating tags..."
-                    : visibleTags.has(newsletter.id)
-                      ? "Hide tags"
-                      : "Edit tags"
-                }
-              >
-                {isUpdatingTags ? (
-                  <Loader2
-                    size={16}
-                    className="animate-spin text-primary-600"
-                  />
-                ) : (
-                  <TagIcon
-                    size={16}
-                    className={`${
-                      visibleTags.has(newsletter.id)
-                        ? "text-primary-600"
-                        : "text-gray-500"
-                    } hover:text-primary-600`}
-                  />
-                )}
-                {visibleTags.has(newsletter.id) && !isUpdatingTags && (
-                  <span className="sr-only">(Active)</span>
-                )}
-              </button>
+                >
+                  {isUpdatingTags ? (
+                    <Loader2
+                      size={14}
+                      className="animate-spin text-primary-600"
+                    />
+                  ) : (
+                    <TagIcon
+                      size={14}
+                      className={`${
+                        visibleTags.has(newsletter.id)
+                          ? "text-primary-600"
+                          : "text-gray-500"
+                      } hover:text-primary-600`}
+                    />
+                  )}
+                  {visibleTags.has(newsletter.id) && !isUpdatingTags && (
+                    <span className="sr-only">(Active)</span>
+                  )}
+                </button>
 
-              {/* Newsletter Actions Component */}
-              <NewsletterActions
-                newsletter={newsletter}
-                onToggleLike={onToggleLike}
-                onToggleArchive={onToggleArchive}
-                onToggleRead={onToggleRead}
-                onTrash={onTrash}
-                onToggleQueue={onToggleQueue}
-                loadingStates={loadingStates}
-                errorTogglingLike={errorTogglingLike}
-                isInReadingQueue={isInReadingQueue}
-                compact={true}
-              />
+                {/* Newsletter Actions Component */}
+                <NewsletterActions
+                  newsletter={newsletter}
+                  onToggleLike={onToggleLike}
+                  onToggleArchive={onToggleArchive}
+                  onToggleRead={onToggleRead}
+                  onTrash={onTrash}
+                  onToggleQueue={onToggleQueue}
+                  loadingStates={loadingStates}
+                  errorTogglingLike={errorTogglingLike}
+                  isInReadingQueue={isInReadingQueue}
+                  compact={true}
+                />
+              </div>
             </div>
             <div className="text-sm text-gray-700 mb-2 line-clamp-2">
               {newsletter.summary}

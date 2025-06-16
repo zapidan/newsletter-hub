@@ -17,20 +17,17 @@ export interface InfiniteNewsletterListProps {
   // Newsletter row props
   selectedIds?: Set<string>;
   isSelecting?: boolean;
-  readingQueue?: any[];
+  readingQueue?: Array<{ newsletter_id: string }>;
   visibleTags?: Set<string>;
 
   // Newsletter row actions
   onRowClick?: (newsletter: NewsletterWithRelations) => void;
   onToggleSelect?: (id: string) => void;
   onToggleLike?: (newsletter: NewsletterWithRelations) => void;
-  onToggleArchive?: (newsletter: NewsletterWithRelations) => void;
-  onToggleRead?: (newsletter: NewsletterWithRelations) => void;
+  onToggleArchive?: (id: string) => void;
+  onToggleRead?: (id: string) => void;
   onTrash?: (id: string) => void;
-  onToggleQueue?: (
-    newsletter: NewsletterWithRelations,
-    isInQueue: boolean,
-  ) => void;
+  onToggleQueue?: (newsletterId: string) => void;
   onUpdateTags?: (newsletterId: string, tagIds: string[]) => void;
   onToggleTagVisibility?: (id: string, e: React.MouseEvent) => void;
   onTagClick?: (tagId: string) => void;
@@ -40,10 +37,10 @@ export interface InfiniteNewsletterListProps {
   // Loading states
   isDeletingNewsletter?: (id: string) => boolean;
   isUpdatingTags?: (id: string) => boolean;
-  loadingStates?: Record<string, boolean>;
+  loadingStates?: Record<string, string>;
 
   // Error states
-  errorTogglingLike?: string | null;
+  errorTogglingLike?: Error | null;
   tagUpdateError?: string | null;
   onDismissTagError?: () => void;
 
@@ -123,18 +120,20 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
 
   // Memoize newsletter row actions to prevent unnecessary re-renders
   const createNewsletterActions = useMemo(() => {
-    return (newsletter: NewsletterWithRelations, isInQueue: boolean) => ({
+    return (newsletter: NewsletterWithRelations) => ({
       onToggleSelect: onToggleSelect
         ? () => onToggleSelect(newsletter.id)
         : undefined,
       onToggleLike: onToggleLike ? () => onToggleLike(newsletter) : undefined,
       onToggleArchive: onToggleArchive
-        ? () => onToggleArchive(newsletter)
+        ? () => onToggleArchive(newsletter.id)
         : undefined,
-      onToggleRead: onToggleRead ? () => onToggleRead(newsletter) : undefined,
+      onToggleRead: onToggleRead
+        ? () => onToggleRead(newsletter.id)
+        : undefined,
       onTrash: onTrash ? () => onTrash(newsletter.id) : undefined,
       onToggleQueue: onToggleQueue
-        ? () => onToggleQueue(newsletter, isInQueue)
+        ? () => onToggleQueue(newsletter.id)
         : undefined,
       onUpdateTags: onUpdateTags
         ? (tagIds: string[]) => onUpdateTags(newsletter.id, tagIds)
@@ -253,7 +252,7 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
             (item) => item.newsletter_id === newsletter.id,
           );
 
-          const actions = createNewsletterActions(newsletter, isInQueue);
+          const actions = createNewsletterActions(newsletter);
 
           return (
             <NewsletterRow

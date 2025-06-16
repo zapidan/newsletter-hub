@@ -522,7 +522,7 @@ const ReadingQueuePage: React.FC = () => {
           items={sortedItems.map((item) => item.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="space-y-3">
+          <div className="space-y-3 w-full">
             {sortedItems.map((item) => (
               <SortableNewsletterRow
                 key={item.id}

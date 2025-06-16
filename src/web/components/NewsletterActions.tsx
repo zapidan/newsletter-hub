@@ -42,11 +42,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   compact = false,
 }) => {
   const buttonClass = compact
-    ? "p-1 rounded-full hover:bg-gray-200 transition-colors"
-    : "p-2 rounded-full hover:bg-gray-200 transition-colors";
+    ? "btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-all"
+    : "btn btn-ghost btn-sm p-2 rounded-lg hover:bg-gray-200 transition-all";
 
-  const iconSize = compact ? "h-4 w-4" : "h-5 w-5";
-  const loadingIconSize = compact ? "h-4 w-4" : "h-5 w-5";
+  const iconSize = compact ? "h-3.5 w-3.5" : "h-4 w-4";
+  const loadingIconSize = compact ? "h-3.5 w-3.5" : "h-4 w-4";
 
   const isLoading = (action: string) => loadingStates[newsletter.id] === action;
   const isDisabled = (action: string) => isLoading(action);
@@ -59,15 +59,18 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
 
   return (
     <div
-      className={`flex items-center space-x-1 ${compact ? "space-x-0.5" : "space-x-1"}`}
+      className={`flex items-center ${compact ? "gap-0.5" : "gap-1"}`}
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Read/Unread Toggle Button */}
       {showReadButton && (
         <button
           type="button"
-          className={`${buttonClass} ${isDisabled("read") ? "opacity-50" : ""}`}
+          className={`${buttonClass} ${isDisabled("read") ? "opacity-50 cursor-not-allowed" : ""}`}
           onClick={async (e) => {
+            e.preventDefault();
             e.stopPropagation();
+            if (isDisabled("read")) return;
             try {
               await onToggleRead(newsletter.id);
             } catch (error) {
@@ -90,9 +93,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       {/* Like Button */}
       <button
         type="button"
-        className={`${buttonClass} ${isDisabled("like") ? "opacity-50" : ""}`}
+        className={`${buttonClass} ${isDisabled("like") ? "opacity-50 cursor-not-allowed" : ""}`}
         onClick={async (e) => {
+          e.preventDefault();
           e.stopPropagation();
+          if (isDisabled("like")) return;
           try {
             await onToggleLike(newsletter);
           } catch (error) {
@@ -119,9 +124,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       {showQueueButton && onToggleQueue && (
         <button
           type="button"
-          className={`${buttonClass} ${isDisabled("queue") ? "opacity-50" : ""}`}
+          className={`${buttonClass} ${isDisabled("queue") ? "opacity-50 cursor-not-allowed" : ""}`}
           onClick={async (e) => {
+            e.preventDefault();
             e.stopPropagation();
+            if (isDisabled("queue")) return;
             try {
               await onToggleQueue(newsletter.id);
             } catch (error) {
@@ -148,9 +155,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       {/* Archive/Unarchive Button */}
       <button
         type="button"
-        className={`${buttonClass} ${isDisabled("archive") ? "opacity-50" : ""}`}
+        className={`${buttonClass} ${isDisabled("archive") ? "opacity-50 cursor-not-allowed" : ""}`}
         onClick={async (e) => {
+          e.preventDefault();
           e.stopPropagation();
+          if (isDisabled("archive")) return;
           try {
             await onToggleArchive(newsletter.id);
           } catch (error) {
@@ -173,9 +182,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       {showTrashButton && newsletter.is_archived && (
         <button
           type="button"
-          className={`${buttonClass} ${isDisabled("delete") ? "opacity-50" : ""}`}
+          className={`${buttonClass} ${isDisabled("delete") ? "opacity-50 cursor-not-allowed" : ""}`}
           onClick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
+            if (isDisabled("delete")) return;
             onTrash(newsletter.id);
           }}
           disabled={isDisabled("delete")}

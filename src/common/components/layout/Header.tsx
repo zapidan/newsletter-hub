@@ -46,13 +46,13 @@ const Header = () => {
               <input
                 type="text"
                 placeholder="Search newsletters..."
-                className="input-field pl-10 pr-4 py-2.5 w-64 lg:w-72 bg-slate-50/50 border-slate-200 text-sm placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-blue-500/10"
+                className="input-field pl-16 pr-4 py-2.5 w-64 lg:w-72 bg-slate-50/50 border-slate-200 text-sm placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-blue-500/10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"
               />
             </form>
           )}

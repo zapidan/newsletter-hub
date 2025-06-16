@@ -1094,7 +1094,7 @@ export const useNewsletters = (
 
       const currentTagIds = currentNewsletter.tags?.map((tag) => tag.id) || [];
 
-      // Update newsletter tags using the tag utility
+      // Update newsletter tags using the tag utility - same as reading queue
       await updateNewsletterTags(id, tagIds, currentTagIds, user.id);
       return true;
     },

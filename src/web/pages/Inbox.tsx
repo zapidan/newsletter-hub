@@ -8,6 +8,7 @@ import { useReadingQueue } from "../../common/hooks/useReadingQueue";
 import { useErrorHandling } from "../../common/hooks/useErrorHandling";
 import { useBulkLoadingStates } from "../../common/hooks/useLoadingStates";
 import { useSharedNewsletterActions } from "../../common/hooks/useSharedNewsletterActions";
+import { toast } from "react-hot-toast";
 import { InfiniteNewsletterList } from "../components/InfiniteScroll";
 import { InboxFilters } from "../components/InboxFilters";
 import BulkSelectionActions from "../components/BulkSelectionActions";
@@ -167,6 +168,31 @@ const Inbox: React.FC = memo(() => {
   // Loading states for bulk operations
   const bulkLoadingStates = useBulkLoadingStates();
 
+  // Shared newsletter action handlers
+  const {
+    handleToggleLike,
+    handleToggleArchive,
+    handleToggleRead,
+    handleDeleteNewsletter,
+    handleToggleInQueue,
+    handleUpdateTags: sharedHandleUpdateTags,
+    isUpdatingTags,
+    handleBulkMarkAsRead,
+    handleBulkMarkAsUnread,
+    handleBulkArchive,
+    handleBulkUnarchive,
+    handleBulkDelete,
+  } = useSharedNewsletterActions({
+    showToasts: true,
+    optimisticUpdates: true,
+    onSuccess: () => {
+      // Success handled by shared handlers
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   // Helper function to preserve URL parameters after actions
   const preserveFilterParams = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
@@ -226,18 +252,6 @@ const Inbox: React.FC = memo(() => {
       window.history.replaceState({}, "", newUrl);
     }
   }, [filter, sourceFilter, timeRange, debouncedTagIds]);
-
-  // Shared newsletter actions with our enhanced version
-  const newsletterActions = useSharedNewsletterActions({
-    showToasts: true,
-    optimisticUpdates: true,
-    enableErrorHandling: true,
-    enableLoadingStates: true,
-    onSuccess: () => {
-      // Trigger any additional success handling
-    },
-    onError: handleError,
-  });
 
   // Selection state (local to component since it's UI-only)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -301,13 +315,12 @@ const Inbox: React.FC = memo(() => {
     setIsSelecting(unreadIds.length > 0);
   }, [newsletters]);
 
-  // Bulk action handlers using our enhanced shared actions
-  const handleBulkMarkAsRead = useCallback(async () => {
+  // Create wrapper functions for bulk actions to handle selection state
+  const handleBulkMarkAsReadWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-
     try {
       const ids = Array.from(selectedIds);
-      await newsletterActions.handleBulkMarkAsRead(ids);
+      await handleBulkMarkAsRead(ids);
       preserveFilterParams();
       clearSelection();
     } catch (error) {
@@ -319,18 +332,17 @@ const Inbox: React.FC = memo(() => {
     }
   }, [
     selectedIds,
-    newsletterActions,
+    handleBulkMarkAsRead,
     preserveFilterParams,
     clearSelection,
     handleError,
   ]);
 
-  const handleBulkMarkAsUnread = useCallback(async () => {
+  const handleBulkMarkAsUnreadWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-
     try {
       const ids = Array.from(selectedIds);
-      await newsletterActions.handleBulkMarkAsUnread(ids);
+      await handleBulkMarkAsUnread(ids);
       preserveFilterParams();
       clearSelection();
     } catch (error) {
@@ -342,18 +354,17 @@ const Inbox: React.FC = memo(() => {
     }
   }, [
     selectedIds,
-    newsletterActions,
+    handleBulkMarkAsUnread,
     preserveFilterParams,
     clearSelection,
     handleError,
   ]);
 
-  const handleBulkArchive = useCallback(async () => {
+  const handleBulkArchiveWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-
     try {
       const ids = Array.from(selectedIds);
-      await newsletterActions.handleBulkArchive(ids);
+      await handleBulkArchive(ids);
       preserveFilterParams();
       clearSelection();
     } catch (error) {
@@ -365,18 +376,17 @@ const Inbox: React.FC = memo(() => {
     }
   }, [
     selectedIds,
-    newsletterActions,
+    handleBulkArchive,
     preserveFilterParams,
     clearSelection,
     handleError,
   ]);
 
-  const handleBulkUnarchive = useCallback(async () => {
+  const handleBulkUnarchiveWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-
     try {
       const ids = Array.from(selectedIds);
-      await newsletterActions.handleBulkUnarchive(ids);
+      await handleBulkUnarchive(ids);
       preserveFilterParams();
       clearSelection();
     } catch (error) {
@@ -388,26 +398,17 @@ const Inbox: React.FC = memo(() => {
     }
   }, [
     selectedIds,
-    newsletterActions,
+    handleBulkUnarchive,
     preserveFilterParams,
     clearSelection,
     handleError,
   ]);
 
-  const handleBulkDelete = useCallback(async () => {
+  const handleBulkDeleteWrapper = useCallback(async () => {
     if (selectedIds.size === 0) return;
-
-    if (
-      !window.confirm(
-        `Are you sure you want to permanently delete ${selectedIds.size} newsletter(s)? This action cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-
     try {
       const ids = Array.from(selectedIds);
-      await newsletterActions.handleBulkDelete(ids);
+      await handleBulkDelete(ids);
       preserveFilterParams();
       clearSelection();
     } catch (error) {
@@ -419,7 +420,7 @@ const Inbox: React.FC = memo(() => {
     }
   }, [
     selectedIds,
-    newsletterActions,
+    handleBulkDelete,
     preserveFilterParams,
     clearSelection,
     handleError,
@@ -432,7 +433,7 @@ const Inbox: React.FC = memo(() => {
         // Mark as read if unread
         if (!newsletter.is_read) {
           try {
-            await newsletterActions.handleToggleRead(newsletter);
+            await handleToggleRead(newsletter);
           } catch (readError) {
             console.error("Failed to mark newsletter as read:", readError);
           }
@@ -441,7 +442,7 @@ const Inbox: React.FC = memo(() => {
         // Archive the newsletter when opened from the inbox
         if (!newsletter.is_archived) {
           try {
-            await newsletterActions.handleToggleArchive(newsletter);
+            await handleToggleArchive(newsletter);
           } catch (archiveError) {
             console.error("Failed to archive newsletter:", archiveError);
           }
@@ -462,7 +463,7 @@ const Inbox: React.FC = memo(() => {
         navigate(`/newsletters/${newsletter.id}`);
       }
     },
-    [navigate, newsletterActions, preserveFilterParams],
+    [navigate, handleToggleRead, handleToggleArchive, preserveFilterParams],
   );
 
   const handleRemoveFromQueue = useCallback(
@@ -522,107 +523,21 @@ const Inbox: React.FC = memo(() => {
     [],
   );
 
-  // Enhanced newsletter action handlers with proper error handling
-  const handleToggleLike = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      try {
-        await newsletterActions.handleToggleLike(newsletter);
-        preserveFilterParams();
-        // Dispatch event for unread count updates
-        window.dispatchEvent(new CustomEvent("newsletter:like-status-changed"));
-      } catch (error) {
-        handleError(error, {
-          category: "business",
-          severity: "low",
-          context: { action: "toggleLike", newsletterId: newsletter.id },
-        });
-      }
-    },
-    [newsletterActions, preserveFilterParams, handleError],
-  );
-
-  const handleToggleArchive = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      try {
-        await newsletterActions.handleToggleArchive(newsletter);
-        preserveFilterParams();
-      } catch (error) {
-        handleError(error, {
-          category: "business",
-          severity: "medium",
-          context: { action: "toggleArchive", newsletterId: newsletter.id },
-        });
-      }
-    },
-    [newsletterActions, preserveFilterParams, handleError],
-  );
-
-  const handleToggleRead = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      try {
-        await newsletterActions.handleToggleRead(newsletter);
-        preserveFilterParams();
-      } catch (error) {
-        handleError(error, {
-          category: "business",
-          severity: "medium",
-          context: { action: "toggleRead", newsletterId: newsletter.id },
-        });
-      }
-    },
-    [newsletterActions, preserveFilterParams, handleError],
-  );
-
-  const handleDeleteNewsletter = useCallback(
-    async (newsletterId: string) => {
-      try {
-        await newsletterActions.handleDeleteNewsletter(newsletterId);
-        preserveFilterParams();
-      } catch (error) {
-        handleError(error, {
-          category: "business",
-          severity: "high",
-          context: { action: "deleteNewsletter", newsletterId },
-        });
-      }
-    },
-    [newsletterActions, preserveFilterParams, handleError],
-  );
-
-  const handleToggleQueue = useCallback(
-    async (newsletter: NewsletterWithRelations, isInQueue: boolean) => {
-      try {
-        await newsletterActions.handleToggleInQueue(newsletter, isInQueue);
-        preserveFilterParams();
-      } catch (error) {
-        handleError(error, {
-          category: "business",
-          severity: "medium",
-          context: { action: "toggleInQueue", newsletterId: newsletter.id },
-        });
-      }
-    },
-    [newsletterActions, preserveFilterParams, handleError],
-  );
-
+  // Use shared actions for tag updates (matching newsletters page pattern)
   const handleUpdateTags = useCallback(
-    async (newsletterId: string, tagIds: string[]) => {
+    async (newsletterId: string, tagIds: string[]): Promise<void> => {
       try {
         setTagUpdateError(null);
-        await newsletterActions.handleUpdateTags(newsletterId, tagIds);
+        await sharedHandleUpdateTags(newsletterId, tagIds);
         preserveFilterParams();
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Failed to update tags";
         setTagUpdateError(errorMessage);
-        handleError(error, {
-          category: "business",
-          severity: "medium",
-          context: { action: "updateTags", newsletterId, tagIds },
-        });
+        toast.error("Failed to update tags");
       }
     },
-    [newsletterActions, preserveFilterParams, handleError],
+    [sharedHandleUpdateTags, preserveFilterParams],
   );
 
   // Handle load more for infinite scroll
@@ -700,11 +615,11 @@ const Inbox: React.FC = memo(() => {
             onSelectAll={toggleSelectAll}
             onSelectRead={selectRead}
             onSelectUnread={selectUnread}
-            onMarkAsRead={handleBulkMarkAsRead}
-            onMarkAsUnread={handleBulkMarkAsUnread}
-            onArchive={handleBulkArchive}
-            onUnarchive={handleBulkUnarchive}
-            onDelete={handleBulkDelete}
+            onMarkAsRead={handleBulkMarkAsReadWrapper}
+            onMarkAsUnread={handleBulkMarkAsUnreadWrapper}
+            onArchive={handleBulkArchiveWrapper}
+            onUnarchive={handleBulkUnarchiveWrapper}
+            onDelete={handleBulkDeleteWrapper}
             onCancel={clearSelection}
           />
         </div>
@@ -740,18 +655,30 @@ const Inbox: React.FC = memo(() => {
             onRowClick={handleNewsletterClick}
             onToggleSelect={toggleSelect}
             onToggleLike={handleToggleLike}
-            onToggleArchive={handleToggleArchive}
-            onToggleRead={handleToggleRead}
+            onToggleArchive={(id: string) => {
+              const newsletter = newsletters.find((n) => n.id === id);
+              if (newsletter) handleToggleArchive(newsletter);
+            }}
+            onToggleRead={(id: string) => {
+              const newsletter = newsletters.find((n) => n.id === id);
+              if (newsletter) handleToggleRead(newsletter);
+            }}
             onTrash={handleDeleteNewsletter}
-            onToggleQueue={handleToggleQueue}
+            onToggleQueue={(newsletterId: string) => {
+              const newsletter = newsletters.find((n) => n.id === newsletterId);
+              const isInQueue = readingQueue.some(
+                (item) => item.newsletter_id === newsletterId,
+              );
+              if (newsletter) handleToggleInQueue(newsletter, isInQueue);
+            }}
             onUpdateTags={handleUpdateTags}
             onToggleTagVisibility={toggleTagVisibility}
             onTagClick={handleTagClick}
             onRemoveFromQueue={handleRemoveFromQueue}
             onMouseEnter={handleNewsletterMouseEnter}
             // Loading states
-            isDeletingNewsletter={() => newsletterActions.isDeletingNewsletter}
-            isUpdatingTags={() => newsletterActions.isUpdatingTags}
+            isDeletingNewsletter={() => false}
+            isUpdatingTags={() => isUpdatingTags}
             loadingStates={{}}
             // Error states
             errorTogglingLike={null}

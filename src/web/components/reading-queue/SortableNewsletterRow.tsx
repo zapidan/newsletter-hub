@@ -150,44 +150,46 @@ export const SortableNewsletterRow: React.FC<
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative ${className}`}
+      className={`relative group w-full ${className} ${isDragging ? "z-10" : ""}`}
       {...rest}
     >
-      <div className="flex items-start">
+      <div
+        className={`relative w-full ${isDragging ? "shadow-lg ring-2 ring-blue-500/20" : ""}`}
+      >
         {isDraggable && (
-          <button
-            {...attributes}
-            {...listeners}
-            className="p-2 text-gray-400 hover:text-gray-600 focus:outline-none"
-            aria-label="Drag to reorder"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="w-5 h-5" />
-          </button>
+          <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all bg-transparent hover:bg-black/5"
+              aria-label="Drag to reorder"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
-        <div className="flex-1">
-          <NewsletterRow
-            newsletter={newsletterWithRelations}
-            isSelected={isSelected}
-            onToggleSelect={onToggleSelect}
-            onToggleRead={onToggleRead}
-            onToggleLike={handleToggleLike}
-            onToggleArchive={onToggleArchive}
-            onTrash={onTrash}
-            onToggleQueue={handleToggleQueue}
-            onUpdateTags={onUpdateTags || (async () => {})}
-            onTagClick={onTagClick}
-            onToggleTagVisibility={onToggleTagVisibility}
-            onRemoveFromQueue={onRemoveFromQueue}
-            onNewsletterClick={handleNewsletterClick}
-            isInReadingQueue={isInReadingQueue}
-            showCheckbox={showCheckbox}
-            showTags={showTags}
-            visibleTags={visibleTags}
-            readingQueue={readingQueue}
-            isDeletingNewsletter={isDeletingNewsletter}
-          />
-        </div>
+        <NewsletterRow
+          newsletter={newsletterWithRelations}
+          isSelected={isSelected}
+          onToggleSelect={onToggleSelect}
+          onToggleRead={onToggleRead}
+          onToggleLike={handleToggleLike}
+          onToggleArchive={onToggleArchive}
+          onTrash={onTrash}
+          onToggleQueue={handleToggleQueue}
+          onUpdateTags={onUpdateTags || (async () => {})}
+          onTagClick={onTagClick}
+          onToggleTagVisibility={onToggleTagVisibility}
+          onRemoveFromQueue={onRemoveFromQueue}
+          onNewsletterClick={handleNewsletterClick}
+          isInReadingQueue={isInReadingQueue}
+          showCheckbox={showCheckbox}
+          showTags={showTags}
+          visibleTags={visibleTags}
+          readingQueue={readingQueue}
+          isDeletingNewsletter={isDeletingNewsletter}
+        />
       </div>
     </div>
   );

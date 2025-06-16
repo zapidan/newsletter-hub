@@ -219,7 +219,7 @@ const SearchFilters: React.FC<{
                   className="mr-2 rounded"
                 />
                 <span className="truncate">{source.name}</span>
-                {source.newsletter_count && (
+                {typeof source.newsletter_count === "number" && (
                   <span className="ml-auto text-neutral-400">
                     ({source.newsletter_count})
                   </span>
