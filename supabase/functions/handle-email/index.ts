@@ -10,6 +10,15 @@ interface EmailData {
   recipient?: string; // For backward compatibility with 'recipient' field
 }
 
+interface Source {
+  id: string;
+  user_id: string;
+  name: string;
+  domain: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export default async function handler(req: Request) {
   // Set CORS headers
   const corsHeaders = {
@@ -121,6 +130,7 @@ interface ProcessEmailResult {
   success: boolean;
   data?: any;
   error?: string;
+  userId?: string | null;
 }
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -132,11 +142,11 @@ async function findOrCreateSource(
   name: string,
   supabase: any
 ): Promise<{ source: Source; created: boolean }> {
-  // First, try to find an existing source by email (case-insensitive)
+  // First, try to find an existing source by 'from' field (case-insensitive)
   const { data: existingSource, error: findError } = await supabase
-    .from('sources')
+    .from('newsletter_sources')
     .select('*')
-    .ilike('email', email)
+    .ilike('from', email)
     .maybeSingle();
 
   if (findError) {
@@ -148,7 +158,7 @@ async function findOrCreateSource(
   if (existingSource) {
     if (existingSource.is_archived) {
       const { data: updatedSource, error: updateError } = await supabase
-        .from('sources')
+        .from('newsletter_sources')
         .update({ is_archived: false })
         .eq('id', existingSource.id)
         .select()
@@ -165,12 +175,12 @@ async function findOrCreateSource(
 
   // If source doesn't exist, create a new one
   const { data: newSource, error: createError } = await supabase
-    .from('sources')
+    .from('newsletter_sources')
     .insert([
       {
-        email: email.toLowerCase(),
-        name: name || email.split('@')[0],
-        is_archived: false,
+        from: email,
+        name: name || email.split('@')[0], // Use the part before @ as name if not provided
+        user_id: null, // Will be set by RLS or trigger
       },
     ])
     .select()
@@ -211,25 +221,72 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
     const fromEmail = fromMatch ? fromMatch[1] : emailData.from;
     const fromName = emailData.from.replace(/<[^>]+>/g, '').trim();
 
-    // Start a database transaction
-    const { data: transactionResult, error: transactionError } = await supabaseWithAuth.rpc('handle_incoming_email_transaction', {
-      p_user_id: null, // No user ID needed for system emails
-      p_from_email: fromEmail,
-      p_from_name: fromName,
-      p_subject: emailData.subject,
-      p_content: emailData['body-html'] || emailData['body-plain'] || '',
-      p_excerpt: (emailData['body-plain'] || '').substring(0, 200) + '...',
-      p_raw_headers: emailData['message-headers'] || '',
-    });
+    // Check if 'to' is a full email or just an alias
+    let userEmail: string;
+    if (emailData.to.includes('@')) {
+      // It's a full email, use it directly
+      userEmail = emailData.to;
+    } else {
+      // It's just an alias, append the domain
+      userEmail = `${emailData.to}@dzapatariesco.dev`;
+    }
+    
+    // Extract the local part for UUID check
+    const emailMatch = userEmail.match(/^([^@]+)@/);
+    if (!emailMatch) {
+      return {
+        success: false,
+        error: 'Invalid recipient email format'
+      };
+    }
+    
+    const localPart = emailMatch[1];
+    let userId: string | null = null;
+    
+    // Check if the local part is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(localPart)) {
+      userId = localPart;
+    } else {
+      // If not a UUID, look up user by email alias
+      const { data: userData, error: userError } = await supabaseWithAuth
+        .from('users')
+        .select('id')
+        .eq('email_alias', userEmail)
+        .single();
 
-    if (transactionError) {
-      console.error('Transaction error:', transactionError);
-      throw new Error(`Transaction failed: ${transactionError.message}`);
+      if (userError || !userData) {
+        return {
+          success: false,
+          error: `User not found for email alias: ${userEmail}`,
+          userId: null
+        };
+      }
+      userId = userData.id;
+    }
+
+    // Process the email in a transaction
+    const { data, error } = await supabaseWithAuth.rpc(
+      'handle_incoming_email_transaction',
+      {
+        p_user_id: userId, // Pass the resolved user ID
+        p_from_email: fromEmail,
+        p_from_name: fromName,
+        p_subject: emailData.subject,
+        p_content: emailData['body-html'] || emailData['body-plain'],
+        p_excerpt: emailData['body-plain']?.substring(0, 200) || '', // First 200 chars as excerpt
+        p_raw_headers: JSON.stringify(emailData['message-headers'] || [])
+      }
+    );
+
+    if (error) {
+      console.error('Transaction error:', error);
+      throw new Error(`Transaction failed: ${error.message}`);
     }
 
     return {
       success: true,
-      data: transactionResult
+      data
     };
   } catch (error) {
     console.error('Error processing email:', error);

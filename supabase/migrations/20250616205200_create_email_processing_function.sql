@@ -22,42 +22,72 @@ DECLARE
   v_source_id uuid;
   v_newsletter_id uuid;
   v_result jsonb;
-  v_domain text;
   v_word_count integer;
   v_estimated_read_time integer;
   v_clean_content text;
   v_system_user_id uuid := '00000000-0000-0000-0000-000000000000';
   v_effective_user_id uuid;
+  v_source_name text;
+  v_source_email text;
 BEGIN
-  -- Set effective user ID - use system user if p_user_id is null
-  v_effective_user_id := COALESCE(p_user_id, v_system_user_id);
+  -- Set effective user ID - use provided user_id
+  v_effective_user_id := p_user_id;
   
-  -- Extract domain from email
-  v_domain := substring(p_from_email from '@(.*)');
+  -- Use the full from email as the source identifier
+  v_source_email := lower(trim(p_from_email));
+  v_source_name := COALESCE(NULLIF(trim(p_from_name), ''), split_part(v_source_email, '@', 1));
 
-  -- First, try to find an existing source with the same domain and user_id (or system user)
+  -- First, try to find an existing source with the same name and from email for this user
   SELECT id INTO v_source_id 
   FROM public.newsletter_sources 
-  WHERE domain = v_domain 
+  WHERE name = v_source_name 
+  AND "from" = p_from_email
   AND (user_id = v_effective_user_id OR (user_id IS NULL AND p_user_id IS NULL))
   LIMIT 1;
 
   -- If no source exists, create a new one
   IF v_source_id IS NULL THEN
-    INSERT INTO public.newsletter_sources (
-      user_id,
-      name,
-      domain,
-      created_at,
-      updated_at
-    ) VALUES (
-      p_user_id,  -- This can be NULL
-      p_from_name,
-      v_domain,
-      NOW(),
-      NOW()
-    )
-    RETURNING id INTO v_source_id;
+    IF p_user_id IS NULL THEN
+      -- For system emails (NULL user_id), use name and from as the conflict target
+      INSERT INTO public.newsletter_sources (
+        user_id,
+        name,
+        "from",
+        created_at,
+        updated_at
+      ) VALUES (
+        NULL,  -- System email
+        v_source_name,
+        p_from_email,  -- Store the full from email
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (name, "from") 
+      WHERE user_id IS NULL
+      DO UPDATE SET 
+        updated_at = NOW()
+      RETURNING id INTO v_source_id;
+    ELSE
+      -- For user emails, include user_id in the conflict target
+      INSERT INTO public.newsletter_sources (
+        user_id,
+        name,
+        "from",
+        created_at,
+        updated_at
+      ) VALUES (
+        p_user_id,
+        v_source_name,
+        p_from_email,  -- Store the full from email
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (name, "from", user_id)
+      WHERE user_id IS NOT NULL
+      DO UPDATE SET 
+        updated_at = NOW()
+      RETURNING id INTO v_source_id;
+    END IF;
   END IF;
 
   -- Calculate word count and read time
