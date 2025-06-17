@@ -174,7 +174,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       console.log('[Auth] Resetting password for:', email);
       
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      // Get the current origin (e.g., http://localhost:3000)
+      const siteUrl = window.location.origin;
+      // Point to the reset password page
+      const redirectTo = `${siteUrl}/reset-password`;
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
       
       if (error) {
         console.error('[Auth] Reset password error:', error);
