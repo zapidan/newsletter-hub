@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useSupabase } from './SupabaseContext';
 import { User, Session } from '@supabase/supabase-js';
+import { verifyAndUpdateEmailAlias } from '../utils/emailAlias';
 
 type AppUser = User | null;
 
@@ -62,6 +63,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[Auth] Initial session:', initialSession);
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
+        
+        // Verify email alias if user is authenticated - don't await this
+        if (initialSession?.user) {
+          verifyAndUpdateEmailAlias()
+            .then(alias => {
+              if (alias) {
+                console.log('[Auth] Email alias verified/updated:', alias);
+              }
+            })
+            .catch(error => {
+              console.error('[Auth] Error in email alias verification:', error);
+              // Don't block the auth flow on alias verification errors
+            });
+        }
       } catch (error) {
         console.error('[Auth] Error getting initial session:', error);
         setError(error instanceof Error ? error.message : 'Failed to get session');
@@ -78,6 +93,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[Auth] Auth state changed:', { event, hasSession: !!newSession });
         setSession(newSession);
         setUser(newSession?.user ?? null);
+        
+        // Verify email alias on sign in or when session is refreshed - don't await
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          verifyAndUpdateEmailAlias()
+            .then(alias => {
+              if (alias) {
+                console.log('[Auth] Email alias verified/updated after sign in:', alias);
+              }
+            })
+            .catch(error => {
+              console.error('[Auth] Error in post-signin email alias verification:', error);
+            });
+        }
       }
     );
 

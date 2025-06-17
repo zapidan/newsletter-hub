@@ -4,7 +4,7 @@ import {
   requireAuth,
   withPerformanceLogging,
 } from "./supabaseClient";
-import emailConfig from '../config/email';
+import { generateEmailAliasFromEmail } from '../utils/emailAlias';
 
 interface UserProfile {
   id: string;
@@ -77,12 +77,7 @@ export const userApi = {
       const user = await requireAuth();
 
       try {
-        // Extract the username part based on configuration
-        const username = emailConfig.defaultUsername === 'user'
-          ? email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "")
-          : emailConfig.defaultUsername.toLowerCase().replace(/[^a-z0-9]/g, "");
-        
-        const emailAlias = `${username}@${emailConfig.defaultDomain}`;
+        const emailAlias = generateEmailAliasFromEmail(email);
 
         // Save to the database
         const { error } = await supabase
