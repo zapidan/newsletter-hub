@@ -148,10 +148,6 @@ export const userApi = {
       const user = await requireAuth();
 
       try {
-        // Validate the new alias format
-        if (!newAlias.endsWith("@newsletterhub.com")) {
-          return { email: "", error: "Invalid email alias format" };
-        }
 
         // Check if the alias is already taken
         const { data } = await supabase
