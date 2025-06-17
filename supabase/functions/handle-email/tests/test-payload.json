@@ -1,0 +1,8 @@
+{
+    "to": "newsletters@dzapatariesco.dev",
+    "from": "sender@example.com",
+    "subject": "Test Email",
+    "body-plain": "This is a test email body",
+    "body-html": "<p>This is a test email body</p>",
+    "message-headers": "From: sender@example.com\nTo: test@example.com\nSubject: Test Email"
+  }
