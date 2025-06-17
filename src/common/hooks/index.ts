@@ -14,3 +14,4 @@ export * from "./useInboxFilters";
 export * from "./useErrorHandling";
 export * from "./useLoadingStates";
 export * from "./useSharedNewsletterActions";
+export * from "./useNewsletterNavigation";

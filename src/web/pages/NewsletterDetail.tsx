@@ -5,10 +5,12 @@ import { ArrowLeft } from "lucide-react";
 import { useNewsletters } from "@common/hooks/useNewsletters";
 import { useTags } from "@common/hooks/useTags";
 import { useAuth } from "@common/contexts/AuthContext";
+import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import { useLogger } from "@common/utils/logger";
 import LoadingScreen from "@common/components/common/LoadingScreen";
 import TagSelector from "@web/components/TagSelector";
 import NewsletterDetailActions from "../../components/NewsletterDetail/NewsletterDetailActions";
+import NewsletterNavigation from "../../components/NewsletterDetail/NewsletterNavigation";
 import type { NewsletterWithRelations, Tag } from "@common/types";
 
 const NewsletterDetail = memo(() => {
@@ -120,6 +122,10 @@ const NewsletterDetail = memo(() => {
   }, [navigate, location.state, id]);
   const { updateNewsletterTags } = useTags();
   const { getNewsletter } = useNewsletters({}, { enabled: false });
+  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
+    showToasts: false,
+    optimisticUpdates: true,
+  });
 
   const { user } = useAuth();
 
@@ -128,6 +134,8 @@ const NewsletterDetail = memo(() => {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasAutoMarkedAsRead, setHasAutoMarkedAsRead] = useState(false);
+  const [hasAutoArchived, setHasAutoArchived] = useState(false);
 
   // Track the fetch state and mount status
   const isMounted = useRef(true);
@@ -277,6 +285,96 @@ const NewsletterDetail = memo(() => {
     [],
   );
 
+  // Auto-mark newsletter as read when it loads (instantaneous)
+  useEffect(() => {
+    if (
+      newsletter &&
+      !newsletter.is_read &&
+      !hasAutoMarkedAsRead &&
+      !loading &&
+      !error
+    ) {
+      const markAsRead = async () => {
+        try {
+          await handleMarkAsRead(newsletter.id);
+          setHasAutoMarkedAsRead(true);
+          log.debug("Auto-marked newsletter as read on detail view", {
+            action: "auto_mark_read_detail",
+            metadata: {
+              newsletterId: newsletter.id,
+              title: newsletter.title,
+            },
+          });
+
+          // Update local state to reflect the change
+          setNewsletter((prev) => (prev ? { ...prev, is_read: true } : null));
+        } catch (error) {
+          log.error(
+            "Failed to auto-mark newsletter as read in detail view",
+            {
+              action: "auto_mark_read_detail_error",
+              metadata: { newsletterId: newsletter.id },
+            },
+            error,
+          );
+        }
+      };
+
+      // Mark as read immediately for instant feedback
+      markAsRead();
+    }
+  }, [newsletter?.id, hasAutoMarkedAsRead, loading, error]);
+
+  // Auto-archive newsletter after it's been read and viewed for a short time
+  useEffect(() => {
+    if (
+      newsletter &&
+      newsletter.is_read &&
+      !newsletter.is_archived &&
+      !hasAutoArchived &&
+      !loading &&
+      !error
+    ) {
+      const archiveNewsletter = async () => {
+        try {
+          await handleToggleArchive(newsletter);
+          setHasAutoArchived(true);
+          log.debug("Auto-archived newsletter after reading", {
+            action: "auto_archive_detail",
+            metadata: {
+              newsletterId: newsletter.id,
+              title: newsletter.title,
+            },
+          });
+
+          // Update local state to reflect the change
+          setNewsletter((prev) =>
+            prev ? { ...prev, is_archived: true } : null,
+          );
+        } catch (error) {
+          log.error(
+            "Failed to auto-archive newsletter in detail view",
+            {
+              action: "auto_archive_detail_error",
+              metadata: { newsletterId: newsletter.id },
+            },
+            error,
+          );
+        }
+      };
+
+      // Archive after 3 seconds of viewing a read newsletter
+      const timeoutId = setTimeout(archiveNewsletter, 3000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [newsletter?.id, newsletter?.is_read, hasAutoArchived, loading, error]);
+
+  // Reset auto-mark and auto-archive state when newsletter ID changes
+  useEffect(() => {
+    setHasAutoMarkedAsRead(false);
+    setHasAutoArchived(false);
+  }, [id]);
+
   // Load newsletter data when component mounts or id changes
   useEffect(() => {
     const fetchData = async () => {
@@ -330,6 +428,10 @@ const NewsletterDetail = memo(() => {
     );
   }
 
+  if (!newsletter) {
+    return <LoadingScreen />;
+  }
+
   // Add key to force remount when ID changes
   return (
     <div
@@ -343,6 +445,19 @@ const NewsletterDetail = memo(() => {
         <ArrowLeft className="h-4 w-4" />
         {getBackButtonText()}
       </button>
+
+      {/* Newsletter Navigation */}
+      {id && (
+        <div className="mb-6">
+          <NewsletterNavigation
+            currentNewsletterId={id}
+            className="bg-white rounded-xl shadow-sm p-4"
+            showLabels={true}
+            showCounter={true}
+            autoMarkAsRead={false} // Let the detail page handle auto-marking
+          />
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6">
         {" "}
