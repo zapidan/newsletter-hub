@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import {
   Routes,
   Route,
@@ -13,21 +13,30 @@ import { Layout } from "@common/components/layout";
 import { ProtectedRoute } from "@common/components/ProtectedRoute";
 import { CacheInitializer } from "@common/components/CacheInitializer";
 import ErrorBoundary from "@web/components/ErrorBoundary";
-import InboxPage from "@web/pages/Inbox";
-import NewsletterDetailPage from "@web/pages/NewsletterDetail";
-import NewslettersPage from "@web/pages/NewslettersPage";
-import TrendingTopicsPage from "@web/pages/TrendingTopics";
-import SearchPage from "@web/pages/Search";
-import TagsPage from "@web/pages/TagsPage";
-import ReadingQueuePage from "@web/pages/ReadingQueuePage";
-import SettingsPage from "@web/pages/Settings";
-import ProfilePage from "@web/pages/ProfilePage";
-import LoginPage from "@web/pages/Login";
-import ForgotPasswordPage from "@web/pages/ForgotPassword";
-import ResetPasswordPage from "@web/pages/ResetPassword";
-import DailySummary from "@web/pages/DailySummary";
 import { useAuth } from "@common/contexts/AuthContext";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+
+// Lazy load page components
+const InboxPage = lazy(() => import("@web/pages/Inbox"));
+const NewsletterDetailPage = lazy(() => import("@web/pages/NewsletterDetail"));
+const NewslettersPage = lazy(() => import("@web/pages/NewslettersPage"));
+const TrendingTopicsPage = lazy(() => import("@web/pages/TrendingTopics"));
+const SearchPage = lazy(() => import("@web/pages/Search"));
+const TagsPage = lazy(() => import("@web/pages/TagsPage"));
+const ReadingQueuePage = lazy(() => import("@web/pages/ReadingQueuePage"));
+const SettingsPage = lazy(() => import("@web/pages/Settings"));
+const ProfilePage = lazy(() => import("@web/pages/ProfilePage"));
+const LoginPage = lazy(() => import("@web/pages/Login"));
+const ForgotPasswordPage = lazy(() => import("@web/pages/ForgotPassword"));
+const ResetPasswordPage = lazy(() => import("@web/pages/ResetPassword"));
+const DailySummary = lazy(() => import("@web/pages/DailySummary"));
+
+// Loading component
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-50">
+    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+  </div>
+);
 
 // A custom hook that builds on useLocation to parse the query string
 function useQuery() {
@@ -50,11 +59,7 @@ const App: React.FC = () => {
   }, [user, location, navigate, redirectTo]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <LoadingFallback />;
   }
 
   // Custom error fallback component
@@ -115,128 +120,130 @@ const App: React.FC = () => {
                 }}
               />
               <Layout>
-                <Routes>
-                  {/* Redirect root to login or inbox based on auth status */}
-                  <Route
-                    path="/"
-                    element={
-                      user ? (
-                        <Navigate to="/inbox" replace />
-                      ) : (
+                <Suspense fallback={<LoadingFallback />}>
+                  <Routes>
+                    {/* Redirect root to login or inbox based on auth status */}
+                    <Route
+                      path="/"
+                      element={
+                        user ? (
+                          <Navigate to="/inbox" replace />
+                        ) : (
+                          <Navigate
+                            to="/login"
+                            state={{ from: location }}
+                            replace
+                          />
+                        )
+                      }
+                    />
+
+                    {/* Public routes */}
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route
+                      path="/forgot-password"
+                      element={<ForgotPasswordPage />}
+                    />
+                    <Route
+                      path="/reset-password"
+                      element={<ResetPasswordPage />}
+                    />
+
+                    {/* Protected routes */}
+                    <Route
+                      path="/inbox"
+                      element={
+                        <ProtectedRoute>
+                          <InboxPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/newsletters"
+                      element={
+                        <ProtectedRoute>
+                          <NewslettersPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/newsletters/:id"
+                      element={
+                        <ProtectedRoute>
+                          <NewsletterDetailPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/trending"
+                      element={
+                        <ProtectedRoute>
+                          <TrendingTopicsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/search"
+                      element={
+                        <ProtectedRoute>
+                          <SearchPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/tags"
+                      element={
+                        <ProtectedRoute>
+                          <TagsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/queue"
+                      element={
+                        <ProtectedRoute>
+                          <ReadingQueuePage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/settings"
+                      element={
+                        <ProtectedRoute>
+                          <SettingsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/profile"
+                      element={
+                        <ProtectedRoute>
+                          <ProfilePage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/daily"
+                      element={
+                        <ProtectedRoute>
+                          <DailySummary />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* 404 route - keep this last */}
+                    <Route
+                      path="*"
+                      element={
                         <Navigate
-                          to="/login"
+                          to={user ? "/inbox" : "/login"}
                           state={{ from: location }}
                           replace
                         />
-                      )
-                    }
-                  />
-
-                  {/* Public routes */}
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route
-                    path="/forgot-password"
-                    element={<ForgotPasswordPage />}
-                  />
-                  <Route
-                    path="/reset-password"
-                    element={<ResetPasswordPage />}
-                  />
-
-                  {/* Protected routes */}
-                  <Route
-                    path="/inbox"
-                    element={
-                      <ProtectedRoute>
-                        <InboxPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/newsletters"
-                    element={
-                      <ProtectedRoute>
-                        <NewslettersPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/newsletters/:id"
-                    element={
-                      <ProtectedRoute>
-                        <NewsletterDetailPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/trending"
-                    element={
-                      <ProtectedRoute>
-                        <TrendingTopicsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/search"
-                    element={
-                      <ProtectedRoute>
-                        <SearchPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/tags"
-                    element={
-                      <ProtectedRoute>
-                        <TagsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/queue"
-                    element={
-                      <ProtectedRoute>
-                        <ReadingQueuePage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/settings"
-                    element={
-                      <ProtectedRoute>
-                        <SettingsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/profile"
-                    element={
-                      <ProtectedRoute>
-                        <ProfilePage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/daily"
-                    element={
-                      <ProtectedRoute>
-                        <DailySummary />
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* 404 route - keep this last */}
-                  <Route
-                    path="*"
-                    element={
-                      <Navigate
-                        to={user ? "/inbox" : "/login"}
-                        state={{ from: location }}
-                        replace
-                      />
-                    }
-                  />
-                </Routes>
+                      }
+                    />
+                  </Routes>
+                </Suspense>
               </Layout>
             </div>
           </CacheInitializer>

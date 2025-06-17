@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 // Convert file URL to directory name
 const __filename = fileURLToPath(import.meta.url);
@@ -9,7 +10,14 @@ const __dirname = path.dirname(__filename);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    visualizer({
+      open: true, // Automatically opens the report in the browser
+      gzipSize: true,
+      brotliSize: true,
+    })
+  ],
   resolve: {
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
@@ -27,7 +35,6 @@ export default defineConfig({
       '@dnd-kit/modifiers'
     ],
     esbuildOptions: {
-      // Enable esbuild's tree shaking
       treeShaking: true,
     },
   },
@@ -42,7 +49,19 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true
+    sourcemap: true,
+    chunkSizeWarningLimit: 1000, // Increase chunk size warning limit (in kbs)
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Group large dependencies into separate chunks
+          react: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-slot'],
+          dnd: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities', '@dnd-kit/modifiers'],
+          // Add other large dependencies here
+        },
+      },
+    },
   },
   esbuild: {
     logOverride: { 'this-is-undefined-in-esm': 'silent' }
