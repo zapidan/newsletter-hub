@@ -73,13 +73,30 @@ const transformNewsletterResponse = (
         .filter(Boolean)
     : [];
 
-  const result = {
-    ...data,
-    source: transformedSource,
-    tags: transformedTags,
-    // Ensure newsletter_source_id is always set, even if null
-    newsletter_source_id: (data.newsletter_source_id as string) || null,
-  } as NewsletterWithRelations;
+    const result: NewsletterWithRelations = {
+      // Include all base Newsletter properties first
+      ...data,
+      
+      // Then include the transformed relations
+      source: transformedSource,
+      tags: transformedTags,
+      is_archived: Boolean(data.is_archived), // Convert to boolean
+      newsletter_source_id: (data.newsletter_source_id as string) || null,
+      
+      // Ensure all required Newsletter properties are present
+      id: data.id as string,
+      title: data.title as string,
+      content: data.content as string,
+      summary: data.summary as string,
+      image_url: data.image_url as string,
+      received_at: data.received_at as string,
+      updated_at: data.updated_at as string,
+      is_read: Boolean(data.is_read),
+      is_liked: Boolean(data.is_liked),
+      user_id: data.user_id as string,
+      word_count: Number(data.word_count) || 0,
+      estimated_read_time: Number(data.estimated_read_time) || 0
+    };
 
   // Log the transformed data
   log.debug("Newsletter response transformation completed", {
@@ -206,6 +223,7 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     order: { column: orderColumn, ascending },
     limit: params.limit,
     offset: params.offset,
+    }
   });
 
   return query;
@@ -243,7 +261,8 @@ export const newsletterApi = {
           sourceIds: params.sourceIds || null,
         isArchived: params.isArchived,
         isRead: params.isRead,
-      });
+        }
+     });
 
       const queryResult = await query;
       const { data, error, count } = queryResult;
@@ -272,6 +291,7 @@ export const newsletterApi = {
               hasSource: !!(data[0] as any).source,
             }
           : null,
+        }
       });
 
       // Log the raw response for the first item if available
@@ -702,7 +722,7 @@ export const newsletterApi = {
         component: "NewsletterApi",
         action: "count_by_source",
         metadata: { counts },
-      );
+      });
 
       return counts;
     });
@@ -734,7 +754,7 @@ export const newsletterApi = {
           component: "NewsletterApi",
           action: "total_count_by_source",
           metadata: { totalCounts },
-        );
+        });
 
         return totalCounts;
       },

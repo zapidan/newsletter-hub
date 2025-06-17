@@ -1,11 +1,11 @@
 import {
   newsletterApi,
   getAllNewsletterSources,
-  markAsRead,
+  updateNewsletter,
 } from "@common/api";
 import { Newsletter, NewsletterSource } from "@common/types";
 import { buildSearchParams, validateSearchFilters } from "../utils/searchUtils";
-import { createLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger";
 
 export interface SearchFilters {
   selectedSources: string[];
@@ -43,7 +43,7 @@ export interface SearchState {
 class SearchService {
   private static readonly RECENT_SEARCHES_KEY = "newsletter_recent_searches";
   private static readonly MAX_RECENT_SEARCHES = 10;
-  private log = createLogger();
+  private log = useLogger();
 
   /**
    * Performs a search with the given options
@@ -69,14 +69,19 @@ class SearchService {
     });
 
     try {
-      const response = await newsletterApi.search(query, searchParams);
+      const response = await newsletterApi.getAll({
+        ...searchParams,
+        search: query,
+        limit: itemsPerPage,
+        offset: (page - 1) * itemsPerPage,
+      });
 
       return {
-        data: response.data,
-        count: response.count,
-        page: response.page,
-        hasMore: response.hasMore,
-        totalPages: Math.ceil(response.count / itemsPerPage),
+        data: response.data || [],
+        count: response.count || 0,
+        page: response.page || page,
+        hasMore: response.hasMore || false,
+        totalPages: Math.ceil((response.count || 0) / itemsPerPage),
       };
     } catch (error) {
       this.log.error(
@@ -101,10 +106,9 @@ class SearchService {
   async getSources(): Promise<NewsletterSource[]> {
     try {
       const response = await getAllNewsletterSources({
-        includeStats: true,
-        isArchived: false,
+        is_archived: false,
       });
-      return response.data;
+      return response.data || [];
     } catch (error) {
       this.log.error(
         "Failed to load newsletter sources",
@@ -129,11 +133,10 @@ class SearchService {
       });
 
       // Update both read and archived status in one call
-      await newsletterApi.update({
-        id: newsletterId,
+      await updateNewsletter(newsletterId, {
         is_read: true,
         is_archived: true,
-      });
+      } as any);
 
       this.log.info("Newsletter marked as read and archived", {
         action: "mark_as_read_and_archive",

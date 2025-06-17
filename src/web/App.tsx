@@ -14,7 +14,7 @@ import { ProtectedRoute } from "@common/components/ProtectedRoute";
 import { CacheInitializer } from "@common/components/CacheInitializer";
 import ErrorBoundary from "@web/components/ErrorBoundary";
 import { useAuth } from "@common/contexts/AuthContext";
-import { useLogger } from "@common/utils/logger";
+import { useLogger, useLoggerStatic } from "@common/utils/logger";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 
 // Lazy load page components
@@ -52,10 +52,11 @@ const App: React.FC = () => {
   const query = useQuery();
   const redirectTo = query.get("redirectTo");
   const log = useLogger("App");
+  const staticLog = useLoggerStatic();
 
   // Log navigation changes
   useEffect(() => {
-    log.logNavigation(
+    staticLog.logNavigation(
       document.referrer ? new URL(document.referrer).pathname : "external",
       location.pathname,
       {
@@ -66,7 +67,7 @@ const App: React.FC = () => {
         },
       },
     );
-  }, [location, log]);
+  }, [location, staticLog]);
 
   // Handle redirect after login
   React.useEffect(() => {

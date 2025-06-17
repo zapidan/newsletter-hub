@@ -531,9 +531,11 @@ export const readingQueueApi = {
             metadata: {
               orphanedItemsCount: orphanedItems.length,
               orphanedItems: orphanedItems.map((item) => ({
-            id: item.id,
-            newsletter_id: item.newsletter_id,
-          })),
+              id: item.id,
+              newsletter_id: item.newsletter_id,
+              }))
+            }
+          }
         );
 
         // Remove orphaned items

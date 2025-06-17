@@ -1,7 +1,7 @@
 import { userApi } from "../api/userApi";
 import supabase from "../api/supabaseClient";
 import emailConfig from "../config/email";
-import { createLogger } from "./logger";
+import { useLoggerStatic } from "./logger";
 
 type EmailAliasResult = {
   email: string;
@@ -32,7 +32,7 @@ export function generateEmailAliasFromEmail(email: string): string {
 export async function generateEmailAlias(
   email: string,
 ): Promise<EmailAliasResult> {
-  const log = createLogger();
+  const log = useLoggerStatic();
   try {
     const emailAlias = generateEmailAliasFromEmail(email);
     return await userApi.generateEmailAlias(emailAlias);
@@ -53,7 +53,7 @@ export async function generateEmailAlias(
  * Gets or creates an email alias for a user
  */
 export async function getUserEmailAlias(): Promise<string> {
-  const log = createLogger();
+  const log = useLoggerStatic();
   try {
     return await userApi.getEmailAlias();
   } catch (error) {
@@ -75,7 +75,7 @@ export async function getUserEmailAlias(): Promise<string> {
 export async function updateEmailAlias(
   newAlias: string,
 ): Promise<EmailAliasResult> {
-  const log = createLogger();
+  const log = useLoggerStatic();
   try {
     return await userApi.updateEmailAlias(newAlias);
   } catch (error) {
@@ -96,7 +96,7 @@ export async function updateEmailAlias(
  * @returns Promise with the current or updated email alias
  */
 export async function verifyAndUpdateEmailAlias(): Promise<string> {
-  const log = createLogger();
+  const log = useLoggerStatic();
   log.info("Starting email alias verification and update", {
     action: "verify_and_update_email_alias",
     metadata: {},

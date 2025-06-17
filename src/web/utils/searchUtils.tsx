@@ -1,4 +1,8 @@
-import React from 'react';
+import React from "react";
+
+interface SearchParams {
+  [key: string]: string | number | boolean | string[] | undefined;
+}
 
 /**
  * Highlights search terms in text with JSX elements
@@ -6,7 +10,7 @@ import React from 'react';
 export const highlightSearchTerms = (
   text: string,
   searchQuery: string,
-): JSX.Element => {
+): React.JSX.Element => {
   if (!searchQuery.trim() || !text) {
     return <span>{text}</span>;
   }
@@ -93,9 +97,7 @@ export const generateSearchSuggestions = (
 
   // Add matching recent searches
   recentSearches
-    .filter((search) =>
-      search.toLowerCase().includes(query.toLowerCase())
-    )
+    .filter((search) => search.toLowerCase().includes(query.toLowerCase()))
     .forEach((search) => suggestions.add(search));
 
   // Add topic-based suggestions
@@ -116,27 +118,57 @@ export const getTopicSuggestions = (query: string): string[] => {
 
   // Technology suggestions
   if (lowerQuery.includes("ai") || lowerQuery.includes("artificial")) {
-    suggestions.push("AI technology", "AI research", "artificial intelligence", "machine learning");
+    suggestions.push(
+      "AI technology",
+      "AI research",
+      "artificial intelligence",
+      "machine learning",
+    );
   }
 
   if (lowerQuery.includes("tech")) {
-    suggestions.push("technology trends", "tech news", "tech startups", "tech innovation");
+    suggestions.push(
+      "technology trends",
+      "tech news",
+      "tech startups",
+      "tech innovation",
+    );
   }
 
   if (lowerQuery.includes("crypto") || lowerQuery.includes("bitcoin")) {
-    suggestions.push("cryptocurrency", "crypto news", "blockchain", "bitcoin analysis");
+    suggestions.push(
+      "cryptocurrency",
+      "crypto news",
+      "blockchain",
+      "bitcoin analysis",
+    );
   }
 
   if (lowerQuery.includes("market") || lowerQuery.includes("finance")) {
-    suggestions.push("market analysis", "market trends", "stock market", "financial news");
+    suggestions.push(
+      "market analysis",
+      "market trends",
+      "stock market",
+      "financial news",
+    );
   }
 
   if (lowerQuery.includes("startup") || lowerQuery.includes("business")) {
-    suggestions.push("startup funding", "business strategy", "entrepreneurship", "venture capital");
+    suggestions.push(
+      "startup funding",
+      "business strategy",
+      "entrepreneurship",
+      "venture capital",
+    );
   }
 
   if (lowerQuery.includes("web") || lowerQuery.includes("development")) {
-    suggestions.push("web development", "software engineering", "programming", "web design");
+    suggestions.push(
+      "web development",
+      "software engineering",
+      "programming",
+      "web design",
+    );
   }
 
   if (lowerQuery.includes("data") || lowerQuery.includes("analytics")) {
@@ -144,7 +176,12 @@ export const getTopicSuggestions = (query: string): string[] => {
   }
 
   if (lowerQuery.includes("design") || lowerQuery.includes("ui")) {
-    suggestions.push("design trends", "UI/UX design", "product design", "user experience");
+    suggestions.push(
+      "design trends",
+      "UI/UX design",
+      "product design",
+      "user experience",
+    );
   }
 
   return suggestions;
@@ -153,7 +190,9 @@ export const getTopicSuggestions = (query: string): string[] => {
 /**
  * Processes search query to extract meaningful terms
  */
-export const processSearchQuery = (query: string): {
+export const processSearchQuery = (
+  query: string,
+): {
   terms: string[];
   originalQuery: string;
   hasValidTerms: boolean;
@@ -187,10 +226,10 @@ export const buildSearchParams = (
     page?: number;
     itemsPerPage?: number;
   } = {},
-): Record<string, any> => {
+): SearchParams => {
   const { page = 1, itemsPerPage = 20 } = pagination;
 
-  const params: Record<string, any> = {
+  const params: SearchParams = {
     search: query,
     limit: itemsPerPage,
     offset: (page - 1) * itemsPerPage,
@@ -354,13 +393,13 @@ export const generatePageNumbers = (
  * Escapes special regex characters
  */
 function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
  * Debounces a function call
  */
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   delay: number,
 ): ((...args: Parameters<T>) => void) => {
@@ -375,7 +414,7 @@ export const debounce = <T extends (...args: any[]) => any>(
 /**
  * Throttles a function call
  */
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   delay: number,
 ): ((...args: Parameters<T>) => void) => {
