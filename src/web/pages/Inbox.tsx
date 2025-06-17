@@ -17,6 +17,7 @@ import { useBulkLoadingStates } from "@common/hooks/useLoadingStates";
 
 import { useToast } from "@common/contexts/ToastContext";
 import { useAuth } from "@common/contexts";
+import { useLogger } from "@common/utils/logger";
 
 import type { NewsletterWithRelations, Tag } from "@common/types";
 import { getCacheManager } from "@common/utils/cacheUtils";
@@ -132,6 +133,7 @@ const Inbox: React.FC = memo(() => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showError } = useToast();
+  const log = useLogger();
 
   // Filter management using our new context and hooks
   const {
@@ -269,15 +271,21 @@ const Inbox: React.FC = memo(() => {
   useEffect(() => {
     // Skip refetch if action is in progress to preserve optimistic updates
     if (isActionInProgress) {
-      console.log("🔄 Skipping refetch - action in progress");
+      log.debug("Skipping refetch - action in progress", {
+        action: "filter_change_refetch",
+        metadata: { isActionInProgress },
+      });
       return;
     }
 
-    console.log("🔄 Filter changed, refetching newsletters...", {
-      filter,
-      sourceFilter,
-      timeRange,
-      debouncedTagIds,
+    log.debug("Filter changed, refetching newsletters", {
+      action: "filter_change_refetch",
+      metadata: {
+        filter,
+        sourceFilter,
+        timeRange,
+        tagIds: debouncedTagIds,
+      },
     });
 
     refetchNewsletters();
@@ -434,7 +442,14 @@ const Inbox: React.FC = memo(() => {
           try {
             await newsletterActions.handleToggleRead(newsletter);
           } catch (readError) {
-            console.error("Failed to mark newsletter as read:", readError);
+            log.error(
+              "Failed to mark newsletter as read",
+              {
+                action: "mark_as_read",
+                metadata: { newsletterId: newsletter.id },
+              },
+              readError,
+            );
           }
         }
 
@@ -443,7 +458,14 @@ const Inbox: React.FC = memo(() => {
           try {
             await newsletterActions.handleToggleArchive(newsletter);
           } catch (archiveError) {
-            console.error("Failed to archive newsletter:", archiveError);
+            log.error(
+              "Failed to archive newsletter",
+              {
+                action: "archive_newsletter",
+                metadata: { newsletterId: newsletter.id },
+              },
+              archiveError,
+            );
           }
         }
 
@@ -451,13 +473,27 @@ const Inbox: React.FC = memo(() => {
         try {
           preserveFilterParams();
         } catch (filterError) {
-          console.error("Failed to preserve filter parameters:", filterError);
+          log.error(
+            "Failed to preserve filter parameters",
+            {
+              action: "preserve_filter_params",
+              metadata: { newsletterId: newsletter.id },
+            },
+            filterError,
+          );
         }
 
         // Navigate to the newsletter detail
         navigate(`/newsletters/${newsletter.id}`);
       } catch (error) {
-        console.error("Unexpected error in newsletter click handler:", error);
+        log.error(
+          "Unexpected error in newsletter click handler",
+          {
+            action: "newsletter_click",
+            metadata: { newsletterId: newsletter.id },
+          },
+          error,
+        );
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`);
       } finally {
@@ -534,7 +570,14 @@ const Inbox: React.FC = memo(() => {
         // Dispatch event for unread count updates
         window.dispatchEvent(new CustomEvent("newsletter:like-status-changed"));
       } catch (error) {
-        console.error("❌ toggleLike failed:", error);
+        log.error(
+          "Failed to toggle like status",
+          {
+            action: "toggle_like",
+            metadata: { newsletterId, filter },
+          },
+          error,
+        );
         // Revert optimistic update on error
         if (filter === "liked") {
           await refetchNewsletters();
@@ -555,7 +598,14 @@ const Inbox: React.FC = memo(() => {
         await newsletterActions.handleToggleArchive(newsletter);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ toggleArchive failed:", error);
+        log.error(
+          "Failed to toggle archive status",
+          {
+            action: "toggle_archive",
+            metadata: { newsletterId },
+          },
+          error,
+        );
         throw error;
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
@@ -572,7 +622,14 @@ const Inbox: React.FC = memo(() => {
         await newsletterActions.handleToggleRead(newsletter);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ toggleRead failed:", error);
+        log.error(
+          "Failed to toggle read status",
+          {
+            action: "toggle_read",
+            metadata: { newsletterId },
+          },
+          error,
+        );
         throw error;
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
@@ -589,7 +646,14 @@ const Inbox: React.FC = memo(() => {
         await newsletterActions.handleDeleteNewsletter(newsletterId);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ deleteNewsletter failed:", error);
+        log.error(
+          "Failed to delete newsletter",
+          {
+            action: "delete_newsletter",
+            metadata: { newsletterId },
+          },
+          error,
+        );
         throw error;
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
@@ -606,7 +670,14 @@ const Inbox: React.FC = memo(() => {
         await newsletterActions.handleToggleInQueue(newsletter, isInQueue);
         preserveFilterParams();
       } catch (error) {
-        console.error("❌ toggleInQueue failed:", error);
+        log.error(
+          "Failed to toggle queue status",
+          {
+            action: "toggle_queue",
+            metadata: { newsletterId },
+          },
+          error,
+        );
         throw error;
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);

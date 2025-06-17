@@ -10,6 +10,7 @@ import { Dialog, Transition } from "@headlessui/react";
 import { toast } from "react-hot-toast";
 
 import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
+import { useLogger } from "@common/utils/logger";
 import {
   useNewsletters,
   useNewsletterSources,
@@ -45,6 +46,7 @@ import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 
 const NewslettersPage: React.FC = () => {
   const navigate = useNavigate();
+  const log = useLogger();
   const [showEditModal, setShowEditModal] = useState(false);
   const [editModalSourceId, setEditModalSourceId] = useState<string | null>(
     null,
@@ -168,7 +170,14 @@ const NewslettersPage: React.FC = () => {
       setShowEditModal(false);
       setEditModalSourceId(null);
     } catch (error) {
-      console.error("Error updating source:", error);
+      log.error(
+        "Failed to update newsletter source",
+        {
+          action: "update_source",
+          metadata: { sourceId: editModalSourceId },
+        },
+        error,
+      );
       setUpdateError(error as Error);
       toast.error("Failed to update source");
     } finally {
@@ -213,7 +222,14 @@ const NewslettersPage: React.FC = () => {
           setSelectedGroupId(null);
         }
       } catch (error) {
-        console.error("Error deleting group:", error);
+        log.error(
+          "Failed to delete source group",
+          {
+            action: "delete_group",
+            metadata: { groupId },
+          },
+          error,
+        );
         toast.error("Failed to delete group");
       }
     },
@@ -230,30 +246,21 @@ const NewslettersPage: React.FC = () => {
     const group = groups.find((g) => g.id === selectedGroupId);
     const sourceIds = group?.sources?.map((s) => s.id) || [];
 
-    console.group("🔍 Selected Group Sources");
-    console.log("Selected Group ID:", selectedGroupId);
-    console.log(
-      "Found Group:",
-      group
-        ? {
-            id: group.id,
-            name: group.name,
-            sourceCount: group.sources?.length || 0,
-            sources: group.sources?.map((s) => ({ id: s.id, name: s.name })),
-          }
-        : "Group not found",
-    );
-    console.log("Source IDs:", sourceIds);
-    console.log(
-      "All Groups:",
-      groups.map((g) => ({
-        id: g.id,
-        name: g.name,
-        sourceCount: g.sources?.length || 0,
-        hasSources: !!g.sources?.length,
-      })),
-    );
-    console.groupEnd();
+    log.debug("Selected group sources computed", {
+      action: "compute_group_sources",
+      metadata: {
+        selectedGroupId,
+        foundGroup: group
+          ? {
+              id: group.id,
+              name: group.name,
+              sourceCount: group.sources?.length || 0,
+            }
+          : null,
+        sourceIds,
+        totalGroups: groups.length,
+      },
+    });
 
     return sourceIds;
   }, [selectedGroupId, groups]);
@@ -266,13 +273,16 @@ const NewslettersPage: React.FC = () => {
 
   // Debug modal states
   React.useEffect(() => {
-    console.log("Modal states:", {
-      isGroupModalOpen,
-      showEditModal,
-      deleteConfirmId: !!deleteConfirmId,
-      anyModalOpen: isGroupModalOpen || showEditModal || !!deleteConfirmId,
+    log.debug("Modal states changed", {
+      action: "modal_state_change",
+      metadata: {
+        isGroupModalOpen,
+        showEditModal,
+        deleteConfirmId: !!deleteConfirmId,
+        anyModalOpen: isGroupModalOpen || showEditModal || !!deleteConfirmId,
+      },
     });
-  }, [isGroupModalOpen, showEditModal, deleteConfirmId]);
+  }, [isGroupModalOpen, showEditModal, deleteConfirmId, log]);
 
   // Handle archive source (delete confirmation)
   const handleArchiveSource = async (sourceId: string) => {
@@ -298,7 +308,14 @@ const NewslettersPage: React.FC = () => {
         setSelectedSourceId(null);
       }
     } catch (error) {
-      console.error("Error archiving source:", error);
+      log.error(
+        "Failed to archive newsletter source",
+        {
+          action: "archive_source",
+          metadata: { sourceId },
+        },
+        error,
+      );
       const errorMessage =
         error instanceof Error ? error.message : "Failed to archive source";
       toast.error(errorMessage);
@@ -322,12 +339,15 @@ const NewslettersPage: React.FC = () => {
           : undefined,
     };
 
-    console.group("📰 NewslettersPage - Building Filter");
-    console.log("Selected Source ID:", selectedSourceId);
-    console.log("Selected Group ID:", selectedGroupId);
-    console.log("Selected Group Source IDs:", selectedGroupSourceIds);
-    console.log("Resulting Filter:", JSON.stringify(filter, null, 2));
-    console.groupEnd();
+    log.debug("Newsletter filter built", {
+      action: "build_newsletter_filter",
+      metadata: {
+        selectedSourceId,
+        selectedGroupId,
+        selectedGroupSourceIds,
+        filter,
+      },
+    });
 
     return filter;
   }, [selectedSourceId, selectedGroupId, selectedGroupSourceIds]);
@@ -434,30 +454,35 @@ const NewslettersPage: React.FC = () => {
   // Debug newsletters data
   // Debug fetched newsletters and trigger refetch on filter changes
   useEffect(() => {
-    console.log("📨 Fetched newsletters updated:", {
-      count: fetchedNewsletters.length,
-      selectedSourceId,
-      selectedGroupId,
-      newsletters: fetchedNewsletters.map((n) => ({
-        id: n.id,
-        title: n.title,
-        sourceId: n.newsletter_source_id,
-      })),
+    log.debug("Fetched newsletters updated", {
+      action: "newsletters_data_update",
+      metadata: {
+        count: fetchedNewsletters.length,
+        selectedSourceId,
+        selectedGroupId,
+        newsletterIds: fetchedNewsletters.map((n) => n.id),
+      },
     });
-  }, [fetchedNewsletters, selectedSourceId, selectedGroupId]);
+  }, [fetchedNewsletters, selectedSourceId, selectedGroupId, log]);
 
   // Force refetch when filters change to ensure fresh data (but not during actions)
   useEffect(() => {
     // Skip refetch if action is in progress to preserve optimistic updates
     if (isActionInProgress) {
-      console.log("🔄 Skipping refetch - action in progress");
+      log.debug("Skipping refetch - action in progress", {
+        action: "filter_change_refetch",
+        metadata: { isActionInProgress },
+      });
       return;
     }
 
-    console.log("🔄 Filter changed, refetching newsletters...", {
-      selectedSourceId,
-      selectedGroupId,
-      selectedGroupSourceIds,
+    log.debug("Filter changed, refetching newsletters", {
+      action: "filter_change_refetch",
+      metadata: {
+        selectedSourceId,
+        selectedGroupId,
+        selectedGroupSourceIds,
+      },
     });
     refetchNewsletters();
   }, [
@@ -659,7 +684,14 @@ const NewslettersPage: React.FC = () => {
           isCurrentlyInQueue ? "Removed from queue" : "Added to queue",
         );
       } catch (error) {
-        console.error("Error toggling queue status:", error);
+        log.error(
+          "Failed to toggle queue status",
+          {
+            action: "toggle_queue",
+            metadata: { newsletterId },
+          },
+          error,
+        );
         toast.error("Failed to update queue status");
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
@@ -689,7 +721,14 @@ const NewslettersPage: React.FC = () => {
       try {
         await sharedHandleUpdateTags(newsletterId, tagIds);
       } catch (error) {
-        console.error("Error updating tags:", error);
+        log.error(
+          "Failed to update newsletter tags",
+          {
+            action: "update_tags",
+            metadata: { newsletterId, tagCount: tagIds.length },
+          },
+          error,
+        );
         // Error handling is already done by shared actions
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
@@ -724,7 +763,14 @@ const NewslettersPage: React.FC = () => {
           try {
             await handleToggleRead(newsletter);
           } catch (readError) {
-            console.error("Failed to mark newsletter as read:", readError);
+            log.error(
+              "Failed to mark newsletter as read",
+              {
+                action: "mark_as_read",
+                metadata: { newsletterId: newsletter.id },
+              },
+              readError,
+            );
           }
         }
 
@@ -733,7 +779,14 @@ const NewslettersPage: React.FC = () => {
           try {
             await handleToggleArchive(newsletter);
           } catch (archiveError) {
-            console.error("Failed to archive newsletter:", archiveError);
+            log.error(
+              "Failed to archive newsletter",
+              {
+                action: "archive_newsletter",
+                metadata: { newsletterId: newsletter.id },
+              },
+              archiveError,
+            );
           }
         }
 
@@ -745,7 +798,14 @@ const NewslettersPage: React.FC = () => {
           },
         });
       } catch (error) {
-        console.error("Unexpected error in newsletter click handler:", error);
+        log.error(
+          "Unexpected error in newsletter click handler",
+          {
+            action: "newsletter_click",
+            metadata: { newsletterId: newsletter.id },
+          },
+          error,
+        );
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
@@ -760,7 +820,14 @@ const NewslettersPage: React.FC = () => {
 
   useEffect(() => {
     if (errorNewsletters) {
-      console.error("Error loading newsletters:", errorNewsletters);
+      log.error(
+        "Failed to load newsletters",
+        {
+          action: "load_newsletters",
+          metadata: { selectedSourceId, selectedGroupId },
+        },
+        errorNewsletters,
+      );
     }
   }, [errorNewsletters]);
 
@@ -770,11 +837,14 @@ const NewslettersPage: React.FC = () => {
   // Log modal state changes in development
   React.useEffect(() => {
     if (process.env.NODE_ENV === "development") {
-      console.log("Modal state changed:", {
-        isGroupModalOpen,
-        showEditModal,
-        deleteConfirmId,
-        anyModalOpen,
+      log.debug("Modal state changed", {
+        action: "debug_modal_state",
+        metadata: {
+          isGroupModalOpen,
+          showEditModal,
+          deleteConfirmId,
+          anyModalOpen,
+        },
       });
     }
   }, [isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen]);
@@ -844,7 +914,10 @@ const NewslettersPage: React.FC = () => {
             >
               <button
                 onClick={() => {
-                  console.log("New Group button clicked");
+                  log.debug("New Group button clicked", {
+                    action: "new_group_button_click",
+                    metadata: {},
+                  });
                   setEditingGroup(null);
                   setIsGroupModalOpen(true);
                 }}
@@ -1119,10 +1192,13 @@ const NewslettersPage: React.FC = () => {
                       }`}
                       style={{ minHeight: 170 }}
                       onClick={() => {
-                        console.log("🎯 Source selected:", {
-                          sourceId: source.id,
-                          sourceName: source.name,
-                          previousSelection: selectedSourceId,
+                        log.debug("Source selected", {
+                          action: "source_selection",
+                          metadata: {
+                            sourceId: source.id,
+                            sourceName: source.name,
+                            previousSelection: selectedSourceId,
+                          },
                         });
                         setSelectedSourceId(source.id);
                       }}
@@ -1392,10 +1468,10 @@ const SourceGroupsList = React.memo(
     onDeleteGroup: (groupId: string) => void;
   }) => {
     if (process.env.NODE_ENV === "development") {
-      console.log(
-        "Rendering SourceGroupsList with isAnyModalOpen:",
-        isAnyModalOpen,
-      );
+      log.debug("Rendering SourceGroupsList", {
+        action: "debug_component_render",
+        metadata: { isAnyModalOpen },
+      });
     }
 
     return (

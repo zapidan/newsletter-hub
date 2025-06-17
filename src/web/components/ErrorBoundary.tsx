@@ -1,5 +1,6 @@
-import { Component, ErrorInfo, ReactNode } from 'react';
-import { toast } from 'react-hot-toast';
+import { Component, ErrorInfo, ReactNode } from "react";
+import { toast } from "react-hot-toast";
+import { logger } from "@common/utils/logger";
 
 interface Props {
   children: ReactNode;
@@ -14,7 +15,7 @@ interface State {
 
 class ErrorBoundary extends Component<Props, State> {
   public state: State = {
-    hasError: false
+    hasError: false,
   };
 
   public static getDerivedStateFromError(error: Error): State {
@@ -22,11 +23,18 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Error boundary caught an error:', error, errorInfo);
-    
+    // Log error with structured logging
+    logger.logComponentError("ErrorBoundary", error, {
+      metadata: {
+        componentStack: errorInfo.componentStack,
+        errorBoundary: true,
+        timestamp: new Date().toISOString(),
+      },
+    });
+
     // Show error toast
     toast.error(`Something went wrong: ${error.message}`);
-    
+
     // Call custom error handler if provided
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
@@ -63,12 +71,21 @@ class ErrorBoundary extends Component<Props, State> {
               Something went wrong
             </h3>
             <p className="mt-2 text-sm text-gray-500">
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {this.state.error?.message || "An unexpected error occurred"}
             </p>
             <div className="mt-6">
               <button
                 type="button"
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  // Log the reload action
+                  logger.logUserAction("error_boundary_reload", {
+                    component: "ErrorBoundary",
+                    metadata: {
+                      errorMessage: this.state.error?.message,
+                    },
+                  });
+                  window.location.reload();
+                }}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Reload page
@@ -78,7 +95,6 @@ class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
-
 
     return this.props.children;
   }

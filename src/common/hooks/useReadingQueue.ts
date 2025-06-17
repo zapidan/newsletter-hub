@@ -7,6 +7,7 @@ import { queryKeyFactory } from "../utils/queryKeyFactory";
 import { getCacheManagerSafe } from "../utils/cacheUtils";
 import { readingQueueApi } from "@common/api/readingQueueApi";
 import { newsletterApi } from "@common/api/newsletterApi";
+import { useLogger } from "@common/utils/logger";
 
 interface NewsletterFromDB {
   id: string;
@@ -55,6 +56,7 @@ interface QueueItemFromDB {
 export const useReadingQueue = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const log = useLogger();
 
   // Initialize cache manager safely
   const cacheManager = useMemo(() => {
@@ -82,9 +84,14 @@ export const useReadingQueue = () => {
     const start = performanceTimers.current.get(operation);
     if (start && process.env.NODE_ENV === "development") {
       const duration = performance.now() - start;
-      console.log(
-        `[useReadingQueue] ${operation} took ${duration.toFixed(2)}ms`,
-      );
+      log.debug("Reading queue operation completed", {
+        action: "performance_timer",
+        metadata: {
+          operation,
+          duration: duration.toFixed(2),
+          unit: "ms",
+        },
+      });
       performanceTimers.current.delete(operation);
     }
   }, []);
@@ -96,15 +103,27 @@ export const useReadingQueue = () => {
     try {
       return await readingQueueApi.getAll();
     } catch (error) {
-      console.error("Error fetching reading queue:", error);
+      log.error(
+        "Failed to fetch reading queue",
+        {
+          action: "fetch_reading_queue",
+          metadata: { userId: user?.id },
+        },
+        error,
+      );
 
       // Handle specific error types
       if (error instanceof Error) {
         // If it's a null newsletter error, it means data integrity issues
         if (error.message.includes("not found in reading queue item")) {
-          console.warn(
-            "[ReadingQueue] Data integrity issue detected, returning empty queue",
-          );
+          log.warn("Data integrity issue in reading queue", {
+            action: "data_integrity_check",
+            metadata: {
+              userId: user?.id,
+              issue: "missing_newsletter_in_queue_item",
+              resolution: "returning_empty_queue",
+            },
+          });
           // Could potentially trigger a cleanup here if needed
           return [];
         }
@@ -182,7 +201,18 @@ export const useReadingQueue = () => {
       return { previousQueue };
     },
     onError: (error, _newsletterId, context) => {
-      console.error("Error adding to queue:", error);
+      log.error(
+        "Failed to add newsletter to reading queue",
+        {
+          action: "add_to_queue",
+          metadata: {
+            newsletterId: _newsletterId,
+            userId: user?.id,
+            hasContext: !!context?.previousQueue,
+          },
+        },
+        error,
+      );
 
       // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
@@ -238,7 +268,18 @@ export const useReadingQueue = () => {
       return { previousQueue, removedItem: itemToRemove };
     },
     onError: (error, _queueItemId, context) => {
-      console.error("Error removing from queue:", error);
+      log.error(
+        "Failed to remove newsletter from reading queue",
+        {
+          action: "remove_from_queue",
+          metadata: {
+            queueItemId: _queueItemId,
+            userId: user?.id,
+            hasContext: !!context?.previousQueue,
+          },
+        },
+        error,
+      );
 
       // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
@@ -295,7 +336,18 @@ export const useReadingQueue = () => {
       return { previousQueue };
     },
     onError: (error, _updates, context) => {
-      console.error("Error reordering queue:", error);
+      log.error(
+        "Failed to reorder reading queue",
+        {
+          action: "reorder_queue",
+          metadata: {
+            userId: user?.id,
+            updatesCount: _updates?.length || 0,
+            hasContext: !!context?.previousQueue,
+          },
+        },
+        error,
+      );
 
       // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
@@ -417,15 +469,26 @@ export const useReadingQueue = () => {
     },
     onSuccess: (result) => {
       if (result.removedCount > 0) {
-        console.log(
-          `[ReadingQueue] Cleaned up ${result.removedCount} orphaned items`,
-        );
+        log.info("Cleaned up orphaned reading queue items", {
+          action: "cleanup_orphaned_items",
+          metadata: {
+            removedCount: result.removedCount,
+            userId: user?.id,
+          },
+        });
         // Refetch the queue to get the updated state
         refetch();
       }
     },
     onError: (error) => {
-      console.error("[ReadingQueue] Failed to cleanup orphaned items:", error);
+      log.error(
+        "Failed to cleanup orphaned reading queue items",
+        {
+          action: "cleanup_orphaned_items",
+          metadata: { userId: user?.id },
+        },
+        error,
+      );
     },
     onSettled: () => {
       safeCacheCall((manager) =>

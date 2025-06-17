@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useEffect, useState } from "react";
+import { useLogger } from "@common/utils/logger";
 
 // Custom debounce implementation
 function debounce<T extends (...args: any[]) => any>(
@@ -108,6 +109,7 @@ interface PerformanceMetrics {
 }
 
 export const usePerformanceMonitor = (componentName: string) => {
+  const log = useLogger();
   const metricsRef = useRef<PerformanceMetrics>({
     renderTime: 0,
     lastRender: 0,
@@ -132,9 +134,16 @@ export const usePerformanceMonitor = (componentName: string) => {
       metricsRef.current.renderCount;
 
     if (process.env.NODE_ENV === "development" && renderTime > 16) {
-      console.warn(
-        `[Performance] ${componentName} render took ${renderTime.toFixed(2)}ms (target: <16ms)`,
-      );
+      log.warn("Component render performance warning", {
+        action: "performance_monitor",
+        metadata: {
+          componentName,
+          renderTime: renderTime.toFixed(2),
+          target: "16ms",
+          renderCount: metricsRef.current.renderCount,
+          averageRenderTime: metricsRef.current.averageRenderTime.toFixed(2),
+        },
+      });
     }
   }, [componentName]);
 
@@ -293,9 +302,14 @@ export const useExpensiveComputation = <T, U>(
       computationCount.current += 1;
 
       if (process.env.NODE_ENV === "development") {
-        console.log(
-          `[Performance] Expensive computation #${computationCount.current} took ${(endTime - startTime).toFixed(2)}ms`,
-        );
+        log.debug("Expensive computation completed", {
+          action: "expensive_computation",
+          metadata: {
+            computationNumber: computationCount.current,
+            duration: (endTime - startTime).toFixed(2),
+            threshold: threshold,
+          },
+        });
       }
 
       previousDeps.current = dependencies;
@@ -402,7 +416,14 @@ export const useMemoryCleanup = () => {
       try {
         cleanup();
       } catch (error) {
-        console.error("Error during cleanup:", error);
+        log.error(
+          "Error during memory cleanup",
+          {
+            action: "memory_cleanup",
+            metadata: { cleanupType: "useMemoryCleanup" },
+          },
+          error,
+        );
       }
     });
     cleanupFunctions.current = [];

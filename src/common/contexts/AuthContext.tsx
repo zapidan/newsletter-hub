@@ -1,7 +1,15 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { useSupabase } from './SupabaseContext';
-import { User, Session } from '@supabase/supabase-js';
-import { verifyAndUpdateEmailAlias } from '../utils/emailAlias';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import { useSupabase } from "./SupabaseContext";
+import { User, Session } from "@supabase/supabase-js";
+import { verifyAndUpdateEmailAlias } from "../utils/emailAlias";
+import { useLoggerStatic } from "../utils/logger";
 
 type AppUser = User | null;
 
@@ -24,62 +32,102 @@ type AuthContextType = {
   checkPasswordStrength: (password: string) => PasswordRequirement[];
 };
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined,
+);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { supabase } = useSupabase();
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<AppUser>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const log = useLoggerStatic();
 
   // Check password strength
-  const checkPasswordStrength = useCallback((password: string): PasswordRequirement[] => {
-    const requirements = [
-      { regex: /.{8,}/, label: 'At least 8 characters', satisfied: false },
-      { regex: /[0-9]/, label: 'Contains number', satisfied: false },
-      { regex: /[a-z]/, label: 'Contains lowercase letter', satisfied: false },
-      { regex: /[A-Z]/, label: 'Contains uppercase letter', satisfied: false },
-      { regex: /[^A-Za-z0-9]/, label: 'Contains special character', satisfied: false },
-    ];
+  const checkPasswordStrength = useCallback(
+    (password: string): PasswordRequirement[] => {
+      const requirements = [
+        { regex: /.{8,}/, label: "At least 8 characters", satisfied: false },
+        { regex: /[0-9]/, label: "Contains number", satisfied: false },
+        {
+          regex: /[a-z]/,
+          label: "Contains lowercase letter",
+          satisfied: false,
+        },
+        {
+          regex: /[A-Z]/,
+          label: "Contains uppercase letter",
+          satisfied: false,
+        },
+        {
+          regex: /[^A-Za-z0-9]/,
+          label: "Contains special character",
+          satisfied: false,
+        },
+      ];
 
-    return requirements.map(req => ({
-      ...req,
-      satisfied: req.regex.test(password)
-    }));
-  }, []);
+      return requirements.map((req) => ({
+        ...req,
+        satisfied: req.regex.test(password),
+      }));
+    },
+    [],
+  );
 
   // Check active session on mount and set up listener
   useEffect(() => {
-    console.log('[Auth] Initializing auth state');
-    
+    log.auth("Initializing auth state");
+
     const getInitialSession = async () => {
       try {
         setLoading(true);
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        
+        const {
+          data: { session: initialSession },
+          error,
+        } = await supabase.auth.getSession();
+
         if (error) throw error;
-        
-        console.log('[Auth] Initial session:', initialSession);
+
+        log.auth("Initial session retrieved", {
+          metadata: {
+            hasSession: !!initialSession,
+            userId: initialSession?.user?.id,
+          },
+        });
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
-        
+
         // Verify email alias if user is authenticated - don't await this
         if (initialSession?.user) {
           verifyAndUpdateEmailAlias()
-            .then(alias => {
+            .then((alias) => {
               if (alias) {
-                console.log('[Auth] Email alias verified/updated:', alias);
+                log.auth("Email alias verified/updated", {
+                  metadata: { alias },
+                });
               }
             })
-            .catch(error => {
-              console.error('[Auth] Error in email alias verification:', error);
+            .catch((error) => {
+              log.error(
+                "Error in email alias verification",
+                { component: "Auth" },
+                error,
+              );
               // Don't block the auth flow on alias verification errors
             });
         }
       } catch (error) {
-        console.error('[Auth] Error getting initial session:', error);
-        setError(error instanceof Error ? error.message : 'Failed to get session');
+        log.error(
+          "Error getting initial session",
+          { component: "Auth" },
+          error instanceof Error ? error : new Error(String(error)),
+        );
+        setError(
+          error instanceof Error ? error.message : "Failed to get session",
+        );
       } finally {
         setLoading(false);
       }
@@ -88,29 +136,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getInitialSession();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        console.log('[Auth] Auth state changed:', { event, hasSession: !!newSession });
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        
-        // Verify email alias on sign in or when session is refreshed - don't await
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          verifyAndUpdateEmailAlias()
-            .then(alias => {
-              if (alias) {
-                console.log('[Auth] Email alias verified/updated after sign in:', alias);
-              }
-            })
-            .catch(error => {
-              console.error('[Auth] Error in post-signin email alias verification:', error);
-            });
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      log.auth("Auth state changed", {
+        metadata: {
+          event,
+          hasSession: !!newSession,
+          userId: newSession?.user?.id,
+        },
+      });
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+
+      // Verify email alias on sign in or when session is refreshed - don't await
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        verifyAndUpdateEmailAlias()
+          .then((alias) => {
+            if (alias) {
+              log.auth("Email alias verified/updated after sign in", {
+                metadata: { alias },
+              });
+            }
+          })
+          .catch((error) => {
+            log.error(
+              "Error in post-signin email alias verification",
+              { component: "Auth" },
+              error,
+            );
+          });
       }
-    );
+    });
 
     return () => {
-      console.log('[Auth] Cleaning up auth listener');
+      log.auth("Cleaning up auth listener");
       subscription?.unsubscribe();
     };
   }, [supabase]);
@@ -119,24 +179,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setError(null);
-      console.log('[Auth] Signing in with:', email);
-      
+      log.auth("Attempting sign in", { metadata: { email } });
+
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        console.error('[Auth] Sign in error:', error);
+        log.error(
+          "Sign in failed",
+          { component: "Auth", metadata: { email } },
+          error,
+        );
         setError(error.message);
         return { error };
       }
 
-      console.log('[Auth] Sign in successful');
+      log.auth("Sign in successful", { metadata: { email } });
       return { error: null };
     } catch (error) {
-      console.error('[Auth] Sign in exception:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to sign in";
+      log.error(
+        "Sign in exception",
+        { component: "Auth", metadata: { email } },
+        error instanceof Error ? error : new Error(errorMessage),
+      );
       setError(errorMessage);
       return { error: new Error(errorMessage) };
     } finally {
@@ -148,24 +217,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setError(null);
-      console.log('[Auth] Signing up with:', email);
-      
+      log.auth("Attempting sign up", { metadata: { email } });
+
       const { error } = await supabase.auth.signUp({
         email,
         password,
       });
 
       if (error) {
-        console.error('[Auth] Sign up error:', error);
+        log.error(
+          "Sign up failed",
+          { component: "Auth", metadata: { email } },
+          error,
+        );
         setError(error.message);
         return { error };
       }
 
-      console.log('[Auth] Sign up successful');
+      log.auth("Sign up successful", { metadata: { email } });
       return { error: null };
     } catch (error) {
-      console.error('[Auth] Sign up exception:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to sign up';
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to sign up";
+      log.error(
+        "Sign up exception",
+        { component: "Auth", metadata: { email } },
+        error instanceof Error ? error : new Error(errorMessage),
+      );
       setError(errorMessage);
       return { error: new Error(errorMessage) };
     } finally {
@@ -177,19 +255,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setError(null);
-      console.log('[Auth] Signing out');
-      
+      log.auth("Attempting sign out");
+
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
-        console.error('[Auth] Sign out error:', error);
+        log.error("Sign out failed", { component: "Auth" }, error);
         throw error;
       }
-      
-      console.log('[Auth] Sign out successful');
+
+      log.auth("Sign out successful");
     } catch (error) {
-      console.error('[Auth] Sign out exception:', error);
-      setError(error instanceof Error ? error.message : 'Failed to sign out');
+      log.error(
+        "Sign out exception",
+        { component: "Auth" },
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      setError(error instanceof Error ? error.message : "Failed to sign out");
       throw error;
     } finally {
       setLoading(false);
@@ -200,28 +282,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setError(null);
-      console.log('[Auth] Resetting password for:', email);
-      
+      log.auth("Attempting password reset", { metadata: { email } });
+
       // Get the current origin (e.g., http://localhost:3000)
       const siteUrl = window.location.origin;
       // Point to the reset password page
       const redirectTo = `${siteUrl}/reset-password`;
-      
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
       });
-      
+
       if (error) {
-        console.error('[Auth] Reset password error:', error);
+        log.error(
+          "Password reset failed",
+          { component: "Auth", metadata: { email } },
+          error,
+        );
         setError(error.message);
         return { error };
       }
-      
-      console.log('[Auth] Password reset email sent');
+
+      log.auth("Password reset email sent", { metadata: { email } });
       return { error: null };
     } catch (error) {
-      console.error('[Auth] Reset password exception:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to reset password';
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to reset password";
+      log.error(
+        "Password reset exception",
+        { component: "Auth", metadata: { email } },
+        error instanceof Error ? error : new Error(errorMessage),
+      );
       setError(errorMessage);
       return { error: new Error(errorMessage) };
     } finally {
@@ -233,23 +324,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setError(null);
-      console.log('[Auth] Updating password');
-      
+      log.auth("Attempting password update");
+
       const { error } = await supabase.auth.updateUser({
-        password: newPassword
+        password: newPassword,
       });
-      
+
       if (error) {
-        console.error('[Auth] Update password error:', error);
+        log.error("Password update failed", { component: "Auth" }, error);
         setError(error.message);
         return { error };
       }
-      
-      console.log('[Auth] Password updated successfully');
+
+      log.auth("Password updated successfully");
       return { error: null };
     } catch (error) {
-      console.error('[Auth] Update password exception:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update password';
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update password";
+      log.error(
+        "Password update exception",
+        { component: "Auth" },
+        error instanceof Error ? error : new Error(errorMessage),
+      );
       setError(errorMessage);
       return { error: new Error(errorMessage) };
     } finally {
@@ -257,37 +353,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const value = useMemo(() => ({
-    user,
-    session,
-    loading,
-    error,
-    signIn,
-    signUp,
-    signOut,
-    resetPassword,
-    updatePassword,
-    checkPasswordStrength,
-  }), [user, session, loading, error, checkPasswordStrength]);
+  const value = useMemo(
+    () => ({
+      user,
+      session,
+      loading,
+      error,
+      signIn,
+      signUp,
+      signOut,
+      resetPassword,
+      updatePassword,
+      checkPasswordStrength,
+    }),
+    [user, session, loading, error, checkPasswordStrength],
+  );
 
-  console.log('[Auth] Rendering AuthProvider with state:', { 
-    hasUser: !!user, 
-    loading, 
-    error: !!error,
-    session: !!session
+  log.debug("Rendering AuthProvider", {
+    component: "Auth",
+    metadata: {
+      hasUser: !!user,
+      loading,
+      hasError: !!error,
+      hasSession: !!session,
+      userId: user?.id,
+    },
   });
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

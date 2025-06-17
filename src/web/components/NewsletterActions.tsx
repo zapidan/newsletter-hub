@@ -9,6 +9,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { NewsletterWithRelations } from "@common/types";
+import { useLogger } from "@common/utils/logger";
 
 interface NewsletterActionsProps {
   newsletter: NewsletterWithRelations;
@@ -41,6 +42,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   showReadButton = true,
   compact = false,
 }) => {
+  const log = useLogger("NewsletterActions");
   const buttonClass = compact
     ? "btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-all"
     : "btn btn-ghost btn-sm p-2 rounded-lg hover:bg-gray-200 transition-all";
@@ -74,7 +76,14 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             try {
               await onToggleRead(newsletter.id);
             } catch (error) {
-              console.error("Error toggling read status:", error);
+              log.error(
+                "Error toggling read status",
+                {
+                  action: "toggle_read",
+                  metadata: { newsletterId: newsletter.id },
+                },
+                error instanceof Error ? error : new Error(String(error)),
+              );
             }
           }}
           disabled={isDisabled("read")}
@@ -101,7 +110,14 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
           try {
             await onToggleLike(newsletter);
           } catch (error) {
-            console.error("Error toggling like:", error);
+            log.error(
+              "Error toggling like",
+              {
+                action: "toggle_like",
+                metadata: { newsletterId: newsletter.id },
+              },
+              error instanceof Error ? error : new Error(String(error)),
+            );
           }
         }}
         disabled={isDisabled("like")}
@@ -132,7 +148,14 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             try {
               await onToggleQueue(newsletter.id);
             } catch (error) {
-              console.error("Error toggling queue:", error);
+              log.error(
+                "Error toggling queue",
+                {
+                  action: "toggle_queue",
+                  metadata: { newsletterId: newsletter.id },
+                },
+                error instanceof Error ? error : new Error(String(error)),
+              );
             }
           }}
           disabled={isDisabled("queue")}
@@ -163,7 +186,14 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
           try {
             await onToggleArchive(newsletter.id);
           } catch (error) {
-            console.error("Error toggling archive:", error);
+            log.error(
+              "Error toggling archive",
+              {
+                action: "toggle_archive",
+                metadata: { newsletterId: newsletter.id },
+              },
+              error instanceof Error ? error : new Error(String(error)),
+            );
           }
         }}
         disabled={isDisabled("archive")}

@@ -4,12 +4,14 @@ import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext, useEffect, useRef, useMemo } from "react";
 import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
+import { useLogger } from "@common/utils/logger";
 
 // Cache time constants (in milliseconds) - Very short for real-time unread counts
 const STALE_TIME = 0; // Always fresh data for unread count
 const CACHE_TIME = 5 * 1000; // 5 seconds - very short cache for immediate updates
 
 export const useUnreadCount = (sourceId?: string | null) => {
+  const log = useLogger("useUnreadCount");
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const queryClient = useQueryClient();
@@ -26,9 +28,12 @@ export const useUnreadCount = (sourceId?: string | null) => {
     const key = sourceId
       ? ["unreadCount", user?.id, "source", sourceId]
       : ["unreadCount", user?.id];
-    console.log("🔑 Unread count query key:", key);
+    log.debug("Unread count query key generated", {
+      action: "generate_query_key",
+      metadata: { key, sourceId, userId: user?.id },
+    });
     return key;
-  }, [user?.id, sourceId]);
+  }, [user?.id, sourceId, log]);
 
   // Use a stable query function with refs to track state
   const {
@@ -40,11 +45,16 @@ export const useUnreadCount = (sourceId?: string | null) => {
     queryKey,
     queryFn: async () => {
       if (!user) {
-        console.log("🚫 No user, returning 0 for unread count");
+        log.debug("No user, returning 0 for unread count", {
+          action: "fetch_unread_count_no_user",
+        });
         return 0;
       }
 
-      console.log("🔍 Fetching unread count...", { sourceId, userId: user.id });
+      log.debug("Fetching unread count", {
+        action: "fetch_unread_count_start",
+        metadata: { sourceId, userId: user.id },
+      });
 
       try {
         const params = {
@@ -54,21 +64,34 @@ export const useUnreadCount = (sourceId?: string | null) => {
           ...(sourceId && { sourceIds: [sourceId] }),
         };
 
-        console.log("📋 Query params:", params);
+        log.debug("Unread count query params", {
+          action: "fetch_unread_count_params",
+          metadata: { params },
+        });
 
         const result = await newsletterApi.getAll(params);
         const count = result.count || 0;
 
-        console.log("📊 Unread count result:", {
-          sourceId,
-          count,
-          actualDataLength: result.data?.length,
-          resultCount: result.count,
+        log.debug("Unread count result", {
+          action: "fetch_unread_count_result",
+          metadata: {
+            sourceId,
+            count,
+            actualDataLength: result.data?.length,
+            resultCount: result.count,
+          },
         });
 
         return count;
       } catch (error) {
-        console.error("❌ Error fetching unread count:", error);
+        log.error(
+          "Error fetching unread count",
+          {
+            action: "fetch_unread_count_error",
+            metadata: { sourceId, userId: user.id },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         throw error;
       }
     },
@@ -107,7 +130,9 @@ export const useUnreadCount = (sourceId?: string | null) => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      console.log("🔄 Invalidating unread count due to newsletter update");
+      log.debug("Invalidating unread count due to newsletter update", {
+        action: "invalidate_unread_count",
+      });
 
       // Force immediate invalidation and refetch - more aggressive
       queryClient.invalidateQueries({
@@ -176,6 +201,7 @@ export const useUnreadCount = (sourceId?: string | null) => {
 
 // Hook for getting unread counts by all sources
 export const useUnreadCountsBySource = () => {
+  const log = useLogger("useUnreadCountsBySource");
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const queryClient = useQueryClient();
@@ -203,7 +229,14 @@ export const useUnreadCountsBySource = () => {
       try {
         return await newsletterApi.getUnreadCountBySource();
       } catch (error) {
-        console.error("Error fetching unread counts by source:", error);
+        log.error(
+          "Error fetching unread counts by source",
+          {
+            action: "fetch_unread_counts_by_source_error",
+            metadata: { userId: user.id },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         throw error;
       }
     },
@@ -222,8 +255,11 @@ export const useUnreadCountsBySource = () => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      console.log(
-        "🔄 Invalidating unread counts by source due to newsletter update",
+      log.debug(
+        "Invalidating unread counts by source due to newsletter update",
+        {
+          action: "invalidate_unread_counts_by_source",
+        },
       );
 
       // Force immediate invalidation and refetch for unread counts by source - more aggressive
@@ -277,6 +313,7 @@ export const useUnreadCountsBySource = () => {
 
 // Hook for getting total counts by all sources (excluding archived newsletters)
 export const useTotalCountsBySource = () => {
+  const log = useLogger("useTotalCountsBySource");
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const queryClient = useQueryClient();
@@ -304,7 +341,14 @@ export const useTotalCountsBySource = () => {
       try {
         return await newsletterApi.getTotalCountBySource();
       } catch (error) {
-        console.error("Error fetching total counts by source:", error);
+        log.error(
+          "Error fetching total counts by source",
+          {
+            action: "fetch_total_counts_by_source_error",
+            metadata: { userId: user.id },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         throw error;
       }
     },
@@ -323,8 +367,11 @@ export const useTotalCountsBySource = () => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      console.log(
-        "🔄 Invalidating total counts by source due to newsletter update",
+      log.debug(
+        "Invalidating total counts by source due to newsletter update",
+        {
+          action: "invalidate_total_counts_by_source",
+        },
       );
 
       // Force immediate invalidation and refetch for total counts by source - more aggressive

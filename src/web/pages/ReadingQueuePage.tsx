@@ -18,8 +18,8 @@ import { toast } from "react-hot-toast";
 import { useTags } from "@common/hooks/useTags";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
 import { useCache } from "@common/hooks/useCache";
-
 import { AuthContext } from "@common/contexts/AuthContext";
+import { useLogger } from "@common/utils/logger";
 import {
   DndContext,
   closestCenter,
@@ -45,6 +45,7 @@ const ReadingQueuePage: React.FC = () => {
   const { setQueryData } = useCache();
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const log = useLogger();
 
   const {
     readingQueue = [],
@@ -75,7 +76,14 @@ const ReadingQueuePage: React.FC = () => {
       }
     },
     onError: (error) => {
-      console.error("Reading queue action error:", error);
+      log.error(
+        "Reading queue action failed",
+        {
+          action: "reading_queue_action",
+          metadata: { userId: user?.id },
+        },
+        error,
+      );
     },
   });
 
@@ -139,7 +147,14 @@ const ReadingQueuePage: React.FC = () => {
         const tags = await getTags();
         setAllTags(tags);
       } catch (error) {
-        console.error("Error loading tags:", error);
+        log.error(
+          "Failed to load tags for reading queue",
+          {
+            action: "load_tags",
+            metadata: { userId: user?.id },
+          },
+          error,
+        );
         toast.error("Failed to load tags");
       }
     };
@@ -180,12 +195,29 @@ const ReadingQueuePage: React.FC = () => {
           }
         } else {
           // This shouldn't happen in reading queue context, but handle gracefully
-          console.warn(
+          log.warn(
             "Attempted to add newsletter to queue from reading queue page",
+            {
+              action: "toggle_reading_queue",
+              metadata: {
+                newsletterId: newsletter.id,
+                context: "reading_queue_page",
+              },
+            },
           );
         }
       } catch (error) {
-        console.error("Error toggling reading queue status:", error);
+        log.error(
+          "Failed to toggle reading queue status",
+          {
+            action: "toggle_reading_queue",
+            metadata: {
+              newsletterId: newsletter.id,
+              userId: user?.id,
+            },
+          },
+          error,
+        );
         toast.error("Failed to update reading queue");
       }
     },
@@ -243,7 +275,17 @@ const ReadingQueuePage: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Error toggling read status:", error);
+        log.error(
+          "Failed to toggle read status",
+          {
+            action: "toggle_read_status",
+            metadata: {
+              newsletterId: newsletter.id,
+              userId: user?.id,
+            },
+          },
+          error,
+        );
       }
     },
     [handleMarkAsRead, handleMarkAsUnread, validQueueItems, cacheManager],
@@ -258,7 +300,17 @@ const ReadingQueuePage: React.FC = () => {
           try {
             await handleToggleRead(newsletter.id);
           } catch (readError) {
-            console.error("Failed to mark newsletter as read:", readError);
+            log.error(
+              "Failed to mark newsletter as read",
+              {
+                action: "mark_as_read",
+                metadata: {
+                  newsletterId: newsletter.id,
+                  userId: user?.id,
+                },
+              },
+              readError,
+            );
           }
         }
 
@@ -270,7 +322,17 @@ const ReadingQueuePage: React.FC = () => {
           },
         });
       } catch (error) {
-        console.error("Unexpected error in newsletter click handler:", error);
+        log.error(
+          "Unexpected error in newsletter click handler",
+          {
+            action: "newsletter_click",
+            metadata: {
+              newsletterId: newsletter.id,
+              userId: user?.id,
+            },
+          },
+          error,
+        );
         // Still navigate even if marking as read fails
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
@@ -322,7 +384,17 @@ const ReadingQueuePage: React.FC = () => {
           await reorderQueue(updates);
           // The query will automatically refetch due to the invalidation in the mutation
         } catch (error) {
-          console.error("Failed to update queue order:", error);
+          log.error(
+            "Failed to update queue order",
+            {
+              action: "reorder_queue",
+              metadata: {
+                userId: user?.id,
+                newOrderCount: newOrder.length,
+              },
+            },
+            error,
+          );
           toast.error("Failed to update queue order");
         }
       }
@@ -358,7 +430,17 @@ const ReadingQueuePage: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Failed to toggle like status:", error);
+        log.error(
+          "Failed to toggle like status",
+          {
+            action: "toggle_like",
+            metadata: {
+              newsletterId: newsletter.id,
+              userId: user?.id,
+            },
+          },
+          error,
+        );
       }
     },
     [handleToggleLike, validQueueItems, cacheManager],
@@ -382,7 +464,17 @@ const ReadingQueuePage: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Error toggling archive status:", error);
+        log.error(
+          "Failed to toggle archive status",
+          {
+            action: "toggle_archive",
+            metadata: {
+              newsletterId: newsletter.id,
+              userId: user?.id,
+            },
+          },
+          error,
+        );
       }
     },
     [handleToggleArchive, validQueueItems, cacheManager],
@@ -662,7 +754,17 @@ const ReadingQueuePage: React.FC = () => {
                           // Refresh the queue to ensure we have the latest data
                           await refetch();
                         } catch (error) {
-                          console.error("Error updating tags:", error);
+                          log.error(
+                            "Failed to update newsletter tags",
+                            {
+                              action: "update_tags",
+                              metadata: {
+                                newsletterId: item.newsletter.id,
+                                userId: user?.id,
+                              },
+                            },
+                            error,
+                          );
                           toast.error(
                             error instanceof Error
                               ? error.message
@@ -675,7 +777,17 @@ const ReadingQueuePage: React.FC = () => {
                         throw new Error("User not authenticated");
                       }
                     } catch (error) {
-                      console.error("Error updating tags:", error);
+                      log.error(
+                        "Failed to update newsletter tags",
+                        {
+                          action: "update_tags",
+                          metadata: {
+                            newsletterId: item.newsletter.id,
+                            userId: user?.id,
+                          },
+                        },
+                        error,
+                      );
                       toast.error("Failed to update tags");
                       // Revert optimistic update on error
                       await refetch();

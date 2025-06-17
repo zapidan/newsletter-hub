@@ -13,18 +13,25 @@ import {
   PaginatedResponse,
   BatchResult,
 } from "../types/api";
+import { useLoggerStatic } from "../utils/logger";
+
+// Initialize logger
+const log = useLoggerStatic();
 
 // Transform raw Supabase response to our Newsletter type
 const transformNewsletterResponse = (
   data: Record<string, unknown>,
 ): NewsletterWithRelations => {
   // Log the raw data we receive
-  console.log("🔄 [transformNewsletterResponse] Raw data:", {
-    id: data.id,
-    newsletter_source_id: data.newsletter_source_id,
-    hasSource: !!data.newsletter_sources,
-    sourceType: typeof data.newsletter_sources,
-    rawSource: data.newsletter_sources,
+  log.debug("Newsletter response transformation started", {
+    component: "NewsletterApi",
+    action: "transform_response",
+    metadata: {
+      id: data.id,
+      newsletter_source_id: data.newsletter_source_id,
+      hasSource: !!data.newsletter_sources,
+      sourceType: typeof data.newsletter_sources,
+    },
   });
 
   // Transform the source data if it exists
@@ -75,13 +82,16 @@ const transformNewsletterResponse = (
   } as NewsletterWithRelations;
 
   // Log the transformed data
-  console.log("✅ [transformNewsletterResponse] Transformed data:", {
-    id: result.id,
-    title: result.title,
-    sourceId: result.newsletter_source_id,
-    hasSource: !!result.source,
-    source: result.source,
-    hasTags: result.tags.length > 0,
+  log.debug("Newsletter response transformation completed", {
+    component: "NewsletterApi",
+    action: "transform_response_complete",
+    metadata: {
+      id: result.id,
+      title: result.title,
+      sourceId: result.newsletter_source_id,
+      hasSource: !!result.source,
+      hasTags: result.tags.length > 0,
+    },
   });
 
   return result;
@@ -137,9 +147,13 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
 
   // Apply source filter if sourceIds is provided
   if (params.sourceIds && params.sourceIds.length > 0) {
-    console.log("🔍 [buildNewsletterQuery] Applying source filter:", {
-      sourceIds: params.sourceIds,
-      count: params.sourceIds.length,
+    log.debug("Applying source filter to newsletter query", {
+      component: "NewsletterApi",
+      action: "build_query_source_filter",
+      metadata: {
+        sourceIds: params.sourceIds,
+        count: params.sourceIds.length,
+      },
     });
 
     if (params.sourceIds.length === 1) {
@@ -177,9 +191,12 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
   }
 
   // Debug logging
-  console.log("🔍 [buildNewsletterQuery] Final query params:", {
-    select: selectClause,
-    filters: {
+  log.debug("Newsletter query build completed", {
+    component: "NewsletterApi",
+    action: "build_query_complete",
+    metadata: {
+      select: selectClause,
+      filters: {
       sourceIds: params.sourceIds,
       isArchived: params.isArchived,
       isRead: params.isRead,
@@ -203,9 +220,13 @@ export const newsletterApi = {
     return withPerformanceLogging("newsletters.getAll", async () => {
       const user = await requireAuth();
 
-      console.log("🔍 [getAll] Building query with params:", {
-        ...params,
-        sourceIds: params.sourceIds || null,
+      log.debug("Building newsletter query", {
+        component: "NewsletterApi",
+        action: "get_all_build_query",
+        metadata: {
+          ...params,
+          sourceIds: params.sourceIds || null,
+        },
       });
 
       // Build the query using buildNewsletterQuery
@@ -214,9 +235,12 @@ export const newsletterApi = {
         user_id: user.id, // Pass user_id to ensure it's included in the query
       });
 
-      console.log("🔍 [getAll] Executing query with filters:", {
-        userId: user.id,
-        sourceIds: params.sourceIds || null,
+      log.debug("Executing newsletter query", {
+        component: "NewsletterApi",
+        action: "get_all_execute_query",
+        metadata: {
+          userId: user.id,
+          sourceIds: params.sourceIds || null,
         isArchived: params.isArchived,
         isRead: params.isRead,
       });
@@ -225,13 +249,20 @@ export const newsletterApi = {
       const { data, error, count } = queryResult;
 
       if (error) {
-        console.error("❌ [getAll] Query error:", error);
+        log.error("Newsletter query failed", {
+          component: "NewsletterApi",
+          action: "get_all_query_error",
+          metadata: { userId: user.id, params },
+        }, error);
         handleSupabaseError(error);
       }
 
-      console.log("🔍 [getAll] Query results:", {
-        count: data?.length || 0,
-        hasSourceIds: !!params.sourceIds,
+      log.debug("Newsletter query results retrieved", {
+        component: "NewsletterApi",
+        action: "get_all_query_results",
+        metadata: {
+          count: data?.length || 0,
+          hasSourceIds: !!params.sourceIds,
         sourceIds: params.sourceIds || null,
         firstItem: data?.[0]
           ? {
@@ -246,12 +277,15 @@ export const newsletterApi = {
       // Log the raw response for the first item if available
       if (data?.[0]) {
         const firstItem = data[0] as any;
-        console.log("🔍 [getAll] First item raw data:", {
-          id: firstItem.id,
-          title: firstItem.title,
-          sourceId: firstItem.newsletter_source_id,
-          source: firstItem.source,
-          rawSource: firstItem.source,
+        log.debug("Newsletter raw data sample", {
+          component: "NewsletterApi",
+          action: "get_all_raw_data_sample",
+          metadata: {
+            id: firstItem.id,
+            title: firstItem.title,
+            sourceId: firstItem.newsletter_source_id,
+            hasSource: !!firstItem.source,
+          },
         });
       }
 
@@ -262,12 +296,15 @@ export const newsletterApi = {
 
       // Log the transformed data for the first item if available
       if (transformedData[0]) {
-        console.log("🔍 [getAll] First item transformed data:", {
-          id: transformedData[0].id,
-          title: transformedData[0].title,
-          sourceId: transformedData[0].newsletter_source_id,
-          source: transformedData[0].source,
-          rawSource: transformedData[0].source,
+        log.debug("Newsletter transformed data sample", {
+          component: "NewsletterApi",
+          action: "get_all_transformed_data_sample",
+          metadata: {
+            id: transformedData[0].id,
+            title: transformedData[0].title,
+            sourceId: transformedData[0].newsletter_source_id,
+            hasSource: !!transformedData[0].source,
+          },
         });
       }
 
@@ -455,7 +492,11 @@ export const newsletterApi = {
         } catch (error) {
           // If tag operations fail, we should still return the updated newsletter
           // but log the error for debugging
-          console.error("Tag update failed for newsletter:", id, error);
+          log.error("Tag update failed for newsletter", {
+            component: "NewsletterApi",
+            action: "update_newsletter_tags",
+            metadata: { newsletterId: id },
+          }, error instanceof Error ? error : new Error(String(error)));
           throw new Error(
             `Tag update failed: ${error instanceof Error ? error.message : "Unknown error"}`,
           );
@@ -657,9 +698,10 @@ export const newsletterApi = {
         counts[sourceId] = (counts[sourceId] || 0) + 1;
       });
 
-      console.log(
-        "📊 Newsletter counts by source (archived excluded):",
-        counts,
+      log.debug("Newsletter counts by source retrieved", {
+        component: "NewsletterApi",
+        action: "count_by_source",
+        metadata: { counts },
       );
 
       return counts;
@@ -688,9 +730,10 @@ export const newsletterApi = {
           totalCounts[sourceId] = (totalCounts[sourceId] || 0) + 1;
         });
 
-        console.log(
-          "📊 Total newsletter counts by source (archived excluded):",
-          totalCounts,
+        log.debug("Total newsletter counts by source retrieved", {
+          component: "NewsletterApi",
+          action: "total_count_by_source",
+          metadata: { totalCounts },
         );
 
         return totalCounts;

@@ -1,4 +1,5 @@
 import { supabase } from "../../api/supabaseClient";
+import { createLogger } from "../logger";
 
 export interface DataIntegrityReport {
   orphanedReadingQueueItems: number;
@@ -19,6 +20,7 @@ export interface CleanupResult {
  */
 export class DatabaseCleanupUtils {
   private static instance: DatabaseCleanupUtils;
+  private log = createLogger();
 
   public static getInstance(): DatabaseCleanupUtils {
     if (!DatabaseCleanupUtils.instance) {
@@ -32,9 +34,10 @@ export class DatabaseCleanupUtils {
    */
   async generateIntegrityReport(userId: string): Promise<DataIntegrityReport> {
     const startTime = performance.now();
-    console.log(
-      `[DatabaseCleanup] Generating integrity report for user ${userId}`,
-    );
+    this.log.info("Generating database integrity report", {
+      action: "generate_integrity_report",
+      metadata: { userId },
+    });
 
     try {
       const [orphanedQueueItems, orphanedTags, orphanedSources] =
@@ -56,15 +59,26 @@ export class DatabaseCleanupUtils {
       };
 
       const duration = performance.now() - startTime;
-      console.log(
-        `[DatabaseCleanup] Integrity report completed in ${duration.toFixed(2)}ms:`,
-        report,
-      );
+      this.log.info("Integrity report completed", {
+        action: "generate_integrity_report",
+        metadata: {
+          userId,
+          duration: duration.toFixed(2),
+          totalIssues: report.totalIssues,
+          orphanedReadingQueueItems: report.orphanedReadingQueueItems,
+          orphanedNewsletterTags: report.orphanedNewsletterTags,
+          orphanedNewsletterSources: report.orphanedNewsletterSources,
+        },
+      });
 
       return report;
     } catch (error) {
-      console.error(
-        "[DatabaseCleanup] Failed to generate integrity report:",
+      this.log.error(
+        "Failed to generate integrity report",
+        {
+          action: "generate_integrity_report",
+          metadata: { userId },
+        },
         error,
       );
       throw error;
@@ -101,8 +115,12 @@ export class DatabaseCleanupUtils {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error(
-        "[DatabaseCleanup] Failed to find orphaned reading queue items:",
+      this.log.error(
+        "Failed to find orphaned reading queue items",
+        {
+          action: "find_orphaned_reading_queue",
+          metadata: { userId },
+        },
         error,
       );
       throw error;
@@ -139,8 +157,12 @@ export class DatabaseCleanupUtils {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error(
-        "[DatabaseCleanup] Failed to find orphaned newsletter tags:",
+      this.log.error(
+        "Failed to find orphaned newsletter tags",
+        {
+          action: "find_orphaned_newsletter_tags",
+          metadata: { userId },
+        },
         error,
       );
       throw error;
@@ -185,8 +207,12 @@ export class DatabaseCleanupUtils {
 
       return sources.filter((source) => !usedSourceIds.has(source.id));
     } catch (error) {
-      console.error(
-        "[DatabaseCleanup] Failed to find orphaned newsletter sources:",
+      this.log.error(
+        "Failed to find orphaned newsletter sources",
+        {
+          action: "find_orphaned_newsletter_sources",
+          metadata: { userId },
+        },
         error,
       );
       throw error;
@@ -204,14 +230,18 @@ export class DatabaseCleanupUtils {
     let itemsRemoved = 0;
 
     try {
-      console.log(
-        `[DatabaseCleanup] Starting cleanup of orphaned reading queue items for user ${userId}`,
-      );
+      this.log.info("Starting cleanup of orphaned reading queue items", {
+        action: "cleanup_orphaned_reading_queue",
+        metadata: { userId },
+      });
 
       const orphanedItems = await this.findOrphanedReadingQueueItems(userId);
 
       if (orphanedItems.length === 0) {
-        console.log("[DatabaseCleanup] No orphaned reading queue items found");
+        this.log.info("No orphaned reading queue items found", {
+          action: "cleanup_orphaned_reading_queue",
+          metadata: { userId, itemsFound: 0 },
+        });
         return {
           itemsRemoved: 0,
           errors: [],
@@ -219,9 +249,10 @@ export class DatabaseCleanupUtils {
         };
       }
 
-      console.log(
-        `[DatabaseCleanup] Found ${orphanedItems.length} orphaned reading queue items`,
-      );
+      this.log.info("Found orphaned reading queue items", {
+        action: "cleanup_orphaned_reading_queue",
+        metadata: { userId, itemsFound: orphanedItems.length },
+      });
 
       const orphanedIds = orphanedItems.map((item) => item.id);
       const { error } = await supabase
@@ -236,14 +267,22 @@ export class DatabaseCleanupUtils {
         );
       } else {
         itemsRemoved = orphanedItems.length;
-        console.log(
-          `[DatabaseCleanup] Successfully removed ${itemsRemoved} orphaned reading queue items`,
-        );
+        this.log.info("Successfully removed orphaned reading queue items", {
+          action: "cleanup_orphaned_reading_queue",
+          metadata: { userId, itemsRemoved },
+        });
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       errors.push(`Cleanup failed: ${errorMsg}`);
-      console.error("[DatabaseCleanup] Cleanup failed:", error);
+      this.log.error(
+        "Cleanup of orphaned reading queue items failed",
+        {
+          action: "cleanup_orphaned_reading_queue",
+          metadata: { userId },
+        },
+        error,
+      );
     }
 
     return {
@@ -262,14 +301,18 @@ export class DatabaseCleanupUtils {
     let itemsRemoved = 0;
 
     try {
-      console.log(
-        `[DatabaseCleanup] Starting cleanup of orphaned newsletter tags for user ${userId}`,
-      );
+      this.log.info("Starting cleanup of orphaned newsletter tags", {
+        action: "cleanup_orphaned_newsletter_tags",
+        metadata: { userId },
+      });
 
       const orphanedTags = await this.findOrphanedNewsletterTags(userId);
 
       if (orphanedTags.length === 0) {
-        console.log("[DatabaseCleanup] No orphaned newsletter tags found");
+        this.log.info("No orphaned newsletter tags found", {
+          action: "cleanup_orphaned_newsletter_tags",
+          metadata: { userId, itemsFound: 0 },
+        });
         return {
           itemsRemoved: 0,
           errors: [],
@@ -277,9 +320,10 @@ export class DatabaseCleanupUtils {
         };
       }
 
-      console.log(
-        `[DatabaseCleanup] Found ${orphanedTags.length} orphaned newsletter tags`,
-      );
+      this.log.info("Found orphaned newsletter tags", {
+        action: "cleanup_orphaned_newsletter_tags",
+        metadata: { userId, itemsFound: orphanedTags.length },
+      });
 
       const orphanedIds = orphanedTags.map((tag) => tag.id);
       const { error } = await supabase
@@ -293,14 +337,22 @@ export class DatabaseCleanupUtils {
         );
       } else {
         itemsRemoved = orphanedTags.length;
-        console.log(
-          `[DatabaseCleanup] Successfully removed ${itemsRemoved} orphaned newsletter tags`,
-        );
+        this.log.info("Successfully removed orphaned newsletter tags", {
+          action: "cleanup_orphaned_newsletter_tags",
+          metadata: { userId, itemsRemoved },
+        });
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       errors.push(`Cleanup failed: ${errorMsg}`);
-      console.error("[DatabaseCleanup] Newsletter tags cleanup failed:", error);
+      this.log.error(
+        "Cleanup of orphaned newsletter tags failed",
+        {
+          action: "cleanup_orphaned_newsletter_tags",
+          metadata: { userId },
+        },
+        error,
+      );
     }
 
     return {
@@ -321,7 +373,10 @@ export class DatabaseCleanupUtils {
     duration: number;
   }> {
     const startTime = performance.now();
-    console.log(`[DatabaseCleanup] Starting full cleanup for user ${userId}`);
+    this.log.info("Starting full database cleanup", {
+      action: "perform_full_cleanup",
+      metadata: { userId },
+    });
 
     try {
       const [readingQueueResult, newsletterTagsResult] = await Promise.all([
@@ -341,17 +396,26 @@ export class DatabaseCleanupUtils {
         duration: performance.now() - startTime,
       };
 
-      console.log(
-        `[DatabaseCleanup] Full cleanup completed in ${result.duration.toFixed(2)}ms:`,
-        {
+      this.log.info("Full database cleanup completed", {
+        action: "perform_full_cleanup",
+        metadata: {
+          userId,
+          duration: result.duration.toFixed(2),
           totalItemsRemoved: result.totalItemsRemoved,
-          totalErrors: result.totalErrors.length,
+          totalErrors: result.totalErrors,
         },
-      );
+      });
 
       return result;
     } catch (error) {
-      console.error("[DatabaseCleanup] Full cleanup failed:", error);
+      this.log.error(
+        "Full database cleanup failed",
+        {
+          action: "perform_full_cleanup",
+          metadata: { userId },
+        },
+        error,
+      );
       throw error;
     }
   }
@@ -363,21 +427,30 @@ export class DatabaseCleanupUtils {
     userId: string,
     intervalMs: number = 24 * 60 * 60 * 1000,
   ): Promise<void> {
-    console.log(
-      `[DatabaseCleanup] Scheduling periodic cleanup for user ${userId} every ${intervalMs}ms`,
-    );
+    this.log.info("Scheduling periodic database cleanup", {
+      action: "schedule_periodic_cleanup",
+      metadata: { userId, intervalMs },
+    });
 
     const cleanup = async () => {
       try {
         const report = await this.generateIntegrityReport(userId);
         if (report.totalIssues > 0) {
-          console.log(
-            `[DatabaseCleanup] Found ${report.totalIssues} integrity issues, performing cleanup`,
-          );
+          this.log.info("Found integrity issues, performing cleanup", {
+            action: "periodic_cleanup_check",
+            metadata: { userId, totalIssues: report.totalIssues },
+          });
           await this.performFullCleanup(userId);
         }
       } catch (error) {
-        console.error("[DatabaseCleanup] Scheduled cleanup failed:", error);
+        this.log.error(
+          "Scheduled database cleanup failed",
+          {
+            action: "periodic_cleanup_check",
+            metadata: { userId },
+          },
+          error,
+        );
       }
     };
 
@@ -433,8 +506,12 @@ export class DatabaseCleanupUtils {
         recommendations,
       };
     } catch (error) {
-      console.error(
-        "[DatabaseCleanup] Database integrity validation failed:",
+      this.log.error(
+        "Database integrity validation failed",
+        {
+          action: "validate_database_integrity",
+          metadata: { userId },
+        },
         error,
       );
       return {

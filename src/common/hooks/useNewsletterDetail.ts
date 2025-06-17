@@ -4,6 +4,7 @@ import { supabase } from "@common/services/supabaseClient";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { NewsletterWithRelations } from "@common/types";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
+import { useLogger } from "@common/utils/logger";
 import {
   getCacheManagerSafe,
   getQueriesData,
@@ -76,6 +77,7 @@ export const useNewsletterDetail = (
 ) => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const log = useLogger();
 
   // Initialize cache manager safely
   const cacheManager = useMemo(() => {
@@ -132,7 +134,14 @@ export const useNewsletterDetail = (
         .single();
 
       if (error) {
-        console.error("Error fetching newsletter detail:", error);
+        log.error(
+          "Failed to fetch newsletter detail",
+          {
+            action: "fetch_newsletter_detail",
+            metadata: { newsletterId, userId: user.id },
+          },
+          error,
+        );
         throw new Error(error.message || "Failed to fetch newsletter details");
       }
 
@@ -338,7 +347,14 @@ export const useNewsletterDetail = (
     try {
       await Promise.allSettled(prefetchPromises);
     } catch (error) {
-      console.warn("Some prefetch operations failed:", error);
+      log.warn("Some prefetch operations failed", {
+        action: "prefetch_operations",
+        metadata: {
+          newsletterId,
+          prefetchTags,
+          prefetchSource,
+        },
+      });
       // Don't throw - prefetching failures shouldn't break the main functionality
     }
   }, [query.data, user, prefetchTags, prefetchSource]);
@@ -436,7 +452,10 @@ export const usePrefetchNewsletterDetail = () => {
           },
         );
       } catch (error) {
-        console.warn(`Failed to prefetch newsletter ${newsletterId}:`, error);
+        log.warn("Failed to prefetch newsletter", {
+          action: "prefetch_newsletter",
+          metadata: { newsletterId },
+        });
         // Don't throw - prefetch failures shouldn't break the app
       }
     },

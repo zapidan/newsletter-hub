@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { useNewsletters } from "@common/hooks/useNewsletters";
 import { useTags } from "@common/hooks/useTags";
 import { useAuth } from "@common/contexts/AuthContext";
+import { useLogger } from "@common/utils/logger";
 import LoadingScreen from "@common/components/common/LoadingScreen";
 import TagSelector from "@web/components/TagSelector";
 import NewsletterDetailActions from "../../components/NewsletterDetail/NewsletterDetailActions";
@@ -13,6 +14,7 @@ import type { NewsletterWithRelations, Tag } from "@common/types";
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
   const { id } = useParams<{ id: string }>();
+  const log = useLogger();
   const navigate = useNavigate();
   const location = useLocation();
   // Check if we came from the reading queue using multiple indicators
@@ -53,8 +55,13 @@ const NewsletterDetail = memo(() => {
   }, [isFromReadingQueue, isFromNewsletterSources]);
 
   const handleBack = useCallback(() => {
-    console.log("Navigation state:", location.state);
-    console.log("Document referrer:", document.referrer);
+    log.debug("Navigation state for back action", {
+      action: "navigate_back",
+      metadata: {
+        locationState: location.state,
+        documentReferrer: document.referrer,
+      },
+    });
 
     // Check multiple indicators to determine where we came from
     const fromReadingQueue =
@@ -75,8 +82,13 @@ const NewsletterDetail = memo(() => {
         location.state.from.includes("/newsletters") &&
         !location.state.from.includes("reading-queue"));
 
-    console.log("From reading queue:", fromReadingQueue);
-    console.log("From newsletter sources:", fromNewsletterSources);
+    log.debug("Determined navigation context", {
+      action: "navigate_back",
+      metadata: {
+        fromReadingQueue,
+        fromNewsletterSources,
+      },
+    });
 
     // Determine target route
     let targetRoute = "/inbox";
@@ -139,18 +151,27 @@ const NewsletterDetail = memo(() => {
 
     // Skip if already fetching this ID
     if (isFetching.current && lastFetchedId.current === id) {
-      console.log("Already fetching newsletter:", id);
+      log.debug("Newsletter fetch already in progress", {
+        action: "fetch_newsletter_detail",
+        metadata: { newsletterId: id },
+      });
       return;
     }
 
     // Skip if we already have this newsletter loaded
     if (newsletter?.id === id) {
-      console.log("Using cached newsletter:", id);
+      log.debug("Using cached newsletter data", {
+        action: "fetch_newsletter_detail",
+        metadata: { newsletterId: id },
+      });
       setLoading(false);
       return;
     }
 
-    console.log("Initializing newsletter fetch for:", id);
+    log.debug("Initializing newsletter fetch", {
+      action: "fetch_newsletter_detail",
+      metadata: { newsletterId: id },
+    });
 
     // Update state
     lastFetchedId.current = id;
@@ -172,13 +193,24 @@ const NewsletterDetail = memo(() => {
 
         // Skip if component unmounted or ID changed
         if (!isMounted.current || lastFetchedId.current !== id) {
-          console.log(
+          log.debug(
             "Skipping state update - component unmounted or ID changed",
+            {
+              action: "fetch_newsletter_detail",
+              metadata: {
+                newsletterId: id,
+                isMounted: isMounted.current,
+                lastFetchedId: lastFetchedId.current,
+              },
+            },
           );
           return;
         }
 
-        console.log("Processing newsletter data for:", data?.id);
+        log.debug("Processing newsletter data", {
+          action: "fetch_newsletter_detail",
+          metadata: { newsletterId: data?.id },
+        });
 
         if (data?.id === id) {
           setNewsletter(data);
@@ -188,7 +220,14 @@ const NewsletterDetail = memo(() => {
           setNewsletter(null);
         }
       } catch (err) {
-        console.error("Error in newsletter fetch:", err);
+        log.error(
+          "Failed to fetch newsletter detail",
+          {
+            action: "fetch_newsletter_detail",
+            metadata: { newsletterId: id },
+          },
+          err,
+        );
 
         // Skip if component unmounted or ID changed
         if (!isMounted.current || lastFetchedId.current !== id) {
@@ -252,7 +291,14 @@ const NewsletterDetail = memo(() => {
           setError("Newsletter not found");
         }
       } catch (err) {
-        console.error("Failed to load newsletter:", err);
+        log.error(
+          "Failed to load newsletter",
+          {
+            action: "load_newsletter",
+            metadata: { newsletterId: id },
+          },
+          err,
+        );
         setError("Failed to load newsletter. Please try again.");
       } finally {
         setLoading(false);
@@ -320,7 +366,14 @@ const NewsletterDetail = memo(() => {
                         setTagSelectorKey((k) => k + 1);
                       }
                     } catch (error) {
-                      console.error("Failed to update tags:", error);
+                      log.error(
+                        "Failed to update tags",
+                        {
+                          action: "update_tags",
+                          metadata: { newsletterId: id },
+                        },
+                        error,
+                      );
                     }
                   }}
                   onTagDeleted={async () => {
@@ -333,7 +386,14 @@ const NewsletterDetail = memo(() => {
                         setTagSelectorKey((k) => k + 1);
                       }
                     } catch (error) {
-                      console.error("Failed to delete tag:", error);
+                      log.error(
+                        "Failed to delete tag",
+                        {
+                          action: "delete_tag",
+                          metadata: { newsletterId: id },
+                        },
+                        error,
+                      );
                     }
                   }}
                 />

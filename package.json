@@ -8,7 +8,11 @@
     "build": "vite build",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "logs:scan": "node scripts/find-console-logs.js",
+    "logs:report": "node scripts/find-console-logs.js --json",
+    "logs:dev": "VITE_LOG_LEVEL=DEBUG npm run dev",
+    "logs:prod": "VITE_LOG_LEVEL=WARN npm run dev"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

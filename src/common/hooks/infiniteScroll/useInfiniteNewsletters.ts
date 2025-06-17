@@ -5,6 +5,7 @@ import { PaginatedResponse } from "../../types/api";
 import { newsletterApi } from "../../api/newsletterApi";
 import { queryKeyFactory } from "../../utils/queryKeyFactory";
 import { useAuth } from "../../contexts/AuthContext";
+import { useLogger } from "../../utils/logger";
 
 export interface UseInfiniteNewslettersOptions {
   enabled?: boolean;
@@ -37,6 +38,7 @@ export const useInfiniteNewsletters = (
   options: UseInfiniteNewslettersOptions = {},
 ): UseInfiniteNewslettersReturn => {
   const { user } = useAuth();
+  const log = useLogger("useInfiniteNewsletters");
   const {
     enabled = true,
     refetchOnWindowFocus = false,
@@ -87,10 +89,13 @@ export const useInfiniteNewsletters = (
     queryKey,
     queryFn: async ({ pageParam = 0 }) => {
       if (debug) {
-        console.log("🔄 Fetching newsletters page:", {
-          page: pageParam / pageSize + 1,
-          offset: pageParam,
-          filters,
+        log.debug("Fetching newsletters page", {
+          action: "fetch_page",
+          metadata: {
+            page: pageParam / pageSize + 1,
+            offset: pageParam,
+            filters,
+          },
         });
       }
 
@@ -103,18 +108,28 @@ export const useInfiniteNewsletters = (
         const result = await newsletterApi.getAll(queryParams);
 
         if (debug) {
-          console.log("✅ Newsletters fetched:", {
-            count: result.data.length,
-            total: result.count,
-            hasMore: result.hasMore,
-            page: pageParam / pageSize + 1,
+          log.debug("Newsletters fetched successfully", {
+            action: "fetch_page_success",
+            metadata: {
+              count: result.data.length,
+              total: result.count,
+              hasMore: result.hasMore,
+              page: pageParam / pageSize + 1,
+            },
           });
         }
 
         return result;
       } catch (err) {
         if (debug) {
-          console.error("❌ Failed to fetch newsletters:", err);
+          log.error(
+            "Failed to fetch newsletters",
+            {
+              action: "fetch_page_error",
+              metadata: { pageParam, pageSize, filters },
+            },
+            err instanceof Error ? err : new Error(String(err)),
+          );
         }
         throw err;
       }
@@ -147,10 +162,13 @@ export const useInfiniteNewsletters = (
     const allNewsletters = data.pages.flatMap((page) => page.data);
 
     if (debug) {
-      console.log("📋 Total newsletters loaded:", {
-        count: allNewsletters.length,
-        pages: data.pages.length,
-        lastPageSize: data.pages[data.pages.length - 1]?.data.length || 0,
+      log.debug("Total newsletters loaded", {
+        action: "calculate_total_newsletters",
+        metadata: {
+          count: allNewsletters.length,
+          pages: data.pages.length,
+          lastPageSize: data.pages[data.pages.length - 1]?.data.length || 0,
+        },
       });
     }
 
@@ -175,10 +193,13 @@ export const useInfiniteNewsletters = (
   const handleFetchNextPage = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       if (debug) {
-        console.log("🔄 Loading next page...", {
-          currentNewsletters: newsletters.length,
-          totalCount,
-          hasNextPage,
+        log.debug("Loading next page", {
+          action: "load_next_page",
+          metadata: {
+            currentNewsletters: newsletters.length,
+            totalCount,
+            hasNextPage,
+          },
         });
       }
       fetchNextPage();
@@ -195,9 +216,12 @@ export const useInfiniteNewsletters = (
   // Enhanced refetch with debug logging
   const handleRefetch = useCallback(() => {
     if (debug) {
-      console.log("🔄 Refetching newsletters...", {
-        filters,
-        currentCount: newsletters.length,
+      log.debug("Refetching newsletters", {
+        action: "refetch_newsletters",
+        metadata: {
+          filters,
+          currentCount: newsletters.length,
+        },
       });
     }
 

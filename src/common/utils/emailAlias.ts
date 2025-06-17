@@ -1,6 +1,7 @@
 import { userApi } from "../api/userApi";
 import supabase from "../api/supabaseClient";
-import emailConfig from '../config/email';
+import emailConfig from "../config/email";
+import { createLogger } from "./logger";
 
 type EmailAliasResult = {
   email: string;
@@ -13,10 +14,14 @@ type EmailAliasResult = {
  * @returns Generated email alias string
  */
 export function generateEmailAliasFromEmail(email: string): string {
-  const username = emailConfig.defaultUsername === 'user'
-    ? email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "")
-    : emailConfig.defaultUsername.toLowerCase().replace(/[^a-z0-9]/g, "");
-  
+  const username =
+    emailConfig.defaultUsername === "user"
+      ? email
+          .split("@")[0]
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+      : emailConfig.defaultUsername.toLowerCase().replace(/[^a-z0-9]/g, "");
+
   return `${username}@${emailConfig.defaultDomain}`;
 }
 
@@ -27,11 +32,19 @@ export function generateEmailAliasFromEmail(email: string): string {
 export async function generateEmailAlias(
   email: string,
 ): Promise<EmailAliasResult> {
+  const log = createLogger();
   try {
     const emailAlias = generateEmailAliasFromEmail(email);
     return await userApi.generateEmailAlias(emailAlias);
   } catch (error) {
-    console.error("Error generating email alias:", error);
+    log.error(
+      "Failed to generate email alias",
+      {
+        action: "generate_email_alias",
+        metadata: { email },
+      },
+      error,
+    );
     return { email: "", error: "Failed to generate email alias" };
   }
 }
@@ -40,11 +53,19 @@ export async function generateEmailAlias(
  * Gets or creates an email alias for a user
  */
 export async function getUserEmailAlias(): Promise<string> {
+  const log = createLogger();
   try {
     return await userApi.getEmailAlias();
   } catch (error) {
-    console.error("Error in getUserEmailAlias:", error);
-    throw error;
+    log.error(
+      "Failed to get user email alias",
+      {
+        action: "get_user_email_alias",
+        metadata: {},
+      },
+      error,
+    );
+    return "";
   }
 }
 
@@ -54,11 +75,19 @@ export async function getUserEmailAlias(): Promise<string> {
 export async function updateEmailAlias(
   newAlias: string,
 ): Promise<EmailAliasResult> {
+  const log = createLogger();
   try {
     return await userApi.updateEmailAlias(newAlias);
   } catch (error) {
-    console.error("Error in updateEmailAlias:", error);
-    return { email: "", error: "Internal server error" };
+    log.error(
+      "Failed to update email alias",
+      {
+        action: "update_email_alias",
+        metadata: { newAlias },
+      },
+      error,
+    );
+    throw error;
   }
 }
 
@@ -67,11 +96,18 @@ export async function updateEmailAlias(
  * @returns Promise with the current or updated email alias
  */
 export async function verifyAndUpdateEmailAlias(): Promise<string> {
-  console.log('[EmailAlias] Starting email alias verification and update');
-  
+  const log = createLogger();
+  log.info("Starting email alias verification and update", {
+    action: "verify_and_update_email_alias",
+    metadata: {},
+  });
+
   // Add a timeout to prevent hanging (5 seconds)
-  const timeoutPromise = new Promise<never>((_, reject) => 
-    setTimeout(() => reject(new Error('Email alias verification timed out')), 5000)
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(
+      () => reject(new Error("Email alias verification timed out")),
+      5000,
+    ),
   );
 
   try {
@@ -79,63 +115,125 @@ export async function verifyAndUpdateEmailAlias(): Promise<string> {
     return await Promise.race([
       (async () => {
         // Get current user
-        console.log('[EmailAlias] Fetching current user...');
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
+        log.debug("Fetching current user", {
+          action: "verify_and_update_email_alias",
+          metadata: { step: "fetch_user" },
+        });
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
         if (userError) {
-          console.error('[EmailAlias] Error getting user:', userError);
+          log.error(
+            "Failed to get current user",
+            {
+              action: "verify_and_update_email_alias",
+              metadata: { step: "fetch_user" },
+            },
+            userError,
+          );
           throw userError;
         }
-        
+
         if (!user?.email) {
-          const errorMsg = 'User not authenticated or email not found';
-          console.error(`[EmailAlias] ${errorMsg}`, { user });
+          const errorMsg = "User not authenticated or email not found";
+          log.error(errorMsg, {
+            action: "verify_and_update_email_alias",
+            metadata: { step: "validate_user", hasUser: !!user },
+          });
           throw new Error(errorMsg);
         }
 
-        console.log('[EmailAlias] User email:', user.email);
-        
+        log.debug("User email retrieved", {
+          action: "verify_and_update_email_alias",
+          metadata: { step: "user_email", email: user.email },
+        });
+
         // Generate expected alias using the common function
         const expectedAlias = generateEmailAliasFromEmail(user.email);
-        console.log('[EmailAlias] Generated expected alias:', expectedAlias);
-        
+        log.debug("Generated expected alias", {
+          action: "verify_and_update_email_alias",
+          metadata: { step: "generate_alias", expectedAlias },
+        });
+
         // Get current alias from database with a timeout
-        console.log('[EmailAlias] Fetching current alias from database...');
+        log.debug("Fetching current alias from database", {
+          action: "verify_and_update_email_alias",
+          metadata: { step: "fetch_current_alias" },
+        });
         const currentAlias = await Promise.race([
           userApi.getEmailAlias(),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('getEmailAlias timed out')), 3000)
-          )
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("getEmailAlias timed out")),
+              3000,
+            ),
+          ),
         ]);
-        
-        console.log('[EmailAlias] Current alias from database:', currentAlias);
-        
+
+        log.debug("Current alias retrieved from database", {
+          action: "verify_and_update_email_alias",
+          metadata: { step: "current_alias", currentAlias },
+        });
+
         // If aliases match, return current alias
         if (currentAlias === expectedAlias) {
-          console.log('[EmailAlias] Aliases match, no update needed');
+          log.debug("Aliases match, no update needed", {
+            action: "verify_and_update_email_alias",
+            metadata: { step: "comparison", result: "match" },
+          });
           return currentAlias;
         }
-        
-        console.log('[EmailAlias] Aliases differ, updating...');
-        
+
+        log.info("Aliases differ, updating email alias", {
+          action: "verify_and_update_email_alias",
+          metadata: {
+            step: "update",
+            currentAlias,
+            expectedAlias,
+          },
+        });
+
         // If different, update to the expected alias
-        const { email: updatedAlias, error: updateError } = await userApi.updateEmailAlias(expectedAlias);
-        
+        const { email: updatedAlias, error: updateError } =
+          await userApi.updateEmailAlias(expectedAlias);
+
         if (updateError) {
-          console.error('[EmailAlias] Error updating alias:', updateError);
+          log.error(
+            "Failed to update email alias",
+            {
+              action: "verify_and_update_email_alias",
+              metadata: { step: "update", expectedAlias },
+            },
+            new Error(updateError),
+          );
           throw new Error(`Failed to update email alias: ${updateError}`);
         }
-        
-        console.log('[EmailAlias] Successfully updated alias to:', updatedAlias);
+
+        log.info("Successfully updated email alias", {
+          action: "verify_and_update_email_alias",
+          metadata: { step: "update_success", updatedAlias },
+        });
         return updatedAlias;
       })(),
-      timeoutPromise
+      timeoutPromise,
     ]);
   } catch (error) {
-    console.error('[EmailAlias] Error in verifyAndUpdateEmailAlias:', error);
+    log.error(
+      "Error in email alias verification",
+      {
+        action: "verify_and_update_email_alias",
+        metadata: { step: "error_handling" },
+      },
+      error,
+    );
     // Don't block the auth flow if there's an error with the alias
-    console.warn('[EmailAlias] Continuing without updating email alias due to error');
-    return ''; // Return empty string to indicate failure but don't block the auth flow
+    log.warn("Continuing without updating email alias due to error", {
+      action: "verify_and_update_email_alias",
+      metadata: { step: "error_recovery" },
+    });
+    return ""; // Return empty string to indicate failure but don't block the auth flow
   }
 }
 

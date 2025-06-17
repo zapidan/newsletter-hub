@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { X, Plus } from 'lucide-react';
-import { NewsletterSource } from '@common/types';
-import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
+import { useState, useEffect } from "react";
+import { X, Plus } from "lucide-react";
+import { NewsletterSource } from "@common/types";
+import { useNewsletterSourceGroups } from "@common/hooks/useNewsletterSourceGroups";
+import { useLogger } from "@common/utils/logger";
 
 interface CreateSourceGroupModalProps {
   isOpen: boolean;
@@ -20,16 +21,19 @@ export const CreateSourceGroupModal = ({
   onClose,
   onSuccess,
   sources,
-  groupToEdit
+  groupToEdit,
 }: CreateSourceGroupModalProps) => {
-  const [name, setName] = useState('');
-  const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set());
-  const [searchTerm, setSearchTerm] = useState('');
-  
-  const { 
-    createGroup, 
-    updateGroup, 
-    isPending: isSaving 
+  const [name, setName] = useState("");
+  const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+  const log = useLogger();
+
+  const {
+    createGroup,
+    updateGroup,
+    isPending: isSaving,
   } = useNewsletterSourceGroups();
 
   // Initialize form when opening modal or when groupToEdit changes
@@ -37,36 +41,47 @@ export const CreateSourceGroupModal = ({
     if (isOpen) {
       if (groupToEdit) {
         setName(groupToEdit.name);
-        setSelectedSourceIds(new Set(groupToEdit.sources.map(s => s.id)));
+        setSelectedSourceIds(new Set(groupToEdit.sources.map((s) => s.id)));
       } else {
-        setName('');
+        setName("");
         setSelectedSourceIds(new Set());
       }
-      setSearchTerm('');
+      setSearchTerm("");
     }
   }, [isOpen, groupToEdit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid || isSaving) return;
-    
+
     try {
       if (groupToEdit) {
         await updateGroup.mutateAsync({
           id: groupToEdit.id,
           name: name.trim(),
-          sourceIds: Array.from(selectedSourceIds)
+          sourceIds: Array.from(selectedSourceIds),
         });
       } else {
         await createGroup.mutateAsync({
           name: name.trim(),
-          sourceIds: Array.from(selectedSourceIds)
+          sourceIds: Array.from(selectedSourceIds),
         });
       }
       onSuccess?.();
       onClose();
     } catch (error) {
-      console.error('Failed to save group:', error);
+      log.error(
+        "Failed to save source group",
+        {
+          action: "save_source_group",
+          metadata: {
+            groupId: groupToEdit?.id,
+            isEdit: !!groupToEdit,
+            sourceCount: selectedSourceIds.size,
+          },
+        },
+        error,
+      );
     }
   };
 
@@ -80,9 +95,10 @@ export const CreateSourceGroupModal = ({
     setSelectedSourceIds(newSelected);
   };
 
-  const filteredSources = sources.filter(source =>
-    source.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    source.domain.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredSources = sources.filter(
+    (source) =>
+      source.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      source.domain.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Form is valid if name is not empty and at least one source is selected
@@ -92,41 +108,41 @@ export const CreateSourceGroupModal = ({
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]"
       style={{
-        position: 'fixed',
+        position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
         zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem'
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
       }}
     >
-      <div 
+      <div
         className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden p-6 relative"
         style={{
-          backgroundColor: 'white',
-          borderRadius: '1rem',
-          width: '100%',
-          maxWidth: '32rem',
-          maxHeight: '90vh',
-          overflow: 'hidden',
-          position: 'relative',
+          backgroundColor: "white",
+          borderRadius: "1rem",
+          width: "100%",
+          maxWidth: "32rem",
+          maxHeight: "90vh",
+          overflow: "hidden",
+          position: "relative",
           zIndex: 10000,
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
         }}
       >
         <div className="flex justify-between items-center pb-4 border-b">
           <h2 className="text-xl font-semibold">
-            {groupToEdit ? 'Edit Group' : 'Create New Group'}
+            {groupToEdit ? "Edit Group" : "Create New Group"}
           </h2>
-          <button 
+          <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700"
             aria-label="Close"
@@ -134,11 +150,17 @@ export const CreateSourceGroupModal = ({
             <X size={20} />
           </button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 flex flex-col overflow-hidden"
+        >
           <div className="pt-4 pb-4 space-y-4">
             <div>
-              <label htmlFor="group-name" className="block text-base font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="group-name"
+                className="block text-base font-medium text-gray-700 mb-2"
+              >
                 Group Name
               </label>
               <input
@@ -152,7 +174,7 @@ export const CreateSourceGroupModal = ({
                 autoFocus
               />
             </div>
-            
+
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-base font-medium text-gray-700">
@@ -169,7 +191,7 @@ export const CreateSourceGroupModal = ({
                   {searchTerm && (
                     <button
                       type="button"
-                      onClick={() => setSearchTerm('')}
+                      onClick={() => setSearchTerm("")}
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
                       <X size={16} />
@@ -177,7 +199,7 @@ export const CreateSourceGroupModal = ({
                   )}
                 </div>
               </div>
-              
+
               <div className="border rounded-md max-h-72 overflow-y-auto">
                 {filteredSources.length > 0 ? (
                   <ul className="divide-y">
@@ -207,15 +229,15 @@ export const CreateSourceGroupModal = ({
                   </ul>
                 ) : (
                   <div className="p-6 text-center text-sm text-gray-500">
-                    {sources.length === 0 
-                      ? 'No sources available. Add some sources first.'
-                      : 'No sources match your search.'}
+                    {sources.length === 0
+                      ? "No sources available. Add some sources first."
+                      : "No sources match your search."}
                   </div>
                 )}
               </div>
             </div>
           </div>
-          
+
           <div className="pt-4 pb-2 bg-gray-50 border-t flex justify-end space-x-4">
             <button
               type="button"
@@ -229,24 +251,24 @@ export const CreateSourceGroupModal = ({
               type="submit"
               disabled={isSubmitDisabled}
               className={`px-5 py-2 text-sm font-medium text-white border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                isSubmitDisabled 
-                  ? 'bg-blue-400 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-700'
+                isSubmitDisabled
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-700"
               }`}
               title={
-                isSubmitDisabled 
-                  ? !name.trim() 
-                    ? 'Please enter a group name' 
-                    : selectedSourceIds.size === 0 
-                      ? 'Please select at least one source' 
-                      : ''
-                  : ''
+                isSubmitDisabled
+                  ? !name.trim()
+                    ? "Please enter a group name"
+                    : selectedSourceIds.size === 0
+                      ? "Please select at least one source"
+                      : ""
+                  : ""
               }
             >
               {isSaving ? (
-                'Saving...'
+                "Saving..."
               ) : groupToEdit ? (
-                'Update Group'
+                "Update Group"
               ) : (
                 <>
                   <Plus className="inline-block w-4 h-4 mr-1 -mt-0.5" />

@@ -1,6 +1,7 @@
 import { useState, FormEvent } from "react";
 import { useAuth } from "@common/contexts/AuthContext";
 import { useEmailAlias } from "@common/hooks/useEmailAlias";
+import { useLogger } from "@common/utils/logger";
 import { motion } from "framer-motion";
 import {
   Mail,
@@ -26,117 +27,163 @@ const Settings = () => {
     loading: emailLoading,
     error: emailError,
   } = useEmailAlias();
+  const log = useLogger();
   const [activeTab, setActiveTab] = useState("account");
   const [notificationEmail, setNotificationEmail] = useState(true);
   const [notificationBrowser, setNotificationBrowser] = useState(false);
   const [voiceType, setVoiceType] = useState("neutral");
   const [voiceSpeed, setVoiceSpeed] = useState("1.0");
   const [copied, setCopied] = useState(false);
-  
+
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(
+    null,
+  );
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
-  
+
   const handlePasswordChange = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     // Reset states
     setPasswordChangeError(null);
     setPasswordChangeSuccess(false);
-    
+
     // Validate current password
     if (!currentPassword) {
       setPasswordChangeError("Please enter your current password");
       return;
     }
-    
+
     // Validate new password
     if (!newPassword) {
       setPasswordChangeError("Please enter a new password");
       return;
     }
-    
+
     // Validate password length
     if (newPassword.length < 8) {
       setPasswordChangeError("New password must be at least 8 characters long");
       return;
     }
-    
+
     // Validate passwords match
     if (newPassword !== confirmPassword) {
       setPasswordChangeError("New passwords do not match");
       return;
     }
-    
+
     // Check if new password is different from current password
     if (currentPassword === newPassword) {
-      setPasswordChangeError("New password must be different from your current password");
+      setPasswordChangeError(
+        "New password must be different from your current password",
+      );
       return;
     }
-    
+
     try {
       setIsUpdatingPassword(true);
-      
+
       // First, we need to re-authenticate with the current password
-      const { error: signInError } = await signIn(user?.email || '', currentPassword);
-      
+      const { error: signInError } = await signIn(
+        user?.email || "",
+        currentPassword,
+      );
+
       if (signInError) {
-        console.error("Sign in error:", signInError);
+        log.error(
+          "Sign in error during password change",
+          {
+            action: "password_change_signin",
+            metadata: { userId: user?.id },
+          },
+          signInError,
+        );
         if (signInError.message.includes("Invalid login credentials")) {
-          setPasswordChangeError("The current password you entered is incorrect. Please try again.");
+          setPasswordChangeError(
+            "The current password you entered is incorrect. Please try again.",
+          );
         } else if (signInError.message.includes("Email not confirmed")) {
-          setPasswordChangeError("Please verify your email address before changing your password.");
+          setPasswordChangeError(
+            "Please verify your email address before changing your password.",
+          );
         } else if (signInError.message.includes("too many requests")) {
-          setPasswordChangeError("Too many attempts. Please wait a few minutes before trying again.");
+          setPasswordChangeError(
+            "Too many attempts. Please wait a few minutes before trying again.",
+          );
         } else {
-          setPasswordChangeError(`Authentication failed: ${signInError.message}`);
+          setPasswordChangeError(
+            `Authentication failed: ${signInError.message}`,
+          );
         }
         return;
       }
-      
+
       // If re-authentication is successful, update the password
       const { error: updateError } = await updatePassword(newPassword);
-      
+
       if (updateError) {
-        console.error("Update password error:", updateError);
+        log.error(
+          "Update password error",
+          {
+            action: "update_password",
+            metadata: { userId: user?.id },
+          },
+          updateError,
+        );
         let errorMessage = "Failed to update password. Please try again.";
-        
-        if (updateError.message.includes("New password should be different from the old password")) {
-          errorMessage = "Your new password must be different from your current password.";
-        } else if (updateError.message.includes("Password should be at least")) {
+
+        if (
+          updateError.message.includes(
+            "New password should be different from the old password",
+          )
+        ) {
+          errorMessage =
+            "Your new password must be different from your current password.";
+        } else if (
+          updateError.message.includes("Password should be at least")
+        ) {
           errorMessage = "Password must be at least 8 characters long.";
         } else if (updateError.message.includes("Invalid refresh token")) {
-          errorMessage = "Your session has expired. Please sign in again and try updating your password.";
+          errorMessage =
+            "Your session has expired. Please sign in again and try updating your password.";
         } else if (updateError.message.includes("network error")) {
-          errorMessage = "Network error. Please check your internet connection and try again.";
+          errorMessage =
+            "Network error. Please check your internet connection and try again.";
         } else if (updateError.message.includes("too many requests")) {
-          errorMessage = "Too many password update attempts. Please wait a few minutes before trying again.";
+          errorMessage =
+            "Too many password update attempts. Please wait a few minutes before trying again.";
         }
-        
+
         setPasswordChangeError(errorMessage);
         return;
       }
-      
+
       // Success!
       setPasswordChangeSuccess(true);
       setPasswordChangeError(null);
-      
+
       // Clear form
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      
+
       // Clear success message after 5 seconds
       setTimeout(() => {
         setPasswordChangeSuccess(false);
       }, 5000);
-      
     } catch (error) {
-      console.error("Error updating password:", error);
+      log.error(
+        "Unexpected error updating password",
+        {
+          action: "update_password",
+          metadata: { userId: user?.id },
+        },
+        error,
+      );
       setPasswordChangeError("An unexpected error occurred. Please try again.");
     } finally {
       setIsUpdatingPassword(false);
@@ -151,7 +198,14 @@ const Settings = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy email:", err);
+      log.error(
+        "Failed to copy email to clipboard",
+        {
+          action: "copy_email",
+          metadata: { userId: user?.id },
+        },
+        err,
+      );
     }
   };
 
@@ -686,21 +740,21 @@ const Settings = () => {
                   <div className="space-y-6">
                     <form onSubmit={handlePasswordChange} className="space-y-4">
                       <h4 className="font-medium">Change Password</h4>
-                      
+
                       {passwordChangeError && (
                         <div className="p-3 bg-red-50 text-red-700 text-sm rounded-md flex items-start gap-2">
                           <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                           <span>{passwordChangeError}</span>
                         </div>
                       )}
-                      
+
                       {passwordChangeSuccess && (
                         <div className="p-3 bg-green-50 text-green-700 text-sm rounded-md flex items-start gap-2">
                           <CheckCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                           <span>Password updated successfully!</span>
                         </div>
                       )}
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-neutral-700 mb-1">
                           Current Password
@@ -730,7 +784,7 @@ const Settings = () => {
                           minLength={8}
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-neutral-700 mb-1">
                           Confirm New Password
@@ -745,22 +799,40 @@ const Settings = () => {
                           minLength={8}
                         />
                       </div>
-                      
+
                       <div className="pt-2">
-                        <button 
-                          type="submit" 
+                        <button
+                          type="submit"
                           className="btn btn-primary w-full flex items-center justify-center gap-2"
                           disabled={isUpdatingPassword}
                         >
                           {isUpdatingPassword ? (
                             <>
-                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              <svg
+                                className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
                               </svg>
                               Updating...
                             </>
-                          ) : 'Update Password'}
+                          ) : (
+                            "Update Password"
+                          )}
                         </button>
                       </div>
                     </form>

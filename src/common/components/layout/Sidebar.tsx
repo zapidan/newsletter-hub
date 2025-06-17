@@ -18,10 +18,12 @@ import {
 import { useState } from "react";
 import { useContext } from "react";
 import { AuthContext } from "@common/contexts/AuthContext";
+import { useLogger } from "@common/utils/logger";
 import { useEmailAlias } from "@common/hooks/useEmailAlias";
 import { useUnreadCount } from "@common/hooks/useUnreadCount";
 
 const Sidebar = () => {
+  const log = useLogger("Sidebar");
   const [isOpen, setIsOpen] = useState(false);
   const auth = useContext(AuthContext);
   const user = auth?.user;
@@ -42,7 +44,14 @@ const Sidebar = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy email:", err);
+      log.error(
+        "Failed to copy email",
+        {
+          action: "copy_email",
+          metadata: { emailAlias },
+        },
+        err instanceof Error ? err : new Error(String(err)),
+      );
       alert("Failed to copy email to clipboard");
     }
   };

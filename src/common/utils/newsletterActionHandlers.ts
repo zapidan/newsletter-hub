@@ -1,6 +1,7 @@
 import { toast } from "react-hot-toast";
 import { getCacheManager } from "./cacheUtils";
 import { readingQueueApi } from "@common/api";
+import { createLogger } from "./logger";
 import type { NewsletterWithRelations } from "@common/types";
 
 export interface NewsletterActionHandlers {
@@ -28,6 +29,7 @@ export interface NewsletterActionOptions {
 export class SharedNewsletterActionHandlers {
   private cacheManager: ReturnType<typeof getCacheManager>;
   private handlers: NewsletterActionHandlers;
+  private log = createLogger();
   private defaultOptions: NewsletterActionOptions = {
     showToasts: true,
     optimisticUpdates: true,
@@ -64,7 +66,14 @@ export class SharedNewsletterActionHandlers {
           );
           optimisticUpdateApplied = true;
         } catch (optimisticError) {
-          console.warn("Failed to apply optimistic update:", optimisticError);
+          this.log.warn("Failed to apply optimistic update", {
+            action: "optimistic_update",
+            metadata: {
+              newsletterId,
+              operationType,
+              updateFields: Object.keys(updates),
+            },
+          });
           // Continue without optimistic update
         }
       }
@@ -98,7 +107,13 @@ export class SharedNewsletterActionHandlers {
             updates: originalData,
           });
         } catch (revertError) {
-          console.warn("Failed to revert optimistic update:", revertError);
+          this.log.warn("Failed to revert optimistic update", {
+            action: "revert_optimistic_update",
+            metadata: {
+              newsletterId,
+              operationType,
+            },
+          });
           // Force refresh if revert fails
           await this.cacheManager.invalidateRelatedQueries(
             [newsletterId],
@@ -139,10 +154,14 @@ export class SharedNewsletterActionHandlers {
           );
           optimisticUpdateApplied = true;
         } catch (optimisticError) {
-          console.warn(
-            "Failed to apply bulk optimistic update:",
-            optimisticError,
-          );
+          this.log.warn("Failed to apply bulk optimistic update", {
+            action: "bulk_optimistic_update",
+            metadata: {
+              newsletterIds: newsletterIds.length,
+              operationType,
+              updateFields: Object.keys(updates),
+            },
+          });
           // Continue without optimistic update
         }
       }

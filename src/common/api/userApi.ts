@@ -4,7 +4,8 @@ import {
   requireAuth,
   withPerformanceLogging,
 } from "./supabaseClient";
-import { generateEmailAliasFromEmail } from '../utils/emailAlias';
+import { generateEmailAliasFromEmail } from "../utils/emailAlias";
+import { useLoggerStatic } from "../utils/logger";
 
 interface UserProfile {
   id: string;
@@ -26,6 +27,9 @@ interface UpdateUserParams {
   avatar_url?: string;
   email_alias?: string;
 }
+
+// Initialize logger
+const log = useLoggerStatic();
 
 // User API Service
 export const userApi = {
@@ -86,13 +90,29 @@ export const userApi = {
           .eq("id", user.id);
 
         if (error) {
-          console.error("Error saving email alias:", error);
+          log.error(
+            "Error saving email alias",
+            {
+              component: "UserApi",
+              action: "save_email_alias",
+              metadata: { userId: user.id },
+            },
+            error,
+          );
           return { email: "", error: "Failed to save email alias" };
         }
 
         return { email: emailAlias };
       } catch (error) {
-        console.error("Error generating email alias:", error);
+        log.error(
+          "Error generating email alias",
+          {
+            component: "UserApi",
+            action: "generate_email_alias",
+            metadata: { email },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         return { email: "", error: "Failed to generate email alias" };
       }
     });
@@ -131,7 +151,15 @@ export const userApi = {
 
         return email;
       } catch (error) {
-        console.error("Error in getEmailAlias:", error);
+        log.error(
+          "Error in getEmailAlias",
+          {
+            component: "UserApi",
+            action: "get_email_alias",
+            metadata: { userId: user.id },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         throw error;
       }
     });
@@ -143,7 +171,6 @@ export const userApi = {
       const user = await requireAuth();
 
       try {
-
         // Check if the alias is already taken
         const { data } = await supabase
           .from("users")
@@ -163,13 +190,29 @@ export const userApi = {
           .eq("id", user.id);
 
         if (updateError) {
-          console.error("Error updating user with email alias:", updateError);
+          log.error(
+            "Error updating user with email alias",
+            {
+              component: "UserApi",
+              action: "update_email_alias",
+              metadata: { userId: user.id, newAlias },
+            },
+            updateError,
+          );
           return { email: "", error: "Error saving email alias" };
         }
 
         return { email: newAlias };
       } catch (error) {
-        console.error("Error in updateEmailAlias:", error);
+        log.error(
+          "Error in updateEmailAlias",
+          {
+            component: "UserApi",
+            action: "update_email_alias",
+            metadata: { userId: user.id, newAlias },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         return { email: "", error: "Internal server error" };
       }
     });
@@ -206,7 +249,15 @@ export const userApi = {
         user.id,
       );
       if (authError) {
-        console.error("Error deleting user from auth:", authError);
+        log.error(
+          "Error deleting user from auth",
+          {
+            component: "UserApi",
+            action: "delete_user",
+            metadata: { userId: user.id },
+          },
+          authError,
+        );
         // Continue anyway as the user data is deleted
       }
 

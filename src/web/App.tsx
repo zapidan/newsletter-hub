@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import {
   Routes,
   Route,
@@ -14,6 +14,7 @@ import { ProtectedRoute } from "@common/components/ProtectedRoute";
 import { CacheInitializer } from "@common/components/CacheInitializer";
 import ErrorBoundary from "@web/components/ErrorBoundary";
 import { useAuth } from "@common/contexts/AuthContext";
+import { useLogger } from "@common/utils/logger";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 
 // Lazy load page components
@@ -50,15 +51,56 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const query = useQuery();
   const redirectTo = query.get("redirectTo");
+  const log = useLogger("App");
+
+  // Log navigation changes
+  useEffect(() => {
+    log.logNavigation(
+      document.referrer ? new URL(document.referrer).pathname : "external",
+      location.pathname,
+      {
+        metadata: {
+          search: location.search,
+          hash: location.hash,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    );
+  }, [location, log]);
 
   // Handle redirect after login
   React.useEffect(() => {
     if (user && (location.pathname === "/login" || location.pathname === "/")) {
-      navigate(redirectTo || "/inbox", { replace: true });
+      const destination = redirectTo || "/inbox";
+      log.info("Redirecting authenticated user", {
+        action: "auth_redirect",
+        metadata: {
+          from: location.pathname,
+          to: destination,
+          userId: user.id,
+        },
+      });
+      navigate(destination, { replace: true });
     }
-  }, [user, location, navigate, redirectTo]);
+  }, [user, location, navigate, redirectTo, log]);
+
+  // Log app initialization
+  useEffect(() => {
+    log.info("App initialized", {
+      action: "app_init",
+      metadata: {
+        pathname: location.pathname,
+        userAgent: navigator.userAgent,
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        authenticated: !!user,
+      },
+    });
+  }, []);
 
   if (loading) {
+    log.debug("App loading - showing loading fallback", {
+      action: "app_loading",
+    });
     return <LoadingFallback />;
   }
 
@@ -76,7 +118,15 @@ const App: React.FC = () => {
         </p>
         <div className="mt-6">
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              log.logUserAction("app_error_refresh", {
+                metadata: {
+                  pathname: location.pathname,
+                  timestamp: new Date().toISOString(),
+                },
+              });
+              window.location.reload();
+            }}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Refresh Page

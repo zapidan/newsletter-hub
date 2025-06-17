@@ -9,6 +9,7 @@ import { useFilters } from "@common/contexts/FilterContext";
 import { useNewsletters } from "@common/hooks/useNewsletters";
 import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
 import { useTags } from "@common/hooks/useTags";
+import { useLogger } from "@common/utils/logger";
 import type { NewsletterWithRelations, Tag } from "@common/types";
 import type { TimeRange } from "@web/components/TimeFilter";
 
@@ -63,6 +64,8 @@ export const useInboxFilters = (
     autoLoadTags = true,
     preserveUrlOnActions = true,
   } = options;
+
+  const log = useLogger();
 
   // Use filter context for core filter state
   const {
@@ -134,14 +137,26 @@ export const useInboxFilters = (
           if (tags && tags.length > 0) {
             setAllTags(tags);
           } else {
-            console.warn(
-              "No tags loaded - this might affect tag filtering functionality",
-            );
+            log.warn("No tags loaded for inbox filters", {
+              action: "load_tags",
+              metadata: {
+                autoLoadTags,
+                tagCount: 0,
+                impact: "filter_functionality_affected",
+              },
+            });
             setAllTags([]);
           }
         })
         .catch((error) => {
-          console.error("Failed to load tags for inbox filters:", error);
+          log.error(
+            "Failed to load tags for inbox filters",
+            {
+              action: "load_tags",
+              metadata: { autoLoadTags },
+            },
+            error,
+          );
           // Show error to user if needed
           setAllTags([]);
         })
@@ -173,10 +188,14 @@ export const useInboxFilters = (
           allTags.some((tag) => tag.id === tagId),
         );
         if (validTagIds.length !== newTagIds.length) {
-          console.warn("Some tag IDs not found in available tags:", {
-            requested: newTagIds,
-            valid: validTagIds,
-            available: allTags.map((t) => t.id),
+          log.warn("Some tag IDs not found in available tags", {
+            action: "validate_tags",
+            metadata: {
+              requested: newTagIds,
+              valid: validTagIds,
+              available: allTags.map((t) => t.id),
+              invalidCount: newTagIds.length - validTagIds.length,
+            },
           });
         }
         setPendingTagUpdates(validTagIds);
@@ -191,12 +210,15 @@ export const useInboxFilters = (
   // Internal function for handling tag clicks with Tag object
   const handleTagClickInternal = useCallback(
     (tag: Tag, e?: React.MouseEvent) => {
-      console.log("🏷️ [DEBUG] Tag clicked:", {
-        tagId: tag.id,
-        tagName: tag.name,
-        eventType: e?.type,
-        currentPendingTags: pendingTagUpdates,
-        allTagsLoaded: allTags.length,
+      log.debug("Tag clicked in inbox filters", {
+        action: "tag_click",
+        metadata: {
+          tagId: tag.id,
+          tagName: tag.name,
+          eventType: e?.type,
+          currentPendingTags: pendingTagUpdates,
+          allTagsLoaded: allTags.length,
+        },
       });
 
       e?.stopPropagation();
@@ -207,11 +229,16 @@ export const useInboxFilters = (
         ? currentTags.filter((id) => id !== tagId)
         : [...currentTags, tagId];
 
-      console.log("🏷️ [DEBUG] Tag toggle result:", {
-        wasSelected: isCurrentlySelected,
-        action: isCurrentlySelected ? "REMOVE" : "ADD",
-        oldTags: currentTags,
-        newTags: newTags,
+      log.debug("Tag toggle result in inbox filters", {
+        action: "tag_toggle",
+        metadata: {
+          tagId: tag.id,
+          wasSelected: isCurrentlySelected,
+          operation: isCurrentlySelected ? "REMOVE" : "ADD",
+          oldTags: currentTags,
+          newTags: newTags,
+          changeCount: Math.abs(newTags.length - currentTags.length),
+        },
       });
 
       updateTagDebounced(newTags);

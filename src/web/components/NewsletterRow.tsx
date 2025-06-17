@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import { Tag as TagIcon, Loader2 } from "lucide-react";
 import { NewsletterWithRelations, Tag } from "@common/types";
+import { useLogger } from "@common/utils/logger";
 import TagSelector from "./TagSelector";
 import NewsletterActions from "./NewsletterActions";
 
@@ -60,6 +61,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   tagUpdateError,
   onDismissTagError,
 }) => {
+  const log = useLogger();
   const handleRowClick = (e: React.MouseEvent) => {
     // Only proceed if the click wasn't on a button or link
     const target = e.target as HTMLElement;
@@ -149,10 +151,13 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                     isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
                   }`}
                   onClick={(e) => {
-                    console.log(
-                      "Tag icon clicked for newsletter:",
-                      newsletter.id,
-                    );
+                    log.debug("Tag icon clicked", {
+                      action: "toggle_tag_visibility",
+                      metadata: {
+                        newsletterId: newsletter.id,
+                        isUpdatingTags,
+                      },
+                    });
                     e.preventDefault();
                     e.stopPropagation();
                     if (!isUpdatingTags) {

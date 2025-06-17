@@ -5,6 +5,10 @@ import {
   withPerformanceLogging,
 } from "./supabaseClient";
 import { ReadingQueueItem, Tag } from "../types";
+import { useLoggerStatic } from "../utils/logger";
+
+// Initialize logger
+const log = useLoggerStatic();
 
 // Transform raw Supabase response to ReadingQueueItem
 const transformQueueItem = (data: {
@@ -34,13 +38,21 @@ const transformQueueItem = (data: {
 }): ReadingQueueItem => {
   if (!data.newsletters) {
     const errorMsg = `Newsletter with id ${data.newsletter_id} not found in reading queue item ${data.id}. The newsletter may have been deleted.`;
-    console.error(`[ReadingQueue] ${errorMsg}`, {
-      queueItemId: data.id,
-      newsletterId: data.newsletter_id,
-      userId: data.user_id,
-      position: data.position,
-      addedAt: data.added_at,
-    });
+    log.error(
+      "Newsletter not found in reading queue item",
+      {
+        component: "ReadingQueueApi",
+        action: "transform_queue_item",
+        metadata: {
+          queueItemId: data.id,
+          newsletterId: data.newsletter_id,
+          userId: data.user_id,
+          position: data.position,
+          addedAt: data.added_at,
+        },
+      },
+      new Error(errorMsg),
+    );
     throw new Error(errorMsg);
   }
 
@@ -103,14 +115,21 @@ export const readingQueueApi = {
 
       // Log data integrity issues and clean up orphaned items
       if (invalidItems.length > 0) {
-        console.warn(
-          `[ReadingQueue] Found ${invalidItems.length} queue items with null newsletters, cleaning up:`,
-          invalidItems.map((item) => ({
-            id: item.id,
-            newsletter_id: item.newsletter_id,
-            user_id: item.user_id,
-            position: item.position,
-          })),
+        log.warn(
+          `Found ${invalidItems.length} queue items with null newsletters, cleaning up`,
+          {
+            component: "ReadingQueueApi",
+            action: "cleanup_invalid_items",
+            metadata: {
+              invalidItemsCount: invalidItems.length,
+              invalidItems: invalidItems.map((item) => ({
+                id: item.id,
+                newsletter_id: item.newsletter_id,
+                user_id: item.user_id,
+                position: item.position,
+              })),
+            },
+          },
         );
 
         // Automatically clean up orphaned items
@@ -123,24 +142,49 @@ export const readingQueueApi = {
             .eq("user_id", user.id);
 
           if (cleanupError) {
-            console.error(
-              "[ReadingQueue] Failed to cleanup orphaned items:",
+            log.error(
+              "Failed to cleanup orphaned items",
+              {
+                component: "ReadingQueueApi",
+                action: "cleanup_orphaned_items",
+                metadata: { orphanedIds },
+              },
               cleanupError,
             );
           } else {
-            console.log(
-              `[ReadingQueue] Successfully cleaned up ${orphanedIds.length} orphaned items`,
+            log.info(
+              `Successfully cleaned up ${orphanedIds.length} orphaned items`,
+              {
+                component: "ReadingQueueApi",
+                action: "cleanup_orphaned_items_success",
+                metadata: { cleanedCount: orphanedIds.length },
+              },
             );
           }
         } catch (cleanupError) {
-          console.error("[ReadingQueue] Cleanup error:", cleanupError);
+          log.error(
+            "Cleanup error occurred",
+            {
+              component: "ReadingQueueApi",
+              action: "cleanup_error",
+            },
+            cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+          );
         }
       }
 
       if (!validQueueItems.length) {
         if (queueItems.length > 0) {
-          console.warn(
-            `[ReadingQueue] All ${queueItems.length} queue items had null newsletters for user ${user.id}`,
+          log.warn(
+            `All ${queueItems.length} queue items had null newsletters`,
+            {
+              component: "ReadingQueueApi",
+              action: "all_items_invalid",
+              metadata: {
+                userId: user.id,
+                queueItemsCount: queueItems.length,
+              },
+            },
           );
         }
         return [];
@@ -179,9 +223,14 @@ export const readingQueueApi = {
             tagsMap.get(item.newsletter_id) || [];
           return transformedItem;
         } catch (error) {
-          console.error(
-            `[ReadingQueue] Failed to transform queue item ${item.id}:`,
-            error,
+          log.error(
+            `Failed to transform queue item ${item.id}`,
+            {
+              component: "ReadingQueueApi",
+              action: "transform_queue_item_error",
+              metadata: { queueItemId: item.id },
+            },
+            error instanceof Error ? error : new Error(String(error)),
           );
           throw error;
         }
@@ -474,9 +523,14 @@ export const readingQueueApi = {
           return { removedCount: 0 };
         }
 
-        console.warn(
-          `[ReadingQueue] Found ${orphanedItems.length} orphaned queue items, cleaning up...`,
-          orphanedItems.map((item) => ({
+        log.warn(
+          `Found ${orphanedItems.length} orphaned queue items, cleaning up`,
+          {
+            component: "ReadingQueueApi",
+            action: "cleanup_orphaned_items_detected",
+            metadata: {
+              orphanedItemsCount: orphanedItems.length,
+              orphanedItems: orphanedItems.map((item) => ({
             id: item.id,
             newsletter_id: item.newsletter_id,
           })),

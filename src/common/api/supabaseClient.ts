@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient, AuthError } from "@supabase/supabase-js";
+import { useLoggerStatic } from "../utils/logger";
 
 // Configuration constants
 const SUPABASE_CONFIG = {
@@ -23,6 +24,9 @@ const SUPABASE_CONFIG = {
   },
 } as const;
 
+// Initialize logger
+const log = useLoggerStatic();
+
 // Environment variables validation
 const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
 const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "";
@@ -32,14 +36,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
   if (!supabaseUrl) missingVars.push("VITE_SUPABASE_URL");
   if (!supabaseAnonKey) missingVars.push("VITE_SUPABASE_ANON_KEY");
 
-  console.error(
-    `Missing required Supabase environment variables: ${missingVars.join(", ")}. ` +
-      "Please check your .env file and ensure all required variables are set.",
+  log.error(
+    `Missing required Supabase environment variables: ${missingVars.join(", ")}`,
+    {
+      component: "SupabaseClient",
+      metadata: {
+        missingVars,
+        mode: import.meta.env.MODE,
+      },
+    },
   );
 
   if (import.meta.env.MODE === "development") {
-    console.warn(
+    log.warn(
       "Running in development mode with missing Supabase configuration",
+      { component: "SupabaseClient" },
     );
   }
 }
@@ -196,26 +207,44 @@ export const withPerformanceLogging = async <T>(
   fn: () => Promise<T>,
 ): Promise<T> => {
   const start = performance.now();
+
+  log.debug(`Starting operation: ${operation}`, {
+    component: "SupabaseClient",
+    action: "performance_start",
+    metadata: { operation },
+  });
+
   try {
     const result = await fn();
     const duration = performance.now() - start;
 
-    if (import.meta.env.MODE === "development") {
-      console.log(
-        `[Supabase] ${operation} completed in ${duration.toFixed(2)}ms`,
-      );
-    }
+    log.info(`Operation completed: ${operation}`, {
+      component: "SupabaseClient",
+      action: "performance_success",
+      metadata: {
+        operation,
+        duration: `${duration.toFixed(2)}ms`,
+        durationMs: duration,
+      },
+    });
 
     return result;
   } catch (error) {
     const duration = performance.now() - start;
 
-    if (import.meta.env.MODE === "development") {
-      console.error(
-        `[Supabase] ${operation} failed after ${duration.toFixed(2)}ms:`,
-        error,
-      );
-    }
+    log.error(
+      `Operation failed: ${operation}`,
+      {
+        component: "SupabaseClient",
+        action: "performance_error",
+        metadata: {
+          operation,
+          duration: `${duration.toFixed(2)}ms`,
+          durationMs: duration,
+        },
+      },
+      error instanceof Error ? error : new Error(String(error)),
+    );
 
     throw error;
   }

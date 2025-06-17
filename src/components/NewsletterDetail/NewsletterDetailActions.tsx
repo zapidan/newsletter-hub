@@ -8,6 +8,7 @@ import {
 import { toast } from "react-hot-toast";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import { readingQueueApi } from "@common/api/readingQueueApi";
+import { useLogger } from "@common/utils/logger";
 import type { NewsletterWithRelations } from "@common/types";
 
 interface NewsletterDetailActionsProps {
@@ -19,6 +20,8 @@ interface NewsletterDetailActionsProps {
 export const NewsletterDetailActions: React.FC<
   NewsletterDetailActionsProps
 > = ({ newsletter, onNewsletterUpdate, isFromReadingQueue = false }) => {
+  const log = useLogger();
+
   // Use shared newsletter actions for consistent cache management
   const {
     handleMarkAsRead,
@@ -39,7 +42,14 @@ export const NewsletterDetailActions: React.FC<
       }
     },
     onError: (error) => {
-      console.error("Action error:", error);
+      log.error(
+        "Newsletter action failed",
+        {
+          action: "newsletter_action",
+          metadata: { newsletterId: newsletter.id },
+        },
+        error,
+      );
     },
   });
 
@@ -72,7 +82,14 @@ export const NewsletterDetailActions: React.FC<
         const inQueue = await readingQueueApi.isInQueue(newsletter.id);
         setIsInQueue(inQueue);
       } catch (error) {
-        console.error("Error checking queue status:", error);
+        log.error(
+          "Failed to check queue status",
+          {
+            action: "check_queue_status",
+            metadata: { newsletterId: newsletter.id },
+          },
+          error,
+        );
         // Fallback to prop value if API fails
         setIsInQueue(isFromReadingQueue);
       } finally {
@@ -102,9 +119,15 @@ export const NewsletterDetailActions: React.FC<
       } else {
         await handleMarkAsRead(localNewsletter.id);
       }
-
     } catch (error) {
-      console.error("Error toggling read status:", error);
+      log.error(
+        "Failed to toggle read status",
+        {
+          action: "toggle_read_status",
+          metadata: { newsletterId: newsletter.id },
+        },
+        error,
+      );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
@@ -137,7 +160,14 @@ export const NewsletterDetailActions: React.FC<
     try {
       await handleToggleLike(localNewsletter);
     } catch (error) {
-      console.error("Failed to update like status:", error);
+      log.error(
+        "Failed to update like status",
+        {
+          action: "toggle_like_status",
+          metadata: { newsletterId: newsletter.id },
+        },
+        error,
+      );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
@@ -165,7 +195,14 @@ export const NewsletterDetailActions: React.FC<
     try {
       await handleToggleInQueue(localNewsletter, isInQueue);
     } catch (error) {
-      console.error("Error toggling queue:", error);
+      log.error(
+        "Failed to toggle reading queue",
+        {
+          action: "toggle_reading_queue",
+          metadata: { newsletterId: newsletter.id },
+        },
+        error,
+      );
       // Revert optimistic update on error
       setIsInQueue(isInQueue);
       toast.error("Failed to update reading queue");
@@ -197,7 +234,14 @@ export const NewsletterDetailActions: React.FC<
     try {
       await handleToggleArchive(localNewsletter);
     } catch (error) {
-      console.error("Error archiving newsletter:", error);
+      log.error(
+        "Failed to archive newsletter",
+        {
+          action: "archive_newsletter",
+          metadata: { newsletterId: newsletter.id },
+        },
+        error,
+      );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
@@ -230,7 +274,14 @@ export const NewsletterDetailActions: React.FC<
     try {
       await handleToggleArchive(localNewsletter);
     } catch (error) {
-      console.error("Error unarchiving newsletter:", error);
+      log.error(
+        "Failed to unarchive newsletter",
+        {
+          action: "unarchive_newsletter",
+          metadata: { newsletterId: newsletter.id },
+        },
+        error,
+      );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
@@ -267,7 +318,14 @@ export const NewsletterDetailActions: React.FC<
         window.location.href = "/inbox?filter=archived";
       }
     } catch (error) {
-      console.error("Error deleting newsletter:", error);
+      log.error(
+        "Failed to delete newsletter",
+        {
+          action: "delete_newsletter",
+          metadata: { newsletterId: newsletter.id },
+        },
+        error,
+      );
       toast.error("Failed to delete newsletter");
     }
   }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue]);

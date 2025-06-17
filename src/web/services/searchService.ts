@@ -5,6 +5,7 @@ import {
 } from "@common/api";
 import { Newsletter, NewsletterSource } from "@common/types";
 import { buildSearchParams, validateSearchFilters } from "../utils/searchUtils";
+import { createLogger } from "@common/utils/logger";
 
 export interface SearchFilters {
   selectedSources: string[];
@@ -42,6 +43,7 @@ export interface SearchState {
 class SearchService {
   private static readonly RECENT_SEARCHES_KEY = "newsletter_recent_searches";
   private static readonly MAX_RECENT_SEARCHES = 10;
+  private log = createLogger();
 
   /**
    * Performs a search with the given options
@@ -77,7 +79,18 @@ class SearchService {
         totalPages: Math.ceil(response.count / itemsPerPage),
       };
     } catch (error) {
-      console.error("Search failed:", error);
+      this.log.error(
+        "Search failed",
+        {
+          action: "search_newsletters",
+          metadata: {
+            query: options.query,
+            page: options.page,
+            filters: options.filters,
+          },
+        },
+        error,
+      );
       throw new Error("Failed to search newsletters. Please try again.");
     }
   }
@@ -93,7 +106,14 @@ class SearchService {
       });
       return response.data;
     } catch (error) {
-      console.error("Failed to load sources:", error);
+      this.log.error(
+        "Failed to load newsletter sources",
+        {
+          action: "get_sources",
+          metadata: {},
+        },
+        error,
+      );
       throw new Error("Failed to load newsletter sources");
     }
   }
@@ -103,7 +123,10 @@ class SearchService {
    */
   async markAsReadAndArchive(newsletterId: string): Promise<void> {
     try {
-      console.log("🔄 Updating newsletter status:", newsletterId);
+      this.log.debug("Updating newsletter status", {
+        action: "mark_as_read_and_archive",
+        metadata: { newsletterId },
+      });
 
       // Update both read and archived status in one call
       await newsletterApi.update({
@@ -112,9 +135,19 @@ class SearchService {
         is_archived: true,
       });
 
-      console.log("✅ Newsletter marked as read and archived:", newsletterId);
+      this.log.info("Newsletter marked as read and archived", {
+        action: "mark_as_read_and_archive",
+        metadata: { newsletterId },
+      });
     } catch (error) {
-      console.error("❌ Failed to mark newsletter as read and archive:", error);
+      this.log.error(
+        "Failed to mark newsletter as read and archive",
+        {
+          action: "mark_as_read_and_archive",
+          metadata: { newsletterId },
+        },
+        error,
+      );
       throw new Error("Failed to update newsletter status");
     }
   }
@@ -124,16 +157,29 @@ class SearchService {
    */
   async openNewsletterDetail(newsletterId: string): Promise<void> {
     try {
-      console.log("🚀 Opening newsletter detail:", newsletterId);
+      this.log.info("Opening newsletter detail", {
+        action: "open_newsletter_detail",
+        metadata: { newsletterId },
+      });
 
       // Update newsletter status
       await this.markAsReadAndArchive(newsletterId);
 
       // Navigate to detail view
-      console.log("🔗 Navigating to:", `/newsletters/${newsletterId}`);
+      this.log.debug("Navigating to newsletter detail", {
+        action: "open_newsletter_detail",
+        metadata: { newsletterId, url: `/newsletters/${newsletterId}` },
+      });
       window.location.href = `/newsletters/${newsletterId}`;
     } catch (error) {
-      console.error("❌ Failed to open newsletter detail:", error);
+      this.log.error(
+        "Failed to open newsletter detail",
+        {
+          action: "open_newsletter_detail",
+          metadata: { newsletterId },
+        },
+        error,
+      );
       // Still navigate even if status update fails
       window.location.href = `/newsletters/${newsletterId}`;
     }
@@ -162,7 +208,14 @@ class SearchService {
       const saved = localStorage.getItem(SearchService.RECENT_SEARCHES_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch (error) {
-      console.error("Failed to parse recent searches:", error);
+      this.log.error(
+        "Failed to parse recent searches",
+        {
+          action: "get_recent_searches",
+          metadata: {},
+        },
+        error,
+      );
       return [];
     }
   }
@@ -177,7 +230,14 @@ class SearchService {
         JSON.stringify(searches),
       );
     } catch (error) {
-      console.error("Failed to save recent searches:", error);
+      this.log.error(
+        "Failed to save recent searches",
+        {
+          action: "set_recent_searches",
+          metadata: { searchCount: searches.length },
+        },
+        error,
+      );
     }
   }
 
@@ -197,7 +257,14 @@ class SearchService {
     try {
       localStorage.removeItem(SearchService.RECENT_SEARCHES_KEY);
     } catch (error) {
-      console.error("Failed to clear recent searches:", error);
+      this.log.error(
+        "Failed to clear recent searches",
+        {
+          action: "clear_recent_searches",
+          metadata: {},
+        },
+        error,
+      );
     }
   }
 

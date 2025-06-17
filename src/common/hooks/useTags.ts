@@ -8,10 +8,12 @@ import {
 } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 import { tagApi } from "@common/api/tagApi";
+import { useLogger } from "@common/utils/logger";
 
 export const useTags = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const log = useLogger();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +45,14 @@ export const useTags = () => {
       return await tagApi.getAll();
     } catch (err: unknown) {
       const error = err as Error;
-      console.error("Error fetching tags:", error);
+      log.error(
+        "Failed to fetch tags",
+        {
+          action: "fetch_tags",
+          metadata: { userId: user?.id },
+        },
+        error,
+      );
       setError(error.message || "Failed to load tags");
       return [];
     } finally {
@@ -76,7 +85,18 @@ export const useTags = () => {
         return data;
       } catch (err: unknown) {
         const error = err as Error;
-        console.error("Error creating tag:", error);
+        log.error(
+          "Failed to create tag",
+          {
+            action: "create_tag",
+            metadata: {
+              userId: user?.id,
+              tagName: tagData.name,
+              tagColor: tagData.color,
+            },
+          },
+          error,
+        );
         setError(error.message || "Failed to create tag");
         return null;
       } finally {
@@ -114,7 +134,18 @@ export const useTags = () => {
         return data;
       } catch (err: unknown) {
         const error = err as Error;
-        console.error("Error updating tag:", error);
+        log.error(
+          "Failed to update tag",
+          {
+            action: "update_tag",
+            metadata: {
+              userId: user?.id,
+              tagId: id,
+              updateFields: Object.keys(updates),
+            },
+          },
+          error,
+        );
         setError(error.message || "Failed to update tag");
         return null;
       } finally {
@@ -163,7 +194,17 @@ export const useTags = () => {
         return true;
       } catch (err: unknown) {
         const error = err as Error;
-        console.error("Error deleting tag:", error);
+        log.error(
+          "Failed to delete tag",
+          {
+            action: "delete_tag",
+            metadata: {
+              userId: user?.id,
+              tagId: id,
+            },
+          },
+          error,
+        );
         setError(error.message || "Failed to delete tag");
         return false;
       } finally {
@@ -183,7 +224,17 @@ export const useTags = () => {
         return await tagApi.getTagsForNewsletter(newsletterId);
       } catch (err: unknown) {
         const error = err as Error;
-        console.error("Error fetching newsletter tags:", error);
+        log.error(
+          "Failed to fetch newsletter tags",
+          {
+            action: "fetch_newsletter_tags",
+            metadata: {
+              userId: user?.id,
+              newsletterId,
+            },
+          },
+          error,
+        );
         setError(error.message || "Failed to load newsletter tags");
         return [];
       } finally {
@@ -225,7 +276,18 @@ export const useTags = () => {
         return true;
       } catch (err: unknown) {
         const error = err as Error;
-        console.error("Error updating newsletter tags:", error);
+        log.error(
+          "Failed to update newsletter tags",
+          {
+            action: "update_newsletter_tags",
+            metadata: {
+              userId: user?.id,
+              newsletterId,
+              tagIds: tagIds.length,
+            },
+          },
+          error,
+        );
         setError(error.message || "Failed to update newsletter tags");
         return false;
       } finally {

@@ -22,6 +22,7 @@ import {
   getQueryData,
   cancelQueries,
 } from "../utils/cacheUtils";
+import { useLogger } from "../utils/logger";
 
 type PreviousNewslettersState = {
   previousNewsletters?: NewsletterWithRelations[];
@@ -196,6 +197,7 @@ export const useNewsletters = (
   } = {},
 ): UseNewslettersReturn => {
   const { user } = useAuth();
+  const log = useLogger("useNewsletters");
   const {
     enabled = true,
     refetchOnWindowFocus = false,
@@ -246,9 +248,12 @@ export const useNewsletters = (
         (id) => id && typeof id === "string",
       );
       if (validSourceIds.length !== filters.sourceIds.length) {
-        console.warn("⚠️ Invalid source IDs detected:", {
-          original: filters.sourceIds,
-          valid: validSourceIds,
+        log.warn("Invalid source IDs detected", {
+          action: "validate_source_ids",
+          metadata: {
+            original: filters.sourceIds,
+            valid: validSourceIds,
+          },
         });
       }
     }
@@ -280,20 +285,30 @@ export const useNewsletters = (
               !queryParams.sourceIds!.includes(newsletter.newsletter_source_id),
           );
           if (unexpectedSources.length > 0) {
-            console.warn("⚠️ Source filtering may not be working correctly:", {
-              expectedSources: queryParams.sourceIds,
-              unexpectedItems: unexpectedSources.map((n) => ({
-                id: n.id,
-                sourceId: n.newsletter_source_id,
-                sourceName: n.source?.name,
-              })),
+            log.warn("Source filtering may not be working correctly", {
+              action: "validate_source_filtering",
+              metadata: {
+                expectedSources: queryParams.sourceIds,
+                unexpectedItems: unexpectedSources.map((n) => ({
+                  id: n.id,
+                  sourceId: n.newsletter_source_id,
+                  sourceName: n.source?.name,
+                })),
+              },
             });
           }
         }
 
         return result;
       } catch (error) {
-        console.error("❌ API Error:", error);
+        log.error(
+          "API Error occurred",
+          {
+            action: "fetch_newsletters",
+            metadata: { filters, queryParams },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         throw error;
       }
     },
@@ -947,9 +962,13 @@ export const useNewsletters = (
         try {
           isInQueue = await readingQueueApi.isInQueue(id);
         } catch (error) {
-          console.warn(
-            "Failed to check queue status, proceeding with cache value:",
-            error,
+          log.warn(
+            "Failed to check queue status, proceeding with cache value",
+            {
+              action: "check_queue_status",
+              metadata: { newsletterId: id },
+            },
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       }
@@ -1033,7 +1052,14 @@ export const useNewsletters = (
           rollbackFunctions.push(result.rollback);
         }
       } catch (error) {
-        console.warn("Failed to apply optimistic update to queue:", error);
+        log.warn(
+          "Failed to apply optimistic update to queue",
+          {
+            action: "optimistic_queue_update",
+            metadata: { newsletterId: id },
+          },
+          error instanceof Error ? error : new Error(String(error)),
+        );
         // Don't throw here - we want to continue with the mutation
       }
 
@@ -1044,7 +1070,14 @@ export const useNewsletters = (
       };
     },
     onError: (error, id, context) => {
-      console.error("Error toggling queue status:", error);
+      log.error(
+        "Error toggling queue status",
+        {
+          action: "toggle_queue_status",
+          metadata: { newsletterId: id },
+        },
+        error instanceof Error ? error : new Error(String(error)),
+      );
 
       // Execute all rollback functions
       if (context?.rollbackFunctions) {
@@ -1052,7 +1085,16 @@ export const useNewsletters = (
           try {
             rollback();
           } catch (rollbackError) {
-            console.error("Error during rollback:", rollbackError);
+            log.error(
+              "Error during rollback",
+              {
+                action: "rollback_queue_toggle",
+                metadata: { newsletterId: id },
+              },
+              rollbackError instanceof Error
+                ? rollbackError
+                : new Error(String(rollbackError)),
+            );
           }
         });
       }

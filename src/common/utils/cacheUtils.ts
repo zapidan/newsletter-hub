@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { queryKeyFactory } from "./queryKeyFactory";
+import { createLogger } from "./logger";
 import type {
   NewsletterWithRelations,
   ReadingQueueItem,
@@ -15,6 +16,7 @@ interface CacheManagerConfig {
 export class SimpleCacheManager {
   public queryClient: QueryClient;
   private config: CacheManagerConfig;
+  private log = createLogger();
 
   constructor(queryClient: QueryClient, config: CacheManagerConfig = {}) {
     this.queryClient = queryClient;
@@ -77,7 +79,14 @@ export class SimpleCacheManager {
         );
       }
     } catch (error) {
-      console.error("Error in updateNewsletterInCache:", error);
+      this.log.error(
+        "Failed to update newsletter in cache",
+        {
+          action: "update_newsletter_cache",
+          metadata: { newsletterId: update.id },
+        },
+        error,
+      );
     }
   }
 
@@ -326,7 +335,17 @@ export class SimpleCacheManager {
     }
 
     Promise.all(invalidationPromises).catch((error) => {
-      console.error("Error invalidating related queries:", error);
+      this.log.error(
+        "Failed to invalidate related queries",
+        {
+          action: "invalidate_related_queries",
+          metadata: {
+            newsletterId,
+            invalidationCount: invalidationPromises.length,
+          },
+        },
+        error,
+      );
     });
   }
 
@@ -339,11 +358,14 @@ export class SimpleCacheManager {
   }): void {
     const { operation, newsletterIds = [], filterContext, priority } = options;
 
-    console.log("🧠 Smart invalidation:", {
-      operation,
-      newsletterIds,
-      filterContext,
-      priority,
+    this.log.debug("Smart cache invalidation triggered", {
+      action: "smart_invalidation",
+      metadata: {
+        operation,
+        newsletterCount: newsletterIds.length,
+        filterContext,
+        priority,
+      },
     });
 
     switch (operation) {
@@ -538,7 +560,14 @@ export class SimpleCacheManager {
 
       return currentData;
     } catch (error) {
-      console.error("Error in optimisticUpdate:", error);
+      this.log.error(
+        "Failed to perform optimistic update",
+        {
+          action: "optimistic_update",
+          metadata: { operation: options.operation },
+        },
+        error,
+      );
       return null;
     }
   }
