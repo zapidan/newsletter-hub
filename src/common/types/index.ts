@@ -120,3 +120,15 @@ export interface TagCreate {
 export interface TagUpdate extends Partial<TagCreate> {
   id: string;
 }
+
+export interface NewsletterFilter {
+  is_read?: boolean;
+  is_archived?: boolean;
+  is_liked?: boolean;
+  tag_ids?: string[];
+  source_id?: string;
+  search?: string;
+  start_date?: string;
+  end_date?: string;
+  group_id?: string;
+}

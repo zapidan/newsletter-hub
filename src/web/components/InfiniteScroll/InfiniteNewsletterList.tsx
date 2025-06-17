@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { NewsletterWithRelations } from "../../../common/types";
+import { NewsletterWithRelations, Tag } from "../../../common/types";
 import { useInfiniteScroll } from "../../../common/hooks/infiniteScroll/useInfiniteScroll";
 import NewsletterRow from "../NewsletterRow";
 import { LoadingSentinel } from "./LoadingSentinel";
@@ -30,7 +30,7 @@ export interface InfiniteNewsletterListProps {
   onToggleQueue?: (newsletterId: string) => void;
   onUpdateTags?: (newsletterId: string, tagIds: string[]) => void;
   onToggleTagVisibility?: (id: string, e: React.MouseEvent) => void;
-  onTagClick?: (tagId: string) => void;
+  onTagClick?: (tag: Tag) => void;
   onRemoveFromQueue?: (e: React.MouseEvent, newsletterId: string) => void;
   onMouseEnter?: (newsletter: NewsletterWithRelations) => void;
 
@@ -136,10 +136,13 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
         ? () => onToggleQueue(newsletter.id)
         : undefined,
       onUpdateTags: onUpdateTags
-        ? (tagIds: string[]) => onUpdateTags(newsletter.id, tagIds)
+        ? (newsletterId: string, tagIds: string[]) =>
+            onUpdateTags(newsletterId, tagIds)
         : undefined,
       onToggleTagVisibility: onToggleTagVisibility,
-      onTagClick: onTagClick,
+      onTagClick: onTagClick
+        ? (tag: Tag, _e: React.MouseEvent) => onTagClick(tag)
+        : undefined,
       onRemoveFromQueue: onRemoveFromQueue,
       onRowClick: onRowClick ? () => onRowClick(newsletter) : undefined,
       onMouseEnter: onMouseEnter ? () => onMouseEnter(newsletter) : undefined,

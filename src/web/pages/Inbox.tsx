@@ -18,7 +18,7 @@ import { useBulkLoadingStates } from "@common/hooks/useLoadingStates";
 import { useToast } from "@common/contexts/ToastContext";
 import { useAuth } from "@common/contexts";
 
-import type { NewsletterWithRelations } from "@common/types";
+import type { NewsletterWithRelations, Tag } from "@common/types";
 import { getCacheManager } from "@common/utils/cacheUtils";
 
 // Separate component for selected tags display
@@ -763,7 +763,7 @@ const Inbox: React.FC = memo(() => {
               }
             }}
             onToggleTagVisibility={toggleTagVisibility}
-            onTagClick={(tagId: string) => handleTagClick(tagId)}
+            onTagClick={(tag: Tag) => handleTagClick(tag.id)}
             onRemoveFromQueue={(e: React.MouseEvent, newsletterId: string) =>
               handleRemoveFromQueue(e, newsletterId)
             }
