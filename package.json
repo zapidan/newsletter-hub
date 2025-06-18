@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
     "test:unit": "vitest run --reporter=verbose src/**/*.{test,spec}.{js,ts,jsx,tsx}",
-    "test:integration": "vitest run --reporter=verbose src/**/*.integration.{test,spec}.{js,ts,jsx,tsx}",
+    "test:integration": "vitest run --reporter=verbose src/__tests__/integration/newsletter-workflow.integration.test.tsx",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",

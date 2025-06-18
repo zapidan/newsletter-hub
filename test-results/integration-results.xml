@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="24" failures="0" errors="0" time="0.018931897">
+    <testsuite name="src/__tests__/integration/newsletter-workflow.integration.test.tsx" timestamp="2025-06-18T17:59:30.458Z" hostname="MacBookPro.attlocal.net" tests="24" failures="0" errors="0" skipped="0" time="0.018931897">
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Inbox Workflow &gt; should display newsletters in inbox and allow filtering" time="0.005273482">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Inbox Workflow &gt; should allow marking newsletters as read" time="0.000749474">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Inbox Workflow &gt; should handle bulk operations" time="0.000486325">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Inbox Workflow &gt; should filter newsletters by read status" time="0.000450177">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Inbox Workflow &gt; should filter newsletters by source" time="0.000531496">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Inbox Workflow &gt; should handle newsletter archiving" time="0.000362817">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Inbox Workflow &gt; should handle newsletter deletion" time="0.000304809">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Detail Workflow &gt; should display newsletter detail and mark as read" time="0.000305841">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Detail Workflow &gt; should allow adding and removing tags" time="0.000531092">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Detail Workflow &gt; should allow favoriting newsletters" time="0.000352542">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Detail Workflow &gt; should handle newsletter sharing" time="0.000284971">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Newsletter Detail Workflow &gt; should display related newsletters" time="0.00031791">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Error Handling &gt; should handle API errors gracefully" time="0.000277164">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Error Handling &gt; should handle network errors" time="0.00024186">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Error Handling &gt; should handle empty states" time="0.000239562">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Loading States &gt; should show loading state while fetching newsletters" time="0.000263881">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Loading States &gt; should show skeleton loading for newsletter detail" time="0.000263642">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Responsive Behavior &gt; should adapt to mobile viewport" time="0.000185529">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Responsive Behavior &gt; should adapt to tablet viewport" time="0.000190582">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Accessibility &gt; should be keyboard navigable" time="0.000185394">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Accessibility &gt; should have proper ARIA labels" time="0.000179369">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Accessibility &gt; should announce state changes to screen readers" time="0.000142989">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Performance &gt; should virtualize long lists" time="0.000260818">
+        </testcase>
+        <testcase classname="src/__tests__/integration/newsletter-workflow.integration.test.tsx" name="Newsletter Workflow Integration Tests &gt; Performance &gt; should implement infinite scrolling" time="0.000323448">
+        </testcase>
+    </testsuite>
+</testsuites>

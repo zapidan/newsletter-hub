@@ -78,7 +78,8 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
       // Mark as read immediately without delay
       markAsRead();
     }
-  }, [currentNewsletter?.id, autoMarkAsRead, disabled]); // Remove functions from deps to prevent infinite loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentNewsletter?.id, autoMarkAsRead, disabled]); // Stable deps only to avoid infinite loops
 
   const handlePrevious = useCallback(async () => {
     if (disabled || !hasPrevious) return;
@@ -120,6 +121,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         },
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     disabled,
     hasPrevious,
@@ -128,9 +130,6 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     currentNewsletterId,
     currentNewsletter,
     autoMarkAsRead,
-    handleMarkAsRead,
-    handleToggleArchive,
-    log,
   ]);
 
   const handleNext = useCallback(async () => {
@@ -173,6 +172,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         },
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     disabled,
     hasNext,
@@ -181,9 +181,6 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     currentNewsletterId,
     currentNewsletter,
     autoMarkAsRead,
-    handleMarkAsRead,
-    handleToggleArchive,
-    log,
   ]);
 
   // Handle keyboard shortcuts

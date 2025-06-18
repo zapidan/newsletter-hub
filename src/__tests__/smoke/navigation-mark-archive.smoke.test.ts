@@ -54,7 +54,7 @@ describe("Navigation Mark and Archive Smoke Tests", () => {
     vi.mocked(useSharedNewsletterActions).mockReturnValue({
       handleMarkAsRead: mockHandleMarkAsRead,
       handleToggleArchive: mockHandleToggleArchive,
-    } as any);
+    } as ReturnType<typeof useSharedNewsletterActions>);
 
     // Clear the navigate mock
     mockNavigate.mockClear();

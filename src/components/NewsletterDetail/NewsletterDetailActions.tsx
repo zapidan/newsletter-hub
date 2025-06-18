@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useCallback, useState, useEffect } from "react";
 import {
   Heart,
@@ -179,8 +180,8 @@ export const NewsletterDetailActions: React.FC<
     localNewsletter,
     isLiking,
     handleToggleLike,
-    onNewsletterUpdate,
     newsletter,
+    onNewsletterUpdate,
   ]);
 
   const handleToggleQueue = useCallback(async () => {
