@@ -10,7 +10,7 @@ import { Dialog, Transition } from "@headlessui/react";
 import { toast } from "react-hot-toast";
 
 import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import {
   useNewsletters,
   useNewsletterSources,
@@ -80,7 +80,7 @@ const NewslettersPage: React.FC = () => {
     isLoadingSources,
     isErrorSources,
     updateSource,
-    archiveNewsletterSource,
+    setSourceArchiveStatus,
     isArchivingSource,
   } = useNewsletterSources();
 
@@ -1070,7 +1070,7 @@ const NewslettersPage: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 disabled:opacity-60"
+                            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
                             onClick={() => {
                               setShowEditModal(false);
                               setEditModalSourceId(null);

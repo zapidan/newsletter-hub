@@ -191,34 +191,10 @@ export const useNewsletterSources = (
     },
   });
 
-  // Archive a source (soft delete)
-  const archiveSource = useCallback(
-    async (sourceId: string) => {
-      return archiveMutation.mutateAsync({ id: sourceId, archive: true });
-    },
-    [archiveMutation],
-  );
-
-  // Unarchive a source
-  const unarchiveSource = useCallback(
-    async (sourceId: string) => {
-      return archiveMutation.mutateAsync({ id: sourceId, archive: false });
-    },
-    [archiveMutation],
-  );
-
-  // Wrapper functions
-  const updateSource = useCallback(
-    (id: string, name: string) => {
-      return updateMutation.mutateAsync({ id, name });
-    },
-    [updateMutation],
-  );
-
-  // Keep deleteSource for backward compatibility, but it will now archive instead of delete
-  const deleteSource = useCallback(
-    (sourceId: string) => {
-      return archiveMutation.mutateAsync({ id: sourceId, archive: true });
+ // Archive or unarchive a source
+  const setSourceArchiveStatus = useCallback(
+    async (sourceId: string, archive: boolean) => {
+      return archiveMutation.mutateAsync({ id: sourceId, archive });
     },
     [archiveMutation],
   );
@@ -233,44 +209,30 @@ export const useNewsletterSources = (
     isStaleSources,
     refetchSources,
 
-    // Pagination data from API response
-    sourcesCount: sourcesResponse?.count || 0,
-    sourcesPage: sourcesResponse?.page || 1,
-    sourcesLimit: sourcesResponse?.limit || 50,
-    sourcesHasMore: sourcesResponse?.hasMore || false,
-    sourcesNextPage: sourcesResponse?.nextPage,
-    sourcesPrevPage: sourcesResponse?.prevPage,
+    // Source actions
+    updateSource: updateMutation.mutateAsync,
+    setSourceArchiveStatus,
 
-    // Update source
-    updateSource,
-    isUpdating: updateMutation.isPending,
-    updateError: updateMutation.error,
-    isUpdateSuccess: updateMutation.isSuccess,
-    resetUpdate: updateMutation.reset,
+    // Raw query data
+    sourcesResponse,
+  };
 
-    // Archive source (soft delete)
-    archiveNewsletterSource: archiveSource,
+  return {
+    // Source data
+    newsletterSources,
+    isLoadingSources,
+    isErrorSources,
+    errorSources,
+    isFetchingSources,
+    isStaleSources,
+    refetchSources,
+
+    // Source actions
+    updateSource: updateMutation.mutateAsync,
+    setSourceArchiveStatus: (sourceId: string, archive: boolean) => Promise<NewsletterSource>,
     isArchivingSource: archiveMutation.isPending,
-    isErrorArchivingSource: archiveMutation.isError,
-    errorArchivingSource: archiveMutation.error,
-    isSuccessArchivingSource: archiveMutation.isSuccess,
 
-    // Unarchive source
-    unarchiveNewsletterSource: unarchiveSource,
-    isUnarchivingSource: archiveMutation.isPending,
-    isErrorUnarchivingSource: archiveMutation.isError,
-    errorUnarchivingSource: archiveMutation.error,
-    isSuccessUnarchivingSource: archiveMutation.isSuccess,
-
-    // For backward compatibility
-    deleteNewsletterSource: deleteSource,
-    isDeletingSource: archiveMutation.isPending,
-    isErrorDeletingSource: archiveMutation.isError,
-    errorDeletingSource: archiveMutation.error,
-    isSuccessDeletingSource: archiveMutation.isSuccess,
-
-    // Cache utilities
-    invalidateSources,
-    prefetchSource: prefetchSourceById,
-  } as const;
+    // Raw query data
+    sourcesResponse,
+  };
 };

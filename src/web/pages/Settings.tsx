@@ -2,6 +2,7 @@ import { useState, FormEvent } from "react";
 import { useAuth } from "@common/contexts/AuthContext";
 import { useEmailAlias } from "@common/hooks/useEmailAlias";
 import { useLogger } from "@common/utils/logger";
+import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
 import { motion } from "framer-motion";
 import {
   Mail,
@@ -34,6 +35,30 @@ const Settings = () => {
   const [voiceType, setVoiceType] = useState("neutral");
   const [voiceSpeed, setVoiceSpeed] = useState("1.0");
   const [copied, setCopied] = useState(false);
+
+  // Fetch newsletter sources
+  const {
+    newsletterSources,
+    isLoadingSources,
+    setSourceArchiveStatus,
+  } = useNewsletterSources({ excludeArchived: false });
+
+  // Handle archive toggle
+  const handleToggleArchive = async (sourceId: string, isArchived: boolean) => {
+    try {
+      await setSourceArchiveStatus(sourceId, isArchived);
+      // The UI will automatically update because the query will be refetched
+    } catch (error) {
+      log.error(
+        "Failed to update source archive status",
+        {
+          action: "toggle_archive_status",
+          metadata: { sourceId, isArchived },
+        },
+        error,
+      );
+    }
+  };
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -378,109 +403,74 @@ const Settings = () => {
               {activeTab === "newsletters" && (
                 <div>
                   <h3 className="text-xl font-semibold mb-6">
-                    Newsletter Settings
+                    Newsletter Sources
                   </h3>
 
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-medium mb-4">
-                        Connected Newsletters
-                      </h4>
-
-                      <div className="space-y-3">
-                        {[
-                          { name: "Tech Insider Weekly", status: "active" },
-                          { name: "Business Morning Brew", status: "active" },
-                          { name: "Science Daily", status: "active" },
-                          { name: "Marketing Trends", status: "inactive" },
-                        ].map((newsletter, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3 border border-neutral-200 rounded-md bg-white"
-                          >
-                            <div className="flex items-center">
-                              <div
-                                className={`w-2 h-2 rounded-full mr-3 ${
-                                  newsletter.status === "active"
-                                    ? "bg-success-500"
-                                    : "bg-neutral-300"
-                                }`}
-                              ></div>
-                              <span>{newsletter.name}</span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700">
-                                {newsletter.status === "active"
-                                  ? "Active"
-                                  : "Inactive"}
-                              </span>
-                              <button className="p-1 text-neutral-500 hover:text-error-600">
-                                <XCircle size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200">
+                        <h4 className="font-medium text-gray-900">
+                          Manage Newsletter Sources
+                        </h4>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Toggle to archive/unarchive newsletter sources.
+                          Archived sources won't appear in your main newsletters
+                          list.
+                        </p>
                       </div>
-                    </div>
 
-                    <div className="border-t border-neutral-200 pt-6">
-                      <h4 className="font-medium mb-4">AI Summary Settings</h4>
-
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="auto-summarize"
-                            className="text-sm text-neutral-700"
-                          >
-                            Automatically generate AI summaries
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="auto-summarize"
-                              className="sr-only"
-                              defaultChecked={true}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-5"></span>
-                          </div>
+                      {isLoadingSources ? (
+                        <div className="p-8 flex justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                         </div>
-
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="extract-topics"
-                            className="text-sm text-neutral-700"
-                          >
-                            Extract and link topics
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="extract-topics"
-                              className="sr-only"
-                              defaultChecked={true}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-5"></span>
-                          </div>
+                      ) : newsletterSources.length === 0 ? (
+                        <div className="p-8 text-center text-gray-500">
+                          No newsletter sources found.
                         </div>
-
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="content-warnings"
-                            className="text-sm text-neutral-700"
-                          >
-                            Flag potentially sensitive content
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="content-warnings"
-                              className="sr-only"
-                              defaultChecked={false}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-0"></span>
-                          </div>
-                        </div>
-                      </div>
+                      ) : (
+                        <ul className="divide-y divide-gray-200">
+                          {newsletterSources.map((source) => (
+                            <li key={source.id} className="px-4 py-3 hover:bg-gray-50">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {source.name}
+                                  </span>
+                                  {source.domain && (
+                                    <span className="ml-2 text-xs text-gray-500">
+                                      ({source.domain})
+                                    </span>
+                                  )}
+                                  <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                                    {source.newsletter_count || 0} newsletters
+                                  </span>
+                                </div>
+                                <div className="flex items-center">
+                                  <button
+                                    type="button"
+                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                                      source.is_archived ? 'bg-gray-200' : 'bg-blue-600'
+                                    }`}
+                                    role="switch"
+                                    aria-checked={!source.is_archived}
+                                    onClick={() => handleToggleArchive(source.id, !source.is_archived)}
+                                  >
+                                    <span className="sr-only">
+                                      {source.is_archived ? 'Unarchive' : 'Archive'} {source.name}
+                                    </span>
+                                    <span
+                                      aria-hidden="true"
+                                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                        source.is_archived ? 'translate-x-0' : 'translate-x-5'
+                                      }`}
+                                    />
+                                  </button>
+                                </div>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
                 </div>
