@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Convert file URL to directory name for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -85,8 +91,8 @@ export default defineConfig({
   },
 
   /* Global setup and teardown */
-  globalSetup: require.resolve("./tests/e2e/global-setup.ts"),
-  globalTeardown: require.resolve("./tests/e2e/global-teardown.ts"),
+  globalSetup: path.join(__dirname, "./tests/e2e/global-setup.ts"),
+  globalTeardown: path.join(__dirname, "./tests/e2e/global-teardown.ts"),
 
   /* Test timeout */
   timeout: 30000,

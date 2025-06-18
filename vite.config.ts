@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "url";
@@ -18,35 +19,6 @@ export default defineConfig({
       brotliSize: true,
     }),
   ],
-  test: {
-    globals: true,
-    environment: "jsdom",
-    setupFiles: ["./src/__tests__/setup.ts"],
-    css: true,
-    coverage: {
-      reporter: ["text", "json", "html"],
-      exclude: [
-        "node_modules/",
-        "src/__tests__/",
-        "**/*.d.ts",
-        "dist/",
-        "build/",
-        "coverage/",
-        "**/*.config.{js,ts}",
-        "**/index.{js,ts}",
-      ],
-    },
-    include: ["src/**/*.{test,spec}.{js,ts,jsx,tsx}"],
-    exclude: [
-      "node_modules",
-      "dist",
-      ".idea",
-      ".git",
-      ".cache",
-      "src/**/*.e2e.{js,ts,jsx,tsx}",
-      "src/**/e2e/**/*",
-    ],
-  },
   resolve: {
     alias: [
       { find: "@", replacement: path.resolve(__dirname, "./src") },
@@ -99,6 +71,20 @@ export default defineConfig({
           // Add other large dependencies here
         },
       },
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/__tests__/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      reportsDirectory: './coverage',
+      exclude: [
+        '**/node_modules/**',
+        '**/__tests__/**',
+      ],
     },
   },
   esbuild: {

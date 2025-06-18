@@ -1,36 +1,37 @@
-import { chromium, FullConfig } from '@playwright/test';
+import { chromium, type FullConfig } from '@playwright/test';
 import { createTestUser, setupTestDatabase } from './test-fixtures';
 
 async function globalSetup(config: FullConfig) {
   console.log('🚀 Starting global E2E test setup...');
-
-  // Setup test database
-  await setupTestDatabase();
-  console.log('✅ Test database initialized');
-
-  // Create test users
-  await createTestUser({
-    email: 'test@example.com',
-    password: 'testpassword123',
-    fullName: 'Test User',
-  });
-
-  await createTestUser({
-    email: 'admin@example.com',
-    password: 'adminpassword123',
-    fullName: 'Admin User',
-    role: 'admin',
-  });
-  console.log('✅ Test users created');
-
-  // Launch browser for authentication
-  const browser = await chromium.launch();
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  const { baseURL } = config.projects[0].use;
 
   try {
-    // Navigate to login page
-    await page.goto('/login');
+    // Setup test database
+    await setupTestDatabase();
+    console.log('✅ Test database initialized');
+
+    // Create test users
+    await createTestUser({
+      email: 'test@example.com',
+      password: 'testpassword123',
+      fullName: 'Test User',
+    });
+
+    await createTestUser({
+      email: 'admin@example.com',
+      password: 'adminpassword123',
+      fullName: 'Admin User',
+      role: 'admin',
+    });
+    console.log('✅ Test users created');
+
+    // Launch browser for authentication
+    const browser = await chromium.launch();
+    const context = await browser.newContext({ baseURL });
+    const page = await context.newPage();
+
+    // Navigate to login page using the baseURL
+    await page.goto(`${baseURL}/login`);
 
     // Login as test user to generate auth state
     await page.fill('[data-testid="email-input"]', 'test@example.com');
@@ -38,7 +39,7 @@ async function globalSetup(config: FullConfig) {
     await page.click('[data-testid="login-button"]');
 
     // Wait for successful login
-    await page.waitForURL('/inbox');
+    await page.waitForURL(`${baseURL}/inbox`);
 
     // Save authentication state
     await context.storageState({ path: 'playwright/.auth/user.json' });
@@ -48,75 +49,26 @@ async function globalSetup(config: FullConfig) {
     await page.click('[data-testid="user-menu-button"]');
     await page.click('[data-testid="logout-button"]');
 
-    await page.goto('/login');
+    await page.goto(`${baseURL}/login`);
     await page.fill('[data-testid="email-input"]', 'admin@example.com');
     await page.fill('[data-testid="password-input"]', 'adminpassword123');
     await page.click('[data-testid="login-button"]');
 
-    await page.waitForURL('/inbox');
+    await page.waitForURL(`${baseURL}/inbox`);
 
     // Save admin authentication state
     await context.storageState({ path: 'playwright/.auth/admin.json' });
     console.log('✅ Admin authentication state saved');
 
-  } catch (error) {
-    console.error('❌ Authentication setup failed:', error);
-    throw error;
-  } finally {
+    // Save storage state for authenticated tests
+    await context.storageState({ path: 'playwright/.auth/user.json' });
     await browser.close();
+
+    console.log('✅ Global setup completed successfully');
+  } catch (error) {
+    console.error('❌ Global setup failed:', error);
+    throw error;
   }
-
-  // Setup mock data
-  await setupMockNewsletters();
-  console.log('✅ Mock newsletters created');
-
-  console.log('🎉 Global E2E test setup completed successfully!');
-}
-
-async function setupMockNewsletters() {
-  const mockNewsletters = [
-    {
-      title: 'AI Newsletter #1',
-      content: '<h1>Artificial Intelligence Updates</h1><p>Latest developments in AI technology...</p>',
-      source_name: 'AI Weekly',
-      source_email: 'ai@weekly.com',
-      received_at: new Date().toISOString(),
-      is_read: false,
-      is_archived: false,
-      tags: ['AI', 'Technology'],
-    },
-    {
-      title: 'Web Development Trends 2024',
-      content: '<h1>Web Development Trends</h1><p>What to expect in web development this year...</p>',
-      source_name: 'Dev Weekly',
-      source_email: 'dev@weekly.com',
-      received_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      is_read: true,
-      is_archived: false,
-      tags: ['Web Development', 'Programming'],
-    },
-    {
-      title: 'Startup Funding Report Q1',
-      content: '<h1>Quarterly Funding Report</h1><p>Analysis of startup funding trends...</p>',
-      source_name: 'Startup Digest',
-      source_email: 'digest@startup.com',
-      received_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-      is_read: false,
-      is_archived: true,
-      tags: ['Startup', 'Business'],
-    },
-  ];
-
-  // Insert mock newsletters into test database
-  for (const newsletter of mockNewsletters) {
-    await insertTestNewsletter(newsletter);
-  }
-}
-
-async function insertTestNewsletter(newsletter: any) {
-  // This would typically interact with your test database
-  // Implementation depends on your database setup
-  console.log(`📧 Creating test newsletter: ${newsletter.title}`);
 }
 
 export default globalSetup;

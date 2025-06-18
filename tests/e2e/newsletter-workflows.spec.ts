@@ -9,7 +9,7 @@ import {
   TEST_NEWSLETTERS,
   waitForPageLoad,
   waitForApiResponse,
-} from './test-fixtures';
+} from './test-fixtures.js';
 
 test.describe('Newsletter Workflows E2E Tests', () => {
   test.beforeEach(async ({ page }) => {
