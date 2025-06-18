@@ -50,7 +50,7 @@ interface SupabaseNewsletterResponse {
   source?: {
     id: string;
     name: string;
-    domain: string;
+    from: string;
     user_id: string;
     created_at: string;
     updated_at: string;
@@ -112,7 +112,7 @@ export const useNewsletterDetail = (
         source:newsletter_sources(
           id,
           name,
-          domain,
+          from,
           user_id,
           created_at,
           updated_at,

@@ -37,11 +37,8 @@ const Settings = () => {
   const [copied, setCopied] = useState(false);
 
   // Fetch newsletter sources
-  const {
-    newsletterSources,
-    isLoadingSources,
-    setSourceArchiveStatus,
-  } = useNewsletterSources({ excludeArchived: false });
+  const { newsletterSources, isLoadingSources, setSourceArchiveStatus } =
+    useNewsletterSources({ excludeArchived: true });
 
   // Handle archive toggle
   const handleToggleArchive = async (sourceId: string, isArchived: boolean) => {
@@ -430,15 +427,18 @@ const Settings = () => {
                       ) : (
                         <ul className="divide-y divide-gray-200">
                           {newsletterSources.map((source) => (
-                            <li key={source.id} className="px-4 py-3 hover:bg-gray-50">
+                            <li
+                              key={source.id}
+                              className="px-4 py-3 hover:bg-gray-50"
+                            >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center">
                                   <span className="text-sm font-medium text-gray-900">
                                     {source.name}
                                   </span>
-                                  {source.domain && (
+                                  {source.from && (
                                     <span className="ml-2 text-xs text-gray-500">
-                                      ({source.domain})
+                                      ({source.from})
                                     </span>
                                   )}
                                   <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
@@ -449,19 +449,31 @@ const Settings = () => {
                                   <button
                                     type="button"
                                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                                      source.is_archived ? 'bg-gray-200' : 'bg-blue-600'
+                                      source.is_archived
+                                        ? "bg-gray-200"
+                                        : "bg-blue-600"
                                     }`}
                                     role="switch"
                                     aria-checked={!source.is_archived}
-                                    onClick={() => handleToggleArchive(source.id, !source.is_archived)}
+                                    onClick={() =>
+                                      handleToggleArchive(
+                                        source.id,
+                                        !source.is_archived,
+                                      )
+                                    }
                                   >
                                     <span className="sr-only">
-                                      {source.is_archived ? 'Unarchive' : 'Archive'} {source.name}
+                                      {source.is_archived
+                                        ? "Unarchive"
+                                        : "Archive"}{" "}
+                                      {source.name}
                                     </span>
                                     <span
                                       aria-hidden="true"
                                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                        source.is_archived ? 'translate-x-0' : 'translate-x-5'
+                                        source.is_archived
+                                          ? "translate-x-0"
+                                          : "translate-x-5"
                                       }`}
                                     />
                                   </button>

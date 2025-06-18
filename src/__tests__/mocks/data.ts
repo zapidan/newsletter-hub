@@ -86,7 +86,7 @@ export const mockSources: NewsletterSource[] = [
   {
     id: "source-1",
     name: "AI Weekly",
-    domain: "ai.weekly.com",
+    from: "ai.weekly.com",
     user_id: "user-1",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
@@ -94,7 +94,7 @@ export const mockSources: NewsletterSource[] = [
   {
     id: "source-2",
     name: "React Newsletter",
-    domain: "react.newsletter.com",
+    from: "react.newsletter.com",
     user_id: "user-1",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
@@ -102,7 +102,7 @@ export const mockSources: NewsletterSource[] = [
   {
     id: "source-3",
     name: "Startup Digest",
-    domain: "startup.com",
+    from: "startup.com",
     user_id: "user-1",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
@@ -110,7 +110,7 @@ export const mockSources: NewsletterSource[] = [
   {
     id: "source-4",
     name: "Design Weekly",
-    domain: "design.weekly.com",
+    from: "design.weekly.com",
     user_id: "user-1",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",

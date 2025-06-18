@@ -45,7 +45,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
       transformedSource = {
         id: sourceData.id,
         name: sourceData.name || "Unknown",
-        domain: sourceData.domain || null,
+        from: sourceData.from || null,
         created_at: sourceData.created_at || new Date().toISOString(),
         updated_at: sourceData.updated_at || new Date().toISOString(),
         user_id: sourceData.user_id || null,
@@ -58,7 +58,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
     transformedSource = {
       id: source.id,
       name: source.name || "Unknown",
-      domain: source.domain || null,
+      from: source.from || null,
       created_at: source.created_at || new Date().toISOString(),
       updated_at: source.updated_at || new Date().toISOString(),
       user_id: source.user_id || null,

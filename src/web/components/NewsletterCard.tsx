@@ -95,9 +95,9 @@ const NewsletterCard = ({
           {newsletter.source ? (
             <>
               <span className="font-medium">{newsletter.source.name}</span>
-              {newsletter.source.domain && (
+              {newsletter.source.from && (
                 <span className="text-gray-400 ml-2">
-                  • {newsletter.source.domain}
+                  • {newsletter.source.from}
                 </span>
               )}
             </>

@@ -344,9 +344,9 @@ const SearchResults: React.FC<{
             <div className="flex items-center justify-between text-sm text-neutral-500 mb-2">
               <div className="flex items-center">
                 {result.source?.name || "Unknown Source"}
-                {result.source?.domain && (
+                {result.source?.from && (
                   <span className="text-gray-400 ml-2">
-                    • {result.source.domain}
+                    • {result.source.from}
                   </span>
                 )}
               </div>

@@ -98,7 +98,7 @@ export const CreateSourceGroupModal = ({
   const filteredSources = sources.filter(
     (source) =>
       source.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      source.domain.toLowerCase().includes(searchTerm.toLowerCase()),
+      source.from.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Form is valid if name is not empty and at least one source is selected
@@ -220,7 +220,7 @@ export const CreateSourceGroupModal = ({
                               {source.name}
                             </div>
                             <div className="text-sm text-gray-500 mt-1">
-                              {source.domain}
+                              {source.from}
                             </div>
                           </div>
                         </label>

@@ -178,7 +178,7 @@ export class DatabaseCleanupUtils {
     Array<{
       id: string;
       name: string;
-      domain: string;
+      from: string;
       created_at: string;
     }>
   > {

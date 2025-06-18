@@ -110,13 +110,13 @@ export interface BulkUpdateNewsletterParams {
 
 export interface CreateNewsletterSourceParams {
   name: string;
-  domain: string;
+  from: string;
 }
 
 export interface UpdateNewsletterSourceParams {
   id: string;
   name?: string;
-  domain?: string;
+  from?: string;
   is_archived?: boolean;
 }
 

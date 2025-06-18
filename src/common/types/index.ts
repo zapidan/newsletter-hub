@@ -22,7 +22,7 @@ export interface NewsletterTag {
 export interface NewsletterSource {
   id: string;
   name: string;
-  domain: string;
+  from: string;
   user_id: string;
   created_at: string;
   updated_at: string;

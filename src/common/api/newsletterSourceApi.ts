@@ -31,7 +31,7 @@ const buildNewsletterSourceQuery = (
   // Apply filters
   if (params.search) {
     query = query.or(
-      `name.ilike.%${params.search}%, domain.ilike.%${params.search}%`,
+      `name.ilike.%${params.search}%, from.ilike.%${params.search}%`,
     );
   }
 
@@ -150,28 +150,30 @@ export const newsletterSourceApi = {
         throw new Error("Newsletter source name is required");
       }
 
-      if (!params.domain?.trim()) {
-        throw new Error("Newsletter source domain is required");
+      if (!params.from?.trim()) {
+        throw new Error("Newsletter source from email is required");
       }
 
-      // Check for duplicate domain for this user
+      // Check for duplicate from email for this user
       const { data: existing } = await supabase
         .from("newsletter_sources")
         .select("id")
-        .eq("domain", params.domain.trim().toLowerCase())
+        .eq("from", params.from.trim().toLowerCase())
         .eq("user_id", user.id)
         .eq("is_archived", false)
         .single();
 
       if (existing) {
-        throw new Error("A newsletter source with this domain already exists");
+        throw new Error(
+          "A newsletter source with this from email already exists",
+        );
       }
 
       const { data: source, error } = await supabase
         .from("newsletter_sources")
         .insert({
           name: params.name.trim(),
-          domain: params.domain.trim().toLowerCase(),
+          from: params.from.trim().toLowerCase(),
           user_id: user.id,
           is_archived: false,
         })
@@ -198,17 +200,17 @@ export const newsletterSourceApi = {
         throw new Error("Newsletter source name cannot be empty");
       }
 
-      // Validate domain if provided and check for duplicates
-      if (updateData.domain !== undefined) {
-        if (!updateData.domain?.trim()) {
-          throw new Error("Newsletter source domain cannot be empty");
+      // Validate from email if provided and check for duplicates
+      if (updateData.from !== undefined) {
+        if (!updateData.from?.trim()) {
+          throw new Error("Newsletter source from email cannot be empty");
         }
 
-        const normalizedDomain = updateData.domain.trim().toLowerCase();
+        const normalizedFrom = updateData.from.trim().toLowerCase();
         const { data: existing } = await supabase
           .from("newsletter_sources")
           .select("id")
-          .eq("domain", normalizedDomain)
+          .eq("from", normalizedFrom)
           .eq("user_id", user.id)
           .eq("is_archived", false)
           .neq("id", id)
@@ -216,11 +218,11 @@ export const newsletterSourceApi = {
 
         if (existing) {
           throw new Error(
-            "A newsletter source with this domain already exists",
+            "A newsletter source with this from email already exists",
           );
         }
 
-        updateData.domain = normalizedDomain;
+        updateData.from = normalizedFrom;
       }
 
       const { data: source, error } = await supabase

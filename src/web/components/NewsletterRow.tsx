@@ -135,9 +135,9 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 </div>
                 <div className="text-sm text-gray-500 truncate">
                   {newsletter.source?.name || "Unknown Source"}
-                  {newsletter.source?.domain && (
+                  {newsletter.source?.from && (
                     <span className="text-gray-400 ml-2">
-                      • {newsletter.source.domain}
+                      • {newsletter.source.from}
                     </span>
                   )}
                 </div>

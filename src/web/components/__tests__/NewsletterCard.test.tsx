@@ -35,7 +35,7 @@ describe("NewsletterCard", () => {
       source: {
         id: "source-1",
         name: "Tech Weekly",
-        domain: "techweekly.com",
+        from: "techweekly.com",
         email: "tech@weekly.com",
         description: "Weekly tech newsletter",
         user_id: "user-1",

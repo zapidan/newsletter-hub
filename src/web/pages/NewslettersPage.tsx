@@ -128,7 +128,7 @@ const NewslettersPage: React.FC = () => {
 
   const [formData, setFormData] = useState({
     name: "",
-    domain: "",
+    from: "",
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -146,7 +146,7 @@ const NewslettersPage: React.FC = () => {
   const handleEdit = (source: NewsletterSource) => {
     setFormData({
       name: source.name,
-      domain: source.domain,
+      from: source.from,
     });
     setEditingId(source.id);
     setEditModalSourceId(source.id);
@@ -891,7 +891,7 @@ const NewslettersPage: React.FC = () => {
             </h1>
             <p className="text-gray-600 mt-1">
               Define your newsletter sources by name and their primary email
-              domain.
+              from.
             </p>
           </div>
         </header>
@@ -1046,13 +1046,13 @@ const NewslettersPage: React.FC = () => {
                         </div>
                         <div className="mb-4">
                           <label
-                            htmlFor="domain"
-                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="from"
+                            className="block text-sm font-medium text-gray-700"
                           >
-                            Domain
+                            From Email
                           </label>
                           <div className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 p-2 text-sm text-gray-600">
-                            {formData.domain}
+                            {formData.from}
                           </div>
                         </div>
                         <div className="flex justify-end gap-2">
@@ -1296,9 +1296,9 @@ const NewslettersPage: React.FC = () => {
                               ? "text-blue-700"
                               : "text-neutral-500"
                           }`}
-                          title={source.domain}
+                          title={source.from}
                         >
-                          {source.domain}
+                          {source.from}
                         </p>
                       </div>
                       <div className="flex justify-center flex-col gap-1">
