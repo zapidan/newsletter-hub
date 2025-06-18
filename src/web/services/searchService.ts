@@ -43,7 +43,14 @@ export interface SearchState {
 class SearchService {
   private static readonly RECENT_SEARCHES_KEY = "newsletter_recent_searches";
   private static readonly MAX_RECENT_SEARCHES = 10;
-  private log = useLoggerStatic();
+  private _log: ReturnType<typeof useLoggerStatic> | null = null;
+
+  private get log() {
+    if (!this._log) {
+      this._log = useLoggerStatic();
+    }
+    return this._log;
+  }
 
   /**
    * Performs a search with the given options
@@ -440,6 +447,16 @@ class SearchService {
   }
 }
 
-// Export singleton instance
-export const searchService = new SearchService();
+// Factory function to create SearchService instance
+export const createSearchService = () => new SearchService();
+
+// Export singleton instance - created lazily
+let searchServiceInstance: SearchService | null = null;
+export const searchService = (): SearchService => {
+  if (!searchServiceInstance) {
+    searchServiceInstance = new SearchService();
+  }
+  return searchServiceInstance;
+};
+
 export default searchService;

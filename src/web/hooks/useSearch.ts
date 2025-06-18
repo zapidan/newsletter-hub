@@ -19,13 +19,13 @@ export const useSearch = () => {
   const initialPage = parseInt(searchParams.get("page") || "1", 10);
 
   const [state, setState] = useState<SearchState>(() => ({
-    ...searchService.createInitialState(),
+    ...searchService().createInitialState(),
     currentPage: initialPage,
   }));
 
   const [query, setQuery] = useState(initialQuery);
   const [filters, setFilters] = useState<SearchFilters>(
-    searchService.createDefaultFilters(),
+    searchService().createDefaultFilters(),
   );
 
   const itemsPerPage = 20;
@@ -38,7 +38,7 @@ export const useSearch = () => {
       if (!searchQuery.trim()) return;
 
       // Validate input
-      const validation = searchService.validateSearchInput(searchQuery);
+      const validation = searchService().validateSearchInput(searchQuery);
       if (!validation.isValid) {
         setState((prev) => ({ ...prev, error: validation.error || null }));
         return;
@@ -54,7 +54,7 @@ export const useSearch = () => {
           itemsPerPage,
         };
 
-        const result = await searchService.search(options);
+        const result = await searchService().search(options);
 
         setState((prev) => ({
           ...prev,
@@ -67,12 +67,12 @@ export const useSearch = () => {
         }));
 
         // Save to recent searches
-        searchService.saveRecentSearch(searchQuery.trim());
+        searchService().saveRecentSearch(searchQuery.trim());
 
         // Update URL
-        searchService.updateUrl(searchQuery, page > 1 ? page : undefined);
+        searchService().updateUrl(searchQuery, page > 1 ? page : undefined);
       } catch (error) {
-        const errorMessage = searchService.formatSearchError(error);
+        const errorMessage = searchService().formatSearchError(error);
         setState((prev) => ({
           ...prev,
           loading: false,
@@ -108,9 +108,9 @@ export const useSearch = () => {
    */
   const clearSearch = useCallback(() => {
     setQuery("");
-    setFilters(searchService.createDefaultFilters());
-    setState(searchService.createInitialState());
-    searchService.updateUrl("");
+    setFilters(searchService().createDefaultFilters());
+    setState(searchService().createInitialState());
+    searchService().updateUrl("");
   }, []);
 
   /**
@@ -143,7 +143,7 @@ export const useSearch = () => {
         ),
       }));
 
-      await searchService.openNewsletterDetail(newsletterId);
+      await searchService().openNewsletterDetail(newsletterId);
     } catch (error) {
       console.error("Failed to open newsletter detail:", error);
       // Revert optimistic update on error
@@ -171,14 +171,14 @@ export const useSearch = () => {
    * Clears all filters
    */
   const clearFilters = useCallback(() => {
-    setFilters(searchService.createDefaultFilters());
+    setFilters(searchService().createDefaultFilters());
   }, []);
 
   /**
    * Checks if filters are applied
    */
   const hasFiltersApplied = useCallback(() => {
-    return searchService.hasFiltersApplied(filters);
+    return searchService().hasFiltersApplied(filters);
   }, [filters]);
 
   // Initial search if query exists
@@ -212,9 +212,9 @@ export const useSearch = () => {
 
     // Computed
     hasFiltersApplied: hasFiltersApplied(),
-    hasResults: searchService.hasResults(state),
-    isSearching: searchService.isSearching(state),
-    hasSearched: searchService.hasSearched(state),
+    hasResults: searchService().hasResults(state),
+    isSearching: searchService().isSearching(state),
+    hasSearched: searchService().hasSearched(state),
   };
 };
 
@@ -231,7 +231,7 @@ export const useSearchSuggestions = (query: string) => {
 
   // Load recent searches on mount
   useEffect(() => {
-    setRecentSearches(searchService.getRecentSearches());
+    setRecentSearches(searchService().getRecentSearches());
   }, []);
 
   // Generate suggestions based on query
@@ -278,8 +278,8 @@ export const useSearchSuggestions = (query: string) => {
   }, []);
 
   const removeRecentSearch = useCallback((searchQuery: string) => {
-    searchService.removeRecentSearch(searchQuery);
-    setRecentSearches(searchService.getRecentSearches());
+    searchService().removeRecentSearch(searchQuery);
+    setRecentSearches(searchService().getRecentSearches());
   }, []);
 
   const showSuggestionsDropdown = useCallback(() => {
@@ -319,10 +319,10 @@ export const useNewsletterSources = () => {
       setError(null);
 
       try {
-        const loadedSources = await searchService.getSources();
+        const loadedSources = await searchService().getSources();
         setSources(loadedSources);
       } catch (err) {
-        setError(searchService.formatSearchError(err));
+        setError(searchService().formatSearchError(err));
       } finally {
         setLoading(false);
       }
@@ -426,11 +426,11 @@ export const useSearchUrl = () => {
 
   const getSearchParams = useCallback(() => {
     const searchParams = new URLSearchParams(location.search);
-    return searchService.parseUrlParams(searchParams);
+    return searchService().parseUrlParams(searchParams);
   }, [location.search]);
 
   const updateSearchUrl = useCallback((query: string, page?: number) => {
-    searchService.updateUrl(query, page);
+    searchService().updateUrl(query, page);
   }, []);
 
   return {
