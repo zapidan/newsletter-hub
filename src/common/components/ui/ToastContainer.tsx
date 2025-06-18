@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
-import { useToast, type Toast } from '@common/contexts/ToastContext';
+import React, { useEffect, useState } from "react";
+import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from "lucide-react";
+import { useToast, type Toast } from "@common/contexts/ToastContext";
 
 interface ToastItemProps {
   toast: Toast;
@@ -8,7 +8,11 @@ interface ToastItemProps {
   isExiting?: boolean;
 }
 
-const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss, isExiting = false }) => {
+const ToastItem: React.FC<ToastItemProps> = ({
+  toast,
+  onDismiss,
+  isExiting = false,
+}) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -27,21 +31,22 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss, isExiting = fal
     const baseStyles = `
       relative flex items-start gap-3 p-4 rounded-lg shadow-lg border
       transition-all duration-200 ease-in-out transform
-      ${isVisible && !isExiting
-        ? 'translate-x-0 opacity-100 scale-100'
-        : 'translate-x-full opacity-0 scale-95'
+      ${
+        isVisible && !isExiting
+          ? "translate-x-0 opacity-100 scale-100"
+          : "translate-x-full opacity-0 scale-95"
       }
       min-w-[320px] max-w-[480px]
     `;
 
     switch (toast.type) {
-      case 'success':
+      case "success":
         return `${baseStyles} bg-green-50 border-green-200 text-green-800`;
-      case 'error':
+      case "error":
         return `${baseStyles} bg-red-50 border-red-200 text-red-800`;
-      case 'warning':
+      case "warning":
         return `${baseStyles} bg-yellow-50 border-yellow-200 text-yellow-800`;
-      case 'info':
+      case "info":
       default:
         return `${baseStyles} bg-blue-50 border-blue-200 text-blue-800`;
     }
@@ -51,27 +56,27 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss, isExiting = fal
     const iconClass = "h-5 w-5 flex-shrink-0 mt-0.5";
 
     switch (toast.type) {
-      case 'success':
+      case "success":
         return <CheckCircle className={`${iconClass} text-green-500`} />;
-      case 'error':
+      case "error":
         return <AlertCircle className={`${iconClass} text-red-500`} />;
-      case 'warning':
+      case "warning":
         return <AlertTriangle className={`${iconClass} text-yellow-500`} />;
-      case 'info':
+      case "info":
       default:
         return <Info className={`${iconClass} text-blue-500`} />;
     }
   };
 
   const getAriaRole = () => {
-    return toast.type === 'error' ? 'alert' : 'status';
+    return toast.type === "error" ? "alert" : "status";
   };
 
   return (
     <div
       className={getToastStyles()}
       role={getAriaRole()}
-      aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+      aria-live={toast.type === "error" ? "assertive" : "polite"}
       aria-atomic="true"
     >
       {/* Icon */}
@@ -99,7 +104,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss, isExiting = fal
           <div
             className="h-full bg-current opacity-30 transition-all linear"
             style={{
-              width: '100%',
+              width: "100%",
               animation: `toast-progress ${toast.duration}ms linear forwards`,
             }}
           />
@@ -110,15 +115,21 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss, isExiting = fal
 };
 
 interface ToastContainerProps {
-  position?: 'top-right' | 'top-left' | 'top-center' | 'bottom-right' | 'bottom-left' | 'bottom-center';
+  position?:
+    | "top-right"
+    | "top-left"
+    | "top-center"
+    | "bottom-right"
+    | "bottom-left"
+    | "bottom-center";
   maxToasts?: number;
   className?: string;
 }
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({
-  position = 'top-right',
+  position = "top-right",
   maxToasts = 5,
-  className = '',
+  className = "",
 }) => {
   const { toasts, dismissToast } = useToast();
   const [exitingToasts, setExitingToasts] = useState<Set<string>>(new Set());
@@ -127,11 +138,11 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
   const visibleToasts = toasts.slice(-maxToasts);
 
   const handleDismiss = (id: string) => {
-    setExitingToasts(prev => new Set(prev).add(id));
+    setExitingToasts((prev) => new Set(prev).add(id));
     // Small delay to show exit animation
     setTimeout(() => {
       dismissToast(id);
-      setExitingToasts(prev => {
+      setExitingToasts((prev) => {
         const newSet = new Set(prev);
         newSet.delete(id);
         return newSet;
@@ -140,33 +151,36 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
   };
 
   const getContainerPosition = () => {
-    const baseClasses = 'fixed z-50 flex flex-col gap-2 p-4 pointer-events-none';
+    const baseClasses =
+      "fixed z-50 flex flex-col gap-2 p-4 pointer-events-none";
 
     switch (position) {
-      case 'top-left':
+      case "top-left":
         return `${baseClasses} top-0 left-0`;
-      case 'top-center':
+      case "top-center":
         return `${baseClasses} top-0 left-1/2 transform -translate-x-1/2`;
-      case 'top-right':
+      case "top-right":
         return `${baseClasses} top-0 right-0`;
-      case 'bottom-left':
+      case "bottom-left":
         return `${baseClasses} bottom-0 left-0`;
-      case 'bottom-center':
+      case "bottom-center":
         return `${baseClasses} bottom-0 left-1/2 transform -translate-x-1/2`;
-      case 'bottom-right':
+      case "bottom-right":
         return `${baseClasses} bottom-0 right-0`;
       default:
         return `${baseClasses} top-0 right-0`;
     }
   };
 
-  const shouldReverseOrder = position.startsWith('bottom');
+  const shouldReverseOrder = position.startsWith("bottom");
 
   if (visibleToasts.length === 0) {
     return null;
   }
 
-  const orderedToasts = shouldReverseOrder ? [...visibleToasts].reverse() : visibleToasts;
+  const orderedToasts = shouldReverseOrder
+    ? [...visibleToasts].reverse()
+    : visibleToasts;
 
   return (
     <>
@@ -187,7 +201,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
       </div>
 
       {/* Add CSS for progress bar animation */}
-      <style jsx>{`
+      <style>{`
         @keyframes toast-progress {
           from {
             width: 100%;
@@ -209,10 +223,13 @@ export const useToastContainer = () => {
   const toastCount = toasts.length;
 
   const getToastsByType = () => {
-    return toasts.reduce((acc, toast) => {
-      acc[toast.type] = (acc[toast.type] || 0) + 1;
-      return acc;
-    }, {} as Record<Toast['type'], number>);
+    return toasts.reduce(
+      (acc, toast) => {
+        acc[toast.type] = (acc[toast.type] || 0) + 1;
+        return acc;
+      },
+      {} as Record<Toast["type"], number>,
+    );
   };
 
   return {

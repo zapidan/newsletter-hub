@@ -1,7 +1,7 @@
 import { toast } from "react-hot-toast";
 import { getCacheManager } from "./cacheUtils";
 import { readingQueueApi } from "@common/api";
-import { useLoggerStatic } from "./logger";
+import { useLoggerStatic } from "./logger/useLogger";
 import type { NewsletterWithRelations } from "@common/types";
 
 export interface NewsletterActionHandlers {

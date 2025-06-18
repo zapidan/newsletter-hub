@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useEffect, useState } from "react";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 // Custom debounce implementation
 function debounce<T extends (...args: any[]) => any>(

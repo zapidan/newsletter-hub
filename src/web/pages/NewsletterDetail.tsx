@@ -6,7 +6,7 @@ import { useNewsletters } from "@common/hooks/useNewsletters";
 import { useTags } from "@common/hooks/useTags";
 import { useAuth } from "@common/contexts/AuthContext";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import LoadingScreen from "@common/components/common/LoadingScreen";
 import TagSelector from "@web/components/TagSelector";
 import NewsletterDetailActions from "../../components/NewsletterDetail/NewsletterDetailActions";

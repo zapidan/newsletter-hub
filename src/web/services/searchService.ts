@@ -5,7 +5,7 @@ import {
 } from "@common/api";
 import { Newsletter, NewsletterSource } from "@common/types";
 import { buildSearchParams, validateSearchFilters } from "../utils/searchUtils";
-import { useLogger } from "@common/utils/logger";
+import { useLoggerStatic } from "@common/utils/logger/useLogger";
 
 export interface SearchFilters {
   selectedSources: string[];
@@ -43,7 +43,7 @@ export interface SearchState {
 class SearchService {
   private static readonly RECENT_SEARCHES_KEY = "newsletter_recent_searches";
   private static readonly MAX_RECENT_SEARCHES = 10;
-  private log = useLogger();
+  private log = useLoggerStatic();
 
   /**
    * Performs a search with the given options

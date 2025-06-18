@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNewsletterSourceGroups } from "@common/hooks/useNewsletterSourceGroups";
 import { NewsletterSourceGroup } from "@common/types";
 import { useClickOutside } from "@common/hooks/useClickOutside";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 interface SourceGroupCardProps {
   group: NewsletterSourceGroup;

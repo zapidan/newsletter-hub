@@ -5,7 +5,7 @@ import {
   withPerformanceLogging,
 } from "./supabaseClient";
 import { ReadingQueueItem, Tag } from "../types";
-import { useLoggerStatic } from "../utils/logger";
+import { useLoggerStatic } from "../utils/logger/useLogger";
 
 // Initialize logger
 const log = useLoggerStatic();
@@ -168,7 +168,9 @@ export const readingQueueApi = {
               component: "ReadingQueueApi",
               action: "cleanup_error",
             },
-            cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+            cleanupError instanceof Error
+              ? cleanupError
+              : new Error(String(cleanupError)),
           );
         }
       }
@@ -195,7 +197,7 @@ export const readingQueueApi = {
         .map((item) => item.newsletter_id)
         .filter((id) => id != null); // Filter out null/undefined newsletter_ids
 
-      let newsletterTags: Array<{ newsletter_id: string; tags: Tag }> = [];
+      let newsletterTags: Array<{ newsletter_id: string; tags: any }> = [];
       if (newsletterIds.length > 0) {
         const { data } = await supabase
           .from("newsletter_tags")
@@ -206,13 +208,25 @@ export const readingQueueApi = {
 
       // Create a map of newsletter ID to tags
       const tagsMap = new Map<string, Tag[]>();
-      newsletterTags.forEach((nt: { newsletter_id: string; tags: Tag }) => {
+      newsletterTags.forEach((nt: { newsletter_id: string; tags: any }) => {
         if (!tagsMap.has(nt.newsletter_id)) {
           tagsMap.set(nt.newsletter_id, []);
         }
-        if (nt.tags) {
-          tagsMap.get(nt.newsletter_id)!.push(nt.tags as Tag);
-        }
+        // Handle both single tag object and array of tags
+        const tags = Array.isArray(nt.tags) ? nt.tags : [nt.tags];
+        tags.forEach((tag: any) => {
+          if (tag && typeof tag === "object") {
+            const transformedTag: Tag = {
+              id: tag.id as string,
+              name: tag.name as string,
+              color: tag.color as string,
+              user_id: tag.user_id as string,
+              created_at: tag.created_at as string,
+              newsletter_count: tag.newsletter_count,
+            };
+            tagsMap.get(nt.newsletter_id)!.push(transformedTag);
+          }
+        });
       });
 
       return validQueueItems.map((item) => {
@@ -294,7 +308,7 @@ export const readingQueueApi = {
       if (error) handleSupabaseError(error);
 
       // Fetch tags for the newsletter (only if newsletter ID is valid)
-      let newsletterTags: Array<{ tags: Tag }> = [];
+      let newsletterTags: Array<{ tags: any }> = [];
       if (newsletterId) {
         const { data } = await supabase
           .from("newsletter_tags")
@@ -306,8 +320,20 @@ export const readingQueueApi = {
       const transformedItem = transformQueueItem(insertedData);
       transformedItem.newsletter.tags =
         newsletterTags
-          ?.map((nt: { tags: Tag }) => nt.tags as Tag)
-          .filter(Boolean) || [];
+          ?.map((nt: { tags: any }) => {
+            if (nt.tags && typeof nt.tags === "object") {
+              return {
+                id: nt.tags.id as string,
+                name: nt.tags.name as string,
+                color: nt.tags.color as string,
+                user_id: nt.tags.user_id as string,
+                created_at: nt.tags.created_at as string,
+                newsletter_count: nt.tags.newsletter_count,
+              } as Tag;
+            }
+            return null;
+          })
+          .filter((tag): tag is Tag => tag !== null) || [];
 
       return transformedItem;
     });
@@ -399,7 +425,7 @@ export const readingQueueApi = {
       if (!data) return null;
 
       // Fetch tags for the newsletter (only if newsletter ID is valid)
-      let newsletterTags: Array<{ tags: Tag }> = [];
+      let newsletterTags: Array<{ tags: any }> = [];
       if (data.newsletter_id) {
         const { data: tagsData } = await supabase
           .from("newsletter_tags")
@@ -411,8 +437,20 @@ export const readingQueueApi = {
       const transformedItem = transformQueueItem(data);
       transformedItem.newsletter.tags =
         newsletterTags
-          ?.map((nt: { tags: Tag }) => nt.tags as Tag)
-          .filter(Boolean) || [];
+          ?.map((nt: { tags: any }) => {
+            if (nt.tags && typeof nt.tags === "object") {
+              return {
+                id: nt.tags.id as string,
+                name: nt.tags.name as string,
+                color: nt.tags.color as string,
+                user_id: nt.tags.user_id as string,
+                created_at: nt.tags.created_at as string,
+                newsletter_count: nt.tags.newsletter_count,
+              } as Tag;
+            }
+            return null;
+          })
+          .filter((tag): tag is Tag => tag !== null) || [];
 
       return transformedItem;
     });
@@ -531,11 +569,11 @@ export const readingQueueApi = {
             metadata: {
               orphanedItemsCount: orphanedItems.length,
               orphanedItems: orphanedItems.map((item) => ({
-              id: item.id,
-              newsletter_id: item.newsletter_id,
-              }))
-            }
-          }
+                id: item.id,
+                newsletter_id: item.newsletter_id,
+              })),
+            },
+          },
         );
 
         // Remove orphaned items

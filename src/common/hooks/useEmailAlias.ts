@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@common/services/supabaseClient";
 import { getUserEmailAlias } from "@common/utils/emailAlias"; // Updated path to match actual file location
 import { User } from "@supabase/supabase-js";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 type AppUser = User | null;
 
@@ -48,7 +48,7 @@ export function useEmailAlias() {
     setError(null);
 
     try {
-      const alias = await getUserEmailAlias(user);
+      const alias = await getUserEmailAlias();
       setEmailAlias(alias);
     } catch (err) {
       log.error(

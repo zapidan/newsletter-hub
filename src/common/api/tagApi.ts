@@ -110,7 +110,23 @@ export const tagApi = {
         .eq("user_id", user.id);
 
       if (error) handleSupabaseError(error);
-      return data?.map((item: { tag: Tag }) => item.tag).filter(Boolean) || [];
+      return (
+        data
+          ?.map((item: { tag: any }) => {
+            if (item.tag && typeof item.tag === "object") {
+              return {
+                id: item.tag.id as string,
+                name: item.tag.name as string,
+                color: item.tag.color as string,
+                user_id: item.tag.user_id as string,
+                created_at: item.tag.created_at as string,
+                newsletter_count: item.tag.newsletter_count,
+              } as Tag;
+            }
+            return null;
+          })
+          .filter((tag): tag is Tag => tag !== null) || []
+      );
     });
   },
 

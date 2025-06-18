@@ -7,7 +7,7 @@ import { queryKeyFactory } from "../utils/queryKeyFactory";
 import { getCacheManagerSafe } from "../utils/cacheUtils";
 import { readingQueueApi } from "@common/api/readingQueueApi";
 import { newsletterApi } from "@common/api/newsletterApi";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 interface NewsletterFromDB {
   id: string;

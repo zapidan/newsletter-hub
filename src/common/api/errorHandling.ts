@@ -1,5 +1,5 @@
-import { PostgrestError, AuthError } from "@supabase/supabase-js";
-import { useLoggerStatic } from "../utils/logger";
+import { AuthError } from "@supabase/supabase-js";
+import { useLoggerStatic } from "../utils/logger/useLogger";
 
 // Custom error types
 export enum ErrorType {
@@ -275,6 +275,7 @@ export const logError = (
     userId?: string;
     operation?: string;
     component?: string;
+    source?: string;
     additionalData?: Record<string, any>;
   },
 ): void => {

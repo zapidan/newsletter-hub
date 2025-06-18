@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { NewsletterWithRelations, NewsletterFilter } from "../../types";
-import { PaginatedResponse } from "../../types/api";
+import { NewsletterWithRelations } from "../../types";
+import { NewsletterFilter } from "../../types/cache";
 import { newsletterApi } from "../../api/newsletterApi";
 import { queryKeyFactory } from "../../utils/queryKeyFactory";
 import { useAuth } from "../../contexts/AuthContext";

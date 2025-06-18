@@ -9,7 +9,7 @@ import {
 import { toast } from "react-hot-toast";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
 import { readingQueueApi } from "@common/api/readingQueueApi";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import type { NewsletterWithRelations } from "@common/types";
 
 interface NewsletterDetailActionsProps {

@@ -9,7 +9,7 @@ import { useFilters } from "@common/contexts/FilterContext";
 import { useNewsletters } from "@common/hooks/useNewsletters";
 import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
 import { useTags } from "@common/hooks/useTags";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import type { NewsletterWithRelations, Tag } from "@common/types";
 import type { TimeRange } from "@web/components/TimeFilter";
 

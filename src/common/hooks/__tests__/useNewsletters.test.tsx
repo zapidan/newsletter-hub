@@ -3,8 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { useNewsletters } from "../useNewsletters";
 import { newsletterApi } from "@common/api/newsletterApi";
-import { getCacheManager } from "@common/utils/cacheUtils";
-import { useAuth } from "@common/contexts/AuthContext";
 import type { NewsletterWithRelations } from "@common/types";
 
 // Mock dependencies
@@ -47,8 +45,6 @@ vi.mock("@common/contexts/AuthContext", () => ({
 }));
 
 const mockNewsletterApi = vi.mocked(newsletterApi);
-const mockGetCacheManager = vi.mocked(getCacheManager);
-const mockUseAuth = vi.mocked(useAuth);
 
 // Mock data
 const mockNewsletter: NewsletterWithRelations = {
@@ -60,7 +56,6 @@ const mockNewsletter: NewsletterWithRelations = {
   is_liked: false,
   is_archived: false,
   received_at: "2024-01-01T00:00:00Z",
-  created_at: "2024-01-01T00:00:00Z",
   updated_at: "2024-01-01T00:00:00Z",
   user_id: "test-user",
   newsletter_source_id: "test-source",
@@ -68,8 +63,7 @@ const mockNewsletter: NewsletterWithRelations = {
   source: null,
   word_count: 100,
   estimated_read_time: 1,
-  image_url: null,
-  url: null,
+  image_url: "",
 };
 
 const mockCacheManager = {
@@ -81,11 +75,6 @@ const mockCacheManager = {
       findAll: () => [],
     }),
   },
-};
-
-const mockUser = {
-  id: "test-user",
-  email: "test@example.com",
 };
 
 describe("useNewsletters - Action Fixes", () => {
@@ -119,7 +108,7 @@ describe("useNewsletters - Action Fixes", () => {
     });
 
     mockCacheManager.updateNewsletterInCache.mockImplementation(
-      (id, updates) => updates,
+      (_id, updates) => updates,
     );
   });
 

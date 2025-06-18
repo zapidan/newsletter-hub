@@ -18,7 +18,7 @@ import {
 import { useState } from "react";
 import { useContext } from "react";
 import { AuthContext } from "@common/contexts/AuthContext";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import { useEmailAlias } from "@common/hooks/useEmailAlias";
 import { useUnreadCount } from "@common/hooks/useUnreadCount";
 

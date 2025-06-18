@@ -17,7 +17,7 @@ import { useBulkLoadingStates } from "@common/hooks/useLoadingStates";
 
 import { useToast } from "@common/contexts/ToastContext";
 import { useAuth } from "@common/contexts";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 import type { NewsletterWithRelations, Tag } from "@common/types";
 import { getCacheManager } from "@common/utils/cacheUtils";

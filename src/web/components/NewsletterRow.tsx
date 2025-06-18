@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { Tag as TagIcon, Loader2 } from "lucide-react";
 import { NewsletterWithRelations, Tag } from "@common/types";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import TagSelector from "./TagSelector";
 import NewsletterActions from "./NewsletterActions";
 

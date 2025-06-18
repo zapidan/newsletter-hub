@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Plus } from "lucide-react";
 import { NewsletterSource } from "@common/types";
 import { useNewsletterSourceGroups } from "@common/hooks/useNewsletterSourceGroups";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 interface CreateSourceGroupModalProps {
   isOpen: boolean;

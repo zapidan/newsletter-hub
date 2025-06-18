@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect } from "react";
 import { useToastActions } from "@common/contexts/ToastContext";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 export type ErrorSeverity = "low" | "medium" | "high" | "critical";
 

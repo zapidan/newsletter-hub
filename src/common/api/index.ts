@@ -1,4 +1,10 @@
-import { ApiError, ApiResponse, CrudOperations } from "../types/api";
+import {
+  ApiError,
+  ApiResponse,
+  CrudOperations,
+  BaseQueryParams,
+  PaginationParams,
+} from "../types/api";
 import { setupGlobalErrorHandling } from "./errorHandling";
 import supabase, {
   handleSupabaseError,
@@ -217,16 +223,15 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
       return data;
     },
 
-    async getAll(params: Record<string, unknown> = {}) {
+    async getAll(params: BaseQueryParams & PaginationParams = {}) {
       const user = await requireAuth();
       let query = supabase.from(tableName).select("*").eq("user_id", user.id);
 
-      if (params.limit) query = query.limit(params.limit);
-      if (params.offset)
-        query = query.range(
-          params.offset,
-          params.offset + (params.limit || 50) - 1,
-        );
+      const limit = params.limit || 50;
+      const offset = params.offset || 0;
+
+      if (params.limit) query = query.limit(limit);
+      if (params.offset) query = query.range(offset, offset + limit - 1);
 
       const { data, error, count } = await query;
       if (error) handleSupabaseError(error);
@@ -234,17 +239,12 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
       return {
         data: data || [],
         count: count || 0,
-        page: Math.floor((params.offset || 0) / (params.limit || 50)) + 1,
-        limit: params.limit || 50,
-        hasMore: (data?.length || 0) === (params.limit || 50),
+        page: Math.floor(offset / limit) + 1,
+        limit: limit,
+        hasMore: (data?.length || 0) === limit,
         nextPage:
-          (data?.length || 0) === (params.limit || 50)
-            ? Math.floor((params.offset || 0) / (params.limit || 50)) + 2
-            : null,
-        prevPage:
-          (params.offset || 0) > 0
-            ? Math.floor((params.offset || 0) / (params.limit || 50))
-            : null,
+          (data?.length || 0) === limit ? Math.floor(offset / limit) + 2 : null,
+        prevPage: offset > 0 ? Math.floor(offset / limit) : null,
       };
     },
 
@@ -380,14 +380,14 @@ export const createApiService = <T, TCreate = any, TUpdate = any>(
 
 // Common query builders
 export const buildPaginationQuery = (
-  query: unknown,
-  { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+  query: any,
+  { offset = 0, limit = 50 }: { offset?: number; limit?: number } = {},
 ) => {
   return query.range(offset, offset + limit - 1);
 };
 
 export const buildOrderQuery = (
-  query: unknown,
+  query: any,
   {
     orderBy = "created_at",
     ascending = false,
@@ -397,7 +397,7 @@ export const buildOrderQuery = (
 };
 
 export const buildSearchQuery = (
-  query: unknown,
+  query: any,
   searchTerm: string,
   searchColumns: string[],
 ) => {

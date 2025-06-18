@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@common/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Check, X } from 'lucide-react';
-import { supabase } from '@common/services/supabaseClient';
+import { supabase } from '@common/api/supabaseClient';
 
 interface Message {
   type: 'success' | 'error';

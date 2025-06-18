@@ -17,8 +17,6 @@ import {
 const buildNewsletterSourceQuery = (
   params: NewsletterSourceQueryParams = {},
 ) => {
-  let query = supabase.from("newsletter_sources");
-
   // Select clause
   let selectClause = "*";
   if (params.includeCount) {
@@ -28,7 +26,7 @@ const buildNewsletterSourceQuery = (
     `;
   }
 
-  query = query.select(selectClause);
+  let query = supabase.from("newsletter_sources").select(selectClause);
 
   // Apply filters
   if (params.search) {
@@ -79,7 +77,6 @@ export const newsletterSourceApi = {
   ): Promise<PaginatedResponse<NewsletterSource>> {
     return withPerformanceLogging("newsletter_sources.getAll", async () => {
       const user = await requireAuth();
-
       let query = buildNewsletterSourceQuery(params);
       query = query.eq("user_id", user.id);
 

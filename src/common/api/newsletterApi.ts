@@ -4,7 +4,7 @@ import {
   requireAuth,
   withPerformanceLogging,
 } from "./supabaseClient";
-import { NewsletterWithRelations } from "../types";
+import { NewsletterWithRelations, Tag } from "../types";
 import {
   NewsletterQueryParams,
   CreateNewsletterParams,
@@ -19,9 +19,7 @@ import { useLoggerStatic } from "../utils/logger";
 const log = useLoggerStatic();
 
 // Transform raw Supabase response to our Newsletter type
-const transformNewsletterResponse = (
-  data: Record<string, unknown>,
-): NewsletterWithRelations => {
+const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Log the raw data we receive
   log.debug("Newsletter response transformation started", {
     component: "NewsletterApi",
@@ -55,48 +53,61 @@ const transformNewsletterResponse = (
     }
   }
   // Fallback to direct source property for backward compatibility
-  else if (data.source) {
+  else if (data.source && typeof data.source === "object") {
+    const source = data.source as any;
     transformedSource = {
-      id: data.source.id,
-      name: data.source.name || "Unknown",
-      domain: data.source.domain || null,
-      created_at: data.source.created_at || new Date().toISOString(),
-      updated_at: data.source.updated_at || new Date().toISOString(),
-      user_id: data.source.user_id || null,
+      id: source.id,
+      name: source.name || "Unknown",
+      domain: source.domain || null,
+      created_at: source.created_at || new Date().toISOString(),
+      updated_at: source.updated_at || new Date().toISOString(),
+      user_id: source.user_id || null,
     };
   }
 
   // Transform tags if they exist
-  const transformedTags = Array.isArray(data.tags)
+  const transformedTags: Tag[] = Array.isArray(data.tags)
     ? data.tags
-        .map((t: { tag: Record<string, unknown> }) => t.tag)
-        .filter(Boolean)
+        .map((t: { tag: any }) => {
+          if (t.tag && typeof t.tag === "object") {
+            return {
+              id: t.tag.id as string,
+              name: t.tag.name as string,
+              color: t.tag.color as string,
+              user_id: t.tag.user_id as string,
+              created_at: t.tag.created_at as string,
+              newsletter_count: t.tag.newsletter_count as number | undefined,
+            } as Tag;
+          }
+          return null;
+        })
+        .filter((tag: Tag | null): tag is Tag => tag !== null)
     : [];
 
-    const result: NewsletterWithRelations = {
-      // Include all base Newsletter properties first
-      ...data,
-      
-      // Then include the transformed relations
-      source: transformedSource,
-      tags: transformedTags,
-      is_archived: Boolean(data.is_archived), // Convert to boolean
-      newsletter_source_id: (data.newsletter_source_id as string) || null,
-      
-      // Ensure all required Newsletter properties are present
-      id: data.id as string,
-      title: data.title as string,
-      content: data.content as string,
-      summary: data.summary as string,
-      image_url: data.image_url as string,
-      received_at: data.received_at as string,
-      updated_at: data.updated_at as string,
-      is_read: Boolean(data.is_read),
-      is_liked: Boolean(data.is_liked),
-      user_id: data.user_id as string,
-      word_count: Number(data.word_count) || 0,
-      estimated_read_time: Number(data.estimated_read_time) || 0
-    };
+  const result: NewsletterWithRelations = {
+    // Include all base Newsletter properties first
+    ...data,
+
+    // Then include the transformed relations
+    source: transformedSource,
+    tags: transformedTags,
+    is_archived: Boolean(data.is_archived), // Convert to boolean
+    newsletter_source_id: (data.newsletter_source_id as string) || null,
+
+    // Ensure all required Newsletter properties are present
+    id: data.id as string,
+    title: data.title as string,
+    content: data.content as string,
+    summary: data.summary as string,
+    image_url: data.image_url as string,
+    received_at: data.received_at as string,
+    updated_at: data.updated_at as string,
+    is_read: Boolean(data.is_read),
+    is_liked: Boolean(data.is_liked),
+    user_id: data.user_id as string,
+    word_count: Number(data.word_count) || 0,
+    estimated_read_time: Number(data.estimated_read_time) || 0,
+  };
 
   // Log the transformed data
   log.debug("Newsletter response transformation completed", {
@@ -214,16 +225,16 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     metadata: {
       select: selectClause,
       filters: {
-      sourceIds: params.sourceIds,
-      isArchived: params.isArchived,
-      isRead: params.isRead,
-      dateFrom: params.dateFrom,
-      dateTo: params.dateTo,
+        sourceIds: params.sourceIds,
+        isArchived: params.isArchived,
+        isRead: params.isRead,
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+      },
+      order: { column: orderColumn, ascending },
+      limit: params.limit,
+      offset: params.offset,
     },
-    order: { column: orderColumn, ascending },
-    limit: params.limit,
-    offset: params.offset,
-    }
   });
 
   return query;
@@ -259,20 +270,24 @@ export const newsletterApi = {
         metadata: {
           userId: user.id,
           sourceIds: params.sourceIds || null,
-        isArchived: params.isArchived,
-        isRead: params.isRead,
-        }
-     });
+          isArchived: params.isArchived,
+          isRead: params.isRead,
+        },
+      });
 
       const queryResult = await query;
       const { data, error, count } = queryResult;
 
       if (error) {
-        log.error("Newsletter query failed", {
-          component: "NewsletterApi",
-          action: "get_all_query_error",
-          metadata: { userId: user.id, params },
-        }, error);
+        log.error(
+          "Newsletter query failed",
+          {
+            component: "NewsletterApi",
+            action: "get_all_query_error",
+            metadata: { userId: user.id, params },
+          },
+          error,
+        );
         handleSupabaseError(error);
       }
 
@@ -282,16 +297,16 @@ export const newsletterApi = {
         metadata: {
           count: data?.length || 0,
           hasSourceIds: !!params.sourceIds,
-        sourceIds: params.sourceIds || null,
-        firstItem: data?.[0]
-          ? {
-              id: (data[0] as any).id,
-              title: (data[0] as any).title,
-              sourceId: (data[0] as any).newsletter_source_id,
-              hasSource: !!(data[0] as any).source,
-            }
-          : null,
-        }
+          sourceIds: params.sourceIds || null,
+          firstItem: data?.[0]
+            ? {
+                id: (data[0] as any).id,
+                title: (data[0] as any).title,
+                sourceId: (data[0] as any).newsletter_source_id,
+                hasSource: !!(data[0] as any).source,
+              }
+            : null,
+        },
       });
 
       // Log the raw response for the first item if available
@@ -386,7 +401,7 @@ export const newsletterApi = {
         handleSupabaseError(error);
       }
 
-      return data ? transformNewsletterResponse(data) : null;
+      return data ? transformNewsletterResponse(data as any) : null;
     });
   },
 
@@ -512,11 +527,15 @@ export const newsletterApi = {
         } catch (error) {
           // If tag operations fail, we should still return the updated newsletter
           // but log the error for debugging
-          log.error("Tag update failed for newsletter", {
-            component: "NewsletterApi",
-            action: "update_newsletter_tags",
-            metadata: { newsletterId: id },
-          }, error instanceof Error ? error : new Error(String(error)));
+          log.error(
+            "Tag update failed for newsletter",
+            {
+              component: "NewsletterApi",
+              action: "update_newsletter_tags",
+              metadata: { newsletterId: id },
+            },
+            error instanceof Error ? error : new Error(String(error)),
+          );
           throw new Error(
             `Tag update failed: ${error instanceof Error ? error.message : "Unknown error"}`,
           );

@@ -9,7 +9,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { NewsletterWithRelations } from "@common/types";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 interface NewsletterActionsProps {
   newsletter: NewsletterWithRelations;

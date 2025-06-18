@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient, AuthError } from "@supabase/supabase-js";
-import { useLoggerStatic } from "../utils/logger";
+import { useLoggerStatic } from "../utils/logger/useLogger";
 
 // Configuration constants
 const SUPABASE_CONFIG = {
@@ -81,8 +81,20 @@ export const handleSupabaseError = (error: unknown): never => {
     throw new SupabaseError("Unknown error occurred");
   }
 
+  // Type guard for error objects with code property
+  const hasCode = (
+    err: unknown,
+  ): err is {
+    code: string;
+    message?: string;
+    details?: unknown;
+    hint?: string;
+  } => {
+    return typeof err === "object" && err !== null && "code" in err;
+  };
+
   // Handle different types of errors
-  if (error.code) {
+  if (hasCode(error)) {
     switch (error.code) {
       case "PGRST116":
         throw new SupabaseError(
@@ -132,8 +144,22 @@ export const handleSupabaseError = (error: unknown): never => {
     );
   }
 
+  // Type guard for error objects with name/message properties
+  const hasNameOrMessage = (
+    err: unknown,
+  ): err is { name?: string; message?: string } => {
+    return (
+      typeof err === "object" &&
+      err !== null &&
+      ("name" in err || "message" in err)
+    );
+  };
+
   // Handle network errors
-  if (error.name === "NetworkError" || error.message?.includes("fetch")) {
+  if (
+    hasNameOrMessage(error) &&
+    (error.name === "NetworkError" || error.message?.includes("fetch"))
+  ) {
     throw new SupabaseError(
       "Network error occurred",
       "NETWORK_ERROR",
@@ -143,11 +169,10 @@ export const handleSupabaseError = (error: unknown): never => {
   }
 
   // Generic error handling
-  throw new SupabaseError(
-    error.message || "An unexpected error occurred",
-    "UNKNOWN_ERROR",
-    error,
-  );
+  const errorMessage = hasNameOrMessage(error)
+    ? error.message || "An unexpected error occurred"
+    : "An unexpected error occurred";
+  throw new SupabaseError(errorMessage, "UNKNOWN_ERROR", error);
 };
 
 // Auth state management utilities

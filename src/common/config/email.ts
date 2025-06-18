@@ -14,7 +14,7 @@ const emailConfig = {
   // Can be overridden by VITE_EMAIL_DEFAULT_DOMAIN environment variable
   defaultDomain:
     import.meta.env.VITE_EMAIL_DEFAULT_DOMAIN || "newsletterhub.com",
-} as const;
+};
 
 // Validate configuration
 if (!emailConfig.defaultDomain.includes(".")) {
@@ -28,5 +28,8 @@ if (!emailConfig.defaultDomain.includes(".")) {
   });
   emailConfig.defaultDomain = "newsletterhub.com";
 }
+
+// Freeze config after validation
+Object.freeze(emailConfig);
 
 export default emailConfig;

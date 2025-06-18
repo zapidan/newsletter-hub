@@ -4,7 +4,7 @@ import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext, useEffect, useRef, useMemo } from "react";
 import { getCacheManagerSafe } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 // Cache time constants (in milliseconds) - Very short for real-time unread counts
 const STALE_TIME = 0; // Always fresh data for unread count

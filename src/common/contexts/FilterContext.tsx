@@ -50,17 +50,16 @@ interface FilterProviderProps {
 export const FilterProvider: React.FC<FilterProviderProps> = ({
   children,
   onFilterChange,
-  debounceTagsMs = 300,
 }) => {
   const { params, updateParams, resetParams } = useInboxUrlParams();
 
   // Extract filter state from URL params
   const filterState: FilterState = useMemo(
     () => ({
-      filter: params.filter || "all",
-      sourceFilter: params.source || null,
-      timeRange: params.time || "all",
-      tagIds: params.tags || [],
+      filter: (params.filter as FilterState["filter"]) || "all",
+      sourceFilter: (params.source as string) || null,
+      timeRange: (params.time as TimeRange) || "all",
+      tagIds: (params.tags as string[]) || [],
     }),
     [params],
   );

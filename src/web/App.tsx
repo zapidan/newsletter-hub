@@ -15,7 +15,7 @@ import { ProtectedRoute } from "@common/components/ProtectedRoute";
 import { CacheInitializer } from "@common/components/CacheInitializer";
 import ErrorBoundary from "@web/components/ErrorBoundary";
 import { useAuth } from "@common/contexts/AuthContext";
-import { useLogger, useLoggerStatic } from "@common/utils/logger";
+import { useLogger, useLoggerStatic } from "@common/utils/logger/useLogger";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 
 // Lazy load page components

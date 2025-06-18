@@ -8,7 +8,7 @@ export interface Toast {
   autoClose?: boolean;
 }
 
-interface ToastContextType {
+export interface ToastContextType {
   toasts: Toast[];
   showToast: (toast: Omit<Toast, "id">) => string;
   showSuccess: (message: string, duration?: number) => string;

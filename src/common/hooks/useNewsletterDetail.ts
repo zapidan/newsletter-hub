@@ -4,7 +4,7 @@ import { supabase } from "@common/services/supabaseClient";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { NewsletterWithRelations } from "@common/types";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import {
   getCacheManagerSafe,
   getQueriesData,

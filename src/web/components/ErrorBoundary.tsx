@@ -1,6 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { toast } from "react-hot-toast";
-import { logger } from "@common/utils/logger";
+import { logger } from "@common/utils/logger/logger";
 
 interface Props {
   children: ReactNode;
