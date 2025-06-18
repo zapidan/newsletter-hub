@@ -171,7 +171,7 @@ const Inbox: React.FC = memo(() => {
   });
 
   // Reading queue
-  const { readingQueue, removeFromQueue } = useReadingQueue();
+  const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
 
   // Error handling
   const { handleError } = useErrorHandling({
@@ -448,7 +448,9 @@ const Inbox: React.FC = memo(() => {
                 action: "mark_as_read",
                 metadata: { newsletterId: newsletter.id },
               },
-              readError,
+              readError instanceof Error
+                ? readError
+                : new Error(String(readError)),
             );
           }
         }
@@ -464,7 +466,9 @@ const Inbox: React.FC = memo(() => {
                 action: "archive_newsletter",
                 metadata: { newsletterId: newsletter.id },
               },
-              archiveError,
+              archiveError instanceof Error
+                ? archiveError
+                : new Error(String(archiveError)),
             );
           }
         }
@@ -479,7 +483,9 @@ const Inbox: React.FC = memo(() => {
               action: "preserve_filter_params",
               metadata: { newsletterId: newsletter.id },
             },
-            filterError,
+            filterError instanceof Error
+              ? filterError
+              : new Error(String(filterError)),
           );
         }
 
@@ -492,7 +498,7 @@ const Inbox: React.FC = memo(() => {
             action: "newsletter_click",
             metadata: { newsletterId: newsletter.id },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`);
@@ -574,9 +580,9 @@ const Inbox: React.FC = memo(() => {
           "Failed to toggle like status",
           {
             action: "toggle_like",
-            metadata: { newsletterId, filter },
+            metadata: { newsletterId: newsletter.id, filter },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         // Revert optimistic update on error
         if (filter === "liked") {
@@ -602,9 +608,9 @@ const Inbox: React.FC = memo(() => {
           "Failed to toggle archive status",
           {
             action: "toggle_archive",
-            metadata: { newsletterId },
+            metadata: { newsletterId: newsletter.id, filter },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         throw error;
       } finally {
@@ -626,9 +632,9 @@ const Inbox: React.FC = memo(() => {
           "Failed to toggle read status",
           {
             action: "toggle_read",
-            metadata: { newsletterId },
+            metadata: { newsletterId: newsletter.id, filter },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         throw error;
       } finally {
@@ -650,9 +656,9 @@ const Inbox: React.FC = memo(() => {
           "Failed to delete newsletter",
           {
             action: "delete_newsletter",
-            metadata: { newsletterId },
+            metadata: { newsletterId: newsletterId },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         throw error;
       } finally {
@@ -674,9 +680,9 @@ const Inbox: React.FC = memo(() => {
           "Failed to toggle queue status",
           {
             action: "toggle_queue",
-            metadata: { newsletterId },
+            metadata: { newsletterId: newsletter.id, filter },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         throw error;
       } finally {

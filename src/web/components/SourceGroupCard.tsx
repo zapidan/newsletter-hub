@@ -51,7 +51,7 @@ export const SourceGroupCard = ({
               groupName: group.name,
             },
           },
-          error,
+          error as Error,
         );
         throw error; // Re-throw to allow error handling in the parent
       }

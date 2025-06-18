@@ -4,7 +4,6 @@ import {
   Search as SearchIcon,
   Filter,
   X,
-  Calendar,
   Tag,
   Archive,
   Eye,
@@ -27,7 +26,6 @@ import {
   getSearchContext,
   formatResultsCount,
   formatPaginationInfo,
-  generatePageNumbers,
 } from "../utils/searchUtils";
 
 // Components
@@ -51,7 +49,6 @@ const SearchInput: React.FC<{
   onQueryChange,
   onSearch,
   onClear,
-  loading,
   showSuggestions,
   suggestions,
   recentSearches,
@@ -435,7 +432,7 @@ const PaginationControls: React.FC<{
   itemsPerPage: number;
   hasMore: boolean;
   onPageChange: (page: number) => void;
-}> = ({ currentPage, totalCount, itemsPerPage, hasMore, onPageChange }) => {
+}> = ({ currentPage, totalCount, itemsPerPage, onPageChange }) => {
   const pagination = usePagination(
     currentPage,
     totalCount,
@@ -649,7 +646,7 @@ const Search: React.FC = () => {
     results,
     loading,
     error,
-    searchPerformed,
+
     totalCount,
     currentPage,
     hasMore,

@@ -70,7 +70,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
               action: "auto_mark_read_navigation_error",
               metadata: { newsletterId: currentNewsletter.id },
             },
-            error,
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       };
@@ -100,7 +100,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
             action: "navigate_previous_process_error",
             metadata: { newsletterId: currentNewsletter.id },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     }
@@ -151,7 +151,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
             action: "navigate_next_process_error",
             metadata: { newsletterId: currentNewsletter.id },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     }

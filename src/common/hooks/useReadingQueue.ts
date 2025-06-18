@@ -9,50 +9,6 @@ import { readingQueueApi } from "@common/api/readingQueueApi";
 import { newsletterApi } from "@common/api/newsletterApi";
 import { useLogger } from "@common/utils/logger/useLogger";
 
-interface NewsletterFromDB {
-  id: string;
-  title: string;
-  content: string;
-  summary: string | null;
-  image_url: string | null;
-  received_at: string;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
-  is_read: boolean;
-  is_liked: boolean;
-  is_archived: boolean;
-  newsletter_source_id: string | null;
-  word_count: number;
-  estimated_read_time: number;
-  tags?: Array<{
-    id: string;
-    name: string;
-    color: string;
-    user_id: string;
-    created_at: string;
-    updated_at: string;
-  }>;
-  newsletter_sources?: {
-    id: string;
-    name: string;
-    domain: string;
-    user_id: string;
-    created_at: string;
-    updated_at: string;
-  } | null;
-}
-
-interface QueueItemFromDB {
-  id: string;
-  position: number;
-  user_id: string;
-  newsletter_id: string;
-  created_at: string;
-  updated_at: string;
-  newsletters: NewsletterFromDB;
-}
-
 export const useReadingQueue = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
@@ -109,7 +65,7 @@ export const useReadingQueue = () => {
           action: "fetch_reading_queue",
           metadata: { userId: user?.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
 
       // Handle specific error types
@@ -225,7 +181,7 @@ export const useReadingQueue = () => {
         );
       }
     },
-    onSuccess: (_data, newsletterId) => {
+    onSuccess: (_data) => {
       if (!user) return;
 
       // Reading queue status is now managed separately from newsletter properties

@@ -37,12 +37,12 @@ export class SimpleCacheManager {
       // Update in all newsletter list queries
       this.queryClient.setQueriesData<any>(
         { queryKey: queryKeyFactory.newsletters.lists() },
-        (oldData) => {
+        (oldData: any) => {
           if (!oldData || !oldData.data || !Array.isArray(oldData.data))
             return oldData;
           return {
             ...oldData,
-            data: oldData.data.map((newsletter: any) =>
+            data: (oldData as any).data.map((newsletter: any) =>
               newsletter.id === update.id
                 ? { ...newsletter, ...update.updates }
                 : newsletter,
@@ -85,7 +85,7 @@ export class SimpleCacheManager {
           action: "update_newsletter_cache",
           metadata: { newsletterId: update.id },
         },
-        error,
+        error as Error,
       );
     }
   }
@@ -340,7 +340,7 @@ export class SimpleCacheManager {
         {
           action: "invalidate_related_queries",
           metadata: {
-            newsletterId,
+            newsletterIds,
             invalidationCount: invalidationPromises.length,
           },
         },
@@ -421,7 +421,11 @@ export class SimpleCacheManager {
     this.queryClient.setQueriesData<unknown>(
       { queryKey: queryKeyFactory.newsletters.lists() },
       (oldData: unknown) => {
-        if (!oldData || !oldData.data || !Array.isArray(oldData.data))
+        if (
+          !oldData ||
+          !(oldData as any).data ||
+          !Array.isArray((oldData as any).data)
+        )
           return oldData;
 
         // Get the filter context from the query key to understand if archived items should be shown
@@ -564,9 +568,9 @@ export class SimpleCacheManager {
         "Failed to perform optimistic update",
         {
           action: "optimistic_update",
-          metadata: { operation: options.operation },
+          metadata: { operation },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       return null;
     }
@@ -749,7 +753,7 @@ export class SimpleCacheManager {
     const previousData = this.queryClient.getQueryData<T>(queryKey);
 
     // Apply optimistic update
-    this.queryClient.setQueryData<T>(queryKey, updater);
+    this.queryClient.setQueryData<T>(queryKey, updater as any);
 
     const rollback = () => {
       if (rollbackData !== undefined) {

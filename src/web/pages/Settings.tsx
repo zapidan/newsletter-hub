@@ -55,7 +55,7 @@ const Settings = () => {
           action: "toggle_archive_status",
           metadata: { sourceId, isArchived },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   };
@@ -207,7 +207,7 @@ const Settings = () => {
           action: "update_password",
           metadata: { userId: user?.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       setPasswordChangeError("An unexpected error occurred. Please try again.");
     } finally {
@@ -229,7 +229,7 @@ const Settings = () => {
           action: "copy_email",
           metadata: { userId: user?.id },
         },
-        err,
+        err instanceof Error ? err : new Error(String(err)),
       );
     }
   };

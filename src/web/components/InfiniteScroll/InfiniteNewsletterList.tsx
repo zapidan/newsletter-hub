@@ -23,7 +23,7 @@ export interface InfiniteNewsletterListProps {
   // Newsletter row actions
   onRowClick?: (newsletter: NewsletterWithRelations) => void;
   onToggleSelect?: (id: string) => void;
-  onToggleLike?: (newsletter: NewsletterWithRelations) => void;
+  onToggleLike: (newsletter: NewsletterWithRelations) => Promise<void>;
   onToggleArchive?: (id: string) => void;
   onToggleRead?: (id: string) => void;
   onTrash?: (id: string) => void;
@@ -124,25 +124,27 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
       onToggleSelect: onToggleSelect
         ? () => onToggleSelect(newsletter.id)
         : undefined,
-      onToggleLike: onToggleLike ? () => onToggleLike(newsletter) : undefined,
+      onToggleLike: onToggleLike
+        ? () => onToggleLike(newsletter)
+        : async () => {},
       onToggleArchive: onToggleArchive
-        ? () => onToggleArchive(newsletter.id)
-        : undefined,
+        ? async () => onToggleArchive(newsletter.id)
+        : async () => {},
       onToggleRead: onToggleRead
-        ? () => onToggleRead(newsletter.id)
-        : undefined,
-      onTrash: onTrash ? () => onTrash(newsletter.id) : undefined,
+        ? async () => onToggleRead(newsletter.id)
+        : async () => {},
+      onTrash: onTrash ? () => onTrash(newsletter.id) : () => {},
       onToggleQueue: onToggleQueue
-        ? () => onToggleQueue(newsletter.id)
-        : undefined,
+        ? async () => onToggleQueue(newsletter.id)
+        : async () => {},
       onUpdateTags: onUpdateTags
         ? (newsletterId: string, tagIds: string[]) =>
             onUpdateTags(newsletterId, tagIds)
-        : undefined,
-      onToggleTagVisibility: onToggleTagVisibility,
+        : () => {},
+      onToggleTagVisibility: onToggleTagVisibility || (() => {}),
       onTagClick: onTagClick
         ? (tag: Tag, _e: React.MouseEvent) => onTagClick(tag)
-        : undefined,
+        : () => {},
       onRemoveFromQueue: onRemoveFromQueue,
       onRowClick: onRowClick ? () => onRowClick(newsletter) : undefined,
       onMouseEnter: onMouseEnter ? () => onMouseEnter(newsletter) : undefined,

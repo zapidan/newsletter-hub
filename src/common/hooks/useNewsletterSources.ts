@@ -109,13 +109,6 @@ export const useNewsletterSources = (
     );
   }, [safeCacheCall]);
 
-  // Prefetch a single source by ID
-  const prefetchSourceById = useCallback(() => {
-    if (!user) return;
-    // Implementation would use cache manager if needed
-    return Promise.resolve();
-  }, [user]);
-
   // Update mutation using API layer
   const updateMutation = useMutation<
     NewsletterSource,
@@ -126,7 +119,7 @@ export const useNewsletterSources = (
     mutationFn: async ({ id, name }) => {
       return newsletterSourceApi.update({ id, name });
     },
-    onMutate: async ({ id, name }) => {
+    onMutate: async () => {
       // Use cache manager for optimistic update
       const previousSources = newsletterSources;
 
@@ -191,7 +184,7 @@ export const useNewsletterSources = (
     },
   });
 
- // Archive or unarchive a source
+  // Archive or unarchive a source
   const setSourceArchiveStatus = useCallback(
     async (sourceId: string, archive: boolean) => {
       return archiveMutation.mutateAsync({ id: sourceId, archive });
@@ -212,24 +205,6 @@ export const useNewsletterSources = (
     // Source actions
     updateSource: updateMutation.mutateAsync,
     setSourceArchiveStatus,
-
-    // Raw query data
-    sourcesResponse,
-  };
-
-  return {
-    // Source data
-    newsletterSources,
-    isLoadingSources,
-    isErrorSources,
-    errorSources,
-    isFetchingSources,
-    isStaleSources,
-    refetchSources,
-
-    // Source actions
-    updateSource: updateMutation.mutateAsync,
-    setSourceArchiveStatus: (sourceId: string, archive: boolean) => Promise<NewsletterSource>,
     isArchivingSource: archiveMutation.isPending,
 
     // Raw query data

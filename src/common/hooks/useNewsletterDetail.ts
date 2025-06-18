@@ -394,6 +394,7 @@ export const useNewsletterDetail = (
 export const usePrefetchNewsletterDetail = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const log = useLogger();
 
   const prefetchNewsletter = useCallback(
     async (newsletterId: string, options: { priority?: boolean } = {}) => {
@@ -459,7 +460,7 @@ export const usePrefetchNewsletterDetail = () => {
         // Don't throw - prefetch failures shouldn't break the app
       }
     },
-    [user],
+    [user, log],
   );
 
   return { prefetchNewsletter };

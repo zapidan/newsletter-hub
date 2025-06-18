@@ -1,4 +1,4 @@
-import React, { FC, memo } from "react";
+import { FC, memo } from "react";
 import { Archive, Filter, Clock, Building2 } from "lucide-react";
 
 export type FilterType = "all" | "unread" | "liked" | "archived";

@@ -24,8 +24,14 @@ const SUPABASE_CONFIG = {
   },
 } as const;
 
-// Initialize logger
-const log = useLoggerStatic();
+// Initialize logger lazily
+let log: ReturnType<typeof useLoggerStatic> | null = null;
+const getLogger = () => {
+  if (!log) {
+    log = useLoggerStatic();
+  }
+  return log;
+};
 
 // Environment variables validation
 const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
@@ -36,7 +42,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   if (!supabaseUrl) missingVars.push("VITE_SUPABASE_URL");
   if (!supabaseAnonKey) missingVars.push("VITE_SUPABASE_ANON_KEY");
 
-  log.error(
+  getLogger().error(
     `Missing required Supabase environment variables: ${missingVars.join(", ")}`,
     {
       component: "SupabaseClient",
@@ -48,7 +54,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 
   if (import.meta.env.MODE === "development") {
-    log.warn(
+    getLogger().warn(
       "Running in development mode with missing Supabase configuration",
       { component: "SupabaseClient" },
     );
@@ -233,7 +239,7 @@ export const withPerformanceLogging = async <T>(
 ): Promise<T> => {
   const start = performance.now();
 
-  log.debug(`Starting operation: ${operation}`, {
+  getLogger().debug(`Starting operation: ${operation}`, {
     component: "SupabaseClient",
     action: "performance_start",
     metadata: { operation },
@@ -243,7 +249,7 @@ export const withPerformanceLogging = async <T>(
     const result = await fn();
     const duration = performance.now() - start;
 
-    log.info(`Operation completed: ${operation}`, {
+    getLogger().info(`Operation completed: ${operation}`, {
       component: "SupabaseClient",
       action: "performance_success",
       metadata: {
@@ -257,7 +263,7 @@ export const withPerformanceLogging = async <T>(
   } catch (error) {
     const duration = performance.now() - start;
 
-    log.error(
+    getLogger().error(
       `Operation failed: ${operation}`,
       {
         component: "SupabaseClient",

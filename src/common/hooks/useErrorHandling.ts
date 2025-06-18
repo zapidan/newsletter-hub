@@ -208,9 +208,9 @@ export const useErrorHandling = (options: UseErrorHandlingOptions = {}) => {
       const message = getUserFriendlyMessage(error);
 
       if (error.severity === "critical" || error.severity === "high") {
-        toastError(message, 8000);
+        toastError(message);
       } else {
-        toastWarning(message, 5000);
+        toastWarning(message);
       }
     },
     [enableToasts, toastError, toastWarning],

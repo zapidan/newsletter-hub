@@ -285,6 +285,7 @@ export const useExpensiveComputation = <T, U>(
   dependencies: T,
   isEqual?: (a: T, b: T) => boolean,
 ): U => {
+  const log = useLogger();
   const previousDeps = useRef<T>(dependencies);
   const previousResult = useRef<U>();
   const computationCount = useRef(0);
@@ -307,7 +308,7 @@ export const useExpensiveComputation = <T, U>(
           metadata: {
             computationNumber: computationCount.current,
             duration: (endTime - startTime).toFixed(2),
-            threshold: threshold,
+            threshold: "N/A",
           },
         });
       }
@@ -343,7 +344,7 @@ export const useVirtualScrolling = (
     return items
       .slice(visibleRange.start, visibleRange.end + 1)
       .map((item, index) => ({
-        ...item,
+        ...(item as object),
         index: visibleRange.start + index,
         top: (visibleRange.start + index) * itemHeight,
       }));
@@ -405,6 +406,7 @@ export const useInfiniteScroll = (
 
 // Memory cleanup utilities
 export const useMemoryCleanup = () => {
+  const log = useLogger();
   const cleanupFunctions = useRef<Array<() => void>>([]);
 
   const addCleanup = useCallback((cleanup: () => void) => {
@@ -422,7 +424,7 @@ export const useMemoryCleanup = () => {
             action: "memory_cleanup",
             metadata: { cleanupType: "useMemoryCleanup" },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     });

@@ -54,7 +54,7 @@ const ReadingQueuePage: React.FC = () => {
     refetch,
     removeFromQueue,
     reorderQueue,
-  } = useReadingQueue();
+  } = useReadingQueue() || {};
 
   // Use shared newsletter actions for consistent cache management
   const {
@@ -153,7 +153,7 @@ const ReadingQueuePage: React.FC = () => {
             action: "load_tags",
             metadata: { userId: user?.id },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         toast.error("Failed to load tags");
       }
@@ -200,7 +200,7 @@ const ReadingQueuePage: React.FC = () => {
             {
               action: "toggle_reading_queue",
               metadata: {
-                newsletterId: newsletter.id,
+                newsletterId: newsletterId,
                 context: "reading_queue_page",
               },
             },
@@ -212,11 +212,11 @@ const ReadingQueuePage: React.FC = () => {
           {
             action: "toggle_reading_queue",
             metadata: {
-              newsletterId: newsletter.id,
+              newsletterId: newsletterId,
               userId: user?.id,
             },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         toast.error("Failed to update reading queue");
       }
@@ -280,11 +280,11 @@ const ReadingQueuePage: React.FC = () => {
           {
             action: "toggle_read_status",
             metadata: {
-              newsletterId: newsletter.id,
+              newsletterId: newsletterId,
               userId: user?.id,
             },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     },
@@ -309,7 +309,9 @@ const ReadingQueuePage: React.FC = () => {
                   userId: user?.id,
                 },
               },
-              readError,
+              readError instanceof Error
+                ? readError
+                : new Error(String(readError)),
             );
           }
         }
@@ -331,7 +333,7 @@ const ReadingQueuePage: React.FC = () => {
               userId: user?.id,
             },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         // Still navigate even if marking as read fails
         navigate(`/newsletters/${newsletter.id}`, {
@@ -390,10 +392,10 @@ const ReadingQueuePage: React.FC = () => {
               action: "reorder_queue",
               metadata: {
                 userId: user?.id,
-                newOrderCount: newOrder.length,
+                newOrderCount: updates.length,
               },
             },
-            error,
+            error instanceof Error ? error : new Error(String(error)),
           );
           toast.error("Failed to update queue order");
         }
@@ -404,7 +406,7 @@ const ReadingQueuePage: React.FC = () => {
 
   // Handle toggling like status with shared actions
   const handleToggleLikeAction = useCallback(
-    async (newsletter: string | NewsletterWithRelations) => {
+    async (newsletter: NewsletterWithRelations) => {
       try {
         // Handle both signatures: (id: string) and (newsletter: Newsletter)
         let newsletterObj: NewsletterWithRelations;
@@ -439,7 +441,7 @@ const ReadingQueuePage: React.FC = () => {
               userId: user?.id,
             },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     },
@@ -469,11 +471,11 @@ const ReadingQueuePage: React.FC = () => {
           {
             action: "toggle_archive",
             metadata: {
-              newsletterId: newsletter.id,
+              newsletterId: id,
               userId: user?.id,
             },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     },
@@ -663,7 +665,14 @@ const ReadingQueuePage: React.FC = () => {
                   id={item.id}
                   newsletter={newsletter}
                   onToggleRead={handleToggleRead}
-                  onToggleLike={handleToggleLikeAction}
+                  onToggleLike={async (id: string) => {
+                    const newsletterToToggle = sortedItems.find(
+                      (item: any) => item.newsletter.id === id,
+                    )?.newsletter;
+                    if (newsletterToToggle) {
+                      await handleToggleLikeAction(newsletterToToggle);
+                    }
+                  }}
                   onToggleArchive={handleToggleArchiveAction}
                   onToggleQueue={toggleInQueue}
                   onTrash={() => {}}
@@ -763,7 +772,9 @@ const ReadingQueuePage: React.FC = () => {
                                 userId: user?.id,
                               },
                             },
-                            error,
+                            error instanceof Error
+                              ? error
+                              : new Error(String(error)),
                           );
                           toast.error(
                             error instanceof Error
@@ -786,7 +797,9 @@ const ReadingQueuePage: React.FC = () => {
                             userId: user?.id,
                           },
                         },
-                        error,
+                        error instanceof Error
+                          ? error
+                          : new Error(String(error)),
                       );
                       toast.error("Failed to update tags");
                       // Revert optimistic update on error

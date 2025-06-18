@@ -24,7 +24,6 @@ const NewsletterCard = ({
   onToggleQueue,
   onToggleArchive,
   showArchiveButton = true,
-  showSource = false,
 }: NewsletterCardProps) => {
   const handleQueueClick = (e: React.MouseEvent) => {
     e.stopPropagation();

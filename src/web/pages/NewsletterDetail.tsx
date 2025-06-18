@@ -234,7 +234,7 @@ const NewsletterDetail = memo(() => {
             action: "fetch_newsletter_detail",
             metadata: { newsletterId: id },
           },
-          err,
+          err instanceof Error ? err : new Error(String(err)),
         );
 
         // Skip if component unmounted or ID changed
@@ -271,8 +271,10 @@ const NewsletterDetail = memo(() => {
   const tagsForUI = useMemo((): Tag[] => {
     if (!newsletter?.tags) return [];
     return (newsletter.tags as unknown[]).map((t: unknown) => {
-      if ("name" in t && "color" in t) return t as Tag;
-      if ("tag" in t && t.tag) return t.tag as Tag;
+      if (typeof t === "object" && t !== null && "name" in t && "color" in t)
+        return t as Tag;
+      if (typeof t === "object" && t !== null && "tag" in t && (t as any).tag)
+        return (t as any).tag as Tag;
       return t as Tag;
     });
   }, [newsletter?.tags]);
@@ -315,7 +317,7 @@ const NewsletterDetail = memo(() => {
               action: "auto_mark_read_detail_error",
               metadata: { newsletterId: newsletter.id },
             },
-            error,
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       };
@@ -358,7 +360,7 @@ const NewsletterDetail = memo(() => {
               action: "auto_archive_detail_error",
               metadata: { newsletterId: newsletter.id },
             },
-            error,
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       };
@@ -395,7 +397,7 @@ const NewsletterDetail = memo(() => {
             action: "load_newsletter",
             metadata: { newsletterId: id },
           },
-          err,
+          err instanceof Error ? err : new Error(String(err)),
         );
         setError("Failed to load newsletter. Please try again.");
       } finally {
@@ -487,7 +489,9 @@ const NewsletterDetail = memo(() => {
                           action: "update_tags",
                           metadata: { newsletterId: id },
                         },
-                        error,
+                        error instanceof Error
+                          ? error
+                          : new Error(String(error)),
                       );
                     }
                   }}
@@ -507,7 +511,9 @@ const NewsletterDetail = memo(() => {
                           action: "delete_tag",
                           metadata: { newsletterId: id },
                         },
-                        error,
+                        error instanceof Error
+                          ? error
+                          : new Error(String(error)),
                       );
                     }
                   }}

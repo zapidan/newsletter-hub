@@ -29,11 +29,18 @@ export interface NewsletterActionOptions {
 export class SharedNewsletterActionHandlers {
   private cacheManager: ReturnType<typeof getCacheManager>;
   private handlers: NewsletterActionHandlers;
-  private log = useLoggerStatic();
+  private _log: ReturnType<typeof useLoggerStatic> | null = null;
   private defaultOptions: NewsletterActionOptions = {
     showToasts: true,
     optimisticUpdates: true,
   };
+
+  private get log() {
+    if (!this._log) {
+      this._log = useLoggerStatic();
+    }
+    return this._log;
+  }
 
   constructor(
     handlers: NewsletterActionHandlers,

@@ -29,6 +29,9 @@ type PreviousNewslettersState = {
   previousNewsletter?: NewsletterWithRelations;
   deletedIds?: string[];
   rollbackFunctions?: Array<() => void>;
+  newsletter?: NewsletterWithRelations;
+  newArchivedState?: boolean;
+  shouldRemoveFromView?: boolean;
 };
 
 // Cache configuration based on data volatility
@@ -203,14 +206,18 @@ export const useNewsletters = (
     refetchOnWindowFocus = false,
     staleTime = CACHE_CONFIG.LIST_STALE_TIME,
     cacheTime = CACHE_CONFIG.LIST_CACHE_TIME,
-    debug = false,
+    // debug = false, // Commented out unused parameter
   } = options;
 
-  // Create cache manager instance
-  const cacheManager = useMemo(
-    () => getCacheManager() as SimpleCacheManager,
-    [],
-  );
+  // Create cache manager instance with proper null check
+  const cacheManager = useMemo(() => {
+    try {
+      return getCacheManager() as SimpleCacheManager;
+    } catch (error) {
+      log.error("Failed to initialize cache manager", { error });
+      throw new Error("Cache manager initialization failed");
+    }
+  }, [log]);
 
   // Generate query key with filters
   const queryKey = useMemo(
@@ -218,9 +225,28 @@ export const useNewsletters = (
     [filters],
   );
 
-  // Build API query parameters from filters
-  const queryParams = useMemo(() => {
-    const params = {
+  // Define proper type for query parameters
+  interface NewsletterQueryParams {
+    search?: string;
+    isRead?: boolean;
+    isArchived?: boolean;
+    isLiked?: boolean;
+    tagIds?: string[];
+    sourceIds?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: number;
+    offset?: number;
+    orderBy?: string;
+    ascending?: boolean;
+    includeRelations?: boolean;
+    includeTags?: boolean;
+    includeSource?: boolean;
+  }
+
+  // Build API query parameters from filters with proper typing
+  const queryParams = useMemo<NewsletterQueryParams>(() => {
+    const params: NewsletterQueryParams = {
       search: filters.search,
       isRead: filters.isRead,
       isArchived: filters.isArchived,
@@ -239,51 +265,55 @@ export const useNewsletters = (
     };
 
     // Validate source IDs in development
-    if (
-      process.env.NODE_ENV === "development" &&
-      filters.sourceIds &&
-      filters.sourceIds.length > 0
-    ) {
-      const validSourceIds = filters.sourceIds.filter(
-        (id) => id && typeof id === "string",
-      );
-      if (validSourceIds.length !== filters.sourceIds.length) {
-        log.warn("Invalid source IDs detected", {
-          action: "validate_source_ids",
-          metadata: {
-            original: filters.sourceIds,
-            valid: validSourceIds,
-          },
-        });
+    if (process.env.NODE_ENV === "development") {
+      const sourceIds = filters.sourceIds;
+      if (sourceIds && sourceIds.length > 0) {
+        const validSourceIds = sourceIds.filter(
+          (id): id is string => typeof id === "string" && id.length > 0,
+        );
+        if (validSourceIds.length !== sourceIds.length) {
+          log.warn("Invalid source IDs detected", {
+            action: "validate_source_ids",
+            metadata: {
+              original: sourceIds,
+              valid: validSourceIds,
+            },
+          });
+        }
       }
     }
 
     return params;
-  }, [filters, debug]);
+  }, [filters, log]);
 
-  // Main newsletters query using the new API
+  // Main newsletters query using the new API with proper type annotation
   const {
     data: newslettersResponse,
     isLoading,
     error: errorNewsletters,
     refetch: refetchNewsletters,
-  } = useQuery({
+  } = useQuery<PaginatedResponse<NewsletterWithRelations>, Error>({
     queryKey,
-    queryFn: async () => {
+    queryFn: async (): Promise<PaginatedResponse<NewsletterWithRelations>> => {
       try {
         const result = await newsletterApi.getAll(queryParams);
+
+        // Type guard to ensure result.data exists
+        if (!result?.data) {
+          throw new Error("No data received from API");
+        }
 
         // Validate source filtering in development
         if (
           process.env.NODE_ENV === "development" &&
-          queryParams.sourceIds &&
-          queryParams.sourceIds.length > 0 &&
-          result.data
+          queryParams.sourceIds?.length
         ) {
           const unexpectedSources = result.data.filter(
             (newsletter) =>
+              newsletter.newsletter_source_id &&
               !queryParams.sourceIds!.includes(newsletter.newsletter_source_id),
           );
+
           if (unexpectedSources.length > 0) {
             log.warn("Source filtering may not be working correctly", {
               action: "validate_source_filtering",
@@ -301,15 +331,17 @@ export const useNewsletters = (
 
         return result;
       } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error : new Error(String(error));
         log.error(
           "API Error occurred",
           {
             action: "fetch_newsletters",
             metadata: { filters, queryParams },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          errorMessage,
         );
-        throw error;
+        throw errorMessage;
       }
     },
     enabled: enabled && !!user,
@@ -324,7 +356,11 @@ export const useNewsletters = (
       ),
   });
 
-  const newsletters = newslettersResponse?.data || [];
+  // Safe access to newsletters data
+  const newsletters = useMemo(
+    () => newslettersResponse?.data || [],
+    [newslettersResponse],
+  );
 
   // Get single newsletter function
   const getNewsletter = useCallback(
@@ -334,18 +370,33 @@ export const useNewsletters = (
     [],
   );
 
-  // Mark as read mutation
+  // Mark as read mutation with proper typing
   const markAsReadMutation = useMutation<
     boolean,
     Error,
     string,
     PreviousNewslettersState
   >({
-    mutationFn: async (id: string) => {
-      await newsletterApi.markAsRead(id);
-      return true;
+    mutationFn: async (id: string): Promise<boolean> => {
+      if (!id) {
+        throw new Error("Newsletter ID is required");
+      }
+      try {
+        await newsletterApi.markAsRead(id);
+        return true;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error : new Error(String(error));
+        log.error("Failed to mark as read", { id }, errorMessage);
+        throw errorMessage;
+      }
     },
-    onMutate: async (id) => {
+    onMutate: async (id: string) => {
+      if (!id) {
+        throw new Error("Newsletter ID is required for optimistic update");
+      }
+
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
@@ -360,6 +411,7 @@ export const useNewsletters = (
       const previousNewsletters =
         getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
+      // Optimistically update the cache
       cacheManager.updateNewsletterInCache({
         id,
         updates: {
@@ -368,9 +420,13 @@ export const useNewsletters = (
         },
       });
 
+      // Return the context with previous values for potential rollback
       return { previousNewsletters };
     },
-    onError: (_err, id, context) => {
+    onError: (error: Error, id: string, context?: PreviousNewslettersState) => {
+      log.error("Error in markAsRead mutation", { id }, error);
+
+      // Rollback to previous state on error
       if (context?.previousNewsletters) {
         const newsletter = context.previousNewsletters.find((n) => n.id === id);
         if (newsletter) {
@@ -384,25 +440,46 @@ export const useNewsletters = (
         }
       }
     },
-    onSettled: (_data, _error, id) => {
-      cacheManager.invalidateRelatedQueries([id], "mark-as-read");
-      // Dispatch event for unread count updates
-      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+    onSettled: (
+      _data: boolean | undefined,
+      error: Error | null,
+      id: string,
+    ) => {
+      // Invalidate and refetch related queries
+      if (!error) {
+        cacheManager.invalidateRelatedQueries([id], "mark-as-read");
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+      }
     },
   });
 
-  // Mark as unread mutation
+  // Mark as unread mutation with proper typing
   const markAsUnreadMutation = useMutation<
     boolean,
     Error,
     string,
     PreviousNewslettersState
   >({
-    mutationFn: async (id: string) => {
-      await newsletterApi.markAsUnread(id);
-      return true;
+    mutationFn: async (id: string): Promise<boolean> => {
+      if (!id) {
+        throw new Error("Newsletter ID is required");
+      }
+      try {
+        await newsletterApi.markAsUnread(id);
+        return true;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error : new Error(String(error));
+        log.error("Failed to mark as unread", { id }, errorMessage);
+        throw errorMessage;
+      }
     },
-    onMutate: async (id) => {
+    onMutate: async (id: string) => {
+      if (!id) {
+        throw new Error("Newsletter ID is required for optimistic update");
+      }
+
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(
@@ -417,6 +494,7 @@ export const useNewsletters = (
       const previousNewsletters =
         getQueryData<NewsletterWithRelations[]>(queryKey) || [];
 
+      // Optimistically update the cache
       cacheManager.updateNewsletterInCache({
         id,
         updates: {
@@ -427,7 +505,10 @@ export const useNewsletters = (
 
       return { previousNewsletters };
     },
-    onError: (_err, id, context) => {
+    onError: (error: Error, id: string, context?: PreviousNewslettersState) => {
+      log.error("Error in markAsUnread mutation", { id }, error);
+
+      // Rollback to previous state on error
       if (context?.previousNewsletters) {
         const newsletter = context.previousNewsletters.find((n) => n.id === id);
         if (newsletter) {
@@ -441,53 +522,90 @@ export const useNewsletters = (
         }
       }
     },
-    onSettled: (_data, _error, id) => {
-      cacheManager.invalidateRelatedQueries([id], "mark-as-unread");
-      // Dispatch event for unread count updates
-      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+    onSettled: (
+      _data: boolean | undefined,
+      error: Error | null,
+      id: string,
+    ) => {
+      // Invalidate and refetch related queries
+      if (!error) {
+        cacheManager.invalidateRelatedQueries([id], "mark-as-unread");
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+      }
     },
   });
 
-  // Bulk mark as read mutation
+  // Bulk mark as read mutation with enhanced type safety
   const bulkMarkAsReadMutation = useMutation<
     boolean,
     Error,
     string[],
     PreviousNewslettersState
   >({
-    mutationFn: async (ids: string[]) => {
-      if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        throw new Error(
-          "Invalid or empty newsletter IDs provided for bulk mark as read",
-        );
+    mutationFn: async (ids: string[]): Promise<boolean> => {
+      if (!ids?.length) {
+        throw new Error("No newsletter IDs provided for bulk mark as read");
       }
-      const result = await newsletterApi.bulkUpdate({
-        ids,
-        updates: { is_read: true },
-      });
-      return result.successCount === ids.length;
+
+      try {
+        const result = await newsletterApi.bulkUpdate({
+          ids,
+          updates: { is_read: true },
+        });
+
+        if (result.successCount !== ids.length) {
+          throw new Error("Failed to mark all newsletters as read");
+        }
+
+        return true;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error : new Error(String(error));
+        log.error(
+          "Bulk mark as read failed",
+          { ids, count: ids.length },
+          errorMessage,
+        );
+        throw errorMessage;
+      }
     },
-    onMutate: async (ids) => {
+    onMutate: async (ids: string[]): Promise<PreviousNewslettersState> => {
+      if (!ids?.length) {
+        throw new Error("No newsletter IDs provided for optimistic update");
+      }
+
+      // Cancel any outgoing refetches to avoid overwriting our optimistic update
       await cancelQueries({
         predicate: createSafePredicate(ids),
       });
 
       const previousNewsletters =
         getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+      const now = new Date().toISOString();
 
+      // Optimistically update the cache
       cacheManager.batchUpdateNewsletters(
         ids.map((id) => ({
           id,
-          updates: {
-            is_read: true,
-            updated_at: new Date().toISOString(),
-          },
+          updates: { is_read: true, updated_at: now },
         })),
       );
 
       return { previousNewsletters };
     },
-    onError: (_err, ids, context) => {
+    onError: (
+      error: Error,
+      ids: string[],
+      context?: PreviousNewslettersState,
+    ) => {
+      log.error(
+        "Error in bulkMarkAsRead mutation",
+        { ids, count: ids.length },
+        error,
+      );
+
+      // Rollback to previous state on error
       if (context?.previousNewsletters) {
         ids.forEach((id) => {
           const newsletter = context.previousNewsletters!.find(
@@ -505,57 +623,90 @@ export const useNewsletters = (
         });
       }
     },
-    onSettled: (_data, _error, ids) => {
-      cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-read");
-      // Dispatch event for unread count updates
-      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+    onSettled: (
+      _data: boolean | undefined,
+      error: Error | null,
+      ids: string[],
+    ) => {
+      // Invalidate and refetch related queries
+      if (!error) {
+        cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-read");
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+      }
     },
   });
 
-  // Bulk mark as unread mutation
+  // Bulk mark as unread mutation with enhanced type safety
   const bulkMarkAsUnreadMutation = useMutation<
     boolean,
     Error,
     string[],
     PreviousNewslettersState
   >({
-    mutationFn: async (ids: string[]) => {
-      if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        throw new Error(
-          "Invalid or empty newsletter IDs provided for bulk mark as unread",
-        );
+    mutationFn: async (ids: string[]): Promise<boolean> => {
+      if (!ids?.length) {
+        throw new Error("No newsletter IDs provided for bulk mark as unread");
       }
-      const result = await newsletterApi.bulkUpdate({
-        ids,
-        updates: { is_read: false },
-      });
-      return result.successCount === ids.length;
+
+      try {
+        const result = await newsletterApi.bulkUpdate({
+          ids,
+          updates: { is_read: false },
+        });
+
+        if (result.successCount !== ids.length) {
+          throw new Error("Failed to mark all newsletters as unread");
+        }
+
+        return true;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error : new Error(String(error));
+        log.error(
+          "Bulk mark as unread failed",
+          { ids, count: ids.length },
+          errorMessage,
+        );
+        throw errorMessage;
+      }
     },
-    onMutate: async (ids) => {
+    onMutate: async (ids: string[]): Promise<PreviousNewslettersState> => {
+      if (!ids?.length) {
+        throw new Error("No newsletter IDs provided for optimistic update");
+      }
+
+      // Cancel any outgoing refetches
       await cancelQueries({
         predicate: createSafePredicate(ids),
       });
 
-      const queryData = getQueryData<any>(queryKey);
-      const previousNewsletters = Array.isArray(queryData?.data)
-        ? queryData.data
-        : Array.isArray(queryData)
-          ? queryData
-          : [];
+      const previousNewsletters =
+        getQueryData<NewsletterWithRelations[]>(queryKey) || [];
+      const now = new Date().toISOString();
 
+      // Optimistically update the cache
       cacheManager.batchUpdateNewsletters(
         ids.map((id) => ({
           id,
-          updates: {
-            is_read: false,
-            updated_at: new Date().toISOString(),
-          },
+          updates: { is_read: false, updated_at: now },
         })),
       );
 
       return { previousNewsletters };
     },
-    onError: (_err, ids, context) => {
+    onError: (
+      error: Error,
+      ids: string[],
+      context?: PreviousNewslettersState,
+    ) => {
+      log.error(
+        "Error in bulkMarkAsUnread mutation",
+        { ids, count: ids.length },
+        error,
+      );
+
+      // Rollback to previous state on error
       if (context?.previousNewsletters) {
         ids.forEach((id) => {
           const newsletter = context.previousNewsletters!.find(
@@ -573,10 +724,17 @@ export const useNewsletters = (
         });
       }
     },
-    onSettled: (_data, _error, ids) => {
-      cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-unread");
-      // Dispatch event for unread count updates
-      window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+    onSettled: (
+      _data: boolean | undefined,
+      error: Error | null,
+      ids: string[],
+    ) => {
+      // Invalidate and refetch related queries
+      if (!error) {
+        cacheManager.invalidateRelatedQueries(ids, "bulk-mark-as-unread");
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
+      }
     },
   });
 
@@ -607,7 +765,9 @@ export const useNewsletters = (
       const previousNewsletters = queryData?.data || [];
 
       // Find the current newsletter to get its like status
-      const currentNewsletter = previousNewsletters.find((n) => n.id === id);
+      const currentNewsletter = previousNewsletters.find(
+        (n: NewsletterWithRelations) => n.id === id,
+      );
       const currentLikedState = currentNewsletter?.is_liked ?? false;
       const newLikedState = !currentLikedState;
 
@@ -635,7 +795,7 @@ export const useNewsletters = (
         }
       }
     },
-    onSettled: (_data, _error, id) => {
+    onSettled: (_data, _error, _id) => {
       // No cache invalidation needed to preserve filter state
     },
   });

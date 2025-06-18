@@ -21,8 +21,14 @@ export enum ErrorSeverity {
   CRITICAL = "critical",
 }
 
-// Initialize logger
-const log = useLoggerStatic();
+// Initialize logger lazily
+let log: ReturnType<typeof useLoggerStatic> | null = null;
+const getLogger = () => {
+  if (!log) {
+    log = useLoggerStatic();
+  }
+  return log;
+};
 
 // Base application error class
 export class AppError extends Error {
@@ -295,7 +301,7 @@ export const logError = (
     error.severity === ErrorSeverity.HIGH
       ? "error"
       : "warn";
-  const logMethod = logLevel === "error" ? log.error : log.warn;
+  const logMethod = logLevel === "error" ? getLogger().error : getLogger().warn;
 
   logMethod(
     `${error.name}: ${error.message}`,
@@ -342,7 +348,7 @@ const reportErrorToService = async (logEntry: ErrorLogEntry): Promise<void> => {
       });
     }
   } catch (reportingError) {
-    log.error(
+    getLogger().error(
       "Failed to report error to external service",
       {
         component: "ErrorHandler",

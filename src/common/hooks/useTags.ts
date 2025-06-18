@@ -1,5 +1,5 @@
 import { useState, useCallback, useContext, useMemo } from "react";
-import { supabase } from "@common/services/supabaseClient";
+
 import { AuthContext } from "@common/contexts/AuthContext";
 import { Tag, TagCreate, TagUpdate } from "@common/types";
 import {
@@ -91,8 +91,8 @@ export const useTags = () => {
             action: "create_tag",
             metadata: {
               userId: user?.id,
-              tagName: tagData.name,
-              tagColor: tagData.color,
+              tagName: tag.name,
+              tagColor: tag.color,
             },
           },
           error,
@@ -140,8 +140,8 @@ export const useTags = () => {
             action: "update_tag",
             metadata: {
               userId: user?.id,
-              tagId: id,
-              updateFields: Object.keys(updates),
+              tagId: tag.id,
+              updateFields: Object.keys(tag),
             },
           },
           error,
@@ -200,7 +200,7 @@ export const useTags = () => {
             action: "delete_tag",
             metadata: {
               userId: user?.id,
-              tagId: id,
+              tagId: tagId,
             },
           },
           error,
@@ -283,7 +283,7 @@ export const useTags = () => {
             metadata: {
               userId: user?.id,
               newsletterId,
-              tagIds: tagIds.length,
+              tagIds: tags.length,
             },
           },
           error,

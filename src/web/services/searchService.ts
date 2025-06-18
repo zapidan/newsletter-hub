@@ -101,7 +101,7 @@ class SearchService {
             filters: options.filters,
           },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       throw new Error("Failed to search newsletters. Please try again.");
     }
@@ -112,9 +112,7 @@ class SearchService {
    */
   async getSources(): Promise<NewsletterSource[]> {
     try {
-      const response = await getAllNewsletterSources({
-        is_archived: false,
-      });
+      const response = await getAllNewsletterSources();
       return response.data || [];
     } catch (error) {
       this.log.error(
@@ -123,7 +121,7 @@ class SearchService {
           action: "get_sources",
           metadata: {},
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       throw new Error("Failed to load newsletter sources");
     }
@@ -140,10 +138,11 @@ class SearchService {
       });
 
       // Update both read and archived status in one call
-      await updateNewsletter(newsletterId, {
+      await updateNewsletter({
+        id: newsletterId,
         is_read: true,
         is_archived: true,
-      } as any);
+      });
 
       this.log.info("Newsletter marked as read and archived", {
         action: "mark_as_read_and_archive",
@@ -156,7 +155,7 @@ class SearchService {
           action: "mark_as_read_and_archive",
           metadata: { newsletterId },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       throw new Error("Failed to update newsletter status");
     }
@@ -188,7 +187,7 @@ class SearchService {
           action: "open_newsletter_detail",
           metadata: { newsletterId },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       // Still navigate even if status update fails
       window.location.href = `/newsletters/${newsletterId}`;
@@ -224,7 +223,7 @@ class SearchService {
           action: "get_recent_searches",
           metadata: {},
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       return [];
     }
@@ -246,7 +245,7 @@ class SearchService {
           action: "set_recent_searches",
           metadata: { searchCount: searches.length },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   }
@@ -273,7 +272,7 @@ class SearchService {
           action: "clear_recent_searches",
           metadata: {},
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   }

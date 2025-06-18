@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
-import { NewsletterSource } from '@common/types';
-import { validateSearchFilters } from '../utils/searchUtils';
+import { useState, useCallback, useMemo } from "react";
+import { NewsletterSource } from "@common/types";
+import { validateSearchFilters } from "../utils/searchUtils";
 
 export interface SearchFilters {
   selectedSources: string[];
@@ -63,7 +63,9 @@ const createDefaultFilters = (): SearchFilters => ({
   dateTo: "",
 });
 
-export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSearchFiltersReturn => {
+export const useSearchFilters = (
+  initialFilters?: Partial<SearchFilters>,
+): UseSearchFiltersReturn => {
   const [filters, setFilters] = useState<SearchFilters>(() => ({
     ...createDefaultFilters(),
     ...initialFilters,
@@ -75,29 +77,41 @@ export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSe
   }, [filters]);
 
   // Update functions
-  const setSelectedSources = useCallback((sources: string[]) => {
-    setFilters(prev => ({ ...prev, selectedSources: sources }));
-  }, []);
+  const setSelectedSources = useCallback(
+    (sources: string[] | ((prev: string[]) => string[])) => {
+      setFilters((prev) => ({
+        ...prev,
+        selectedSources:
+          typeof sources === "function"
+            ? sources(prev.selectedSources)
+            : sources,
+      }));
+    },
+    [],
+  );
 
   const setReadStatus = useCallback((status: "all" | "read" | "unread") => {
-    setFilters(prev => ({ ...prev, readStatus: status }));
+    setFilters((prev) => ({ ...prev, readStatus: status }));
   }, []);
 
-  const setArchivedStatus = useCallback((status: "all" | "archived" | "active") => {
-    setFilters(prev => ({ ...prev, archivedStatus: status }));
-  }, []);
+  const setArchivedStatus = useCallback(
+    (status: "all" | "archived" | "active") => {
+      setFilters((prev) => ({ ...prev, archivedStatus: status }));
+    },
+    [],
+  );
 
   const setDateFrom = useCallback((date: string) => {
-    setFilters(prev => ({ ...prev, dateFrom: date }));
+    setFilters((prev) => ({ ...prev, dateFrom: date }));
   }, []);
 
   const setDateTo = useCallback((date: string) => {
-    setFilters(prev => ({ ...prev, dateTo: date }));
+    setFilters((prev) => ({ ...prev, dateTo: date }));
   }, []);
 
   // Bulk operations
   const updateFilters = useCallback((updates: Partial<SearchFilters>) => {
-    setFilters(prev => ({ ...prev, ...updates }));
+    setFilters((prev) => ({ ...prev, ...updates }));
   }, []);
 
   const clearAllFilters = useCallback(() => {
@@ -109,27 +123,36 @@ export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSe
   }, []);
 
   // Source management
-  const toggleSource = useCallback((sourceId: string) => {
-    setSelectedSources(prev =>
-      prev.includes(sourceId)
-        ? prev.filter(id => id !== sourceId)
-        : [...prev, sourceId]
-    );
-  }, [setSelectedSources]);
+  const toggleSource = useCallback(
+    (sourceId: string) => {
+      setSelectedSources((prev: string[]) =>
+        prev.includes(sourceId)
+          ? prev.filter((id: string) => id !== sourceId)
+          : [...prev, sourceId],
+      );
+    },
+    [setSelectedSources],
+  );
 
-  const selectAllSources = useCallback((sources: NewsletterSource[]) => {
-    const allSourceIds = sources.map(source => source.id);
-    setSelectedSources(allSourceIds);
-  }, [setSelectedSources]);
+  const selectAllSources = useCallback(
+    (sources: NewsletterSource[]) => {
+      const allSourceIds = sources.map((source) => source.id);
+      setSelectedSources(allSourceIds);
+    },
+    [setSelectedSources],
+  );
 
   const clearSelectedSources = useCallback(() => {
     setSelectedSources([]);
   }, [setSelectedSources]);
 
   // Status helpers
-  const isSourceSelected = useCallback((sourceId: string) => {
-    return filters.selectedSources.includes(sourceId);
-  }, [filters.selectedSources]);
+  const isSourceSelected = useCallback(
+    (sourceId: string) => {
+      return filters.selectedSources.includes(sourceId);
+    },
+    [filters.selectedSources],
+  );
 
   const getSelectedSourcesCount = useCallback(() => {
     return filters.selectedSources.length;
@@ -168,7 +191,7 @@ export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSe
     try {
       return JSON.stringify(filters);
     } catch (error) {
-      console.error('Failed to export filters:', error);
+      console.error("Failed to export filters:", error);
       return "";
     }
   }, [filters]);
@@ -179,10 +202,14 @@ export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSe
 
       // Validate the imported filters structure
       const expectedKeys: (keyof SearchFilters)[] = [
-        'selectedSources', 'readStatus', 'archivedStatus', 'dateFrom', 'dateTo'
+        "selectedSources",
+        "readStatus",
+        "archivedStatus",
+        "dateFrom",
+        "dateTo",
       ];
 
-      const hasAllKeys = expectedKeys.every(key => key in importedFilters);
+      const hasAllKeys = expectedKeys.every((key) => key in importedFilters);
       if (!hasAllKeys) {
         return false;
       }
@@ -191,8 +218,10 @@ export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSe
       const validReadStatuses = ["all", "read", "unread"];
       const validArchivedStatuses = ["all", "archived", "active"];
 
-      if (!validReadStatuses.includes(importedFilters.readStatus) ||
-          !validArchivedStatuses.includes(importedFilters.archivedStatus)) {
+      if (
+        !validReadStatuses.includes(importedFilters.readStatus) ||
+        !validArchivedStatuses.includes(importedFilters.archivedStatus)
+      ) {
         return false;
       }
 
@@ -204,7 +233,7 @@ export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSe
       setFilters(importedFilters);
       return true;
     } catch (error) {
-      console.error('Failed to import filters:', error);
+      console.error("Failed to import filters:", error);
       return false;
     }
   }, []);
@@ -251,30 +280,38 @@ export const useSearchFilters = (initialFilters?: Partial<SearchFilters>): UseSe
 };
 
 // Helper functions for common filter operations
-export const createFiltersFromUrl = (searchParams: URLSearchParams): Partial<SearchFilters> => {
+export const createFiltersFromUrl = (
+  searchParams: URLSearchParams,
+): Partial<SearchFilters> => {
   const filters: Partial<SearchFilters> = {};
 
-  const sources = searchParams.get('sources');
+  const sources = searchParams.get("sources");
   if (sources) {
-    filters.selectedSources = sources.split(',').filter(Boolean);
+    filters.selectedSources = sources.split(",").filter(Boolean);
   }
 
-  const readStatus = searchParams.get('read') as "all" | "read" | "unread";
+  const readStatus = searchParams.get("read") as "all" | "read" | "unread";
   if (readStatus && ["all", "read", "unread"].includes(readStatus)) {
     filters.readStatus = readStatus;
   }
 
-  const archivedStatus = searchParams.get('archived') as "all" | "archived" | "active";
-  if (archivedStatus && ["all", "archived", "active"].includes(archivedStatus)) {
+  const archivedStatus = searchParams.get("archived") as
+    | "all"
+    | "archived"
+    | "active";
+  if (
+    archivedStatus &&
+    ["all", "archived", "active"].includes(archivedStatus)
+  ) {
     filters.archivedStatus = archivedStatus;
   }
 
-  const dateFrom = searchParams.get('from');
+  const dateFrom = searchParams.get("from");
   if (dateFrom) {
     filters.dateFrom = dateFrom;
   }
 
-  const dateTo = searchParams.get('to');
+  const dateTo = searchParams.get("to");
   if (dateTo) {
     filters.dateTo = dateTo;
   }
@@ -282,41 +319,44 @@ export const createFiltersFromUrl = (searchParams: URLSearchParams): Partial<Sea
   return filters;
 };
 
-export const addFiltersToUrl = (filters: SearchFilters, searchParams: URLSearchParams): URLSearchParams => {
+export const addFiltersToUrl = (
+  filters: SearchFilters,
+  searchParams: URLSearchParams,
+): URLSearchParams => {
   const newParams = new URLSearchParams(searchParams);
 
   // Add source filters
   if (filters.selectedSources.length > 0) {
-    newParams.set('sources', filters.selectedSources.join(','));
+    newParams.set("sources", filters.selectedSources.join(","));
   } else {
-    newParams.delete('sources');
+    newParams.delete("sources");
   }
 
   // Add read status filter
-  if (filters.readStatus !== 'all') {
-    newParams.set('read', filters.readStatus);
+  if (filters.readStatus !== "all") {
+    newParams.set("read", filters.readStatus);
   } else {
-    newParams.delete('read');
+    newParams.delete("read");
   }
 
   // Add archived status filter
-  if (filters.archivedStatus !== 'active') {
-    newParams.set('archived', filters.archivedStatus);
+  if (filters.archivedStatus !== "active") {
+    newParams.set("archived", filters.archivedStatus);
   } else {
-    newParams.delete('archived');
+    newParams.delete("archived");
   }
 
   // Add date filters
   if (filters.dateFrom) {
-    newParams.set('from', filters.dateFrom);
+    newParams.set("from", filters.dateFrom);
   } else {
-    newParams.delete('from');
+    newParams.delete("from");
   }
 
   if (filters.dateTo) {
-    newParams.set('to', filters.dateTo);
+    newParams.set("to", filters.dateTo);
   } else {
-    newParams.delete('to');
+    newParams.delete("to");
   }
 
   return newParams;
@@ -329,7 +369,9 @@ export const PRESET_FILTERS = {
     archivedStatus: "active" as const,
   },
   RECENT: {
-    dateFrom: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 7 days
+    dateFrom: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0], // Last 7 days
     archivedStatus: "active" as const,
   },
   LIKED_ONLY: {

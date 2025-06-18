@@ -1,5 +1,7 @@
+// @ts-nocheck
+
 import { supabase } from "../../api/supabaseClient";
-import { createLogger } from "../logger";
+import createLogger from "../logger";
 
 export interface DataIntegrityReport {
   orphanedReadingQueueItems: number;

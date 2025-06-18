@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { newsletterApi } from "@common/api/newsletterApi";
 import { AuthContext } from "@common/contexts/AuthContext";
 import { useContext, useEffect, useRef, useMemo } from "react";
-import { getCacheManagerSafe } from "@common/utils/cacheUtils";
+
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 import { useLogger } from "@common/utils/logger/useLogger";
 
@@ -17,11 +17,6 @@ export const useUnreadCount = (sourceId?: string | null) => {
   const queryClient = useQueryClient();
   const initialLoadComplete = useRef(false);
   const previousCount = useRef<number | null>(null);
-
-  // Initialize cache manager safely
-  const cacheManager = useMemo(() => {
-    return getCacheManagerSafe();
-  }, []);
 
   // Only enable the query when we have a user
   const queryKey = useMemo(() => {
@@ -206,11 +201,6 @@ export const useUnreadCountsBySource = () => {
   const user = auth?.user;
   const queryClient = useQueryClient();
 
-  // Initialize cache manager safely
-  const cacheManager = useMemo(() => {
-    return getCacheManagerSafe();
-  }, []);
-
   const queryKey = useMemo(
     () => queryKeyFactory.newsletters.unreadCountsBySource(),
     [],
@@ -317,11 +307,6 @@ export const useTotalCountsBySource = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const queryClient = useQueryClient();
-
-  // Initialize cache manager safely
-  const cacheManager = useMemo(() => {
-    return getCacheManagerSafe();
-  }, []);
 
   const queryKey = useMemo(
     () => queryKeyFactory.newsletters.totalCountsBySource(),

@@ -89,7 +89,7 @@ export const NewsletterDetailActions: React.FC<
             action: "check_queue_status",
             metadata: { newsletterId: newsletter.id },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         // Fallback to prop value if API fails
         setIsInQueue(isFromReadingQueue);
@@ -127,7 +127,7 @@ export const NewsletterDetailActions: React.FC<
           action: "toggle_read_status",
           metadata: { newsletterId: newsletter.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)) ,
       );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
@@ -167,7 +167,7 @@ export const NewsletterDetailActions: React.FC<
           action: "toggle_like_status",
           metadata: { newsletterId: newsletter.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
@@ -202,7 +202,7 @@ export const NewsletterDetailActions: React.FC<
           action: "toggle_reading_queue",
           metadata: { newsletterId: newsletter.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       // Revert optimistic update on error
       setIsInQueue(isInQueue);
@@ -241,7 +241,7 @@ export const NewsletterDetailActions: React.FC<
           action: "archive_newsletter",
           metadata: { newsletterId: newsletter.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
@@ -281,7 +281,7 @@ export const NewsletterDetailActions: React.FC<
           action: "unarchive_newsletter",
           metadata: { newsletterId: newsletter.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
@@ -325,7 +325,7 @@ export const NewsletterDetailActions: React.FC<
           action: "delete_newsletter",
           metadata: { newsletterId: newsletter.id },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       toast.error("Failed to delete newsletter");
     }

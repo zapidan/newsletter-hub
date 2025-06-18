@@ -30,7 +30,7 @@ export const queryKeyFactory = {
       // Build filters object excluding undefined values
       const filters: Record<string, unknown> = {};
       if (params.userId) filters.userId = params.userId;
-      if (params.filter && params.filter !== "all")
+      if (params.filter && typeof params.filter === "object")
         filters.filter = params.filter;
       if (params.tagIds?.length) filters.tagIds = [...params.tagIds].sort(); // Sort for consistency
       if (params.sourceId !== undefined) filters.sourceId = params.sourceId;
@@ -227,7 +227,7 @@ export const queryKeyFactory = {
 
       const filtersObj = queryKey[2];
       if (typeof filtersObj !== "object" || !filtersObj)
-        return filter === "all";
+        return filter.status === "all";
 
       return (filtersObj as Record<string, unknown>).filter === filter;
     },

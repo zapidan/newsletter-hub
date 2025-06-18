@@ -10,6 +10,9 @@ vi.mock("@common/api", () => ({
 }));
 
 import { searchService } from "../searchService";
+
+// Get the service instance for testing
+const serviceInstance = searchService();
 import {
   newsletterApi,
   getAllNewsletterSources,
@@ -28,12 +31,19 @@ vi.mock("../../utils/searchUtils", () => ({
 }));
 
 // Mock logger
-vi.mock("@common/utils/logger", () => ({
-  createLogger: () => ({
+vi.mock("@common/utils/logger/useLogger", () => ({
+  useLoggerStatic: () => ({
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+    auth: vi.fn(),
+    api: vi.fn(),
+    ui: vi.fn(),
+    logUserAction: vi.fn(),
+    logApiRequest: vi.fn(),
+    logNavigation: vi.fn(),
+    logError: vi.fn(),
   }),
   useLogger: () => ({
     debug: vi.fn(),
@@ -70,7 +80,7 @@ describe("SearchService Simple Tests", () => {
 
   describe("Basic functionality", () => {
     it("should create default filters", () => {
-      const filters = searchService.createDefaultFilters();
+      const filters = serviceInstance.createDefaultFilters();
 
       expect(filters).toEqual({
         selectedSources: [],
@@ -82,7 +92,7 @@ describe("SearchService Simple Tests", () => {
     });
 
     it("should create initial state", () => {
-      const state = searchService.createInitialState();
+      const state = serviceInstance.createInitialState();
 
       expect(state).toEqual({
         results: [],
@@ -96,19 +106,19 @@ describe("SearchService Simple Tests", () => {
     });
 
     it("should detect when filters are applied", () => {
-      const defaultFilters = searchService.createDefaultFilters();
+      const defaultFilters = serviceInstance.createDefaultFilters();
       const appliedFilters = {
         ...defaultFilters,
         selectedSources: ["source-1"],
       };
 
-      expect(searchService.hasFiltersApplied(defaultFilters)).toBe(false);
-      expect(searchService.hasFiltersApplied(appliedFilters)).toBe(true);
+      expect(serviceInstance.hasFiltersApplied(defaultFilters)).toBe(false);
+      expect(serviceInstance.hasFiltersApplied(appliedFilters)).toBe(true);
     });
 
     it("should reset filters to default", () => {
-      const resetFilters = searchService.resetFilters();
-      const defaultFilters = searchService.createDefaultFilters();
+      const resetFilters = serviceInstance.resetFilters();
+      const defaultFilters = serviceInstance.createDefaultFilters();
 
       expect(resetFilters).toEqual(defaultFilters);
     });
@@ -116,12 +126,12 @@ describe("SearchService Simple Tests", () => {
 
   describe("Search validation", () => {
     it("should validate search input successfully", () => {
-      const result = searchService.validateSearchInput("valid search term");
+      const result = serviceInstance.validateSearchInput("valid search term");
       expect(result).toEqual({ isValid: true });
     });
 
     it("should reject empty search input", () => {
-      const result = searchService.validateSearchInput("   ");
+      const result = serviceInstance.validateSearchInput("   ");
       expect(result).toEqual({
         isValid: false,
         error: "Search query cannot be empty",
@@ -129,7 +139,7 @@ describe("SearchService Simple Tests", () => {
     });
 
     it("should reject short search input", () => {
-      const result = searchService.validateSearchInput("a");
+      const result = serviceInstance.validateSearchInput("a");
       expect(result).toEqual({
         isValid: false,
         error: "Search query must be at least 2 characters long",
@@ -138,7 +148,7 @@ describe("SearchService Simple Tests", () => {
 
     it("should reject long search input", () => {
       const longQuery = "a".repeat(501);
-      const result = searchService.validateSearchInput(longQuery);
+      const result = serviceInstance.validateSearchInput(longQuery);
       expect(result).toEqual({
         isValid: false,
         error: "Search query is too long (maximum 500 characters)",
@@ -150,7 +160,7 @@ describe("SearchService Simple Tests", () => {
     it("should save recent search", () => {
       localStorageMock.getItem.mockReturnValue("[]");
 
-      searchService.saveRecentSearch("test search");
+      serviceInstance.saveRecentSearch("test search");
 
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         "newsletter_recent_searches",
@@ -159,7 +169,7 @@ describe("SearchService Simple Tests", () => {
     });
 
     it("should not save empty search", () => {
-      searchService.saveRecentSearch("   ");
+      serviceInstance.saveRecentSearch("   ");
       expect(localStorageMock.setItem).not.toHaveBeenCalled();
     });
 
@@ -167,19 +177,19 @@ describe("SearchService Simple Tests", () => {
       const mockSearches = ["search1", "search2"];
       localStorageMock.getItem.mockReturnValue(JSON.stringify(mockSearches));
 
-      const result = searchService.getRecentSearches();
+      const result = serviceInstance.getRecentSearches();
       expect(result).toEqual(mockSearches);
     });
 
     it("should handle corrupted localStorage data", () => {
       localStorageMock.getItem.mockReturnValue("invalid json");
 
-      const result = searchService.getRecentSearches();
+      const result = serviceInstance.getRecentSearches();
       expect(result).toEqual([]);
     });
 
     it("should clear all recent searches", () => {
-      searchService.clearRecentSearches();
+      serviceInstance.clearRecentSearches();
       expect(localStorageMock.removeItem).toHaveBeenCalledWith(
         "newsletter_recent_searches",
       );
@@ -188,14 +198,14 @@ describe("SearchService Simple Tests", () => {
 
   describe("URL management", () => {
     it("should build URL parameters", () => {
-      const params = searchService.buildUrlParams("test search", 2);
+      const params = serviceInstance.buildUrlParams("test search", 2);
 
       expect(params.get("q")).toBe("test search");
       expect(params.get("page")).toBe("2");
     });
 
     it("should not include empty parameters", () => {
-      const params = searchService.buildUrlParams("", 1);
+      const params = serviceInstance.buildUrlParams("", 1);
 
       expect(params.has("q")).toBe(false);
       expect(params.has("page")).toBe(false);
@@ -203,7 +213,7 @@ describe("SearchService Simple Tests", () => {
 
     it("should parse URL parameters", () => {
       const searchParams = new URLSearchParams("q=test+search&page=3");
-      const result = searchService.parseUrlParams(searchParams);
+      const result = serviceInstance.parseUrlParams(searchParams);
 
       expect(result).toEqual({
         query: "test search",
@@ -213,7 +223,7 @@ describe("SearchService Simple Tests", () => {
 
     it("should handle missing URL parameters", () => {
       const searchParams = new URLSearchParams();
-      const result = searchService.parseUrlParams(searchParams);
+      const result = serviceInstance.parseUrlParams(searchParams);
 
       expect(result).toEqual({
         query: "",
@@ -224,47 +234,47 @@ describe("SearchService Simple Tests", () => {
 
   describe("State management", () => {
     it("should check if has results", () => {
-      const emptyState = searchService.createInitialState();
+      const emptyState = serviceInstance.createInitialState();
       const stateWithResults = {
         ...emptyState,
         results: [{ id: "1", title: "Test" }],
       };
 
-      expect(searchService.hasResults(emptyState)).toBe(false);
-      expect(searchService.hasResults(stateWithResults)).toBe(true);
+      expect(serviceInstance.hasResults(emptyState)).toBe(false);
+      expect(serviceInstance.hasResults(stateWithResults)).toBe(true);
     });
 
     it("should check if searching", () => {
-      const idleState = searchService.createInitialState();
+      const idleState = serviceInstance.createInitialState();
       const loadingState = {
         ...idleState,
         loading: true,
       };
 
-      expect(searchService.isSearching(idleState)).toBe(false);
-      expect(searchService.isSearching(loadingState)).toBe(true);
+      expect(serviceInstance.isSearching(idleState)).toBe(false);
+      expect(serviceInstance.isSearching(loadingState)).toBe(true);
     });
 
     it("should check if has searched", () => {
-      const initialState = searchService.createInitialState();
+      const initialState = serviceInstance.createInitialState();
       const searchedState = {
         ...initialState,
         searchPerformed: true,
       };
 
-      expect(searchService.hasSearched(initialState)).toBe(false);
-      expect(searchService.hasSearched(searchedState)).toBe(true);
+      expect(serviceInstance.hasSearched(initialState)).toBe(false);
+      expect(serviceInstance.hasSearched(searchedState)).toBe(true);
     });
 
     it("should get search statistics", () => {
       const state = {
-        ...searchService.createInitialState(),
+        ...serviceInstance.createInitialState(),
         totalCount: 100,
         currentPage: 2,
         hasMore: true,
       };
 
-      const stats = searchService.getSearchStats(state);
+      const stats = serviceInstance.getSearchStats(state);
 
       expect(stats).toEqual({
         totalResults: 100,
@@ -278,17 +288,17 @@ describe("SearchService Simple Tests", () => {
   describe("Error handling", () => {
     it("should format Error objects", () => {
       const error = new Error("Test error");
-      const result = searchService.formatSearchError(error);
+      const result = serviceInstance.formatSearchError(error);
       expect(result).toBe("Test error");
     });
 
     it("should format string errors", () => {
-      const result = searchService.formatSearchError("String error");
+      const result = serviceInstance.formatSearchError("String error");
       expect(result).toBe("String error");
     });
 
     it("should format unknown errors", () => {
-      const result = searchService.formatSearchError({ unknown: "error" });
+      const result = serviceInstance.formatSearchError({ unknown: "error" });
       expect(result).toBe("An unexpected error occurred while searching");
     });
   });
@@ -306,12 +316,12 @@ describe("SearchService Simple Tests", () => {
 
       const searchOptions = {
         query: "test",
-        filters: searchService.createDefaultFilters(),
+        filters: serviceInstance.createDefaultFilters(),
         page: 1,
         itemsPerPage: 20,
       };
 
-      const result = await searchService.search(searchOptions);
+      const result = await serviceInstance.search(searchOptions);
 
       expect(newsletterApi.getAll).toHaveBeenCalled();
       expect(result).toEqual({
@@ -328,12 +338,12 @@ describe("SearchService Simple Tests", () => {
 
       const searchOptions = {
         query: "test",
-        filters: searchService.createDefaultFilters(),
+        filters: serviceInstance.createDefaultFilters(),
         page: 1,
         itemsPerPage: 20,
       };
 
-      await expect(searchService.search(searchOptions)).rejects.toThrow(
+      await expect(serviceInstance.search(searchOptions)).rejects.toThrow(
         "Failed to search newsletters. Please try again.",
       );
     });
@@ -341,12 +351,12 @@ describe("SearchService Simple Tests", () => {
     it("should throw error for empty query", async () => {
       const searchOptions = {
         query: "   ",
-        filters: searchService.createDefaultFilters(),
+        filters: serviceInstance.createDefaultFilters(),
         page: 1,
         itemsPerPage: 20,
       };
 
-      await expect(searchService.search(searchOptions)).rejects.toThrow(
+      await expect(serviceInstance.search(searchOptions)).rejects.toThrow(
         "Search query cannot be empty",
       );
     });
@@ -363,11 +373,9 @@ describe("SearchService Simple Tests", () => {
         data: mockSources,
       });
 
-      const result = await searchService.getSources();
+      const result = await serviceInstance.getSources();
 
-      expect(getAllNewsletterSources).toHaveBeenCalledWith({
-        is_archived: false,
-      });
+      expect(getAllNewsletterSources).toHaveBeenCalledWith();
       expect(result).toEqual(mockSources);
     });
 
@@ -376,7 +384,7 @@ describe("SearchService Simple Tests", () => {
         new Error("API Error"),
       );
 
-      await expect(searchService.getSources()).rejects.toThrow(
+      await expect(serviceInstance.getSources()).rejects.toThrow(
         "Failed to load newsletter sources",
       );
     });
@@ -386,9 +394,10 @@ describe("SearchService Simple Tests", () => {
     it("should mark newsletter as read and archived", async () => {
       (updateNewsletter as any).mockResolvedValue({});
 
-      await searchService.markAsReadAndArchive("newsletter-1");
+      await serviceInstance.markAsReadAndArchive("newsletter-1");
 
-      expect(updateNewsletter).toHaveBeenCalledWith("newsletter-1", {
+      expect(updateNewsletter).toHaveBeenCalledWith({
+        id: "newsletter-1",
         is_read: true,
         is_archived: true,
       });
@@ -398,16 +407,17 @@ describe("SearchService Simple Tests", () => {
       (updateNewsletter as any).mockRejectedValue(new Error("Update failed"));
 
       await expect(
-        searchService.markAsReadAndArchive("newsletter-1"),
+        serviceInstance.markAsReadAndArchive("newsletter-1"),
       ).rejects.toThrow("Failed to update newsletter status");
     });
 
     it("should open newsletter detail and update status", async () => {
       (updateNewsletter as any).mockResolvedValue({});
 
-      await searchService.openNewsletterDetail("newsletter-1");
+      await serviceInstance.openNewsletterDetail("newsletter-1");
 
-      expect(updateNewsletter).toHaveBeenCalledWith("newsletter-1", {
+      expect(updateNewsletter).toHaveBeenCalledWith({
+        id: "newsletter-1",
         is_read: true,
         is_archived: true,
       });
@@ -417,7 +427,7 @@ describe("SearchService Simple Tests", () => {
     it("should navigate even if status update fails", async () => {
       (updateNewsletter as any).mockRejectedValue(new Error("Update failed"));
 
-      await searchService.openNewsletterDetail("newsletter-1");
+      await serviceInstance.openNewsletterDetail("newsletter-1");
 
       expect(mockLocation.href).toBe("/newsletters/newsletter-1");
     });

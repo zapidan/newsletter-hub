@@ -24,6 +24,7 @@ export interface LogContext {
   component?: string;
   action?: string;
   metadata?: Record<string, any>;
+  [key: string]: any; // Allow additional properties for flexible usage
 }
 
 export interface LogEntry {
@@ -58,20 +59,24 @@ class Logger {
 
     if (level) {
       switch (level.toUpperCase()) {
-        case 'DEBUG': return LogLevel.DEBUG;
-        case 'INFO': return LogLevel.INFO;
-        case 'WARN': return LogLevel.WARN;
-        case 'ERROR': return LogLevel.ERROR;
+        case "DEBUG":
+          return LogLevel.DEBUG;
+        case "INFO":
+          return LogLevel.INFO;
+        case "WARN":
+          return LogLevel.WARN;
+        case "ERROR":
+          return LogLevel.ERROR;
       }
     }
 
     // Default levels by environment
     switch (env) {
-      case 'development':
+      case "development":
         return LogLevel.DEBUG;
-      case 'staging':
+      case "staging":
         return LogLevel.INFO;
-      case 'production':
+      case "production":
         return LogLevel.WARN;
       default:
         return LogLevel.INFO;
@@ -98,23 +103,34 @@ class Logger {
     return level >= this.logLevel;
   }
 
-  private formatMessage(level: LogLevel, message: string, context: LogContext): string {
+  private formatMessage(
+    level: LogLevel,
+    message: string,
+    context: LogContext,
+  ): string {
     const timestamp = new Date().toISOString();
     const levelName = LogLevel[level];
 
     // Build prefix with user ID if available
-    const userIdPrefix = context.userId ? `[user id] {${context.userId}}` : '[user id] {anonymous}';
+    const userIdPrefix = context.userId
+      ? `[user id] {${context.userId}}`
+      : "[user id] {anonymous}";
 
     // Build component context
-    const componentPrefix = context.component ? `[${context.component}]` : '';
+    const componentPrefix = context.component ? `[${context.component}]` : "";
 
     // Build action context
-    const actionPrefix = context.action ? `[${context.action}]` : '';
+    const actionPrefix = context.action ? `[${context.action}]` : "";
 
     return `${timestamp} ${levelName} ${userIdPrefix} ${componentPrefix}${actionPrefix} ${message}`;
   }
 
-  private createLogEntry(level: LogLevel, message: string, context: LogContext, error?: Error): LogEntry {
+  private createLogEntry(
+    level: LogLevel,
+    message: string,
+    context: LogContext,
+    error?: Error,
+  ): LogEntry {
     const mergedContext = { ...this.currentContext, ...context };
 
     return {
@@ -128,11 +144,17 @@ class Logger {
   }
 
   private outputLog(entry: LogEntry): void {
-    const formattedMessage = this.formatMessage(entry.level, entry.message, entry.context);
+    const formattedMessage = this.formatMessage(
+      entry.level,
+      entry.message,
+      entry.context,
+    );
 
     // Add metadata if present
     const metadata = entry.context.metadata;
-    const metadataStr = metadata ? ` | Metadata: ${JSON.stringify(metadata)}` : '';
+    const metadataStr = metadata
+      ? ` | Metadata: ${JSON.stringify(metadata)}`
+      : "";
 
     const fullMessage = formattedMessage + metadataStr;
 
@@ -154,12 +176,15 @@ class Logger {
     }
 
     // In production, you might want to send logs to an external service
-    if (import.meta.env.MODE === 'production' && entry.level >= LogLevel.ERROR) {
-      this.sendToExternalService(entry);
+    if (
+      import.meta.env.MODE === "production" &&
+      entry.level >= LogLevel.ERROR
+    ) {
+      this.sendToExternalService();
     }
   }
 
-  private sendToExternalService(entry: LogEntry): void {
+  private sendToExternalService(): void {
     // Placeholder for external logging service integration
     // This could be Sentry, LogRocket, DataDog, etc.
     try {
@@ -171,7 +196,7 @@ class Logger {
       // });
     } catch (error) {
       // Fallback to console if external service fails
-      console.error('Failed to send log to external service:', error);
+      console.error("Failed to send log to external service:", error);
     }
   }
 
@@ -205,15 +230,15 @@ class Logger {
 
   // Specialized logging methods for common use cases
   public auth(message: string, context: LogContext = {}): void {
-    this.info(message, { ...context, component: 'Auth' });
+    this.info(message, { ...context, component: "Auth" });
   }
 
   public api(message: string, context: LogContext = {}): void {
-    this.info(message, { ...context, component: 'API' });
+    this.info(message, { ...context, component: "API" });
   }
 
   public ui(message: string, context: LogContext = {}): void {
-    this.debug(message, { ...context, component: 'UI' });
+    this.debug(message, { ...context, component: "UI" });
   }
 
   // Performance monitoring
@@ -223,69 +248,91 @@ class Logger {
     return () => {
       const duration = performance.now() - start;
       this.info(`${timerName} completed`, {
-        component: 'Performance',
-        metadata: { duration: `${duration.toFixed(2)}ms` }
+        component: "Performance",
+        metadata: { duration: `${duration.toFixed(2)}ms` },
       });
     };
   }
 
   // API request/response logging
-  public logApiRequest(url: string, method: string, context: LogContext = {}): void {
+  public logApiRequest(
+    url: string,
+    method: string,
+    context: LogContext = {},
+  ): void {
     this.debug(`API Request: ${method} ${url}`, {
       ...context,
-      component: 'API',
-      action: 'request',
-      metadata: { url, method }
+      component: "API",
+      action: "request",
+      metadata: { url, method },
     });
   }
 
-  public logApiResponse(url: string, method: string, status: number, duration: number, context: LogContext = {}): void {
+  public logApiResponse(
+    url: string,
+    method: string,
+    status: number,
+    duration: number,
+    context: LogContext = {},
+  ): void {
     const level = status >= 400 ? LogLevel.WARN : LogLevel.DEBUG;
     const message = `API Response: ${method} ${url} - ${status} (${duration.toFixed(2)}ms)`;
 
     if (level === LogLevel.WARN) {
       this.warn(message, {
         ...context,
-        component: 'API',
-        action: 'response',
-        metadata: { url, method, status, duration }
+        component: "API",
+        action: "response",
+        metadata: { url, method, status, duration },
       });
     } else {
       this.debug(message, {
         ...context,
-        component: 'API',
-        action: 'response',
-        metadata: { url, method, status, duration }
+        component: "API",
+        action: "response",
+        metadata: { url, method, status, duration },
       });
     }
   }
 
   // Error boundary logging
-  public logComponentError(componentName: string, error: Error, context: LogContext = {}): void {
-    this.error(`Component error in ${componentName}`, {
-      ...context,
-      component: componentName,
-      action: 'render_error',
-      metadata: { errorName: error.name, errorMessage: error.message }
-    }, error);
+  public logComponentError(
+    componentName: string,
+    error: Error,
+    context: LogContext = {},
+  ): void {
+    this.error(
+      `Component error in ${componentName}`,
+      {
+        ...context,
+        component: componentName,
+        action: "render_error",
+        metadata: { errorName: error.name, errorMessage: error.message },
+      },
+      error,
+    );
   }
 
   // User action logging
   public logUserAction(action: string, context: LogContext = {}): void {
     this.info(`User action: ${action}`, {
       ...context,
-      component: 'UserAction',
+      component: "UserAction",
       action,
     });
   }
 
   // Navigation logging
-  public logNavigation(from: string, to: string, context: LogContext = {}): void {
+  public logNavigation(
+    from: string,
+    to: string,
+    context: LogContext = {},
+  ): void {
     this.debug(`Navigation: ${from} -> ${to}`, {
       ...context,
-      component: 'Navigation',
-      action: 'route_change',
-      metadata: { from, to }
+      component: "Navigation",
+      action: "route_change",
+      metadata: { from, to },
     });
   }
 }
@@ -293,5 +340,4 @@ class Logger {
 // Export singleton instance
 export const logger = Logger.getInstance();
 
-// Export types for use in other files
-export type { LogContext, LogEntry };
+// Types are already exported via export interface above

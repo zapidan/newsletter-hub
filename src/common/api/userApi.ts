@@ -28,8 +28,14 @@ interface UpdateUserParams {
   email_alias?: string;
 }
 
-// Initialize logger
-const log = useLoggerStatic();
+// Initialize logger lazily
+let log: ReturnType<typeof useLoggerStatic> | null = null;
+const getLogger = () => {
+  if (!log) {
+    log = useLoggerStatic();
+  }
+  return log;
+};
 
 // User API Service
 export const userApi = {
@@ -90,7 +96,7 @@ export const userApi = {
           .eq("id", user.id);
 
         if (error) {
-          log.error(
+          getLogger().error(
             "Error saving email alias",
             {
               component: "UserApi",
@@ -104,7 +110,7 @@ export const userApi = {
 
         return { email: emailAlias };
       } catch (error) {
-        log.error(
+        getLogger().error(
           "Error generating email alias",
           {
             component: "UserApi",
@@ -151,7 +157,7 @@ export const userApi = {
 
         return email;
       } catch (error) {
-        log.error(
+        getLogger().error(
           "Error in getEmailAlias",
           {
             component: "UserApi",
@@ -190,7 +196,7 @@ export const userApi = {
           .eq("id", user.id);
 
         if (updateError) {
-          log.error(
+          getLogger().error(
             "Error updating user with email alias",
             {
               component: "UserApi",
@@ -204,7 +210,7 @@ export const userApi = {
 
         return { email: newAlias };
       } catch (error) {
-        log.error(
+        getLogger().error(
           "Error in updateEmailAlias",
           {
             component: "UserApi",
@@ -249,7 +255,7 @@ export const userApi = {
         user.id,
       );
       if (authError) {
-        log.error(
+        getLogger().error(
           "Error deleting user from auth",
           {
             component: "UserApi",

@@ -6,12 +6,11 @@ import React, {
   useMemo,
 } from "react";
 import { useFilters } from "@common/contexts/FilterContext";
-import { useNewsletters } from "@common/hooks/useNewsletters";
-import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
 import { useTags } from "@common/hooks/useTags";
 import { useLogger } from "@common/utils/logger/useLogger";
-import type { NewsletterWithRelations, Tag } from "@common/types";
+import type { Tag } from "@common/types";
 import type { TimeRange } from "@web/components/TimeFilter";
+import { useNewsletterSources } from "./useNewsletterSources";
 
 export interface InboxFiltersState {
   filter: "all" | "unread" | "liked" | "archived";
@@ -62,7 +61,7 @@ export const useInboxFilters = (
   const {
     debounceMs = 300,
     autoLoadTags = true,
-    preserveUrlOnActions = true,
+    // preserveUrlOnActions = true, // Commented out unused parameter
   } = options;
 
   const log = useLogger();
@@ -74,16 +73,10 @@ export const useInboxFilters = (
     timeRange,
     tagIds,
     newsletterFilter,
-    hasActiveFilters,
-    isFilterActive,
     setFilter,
     setSourceFilter,
     setTimeRange,
     setTagIds,
-    toggleTag,
-    addTag,
-    removeTag,
-    clearTags,
     resetFilters,
   } = useFilters();
 

@@ -1,14 +1,14 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import NewsletterCard from '../NewsletterCard';
-import { mockNewsletters } from '../../../__tests__/mocks/data';
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import NewsletterCard from "../NewsletterCard";
+import { mockNewsletters } from "../../../__tests__/mocks/data";
 
 // Mock date-fns format function
-vi.mock('date-fns', () => ({
-  format: vi.fn(() => 'Jan 15, 2024'),
+vi.mock("date-fns", () => ({
+  format: vi.fn(() => "Jan 15, 2024"),
 }));
 
-describe('NewsletterCard', () => {
+describe("NewsletterCard", () => {
   const mockNewsletter = mockNewsletters[0];
   const defaultProps = {
     newsletter: mockNewsletter,
@@ -24,135 +24,138 @@ describe('NewsletterCard', () => {
     vi.clearAllMocks();
   });
 
-  it('renders newsletter title', () => {
+  it("renders newsletter title", () => {
     render(<NewsletterCard {...defaultProps} />);
     expect(screen.getByText(mockNewsletter.title)).toBeInTheDocument();
   });
 
-  it('renders newsletter source information', () => {
+  it("renders newsletter source information", () => {
     const newsletterWithSource = {
       ...mockNewsletter,
       source: {
-        id: 'source-1',
-        name: 'Tech Weekly',
-        domain: 'techweekly.com',
-        email: 'tech@weekly.com',
-        description: 'Weekly tech newsletter',
-        user_id: 'user-1',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
+        id: "source-1",
+        name: "Tech Weekly",
+        domain: "techweekly.com",
+        email: "tech@weekly.com",
+        description: "Weekly tech newsletter",
+        user_id: "user-1",
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
       },
     };
 
-    render(<NewsletterCard {...defaultProps} newsletter={newsletterWithSource} />);
-    expect(screen.getByText('Tech Weekly')).toBeInTheDocument();
-    expect(screen.getByText('• techweekly.com')).toBeInTheDocument();
+    render(
+      <NewsletterCard {...defaultProps} newsletter={newsletterWithSource} />,
+    );
+    expect(screen.getByText("Tech Weekly")).toBeInTheDocument();
+    expect(screen.getByText("• techweekly.com")).toBeInTheDocument();
   });
 
   it('renders "Unknown Source" when source is missing', () => {
     const newsletterWithoutSource = {
       ...mockNewsletter,
-      source: undefined,
+      source: null,
     };
 
-    render(<NewsletterCard {...defaultProps} newsletter={newsletterWithoutSource} />);
-    expect(screen.getByText('Unknown Source')).toBeInTheDocument();
+    render(
+      <NewsletterCard {...defaultProps} newsletter={newsletterWithoutSource} />,
+    );
+    expect(screen.getByText("Unknown Source")).toBeInTheDocument();
   });
 
-  it('renders formatted date', () => {
+  it("renders formatted date", () => {
     render(<NewsletterCard {...defaultProps} />);
-    expect(screen.getByText('Jan 15, 2024')).toBeInTheDocument();
+    expect(screen.getByText("Jan 15, 2024")).toBeInTheDocument();
   });
 
-  it('renders newsletter image when provided', () => {
+  it("renders newsletter image when provided", () => {
     const newsletterWithImage = {
       ...mockNewsletter,
-      image_url: 'https://example.com/image.jpg',
+      image_url: "https://example.com/image.jpg",
     };
 
-    render(<NewsletterCard {...defaultProps} newsletter={newsletterWithImage} />);
+    render(
+      <NewsletterCard {...defaultProps} newsletter={newsletterWithImage} />,
+    );
     const image = screen.getByAltText(mockNewsletter.title);
     expect(image).toBeInTheDocument();
-    expect(image).toHaveAttribute('src', 'https://example.com/image.jpg');
+    expect(image).toHaveAttribute("src", "https://example.com/image.jpg");
   });
 
-  it('does not render image container when no image URL', () => {
+  it("does not render image container when no image URL", () => {
     render(<NewsletterCard {...defaultProps} />);
     const image = screen.queryByAltText(mockNewsletter.title);
     expect(image).not.toBeInTheDocument();
   });
 
-  describe('Queue functionality', () => {
-    it('renders queue button when showQueueButton is true', () => {
+  describe("Queue functionality", () => {
+    it("renders queue button when showQueueButton is true", () => {
       render(<NewsletterCard {...defaultProps} showQueueButton={true} />);
-      const queueButton = screen.getByTitle('Add to queue');
+      const queueButton = screen.getByTitle("Add to queue");
       expect(queueButton).toBeInTheDocument();
     });
 
-    it('does not render queue button when showQueueButton is false', () => {
+    it("does not render queue button when showQueueButton is false", () => {
       render(<NewsletterCard {...defaultProps} showQueueButton={false} />);
-      const queueButton = screen.queryByTitle('Add to queue');
+      const queueButton = screen.queryByTitle("Add to queue");
       expect(queueButton).not.toBeInTheDocument();
     });
 
     it('shows "Remove from queue" title when isInQueue is true', () => {
       render(<NewsletterCard {...defaultProps} isInQueue={true} />);
-      const queueButton = screen.getByTitle('Remove from queue');
+      const queueButton = screen.getByTitle("Remove from queue");
       expect(queueButton).toBeInTheDocument();
     });
 
     it('shows "Add to queue" title when isInQueue is false', () => {
       render(<NewsletterCard {...defaultProps} isInQueue={false} />);
-      const queueButton = screen.getByTitle('Add to queue');
+      const queueButton = screen.getByTitle("Add to queue");
       expect(queueButton).toBeInTheDocument();
     });
 
-    it('calls onToggleQueue with correct parameters when queue button is clicked', () => {
+    it("calls onToggleQueue with correct parameters when queue button is clicked", () => {
       const mockOnToggleQueue = vi.fn();
       render(
         <NewsletterCard
           {...defaultProps}
           onToggleQueue={mockOnToggleQueue}
           isInQueue={false}
-        />
+        />,
       );
 
-      const queueButton = screen.getByTitle('Add to queue');
+      const queueButton = screen.getByTitle("Add to queue");
       fireEvent.click(queueButton);
 
       expect(mockOnToggleQueue).toHaveBeenCalledWith(mockNewsletter.id, true);
     });
 
-    it('calls onToggleQueue to remove from queue when already in queue', () => {
+    it("calls onToggleQueue to remove from queue when already in queue", () => {
       const mockOnToggleQueue = vi.fn();
       render(
         <NewsletterCard
           {...defaultProps}
           onToggleQueue={mockOnToggleQueue}
           isInQueue={true}
-        />
+        />,
       );
 
-      const queueButton = screen.getByTitle('Remove from queue');
+      const queueButton = screen.getByTitle("Remove from queue");
       fireEvent.click(queueButton);
 
       expect(mockOnToggleQueue).toHaveBeenCalledWith(mockNewsletter.id, false);
     });
 
-    it('prevents event propagation when queue button is clicked', () => {
+    it("prevents event propagation when queue button is clicked", () => {
       const mockOnToggleQueue = vi.fn();
       const mockCardClick = vi.fn();
 
       render(
         <div onClick={mockCardClick}>
-          <NewsletterCard
-            {...defaultProps}
-            onToggleQueue={mockOnToggleQueue}
-          />
-        </div>
+          <NewsletterCard {...defaultProps} onToggleQueue={mockOnToggleQueue} />
+        </div>,
       );
 
-      const queueButton = screen.getByTitle('Add to queue');
+      const queueButton = screen.getByTitle("Add to queue");
       fireEvent.click(queueButton);
 
       expect(mockOnToggleQueue).toHaveBeenCalled();
@@ -160,16 +163,16 @@ describe('NewsletterCard', () => {
     });
   });
 
-  describe('Archive functionality', () => {
-    it('renders archive button when showArchiveButton is true', () => {
+  describe("Archive functionality", () => {
+    it("renders archive button when showArchiveButton is true", () => {
       render(<NewsletterCard {...defaultProps} showArchiveButton={true} />);
-      const archiveButton = screen.getByTitle('Archive');
+      const archiveButton = screen.getByTitle("Archive");
       expect(archiveButton).toBeInTheDocument();
     });
 
-    it('does not render archive button when showArchiveButton is false', () => {
+    it("does not render archive button when showArchiveButton is false", () => {
       render(<NewsletterCard {...defaultProps} showArchiveButton={false} />);
-      const archiveButton = screen.queryByTitle('Archive');
+      const archiveButton = screen.queryByTitle("Archive");
       expect(archiveButton).not.toBeInTheDocument();
     });
 
@@ -180,13 +183,10 @@ describe('NewsletterCard', () => {
       };
 
       render(
-        <NewsletterCard
-          {...defaultProps}
-          newsletter={archivedNewsletter}
-        />
+        <NewsletterCard {...defaultProps} newsletter={archivedNewsletter} />,
       );
 
-      const archiveButton = screen.getByTitle('Unarchive');
+      const archiveButton = screen.getByTitle("Unarchive");
       expect(archiveButton).toBeInTheDocument();
     });
 
@@ -197,32 +197,29 @@ describe('NewsletterCard', () => {
       };
 
       render(
-        <NewsletterCard
-          {...defaultProps}
-          newsletter={unarchivedNewsletter}
-        />
+        <NewsletterCard {...defaultProps} newsletter={unarchivedNewsletter} />,
       );
 
-      const archiveButton = screen.getByTitle('Archive');
+      const archiveButton = screen.getByTitle("Archive");
       expect(archiveButton).toBeInTheDocument();
     });
 
-    it('calls onToggleArchive with correct parameters when archive button is clicked', () => {
+    it("calls onToggleArchive with correct parameters when archive button is clicked", () => {
       const mockOnToggleArchive = vi.fn();
       render(
         <NewsletterCard
           {...defaultProps}
           onToggleArchive={mockOnToggleArchive}
-        />
+        />,
       );
 
-      const archiveButton = screen.getByTitle('Archive');
+      const archiveButton = screen.getByTitle("Archive");
       fireEvent.click(archiveButton);
 
       expect(mockOnToggleArchive).toHaveBeenCalledWith(mockNewsletter.id, true);
     });
 
-    it('calls onToggleArchive to unarchive when already archived', () => {
+    it("calls onToggleArchive to unarchive when already archived", () => {
       const mockOnToggleArchive = vi.fn();
       const archivedNewsletter = {
         ...mockNewsletter,
@@ -234,16 +231,19 @@ describe('NewsletterCard', () => {
           {...defaultProps}
           newsletter={archivedNewsletter}
           onToggleArchive={mockOnToggleArchive}
-        />
+        />,
       );
 
-      const archiveButton = screen.getByTitle('Unarchive');
+      const archiveButton = screen.getByTitle("Unarchive");
       fireEvent.click(archiveButton);
 
-      expect(mockOnToggleArchive).toHaveBeenCalledWith(mockNewsletter.id, false);
+      expect(mockOnToggleArchive).toHaveBeenCalledWith(
+        mockNewsletter.id,
+        false,
+      );
     });
 
-    it('prevents event propagation when archive button is clicked', () => {
+    it("prevents event propagation when archive button is clicked", () => {
       const mockOnToggleArchive = vi.fn();
       const mockCardClick = vi.fn();
 
@@ -253,10 +253,10 @@ describe('NewsletterCard', () => {
             {...defaultProps}
             onToggleArchive={mockOnToggleArchive}
           />
-        </div>
+        </div>,
       );
 
-      const archiveButton = screen.getByTitle('Archive');
+      const archiveButton = screen.getByTitle("Archive");
       fireEvent.click(archiveButton);
 
       expect(mockOnToggleArchive).toHaveBeenCalled();
@@ -264,105 +264,137 @@ describe('NewsletterCard', () => {
     });
   });
 
-  describe('Tags functionality', () => {
-    it('renders tags when newsletter has tags', () => {
+  describe("Tags functionality", () => {
+    it("renders tags when newsletter has tags", () => {
       const newsletterWithTags = {
         ...mockNewsletter,
         tags: [
-          { id: 'tag-1', name: 'AI/ML', color: '#3B82F6' },
-          { id: 'tag-2', name: 'Tech', color: '#10B981' },
+          {
+            id: "tag-1",
+            name: "AI/ML",
+            color: "#3B82F6",
+            user_id: "user-1",
+            created_at: "2024-01-01T00:00:00Z",
+          },
+          {
+            id: "tag-2",
+            name: "Tech",
+            color: "#10B981",
+            user_id: "user-1",
+            created_at: "2024-01-01T00:00:00Z",
+          },
         ],
       };
 
-      render(<NewsletterCard {...defaultProps} newsletter={newsletterWithTags} />);
+      render(
+        <NewsletterCard {...defaultProps} newsletter={newsletterWithTags} />,
+      );
 
-      expect(screen.getByText('AI/ML')).toBeInTheDocument();
-      expect(screen.getByText('Tech')).toBeInTheDocument();
+      expect(screen.getByText("AI/ML")).toBeInTheDocument();
+      expect(screen.getByText("Tech")).toBeInTheDocument();
     });
 
-    it('does not render tags section when newsletter has no tags', () => {
+    it("does not render tags section when newsletter has no tags", () => {
       const newsletterWithoutTags = {
         ...mockNewsletter,
         tags: [],
       };
 
-      render(<NewsletterCard {...defaultProps} newsletter={newsletterWithoutTags} />);
+      render(
+        <NewsletterCard {...defaultProps} newsletter={newsletterWithoutTags} />,
+      );
 
       // Check that no tag elements are rendered
       const tagElements = screen.queryAllByText(/^(AI\/ML|Tech|Design)$/);
       expect(tagElements).toHaveLength(0);
     });
 
-    it('applies correct tag styling with color', () => {
+    it("applies correct tag styling with color", () => {
       const newsletterWithTags = {
         ...mockNewsletter,
         tags: [
-          { id: 'tag-1', name: 'AI/ML', color: '#3B82F6' },
+          {
+            id: "tag-1",
+            name: "AI/ML",
+            color: "#3B82F6",
+            user_id: "user-1",
+            created_at: "2024-01-01T00:00:00Z",
+          },
         ],
       };
 
-      render(<NewsletterCard {...defaultProps} newsletter={newsletterWithTags} />);
+      render(
+        <NewsletterCard {...defaultProps} newsletter={newsletterWithTags} />,
+      );
 
-      const tagElement = screen.getByText('AI/ML');
+      const tagElement = screen.getByText("AI/ML");
       expect(tagElement).toHaveStyle({
-        backgroundColor: '#3B82F620',
-        color: '#3B82F6',
+        backgroundColor: "#3B82F620",
+        color: "#3B82F6",
       });
     });
   });
 
-  describe('Accessibility', () => {
-    it('has proper button labels for screen readers', () => {
+  describe("Accessibility", () => {
+    it("has proper button labels for screen readers", () => {
       render(<NewsletterCard {...defaultProps} />);
 
-      const queueButton = screen.getByTitle('Add to queue');
-      const archiveButton = screen.getByTitle('Archive');
+      const queueButton = screen.getByTitle("Add to queue");
+      const archiveButton = screen.getByTitle("Archive");
 
-      expect(queueButton).toHaveAttribute('title', 'Add to queue');
-      expect(archiveButton).toHaveAttribute('title', 'Archive');
+      expect(queueButton).toHaveAttribute("title", "Add to queue");
+      expect(archiveButton).toHaveAttribute("title", "Archive");
     });
 
-    it('has alt text for newsletter image', () => {
+    it("has alt text for newsletter image", () => {
       const newsletterWithImage = {
         ...mockNewsletter,
-        image_url: 'https://example.com/image.jpg',
+        image_url: "https://example.com/image.jpg",
       };
 
-      render(<NewsletterCard {...defaultProps} newsletter={newsletterWithImage} />);
+      render(
+        <NewsletterCard {...defaultProps} newsletter={newsletterWithImage} />,
+      );
 
       const image = screen.getByAltText(mockNewsletter.title);
       expect(image).toBeInTheDocument();
     });
   });
 
-  describe('Layout and styling', () => {
-    it('applies hover effects to the card', () => {
+  describe("Layout and styling", () => {
+    it("applies hover effects to the card", () => {
       const { container } = render(<NewsletterCard {...defaultProps} />);
       const card = container.firstChild as HTMLElement;
 
-      expect(card).toHaveClass('hover:shadow-lg');
-      expect(card).toHaveClass('transition-shadow');
+      expect(card).toHaveClass("hover:shadow-lg");
+      expect(card).toHaveClass("transition-shadow");
     });
 
-    it('handles long titles with line clamp', () => {
+    it("handles long titles with line clamp", () => {
       const newsletterWithLongTitle = {
         ...mockNewsletter,
-        title: 'This is a very long newsletter title that should be clamped to prevent layout issues and maintain consistent card heights across the grid',
+        title:
+          "This is a very long newsletter title that should be clamped to prevent layout issues and maintain consistent card heights across the grid",
       };
 
-      render(<NewsletterCard {...defaultProps} newsletter={newsletterWithLongTitle} />);
+      render(
+        <NewsletterCard
+          {...defaultProps}
+          newsletter={newsletterWithLongTitle}
+        />,
+      );
 
       const titleElement = screen.getByText(newsletterWithLongTitle.title);
-      expect(titleElement).toHaveClass('line-clamp-2');
+      expect(titleElement).toHaveClass("line-clamp-2");
     });
 
-    it('uses flexbox layout for proper card structure', () => {
+    it("uses flexbox layout for proper card structure", () => {
       const { container } = render(<NewsletterCard {...defaultProps} />);
       const card = container.firstChild as HTMLElement;
-      const contentDiv = card.querySelector('.p-4');
+      const contentDiv = card.querySelector(".p-4");
 
-      expect(card).toHaveClass('flex', 'flex-col');
-      expect(contentDiv).toHaveClass('flex-1', 'flex', 'flex-col');
+      expect(card).toHaveClass("flex", "flex-col");
+      expect(contentDiv).toHaveClass("flex-1", "flex", "flex-col");
     });
   });
 });

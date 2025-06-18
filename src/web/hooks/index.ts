@@ -7,7 +7,6 @@ export { useSearchKeyboard } from './useSearch';
 export { useSearchUrl } from './useSearch';
 
 // Search filters hook
-export { useSearchFilters } from './useSearchFilters';
 export { default as useSearchFilters } from './useSearchFilters';
 
 // Re-export types

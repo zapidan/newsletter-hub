@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { Newsletter, NewsletterSource } from "@common/types";
+import { NewsletterSource } from "@common/types";
 import {
   searchService,
   SearchFilters,
@@ -236,7 +236,8 @@ export const useSearchSuggestions = (query: string) => {
 
   // Generate suggestions based on query
   const debouncedGenerateSuggestions = useCallback(
-    debounce((searchQuery: string) => {
+    debounce((...args: unknown[]) => {
+      const searchQuery = args[0] as string;
       if (searchQuery.length >= 2) {
         const generatedSuggestions = generateSearchSuggestions(
           searchQuery,

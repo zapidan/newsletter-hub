@@ -203,8 +203,8 @@ export function useInboxUrlParams() {
     tags: {
       defaultValue: [] as string[],
       omitIfDefault: true,
-      serialize: (value: string[]) =>
-        value.length > 0 ? value.join(",") : null,
+      serialize: (value: ParamValue) =>
+        Array.isArray(value) && value.length > 0 ? value.join(",") : null,
       deserialize: (value: string) =>
         value ? value.split(",").filter(Boolean) : [],
     },

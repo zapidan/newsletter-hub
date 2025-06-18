@@ -165,7 +165,10 @@ const NewslettersPage: React.FC = () => {
     setIsUpdating(true);
     setUpdateError(null);
     try {
-      await updateSource(editingId, formData.name);
+      await updateSource({
+        id: editingId,
+        name: formData.name,
+      });
       toast.success("Source updated successfully");
       setShowEditModal(false);
       setEditModalSourceId(null);
@@ -176,7 +179,7 @@ const NewslettersPage: React.FC = () => {
           action: "update_source",
           metadata: { sourceId: editModalSourceId },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       setUpdateError(error as Error);
       toast.error("Failed to update source");
@@ -228,7 +231,7 @@ const NewslettersPage: React.FC = () => {
             action: "delete_group",
             metadata: { groupId },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         toast.error("Failed to delete group");
       }
@@ -302,7 +305,7 @@ const NewslettersPage: React.FC = () => {
         const newsletterIds = newslettersResponse.data.map((nl) => nl.id);
         await bulkArchive(newsletterIds);
       }
-      await archiveNewsletterSource(deleteConfirmId);
+      await setSourceArchiveStatus(deleteConfirmId, true);
       toast.success("Source and its newsletters have been archived");
       if (selectedSourceId === deleteConfirmId) {
         setSelectedSourceId(null);
@@ -312,9 +315,9 @@ const NewslettersPage: React.FC = () => {
         "Failed to archive newsletter source",
         {
           action: "archive_source",
-          metadata: { sourceId },
+          metadata: { deleteConfirmId },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
       const errorMessage =
         error instanceof Error ? error.message : "Failed to archive source";
@@ -690,7 +693,7 @@ const NewslettersPage: React.FC = () => {
             action: "toggle_queue",
             metadata: { newsletterId },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         toast.error("Failed to update queue status");
       } finally {
@@ -727,7 +730,7 @@ const NewslettersPage: React.FC = () => {
             action: "update_tags",
             metadata: { newsletterId, tagCount: tagIds.length },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         // Error handling is already done by shared actions
       } finally {
@@ -769,7 +772,9 @@ const NewslettersPage: React.FC = () => {
                 action: "mark_as_read",
                 metadata: { newsletterId: newsletter.id },
               },
-              readError,
+              readError instanceof Error
+                ? readError
+                : new Error(String(readError)),
             );
           }
         }
@@ -785,7 +790,9 @@ const NewslettersPage: React.FC = () => {
                 action: "archive_newsletter",
                 metadata: { newsletterId: newsletter.id },
               },
-              archiveError,
+              archiveError instanceof Error
+                ? archiveError
+                : new Error(String(archiveError)),
             );
           }
         }
@@ -804,7 +811,7 @@ const NewslettersPage: React.FC = () => {
             action: "newsletter_click",
             metadata: { newsletterId: newsletter.id },
           },
-          error,
+          error instanceof Error ? error : new Error(String(error)),
         );
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`, {
@@ -826,7 +833,9 @@ const NewslettersPage: React.FC = () => {
           action: "load_newsletters",
           metadata: { selectedSourceId, selectedGroupId },
         },
-        errorNewsletters,
+        errorNewsletters instanceof Error
+          ? errorNewsletters
+          : new Error(String(errorNewsletters)),
       );
     }
   }, [errorNewsletters]);
@@ -1467,6 +1476,8 @@ const SourceGroupsList = React.memo(
     isAnyModalOpen: boolean;
     onDeleteGroup: (groupId: string) => void;
   }) => {
+    const log = useLogger();
+
     if (process.env.NODE_ENV === "development") {
       log.debug("Rendering SourceGroupsList", {
         action: "debug_component_render",

@@ -80,7 +80,7 @@ export const CreateSourceGroupModal = ({
             sourceCount: selectedSourceIds.size,
           },
         },
-        error,
+        error instanceof Error ? error : new Error(String(error)),
       );
     }
   };

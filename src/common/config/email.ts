@@ -1,7 +1,13 @@
 import { useLoggerStatic } from "../utils/logger";
 
-// Initialize logger
-const log = useLoggerStatic();
+// Initialize logger lazily
+let log: ReturnType<typeof useLoggerStatic> | null = null;
+const getLogger = () => {
+  if (!log) {
+    log = useLoggerStatic();
+  }
+  return log;
+};
 
 // Email configuration with environment variable support
 const emailConfig = {
@@ -18,7 +24,7 @@ const emailConfig = {
 
 // Validate configuration
 if (!emailConfig.defaultDomain.includes(".")) {
-  log.warn("Invalid default email domain. Using fallback domain.", {
+  getLogger().warn("Invalid default email domain. Using fallback domain.", {
     component: "EmailConfig",
     action: "validate_domain",
     metadata: {

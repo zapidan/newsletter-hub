@@ -1,5 +1,4 @@
 // Search functionality service
-export { searchService } from './searchService';
 export { default as searchService } from './searchService';
 
 // Re-export types
