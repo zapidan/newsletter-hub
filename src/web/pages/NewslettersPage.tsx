@@ -17,10 +17,6 @@ import {
   useNewsletterSourceGroups,
   useReadingQueue,
 } from "@common/hooks";
-import {
-  useUnreadCountsBySource,
-  useTotalCountsBySource,
-} from "@common/hooks/useUnreadCount";
 
 import { newsletterApi } from "@common/api";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
@@ -52,10 +48,6 @@ const NewslettersPage: React.FC = () => {
     null,
   );
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [isLoadingCounts, setIsLoadingCounts] = useState(true);
-  const [sourcesWithCounts, setSourcesWithCounts] = useState<
-    NewsletterSource[]
-  >([]);
 
   // Initialize cache manager for advanced operations
   const cacheManager = useMemo(() => {
@@ -84,27 +76,13 @@ const NewslettersPage: React.FC = () => {
     isArchivingSource,
   } = useNewsletterSources();
 
-  const { unreadCountsBySource } = useUnreadCountsBySource();
-  const { totalCountsBySource } = useTotalCountsBySource();
-
-  useEffect(() => {
-    if (newsletterSources && newsletterSources.length > 0) {
-      setSourcesWithCounts(newsletterSources);
-      setIsLoadingCounts(false);
-    } else if (!isLoadingSources) {
-      setIsLoadingCounts(false);
-    }
-  }, [newsletterSources, isLoadingSources]);
-
   // Performance optimization: Preload newsletter data for popular sources
   useEffect(() => {
-    if (cacheManager && sourcesWithCounts.length > 0) {
+    if (cacheManager && newsletterSources.length > 0) {
       // Preload data for sources with high newsletter counts
-      const popularSources = sourcesWithCounts
+      const popularSources = newsletterSources
         .filter(
-          (source) =>
-            totalCountsBySource[source.id] &&
-            totalCountsBySource[source.id] > 5,
+          (source) => source.newsletter_count && source.newsletter_count > 5,
         )
         .slice(0, 3);
 
@@ -124,7 +102,7 @@ const NewslettersPage: React.FC = () => {
         );
       });
     }
-  }, [cacheManager, sourcesWithCounts, totalCountsBySource]);
+  }, [cacheManager, newsletterSources]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -1181,9 +1159,9 @@ const NewslettersPage: React.FC = () => {
           )}
           {!isLoadingSources &&
             !isErrorSources &&
-            sourcesWithCounts.length > 0 && (
+            newsletterSources.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-2 relative z-50">
-                {sourcesWithCounts.map((source: NewsletterSource) => {
+                {newsletterSources.map((source: NewsletterSource) => {
                   const isEditing = editModalSourceId === source.id;
                   const isDeleting = deleteConfirmId === source.id;
                   // Only show buttons if not editing/deleting any card, or if this is the card being edited/deleted
@@ -1302,22 +1280,21 @@ const NewslettersPage: React.FC = () => {
                         </p>
                       </div>
                       <div className="flex justify-center flex-col gap-1">
-                        {isLoadingCounts ? (
+                        {isLoadingSources ? (
                           <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" />
                         ) : (
                           <>
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {totalCountsBySource[source.id] || 0}{" "}
-                              {(totalCountsBySource[source.id] || 0) === 1
+                              {source.newsletter_count || 0}{" "}
+                              {(source.newsletter_count || 0) === 1
                                 ? "newsletter"
                                 : "newsletters"}
                             </span>
-                            {unreadCountsBySource[source.id] &&
-                              unreadCountsBySource[source.id] > 0 && (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                  {unreadCountsBySource[source.id]} unread
-                                </span>
-                              )}
+                            {source.unread_count && source.unread_count > 0 && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                {source.unread_count} unread
+                              </span>
+                            )}
                           </>
                         )}
                       </div>
@@ -1356,23 +1333,6 @@ const NewslettersPage: React.FC = () => {
                   </button>
                 )}
               </div>
-            </div>
-
-            {/* Debug Info */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
-              <div className="font-medium mb-1">🐛 Debug Info:</div>
-              <div>Selected Source: {selectedSourceId || "None"}</div>
-              <div>Selected Group: {selectedGroupId || "None"}</div>
-              <div>
-                Group Source IDs:{" "}
-                {selectedGroupSourceIds.length > 0
-                  ? selectedGroupSourceIds.join(", ")
-                  : "None"}
-              </div>
-              <div>Fetched Newsletters: {fetchedNewsletters.length}</div>
-              <div>Loading: {isLoadingNewsletters ? "Yes" : "No"}</div>
-              <div>Error: {isErrorNewsletters ? "Yes" : "No"}</div>
-              <div>Filter: {JSON.stringify(newsletterFilter)}</div>
             </div>
 
             {isLoadingNewsletters ? (

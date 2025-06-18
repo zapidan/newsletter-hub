@@ -17,16 +17,7 @@ import {
 const buildNewsletterSourceQuery = (
   params: NewsletterSourceQueryParams = {},
 ) => {
-  // Select clause
-  let selectClause = "*";
-  if (params.includeCount) {
-    selectClause = `
-      *,
-      newsletter_count:newsletters(count).eq(is_archived,false)
-    `;
-  }
-
-  let query = supabase.from("newsletter_sources").select(selectClause);
+  let query = supabase.from("newsletter_sources").select("*");
 
   // Apply filters
   if (params.search) {
@@ -59,12 +50,70 @@ const buildNewsletterSourceQuery = (
   return query;
 };
 
+// Get newsletter counts for sources
+const getNewsletterCountsForSources = async (
+  sourceIds: string[],
+  userId: string,
+): Promise<{
+  totalCounts: Record<string, number>;
+  unreadCounts: Record<string, number>;
+}> => {
+  if (sourceIds.length === 0) {
+    return { totalCounts: {}, unreadCounts: {} };
+  }
+
+  // Get total counts (non-archived newsletters)
+  const { data: totalData, error: totalError } = await supabase
+    .from("newsletters")
+    .select("newsletter_source_id")
+    .eq("user_id", userId)
+    .eq("is_archived", false)
+    .in("newsletter_source_id", sourceIds);
+
+  if (totalError) handleSupabaseError(totalError);
+
+  // Get unread counts
+  const { data: unreadData, error: unreadError } = await supabase
+    .from("newsletters")
+    .select("newsletter_source_id")
+    .eq("user_id", userId)
+    .eq("is_archived", false)
+    .eq("is_read", false)
+    .in("newsletter_source_id", sourceIds);
+
+  if (unreadError) handleSupabaseError(unreadError);
+
+  // Count newsletters by source
+  const totalCounts: Record<string, number> = {};
+  const unreadCounts: Record<string, number> = {};
+
+  totalData?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+    if (newsletter.newsletter_source_id) {
+      totalCounts[newsletter.newsletter_source_id] =
+        (totalCounts[newsletter.newsletter_source_id] || 0) + 1;
+    }
+  });
+
+  unreadData?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+    if (newsletter.newsletter_source_id) {
+      unreadCounts[newsletter.newsletter_source_id] =
+        (unreadCounts[newsletter.newsletter_source_id] || 0) + 1;
+    }
+  });
+
+  return { totalCounts, unreadCounts };
+};
+
 // Transform raw Supabase response to our NewsletterSource type
-const transformNewsletterSourceResponse = (data: any): NewsletterSource => {
+const transformNewsletterSourceResponse = (
+  data: any,
+  totalCount = 0,
+  unreadCount = 0,
+): NewsletterSource => {
   return {
     ...data,
-    newsletter_count:
-      data.newsletter_count?.[0]?.count || data.newsletter_count || 0,
+    newsletter_count: totalCount,
+    unread_count: unreadCount,
     is_archived: data.is_archived || false,
   };
 };
@@ -84,9 +133,26 @@ export const newsletterSourceApi = {
 
       if (error) handleSupabaseError(error);
 
-      const transformedData = (data || []).map(
-        transformNewsletterSourceResponse,
-      );
+      let transformedData: NewsletterSource[];
+
+      if (params.includeCount && data && data.length > 0) {
+        // Get counts for all sources
+        const sourceIds = data.map((source: any) => source.id);
+        const { totalCounts, unreadCounts } =
+          await getNewsletterCountsForSources(sourceIds, user.id);
+
+        transformedData = data.map((source: any) =>
+          transformNewsletterSourceResponse(
+            source,
+            totalCounts[source.id] || 0,
+            unreadCounts[source.id] || 0,
+          ),
+        );
+      } else {
+        transformedData = (data || []).map((source: any) =>
+          transformNewsletterSourceResponse(source),
+        );
+      }
 
       const limit = params.limit || 50;
       const offset = params.offset || 0;
@@ -112,17 +178,9 @@ export const newsletterSourceApi = {
     return withPerformanceLogging("newsletter_sources.getById", async () => {
       const user = await requireAuth();
 
-      let selectClause = "*";
-      if (includeCount) {
-        selectClause = `
-          *,
-          newsletter_count:newsletters(count).eq(is_archived,false)
-        `;
-      }
-
       const { data, error } = await supabase
         .from("newsletter_sources")
-        .select(selectClause)
+        .select("*")
         .eq("id", id)
         .eq("user_id", user.id)
         .single();
@@ -134,7 +192,19 @@ export const newsletterSourceApi = {
         handleSupabaseError(error);
       }
 
-      return data ? transformNewsletterSourceResponse(data) : null;
+      if (!data) return null;
+
+      if (includeCount) {
+        const { totalCounts, unreadCounts } =
+          await getNewsletterCountsForSources([id], user.id);
+        return transformNewsletterSourceResponse(
+          data,
+          totalCounts[id] || 0,
+          unreadCounts[id] || 0,
+        );
+      }
+
+      return transformNewsletterSourceResponse(data);
     });
   },
 
@@ -324,7 +394,7 @@ export const newsletterSourceApi = {
         } else {
           // Transform successful results
           const transformedResults = (data || []).map(
-            transformNewsletterSourceResponse,
+            (source) => transformNewsletterSourceResponse(source),
           );
           ids.forEach((id) => {
             const result = transformedResults.find((r) => r.id === id);
@@ -376,7 +446,7 @@ export const newsletterSourceApi = {
         } else {
           // Transform successful results
           const transformedResults = (data || []).map(
-            transformNewsletterSourceResponse,
+            (source) => transformNewsletterSourceResponse(source),
           );
           ids.forEach((id) => {
             const result = transformedResults.find((r) => r.id === id);
@@ -437,8 +507,8 @@ export const newsletterSourceApi = {
 
         if (error) handleSupabaseError(error);
 
-        const transformedData = (data || []).map(
-          transformNewsletterSourceResponse,
+        const transformedData = (data || []).map((source) =>
+          transformNewsletterSourceResponse(source),
         );
 
         const limit = params.limit || 50;

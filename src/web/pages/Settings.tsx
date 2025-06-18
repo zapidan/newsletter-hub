@@ -36,9 +36,9 @@ const Settings = () => {
   const [voiceSpeed, setVoiceSpeed] = useState("1.0");
   const [copied, setCopied] = useState(false);
 
-  // Fetch newsletter sources
+  // Fetch newsletter sources with counts
   const { newsletterSources, isLoadingSources, setSourceArchiveStatus } =
-    useNewsletterSources({ excludeArchived: true });
+    useNewsletterSources({ excludeArchived: false, includeCount: true });
 
   // Handle archive toggle
   const handleToggleArchive = async (sourceId: string, isArchived: boolean) => {
@@ -441,9 +441,20 @@ const Settings = () => {
                                       ({source.from})
                                     </span>
                                   )}
-                                  <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                                    {source.newsletter_count || 0} newsletters
-                                  </span>
+                                  <div className="ml-2 flex items-center gap-2">
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                      {source.newsletter_count || 0}{" "}
+                                      {(source.newsletter_count || 0) === 1
+                                        ? "newsletter"
+                                        : "newsletters"}
+                                    </span>
+                                    {source.unread_count &&
+                                      source.unread_count > 0 && (
+                                        <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                                          {source.unread_count} unread
+                                        </span>
+                                      )}
+                                  </div>
                                 </div>
                                 <div className="flex items-center">
                                   <button

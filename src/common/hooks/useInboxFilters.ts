@@ -8,7 +8,7 @@ import React, {
 import { useFilters } from "@common/contexts/FilterContext";
 import { useTags } from "@common/hooks/useTags";
 import { useLogger } from "@common/utils/logger/useLogger";
-import type { Tag } from "@common/types";
+import type { Tag, NewsletterSource } from "@common/types";
 import type { TimeRange } from "@web/components/TimeFilter";
 import { useNewsletterSources } from "./useNewsletterSources";
 
@@ -50,7 +50,7 @@ export interface UseInboxFiltersReturn
   newsletterFilter: ReturnType<typeof useFilters>["newsletterFilter"];
   hasActiveFilters: boolean;
   isFilterActive: (filterName: keyof InboxFiltersState) => boolean;
-  newsletterSources: Array<{ id: string; name: string }>;
+  newsletterSources: NewsletterSource[];
   isLoadingTags: boolean;
   isLoadingSources: boolean;
 }
@@ -91,7 +91,9 @@ export const useInboxFilters = (
 
   // Hooks
   const { getTags } = useTags();
-  const { newsletterSources = [], isLoadingSources } = useNewsletterSources();
+  const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
+    includeCount: true,
+  });
 
   // Sync pendingTagUpdates with URL changes
   useEffect(() => {

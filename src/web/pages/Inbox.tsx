@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
 
-import { InboxFilters } from "@web/components/InboxFilters";
+import {
+  InboxFilters,
+  NewsletterSourceWithCount,
+} from "@web/components/InboxFilters";
 import BulkSelectionActions from "@web/components/BulkSelectionActions";
 
 import LoadingScreen from "@common/components/common/LoadingScreen";
@@ -144,6 +147,7 @@ const Inbox: React.FC = memo(() => {
     allTags,
     newsletterSources,
     newsletterFilter,
+    isLoadingSources,
     // Filter actions
     setFilter,
     setSourceFilter,
@@ -152,6 +156,16 @@ const Inbox: React.FC = memo(() => {
     resetFilters,
     handleTagClick,
   } = useInboxFilters();
+
+  // Create sources with unread counts for the filter dropdown
+  const sourcesWithUnreadCounts = useMemo(() => {
+    return newsletterSources.map(
+      (source): NewsletterSourceWithCount => ({
+        ...source,
+        count: source.unread_count || 0,
+      }),
+    );
+  }, [newsletterSources]);
 
   // Newsletter data with infinite scroll
   const {
@@ -730,10 +744,12 @@ const Inbox: React.FC = memo(() => {
               filter={filter}
               sourceFilter={sourceFilter}
               timeRange={timeRange}
-              newsletterSources={newsletterSources}
+              newsletterSources={sourcesWithUnreadCounts}
               onFilterChange={setFilter}
               onSourceFilterChange={setSourceFilter}
               onTimeRangeChange={setTimeRange}
+              isLoadingSources={isLoadingSources}
+              showFilterCounts={true}
             />
             {!isSelecting && (
               <button
