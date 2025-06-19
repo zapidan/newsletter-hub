@@ -1,15 +1,15 @@
+import { Session, User } from "@supabase/supabase-js";
 import {
   createContext,
-  useContext,
-  useState,
-  useEffect,
   useCallback,
+  useContext,
+  useEffect,
   useMemo,
+  useState,
 } from "react";
-import { useSupabase } from "./SupabaseContext";
-import { User, Session } from "@supabase/supabase-js";
 import { verifyAndUpdateEmailAlias } from "../utils/emailAlias";
 import { useLoggerStatic } from "../utils/logger";
+import { useSupabase } from "./SupabaseContext";
 
 type AppUser = User | null;
 
@@ -366,7 +366,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       updatePassword,
       checkPasswordStrength,
     }),
-    [user, session, loading, error, checkPasswordStrength],
+    [user, session, loading, error, checkPasswordStrength, signIn, signUp, signOut, resetPassword, updatePassword],
   );
 
   log.debug("Rendering AuthProvider", {

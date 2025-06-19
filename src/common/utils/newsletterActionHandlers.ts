@@ -1,8 +1,8 @@
+import { readingQueueApi } from "@common/api";
+import type { NewsletterWithRelations } from "@common/types";
 import { toast } from "react-hot-toast";
 import { getCacheManager } from "./cacheUtils";
-import { readingQueueApi } from "@common/api";
 import { logger } from "./logger";
-import type { NewsletterWithRelations } from "@common/types";
 
 export interface NewsletterActionHandlers {
   markAsRead: (id: string) => Promise<void>;
@@ -65,7 +65,7 @@ export class SharedNewsletterActionHandlers {
             operationType,
           );
           optimisticUpdateApplied = true;
-        } catch (optimisticError) {
+        } catch (_) {
           this.log.warn("Failed to apply optimistic update", {
             action: "optimistic_update",
             metadata: {
@@ -106,7 +106,7 @@ export class SharedNewsletterActionHandlers {
             id: newsletterId,
             updates: originalData,
           });
-        } catch (revertError) {
+        } catch (_) {
           this.log.warn("Failed to revert optimistic update", {
             action: "revert_optimistic_update",
             metadata: {
@@ -153,7 +153,7 @@ export class SharedNewsletterActionHandlers {
             newsletterIds.map((id) => ({ id, updates })),
           );
           optimisticUpdateApplied = true;
-        } catch (optimisticError) {
+        } catch (_) {
           this.log.warn("Failed to apply bulk optimistic update", {
             action: "bulk_optimistic_update",
             metadata: {

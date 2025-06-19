@@ -1,15 +1,15 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-} from "react";
 import { useFilters } from "@common/contexts/FilterContext";
 import { useTags } from "@common/hooks/useTags";
+import type { NewsletterSource, Tag } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
-import type { Tag, NewsletterSource } from "@common/types";
 import type { TimeRange } from "@web/components/TimeFilter";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNewsletterSources } from "./useNewsletterSources";
 
 export interface InboxFiltersState {
@@ -46,7 +46,7 @@ export interface UseInboxFiltersOptions {
 
 export interface UseInboxFiltersReturn
   extends InboxFiltersState,
-    InboxFiltersActions {
+  InboxFiltersActions {
   newsletterFilter: ReturnType<typeof useFilters>["newsletterFilter"];
   hasActiveFilters: boolean;
   isFilterActive: (filterName: keyof InboxFiltersState) => boolean;
@@ -159,7 +159,7 @@ export const useInboxFilters = (
           setIsLoadingTags(false);
         });
     }
-  }, [autoLoadTags, getTags]);
+  }, [autoLoadTags, getTags, log]);
 
   // Update visible tags based on current tag selection
   useEffect(() => {
@@ -199,7 +199,7 @@ export const useInboxFilters = (
         setPendingTagUpdates(newTagIds);
       }
     },
-    [allTags],
+    [allTags, log],
   );
 
   // Internal function for handling tag clicks with Tag object
@@ -238,7 +238,7 @@ export const useInboxFilters = (
 
       updateTagDebounced(newTags);
     },
-    [pendingTagUpdates, updateTagDebounced, allTags.length],
+    [pendingTagUpdates, updateTagDebounced, allTags.length, log],
   );
 
   // Handle tag click with toggle logic - matches interface signature

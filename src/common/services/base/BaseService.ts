@@ -113,7 +113,7 @@ export abstract class BaseService {
 
         const delay = Math.min(
           (retryOptions.baseDelay || 1000) *
-            Math.pow(retryOptions.backoffMultiplier || 2, attempt - 1),
+          Math.pow(retryOptions.backoffMultiplier || 2, attempt - 1),
           retryOptions.maxDelay || 30000,
         );
 
@@ -280,8 +280,8 @@ export abstract class BaseService {
 
   protected async executeWithLogging<T>(
     operation: () => Promise<T>,
-    _operationName: string, // eslint-disable-line @typescript-eslint/no-unused-vars
-    _metadata?: Record<string, unknown>, // eslint-disable-line @typescript-eslint/no-unused-vars
+    _operationName: string,
+    _metadata?: Record<string, unknown>,
   ): Promise<T> {
     // Subclasses should implement their own logging
     return await operation();

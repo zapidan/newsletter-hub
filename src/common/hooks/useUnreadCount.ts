@@ -175,7 +175,7 @@ export const useUnreadCount = (sourceId?: string | null) => {
       window.removeEventListener("newsletter:archived", handleNewsletterUpdate);
       window.removeEventListener("newsletter:deleted", handleNewsletterUpdate);
     };
-  }, [user, queryClient]);
+  }, [user, queryClient, queryKey]);
 
   // During initial load, return undefined to hide the counter
   // After initial load, always return the previous count until we have a new stable value

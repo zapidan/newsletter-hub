@@ -1,31 +1,28 @@
-import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Search as SearchIcon,
-  Filter,
-  X,
-  Tag,
-  Archive,
-  Eye,
-  Clock,
-  TrendingUp,
-  Lightbulb,
-} from "lucide-react";
 import { format } from "date-fns";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Archive,
+  Clock,
+  Eye,
+  Filter,
+  Lightbulb,
+  Search as SearchIcon,
+  Tag,
+  TrendingUp,
+  X,
+} from "lucide-react";
+import React from "react";
 
 // Hooks
-import { useSearch } from "../hooks/useSearch";
-import { useSearchSuggestions } from "../hooks/useSearch";
-import { useNewsletterSources } from "../hooks/useSearch";
-import { usePagination } from "../hooks/useSearch";
-import { useSearchKeyboard } from "../hooks/useSearch";
+import { useNewsletterSources, usePagination, useSearch, useSearchKeyboard, useSearchSuggestions } from "../hooks/useSearch";
 
 // Utils
+import { Newsletter, NewsletterSource } from "../../common/index.ts";
 import {
-  highlightSearchTerms,
-  getSearchContext,
-  formatResultsCount,
   formatPaginationInfo,
+  formatResultsCount,
+  getSearchContext,
+  highlightSearchTerms,
 } from "../utils/searchUtils";
 
 // Components
@@ -59,110 +56,110 @@ const SearchInput: React.FC<{
   inputRef,
   suggestionsRef,
 }) => {
-  const { handleKeyDown } = useSearchKeyboard(onSearch, onHideSuggestions);
+    const { handleKeyDown } = useSearchKeyboard(onSearch, onHideSuggestions);
 
-  return (
-    <div className="relative">
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        onFocus={onShowSuggestions}
-        onKeyDown={handleKeyDown}
-        placeholder="Search for topics, newsletters, or keywords..."
-        className="input-field pl-10 py-3 pr-10 text-lg"
-      />
+    return (
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          onFocus={onShowSuggestions}
+          onKeyDown={handleKeyDown}
+          placeholder="Search for topics, newsletters, or keywords..."
+          className="input-field pl-10 py-3 pr-10 text-lg"
+        />
 
-      <SearchIcon
-        size={20}
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
-      />
+        <SearchIcon
+          size={20}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
+        />
 
-      {query && (
-        <button
-          onClick={onClear}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-700"
-          aria-label="Clear search"
-        >
-          <X size={16} />
-        </button>
-      )}
+        {query && (
+          <button
+            onClick={onClear}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-700"
+            aria-label="Clear search"
+          >
+            <X size={16} />
+          </button>
+        )}
 
-      {/* Search Suggestions Dropdown */}
-      <AnimatePresence>
-        {showSuggestions &&
-          (suggestions.length > 0 || recentSearches.length > 0) && (
-            <motion.div
-              ref={suggestionsRef}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
-            >
-              {suggestions.length > 0 && (
-                <div className="p-2">
-                  <div className="text-xs font-medium text-neutral-500 mb-2 px-2">
-                    Suggestions
-                  </div>
-                  {suggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => onSuggestionClick(suggestion)}
-                      className="w-full text-left px-3 py-2 hover:bg-neutral-50 rounded-md text-sm flex items-center"
-                    >
-                      <SearchIcon size={14} className="mr-2 text-neutral-400" />
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {!query && recentSearches.length > 0 && (
-                <div className="p-2 border-t border-neutral-100">
-                  <div className="text-xs font-medium text-neutral-500 mb-2 px-2 flex items-center">
-                    <Clock size={12} className="mr-1" />
-                    Recent Searches
-                  </div>
-                  {recentSearches.slice(0, 5).map((search, index) => (
-                    <button
-                      key={index}
-                      onClick={() => onSuggestionClick(search)}
-                      className="w-full text-left px-3 py-2 hover:bg-neutral-50 rounded-md text-sm flex items-center group"
-                    >
-                      <Clock size={14} className="mr-2 text-neutral-400" />
-                      {search}
+        {/* Search Suggestions Dropdown */}
+        <AnimatePresence>
+          {showSuggestions &&
+            (suggestions.length > 0 || recentSearches.length > 0) && (
+              <motion.div
+                ref={suggestionsRef}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
+              >
+                {suggestions.length > 0 && (
+                  <div className="p-2">
+                    <div className="text-xs font-medium text-neutral-500 mb-2 px-2">
+                      Suggestions
+                    </div>
+                    {suggestions.map((suggestion, index) => (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveRecentSearch(search);
-                        }}
-                        className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-neutral-200 rounded"
+                        key={index}
+                        onClick={() => onSuggestionClick(suggestion)}
+                        className="w-full text-left px-3 py-2 hover:bg-neutral-50 rounded-md text-sm flex items-center"
                       >
-                        <X size={12} />
+                        <SearchIcon size={14} className="mr-2 text-neutral-400" />
+                        {suggestion}
                       </button>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-      </AnimatePresence>
-    </div>
-  );
-};
+                    ))}
+                  </div>
+                )}
+
+                {!query && recentSearches.length > 0 && (
+                  <div className="p-2 border-t border-neutral-100">
+                    <div className="text-xs font-medium text-neutral-500 mb-2 px-2 flex items-center">
+                      <Clock size={12} className="mr-1" />
+                      Recent Searches
+                    </div>
+                    {recentSearches.slice(0, 5).map((search, index) => (
+                      <button
+                        key={index}
+                        onClick={() => onSuggestionClick(search)}
+                        className="w-full text-left px-3 py-2 hover:bg-neutral-50 rounded-md text-sm flex items-center group"
+                      >
+                        <Clock size={14} className="mr-2 text-neutral-400" />
+                        {search}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveRecentSearch(search);
+                          }}
+                          className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-neutral-200 rounded"
+                        >
+                          <X size={12} />
+                        </button>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+        </AnimatePresence>
+      </div>
+    );
+  };
 
 const SearchFilters: React.FC<{
   showFilters: boolean;
-  sources: any[];
+  sources: NewsletterSource[];
   selectedSources: string[];
-  readStatus: string;
+  readStatus: "all" | "read" | "unread";
   archivedStatus: string;
   dateFrom: string;
   dateTo: string;
   onToggleSource: (sourceId: string) => void;
-  onReadStatusChange: (status: any) => void;
-  onArchivedStatusChange: (status: any) => void;
+  onReadStatusChange: (status: "all" | "read" | "unread") => void;
+  onArchivedStatusChange: (status: string) => void;
   onDateFromChange: (date: string) => void;
   onDateToChange: (date: string) => void;
   onClearFilters: () => void;
@@ -181,112 +178,112 @@ const SearchFilters: React.FC<{
   onDateToChange,
   onClearFilters,
 }) => {
-  if (!showFilters) return null;
+    if (!showFilters) return null;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: "auto" }}
-      exit={{ opacity: 0, height: 0 }}
-      className="mt-4 p-4 bg-neutral-50 rounded-lg border"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="font-medium text-neutral-800">Search Filters</h4>
-        <button
-          onClick={onClearFilters}
-          className="text-sm text-neutral-500 hover:text-neutral-700"
-        >
-          Clear all
-        </button>
-      </div>
+    return (
+      <motion.div
+        initial={{ opacity: 0, height: 0 }}
+        animate={{ opacity: 1, height: "auto" }}
+        exit={{ opacity: 0, height: 0 }}
+        className="mt-4 p-4 bg-neutral-50 rounded-lg border"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-medium text-neutral-800">Search Filters</h4>
+          <button
+            onClick={onClearFilters}
+            className="text-sm text-neutral-500 hover:text-neutral-700"
+          >
+            Clear all
+          </button>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Sources */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-2">
-            Sources
-          </label>
-          <div className="max-h-32 overflow-y-auto space-y-1">
-            {sources.map((source) => (
-              <label key={source.id} className="flex items-center text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedSources.includes(source.id)}
-                  onChange={() => onToggleSource(source.id)}
-                  className="mr-2 rounded"
-                />
-                <span className="truncate">{source.name}</span>
-                {typeof source.newsletter_count === "number" && (
-                  <span className="ml-auto text-neutral-400">
-                    ({source.newsletter_count})
-                  </span>
-                )}
-              </label>
-            ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Sources */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Sources
+            </label>
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {sources.map((source) => (
+                <label key={source.id} className="flex items-center text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedSources.includes(source.id)}
+                    onChange={() => onToggleSource(source.id)}
+                    className="mr-2 rounded"
+                  />
+                  <span className="truncate">{source.name}</span>
+                  {typeof source.newsletter_count === "number" && (
+                    <span className="ml-auto text-neutral-400">
+                      ({source.newsletter_count})
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Read Status */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Read Status
+            </label>
+            <select
+              value={readStatus}
+              onChange={(e) => onReadStatusChange(e.target.value)}
+              className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
+            >
+              <option value="all">All newsletters</option>
+              <option value="read">Read only</option>
+              <option value="unread">Unread only</option>
+            </select>
+          </div>
+
+          {/* Archive Status */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Archive Status
+            </label>
+            <select
+              value={archivedStatus}
+              onChange={(e) => onArchivedStatusChange(e.target.value)}
+              className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
+            >
+              <option value="active">Active only</option>
+              <option value="all">All newsletters</option>
+              <option value="archived">Archived only</option>
+            </select>
+          </div>
+
+          {/* Date Range */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Date Range
+            </label>
+            <div className="space-y-1">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => onDateFromChange(e.target.value)}
+                className="w-full px-2 py-1 border border-neutral-300 rounded text-sm"
+                placeholder="From"
+              />
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => onDateToChange(e.target.value)}
+                className="w-full px-2 py-1 border border-neutral-300 rounded text-sm"
+                placeholder="To"
+              />
+            </div>
           </div>
         </div>
-
-        {/* Read Status */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-2">
-            Read Status
-          </label>
-          <select
-            value={readStatus}
-            onChange={(e) => onReadStatusChange(e.target.value)}
-            className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
-          >
-            <option value="all">All newsletters</option>
-            <option value="read">Read only</option>
-            <option value="unread">Unread only</option>
-          </select>
-        </div>
-
-        {/* Archive Status */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-2">
-            Archive Status
-          </label>
-          <select
-            value={archivedStatus}
-            onChange={(e) => onArchivedStatusChange(e.target.value)}
-            className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
-          >
-            <option value="active">Active only</option>
-            <option value="all">All newsletters</option>
-            <option value="archived">Archived only</option>
-          </select>
-        </div>
-
-        {/* Date Range */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-2">
-            Date Range
-          </label>
-          <div className="space-y-1">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => onDateFromChange(e.target.value)}
-              className="w-full px-2 py-1 border border-neutral-300 rounded text-sm"
-              placeholder="From"
-            />
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => onDateToChange(e.target.value)}
-              className="w-full px-2 py-1 border border-neutral-300 rounded text-sm"
-              placeholder="To"
-            />
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
+      </motion.div>
+    );
+  };
 
 const SearchResults: React.FC<{
-  results: any[];
+  results: Newsletter[];
   query: string;
   loading: boolean;
   onResultClick: (id: string) => void;
@@ -326,9 +323,8 @@ const SearchResults: React.FC<{
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.1, duration: 0.3 }}
-          className={`card cursor-pointer hover:shadow transition-all ${
-            clickedIds.has(result.id) ? "opacity-50 pointer-events-none" : ""
-          }`}
+          className={`card cursor-pointer hover:shadow transition-all ${clickedIds.has(result.id) ? "opacity-50 pointer-events-none" : ""
+            }`}
           onClick={() => handleResultClick(result.id)}
         >
           <div className="p-4">
@@ -452,11 +448,10 @@ const PaginationControls: React.FC<{
         <button
           onClick={pagination.goToPrevious}
           disabled={!pagination.hasPrevious}
-          className={`${
-            pagination.hasPrevious
-              ? "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-300"
-              : "bg-neutral-100 text-neutral-400 cursor-not-allowed"
-          } px-3 py-2 text-sm font-medium border rounded-md transition-colors`}
+          className={`${pagination.hasPrevious
+            ? "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-300"
+            : "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+            } px-3 py-2 text-sm font-medium border rounded-md transition-colors`}
         >
           Previous
         </button>
@@ -478,11 +473,10 @@ const PaginationControls: React.FC<{
               <button
                 key={pageNum}
                 onClick={() => pagination.goToPage(pageNum)}
-                className={`${
-                  pageNum === currentPage
-                    ? "bg-primary-500 text-white border-primary-500"
-                    : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-300"
-                } px-3 py-2 text-sm font-medium border rounded-md transition-colors`}
+                className={`${pageNum === currentPage
+                  ? "bg-primary-500 text-white border-primary-500"
+                  : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-300"
+                  } px-3 py-2 text-sm font-medium border rounded-md transition-colors`}
               >
                 {pageNum}
               </button>
@@ -493,11 +487,10 @@ const PaginationControls: React.FC<{
         <button
           onClick={pagination.goToNext}
           disabled={!pagination.hasMore}
-          className={`${
-            pagination.hasMore
-              ? "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-300"
-              : "bg-neutral-100 text-neutral-400 cursor-not-allowed"
-          } px-3 py-2 text-sm font-medium border rounded-md transition-colors`}
+          className={`${pagination.hasMore
+            ? "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-300"
+            : "bg-neutral-100 text-neutral-400 cursor-not-allowed"
+            } px-3 py-2 text-sm font-medium border rounded-md transition-colors`}
         >
           Next
         </button>
@@ -718,8 +711,7 @@ const Search: React.FC = () => {
               <>
                 {formatResultsCount(totalCount, hasFiltersApplied)}
                 {filters.selectedSources.length > 0 &&
-                  ` • ${filters.selectedSources.length} source${
-                    filters.selectedSources.length !== 1 ? "s" : ""
+                  ` • ${filters.selectedSources.length} source${filters.selectedSources.length !== 1 ? "s" : ""
                   } selected`}
               </>
             )}
@@ -729,11 +721,10 @@ const Search: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`${
-                showFilters || hasFiltersApplied
-                  ? "bg-primary-100 text-primary-600"
-                  : "bg-neutral-100 text-neutral-600 hover:text-neutral-800"
-              } px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center`}
+              className={`${showFilters || hasFiltersApplied
+                ? "bg-primary-100 text-primary-600"
+                : "bg-neutral-100 text-neutral-600 hover:text-neutral-800"
+                } px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center`}
             >
               <Filter size={14} className="mr-1" />
               Filters
@@ -742,11 +733,10 @@ const Search: React.FC = () => {
             <button
               onClick={handleSearch}
               disabled={!query.trim() || loading}
-              className={`${
-                query.trim() && !loading
-                  ? "bg-primary-500 hover:bg-primary-600 text-white"
-                  : "bg-neutral-200 text-neutral-500 cursor-not-allowed"
-              } px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center`}
+              className={`${query.trim() && !loading
+                ? "bg-primary-500 hover:bg-primary-600 text-white"
+                : "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                } px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center`}
             >
               {loading ? (
                 <>

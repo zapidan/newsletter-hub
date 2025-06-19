@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useLogger } from "@common/utils/logger/useLogger";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import { newsletterApi } from "../../api/newsletterApi";
+import { useAuth } from "../../contexts/AuthContext";
 import { NewsletterWithRelations } from "../../types";
 import { NewsletterFilter } from "../../types/cache";
-import { newsletterApi } from "../../api/newsletterApi";
 import { queryKeyFactory } from "../../utils/queryKeyFactory";
-import { useAuth } from "../../contexts/AuthContext";
-import { useLogger } from "@common/utils/logger/useLogger";
 
 export interface UseInfiniteNewslettersOptions {
   enabled?: boolean;
@@ -173,7 +173,7 @@ export const useInfiniteNewsletters = (
     }
 
     return allNewsletters;
-  }, [data?.pages, debug]);
+  }, [data?.pages, debug, log]);
 
   // Calculate metadata
   const totalCount = data?.pages[0]?.count || 0;
@@ -211,6 +211,7 @@ export const useInfiniteNewsletters = (
     debug,
     newsletters.length,
     totalCount,
+    log,
   ]);
 
   // Enhanced refetch with debug logging
@@ -227,7 +228,7 @@ export const useInfiniteNewsletters = (
 
     setCurrentPage(1);
     return refetch();
-  }, [refetch, debug, filters, newsletters.length]);
+  }, [refetch, debug, filters, newsletters.length, log]);
 
   return {
     newsletters,

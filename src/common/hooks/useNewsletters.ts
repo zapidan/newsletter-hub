@@ -1,28 +1,28 @@
-import { useCallback, useMemo } from "react";
 import {
-  useQuery,
-  useMutation,
+  MutateOptions,
   QueryObserverResult,
   RefetchOptions,
   UseMutateAsyncFunction,
-  MutateOptions,
+  useMutation,
+  useQuery,
 } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 
+import { useLogger } from "@common/utils/logger/useLogger";
 import { newsletterApi } from "../api/newsletterApi";
 import { readingQueueApi } from "../api/readingQueueApi";
 import { useAuth } from "../contexts/AuthContext";
 import { NewsletterWithRelations, ReadingQueueItem } from "../types";
 import { PaginatedResponse } from "../types/api";
 import type { NewsletterFilter } from "../types/cache";
+import {
+  cancelQueries,
+  getCacheManager,
+  getQueryData,
+  SimpleCacheManager,
+} from "../utils/cacheUtils";
 import { queryKeyFactory } from "../utils/queryKeyFactory";
 import { updateNewsletterTags } from "../utils/tagUtils";
-import {
-  getCacheManager,
-  SimpleCacheManager,
-  getQueryData,
-  cancelQueries,
-} from "../utils/cacheUtils";
-import { useLogger } from "@common/utils/logger/useLogger";
 
 type PreviousNewslettersState = {
   previousNewsletters?: NewsletterWithRelations[];
@@ -761,7 +761,7 @@ export const useNewsletters = (
           ),
       });
 
-      const queryData = getQueryData<any>(queryKey);
+      const queryData = getQueryData<PaginatedResponse<NewsletterWithRelations>>(queryKey);
       const previousNewsletters = queryData?.data || [];
 
       // Find the current newsletter to get its like status
@@ -795,7 +795,7 @@ export const useNewsletters = (
         }
       }
     },
-    onSettled: (_data, _error, _id) => {
+    onSettled: () => {
       // No cache invalidation needed to preserve filter state
     },
   });
@@ -825,7 +825,7 @@ export const useNewsletters = (
       });
 
       // Get the current newsletter list data to understand the current filter context
-      const queryData = getQueryData<any>(queryKey);
+      const queryData = getQueryData<PaginatedResponse<NewsletterWithRelations>>(queryKey);
       const previousNewsletters = Array.isArray(queryData?.data)
         ? queryData.data
         : Array.isArray(queryData)
@@ -850,7 +850,7 @@ export const useNewsletters = (
 
       if (shouldRemoveFromView) {
         // Remove the newsletter from the current filtered view immediately
-        cacheManager.queryClient.setQueryData(queryKey, (oldData: any) => {
+        cacheManager.queryClient.setQueryData(queryKey, (oldData: PaginatedResponse<NewsletterWithRelations>) => {
           if (!oldData || !oldData.data || !Array.isArray(oldData.data))
             return oldData;
 
@@ -887,7 +887,7 @@ export const useNewsletters = (
       if (context?.previousNewsletters && context?.newsletter) {
         if (context.shouldRemoveFromView) {
           // Restore the newsletter to the list if it was removed
-          cacheManager.queryClient.setQueryData(queryKey, (oldData: any) => {
+          cacheManager.queryClient.setQueryData(queryKey, (oldData: PaginatedResponse<NewsletterWithRelations>) => {
             if (!oldData || !oldData.data || !Array.isArray(oldData.data))
               return oldData;
 
@@ -949,7 +949,7 @@ export const useNewsletters = (
         predicate: createSafePredicate(ids),
       });
 
-      const queryData = getQueryData<any>(queryKey);
+      const queryData = getQueryData<PaginatedResponse<NewsletterWithRelations>>(queryKey);
       const previousNewsletters = Array.isArray(queryData?.data)
         ? queryData.data
         : Array.isArray(queryData)
@@ -1014,7 +1014,7 @@ export const useNewsletters = (
         predicate: createSafePredicate(ids),
       });
 
-      const queryData = getQueryData<any>(queryKey);
+      const queryData = getQueryData<PaginatedResponse<NewsletterWithRelations>>(queryKey);
       const previousNewsletters = Array.isArray(queryData?.data)
         ? queryData.data
         : Array.isArray(queryData)

@@ -2,9 +2,9 @@ name: Test Suite
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   schedule:
     # Run tests daily at 2 AM UTC
     - cron: '0 2 * * *'
@@ -54,8 +54,8 @@ jobs:
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
     permissions:
       contents: read
-      pull-requests: write  # Required for posting linting results
-      checks: write        # Required for creating check runs
+      pull-requests: write # Required for posting linting results
+      checks: write # Required for creating check runs
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -96,10 +96,10 @@ jobs:
           VALIDATE_ALL_CODEBASE: true
           VALIDATE_JAVASCRIPT_ES: false
           VALIDATE_TYPESCRIPT_ES: false
-          JAVASCRIPT_ES_LINTER: "eslint"
-          TYPESCRIPT_ES_LINTER: "eslint"
-          JAVASCRIPT_ES_FILE_EXTENSIONS: ".js,.jsx"
-          TYPESCRIPT_ES_FILE_EXTENSIONS: ".ts,.tsx"
+          JAVASCRIPT_ES_LINTER: 'eslint'
+          TYPESCRIPT_ES_LINTER: 'eslint'
+          JAVASCRIPT_ES_FILE_EXTENSIONS: '.js,.jsx'
+          TYPESCRIPT_ES_FILE_EXTENSIONS: '.ts,.tsx'
           LOG_LEVEL: WARN
           DISABLE_ERRORS: false
           FILTER_REGEX_EXCLUDE: 'node_modules/.*|.github/.*|.git/.*'
@@ -178,6 +178,19 @@ jobs:
         with:
           name: Integration Tests (Node ${{ matrix.node-version }})
           path: 'test-results/integration-results.xml'
+          reporter: jest-junit
+
+      - name: Run smoke tests
+        run: pnpm test:smoke
+        env:
+          NODE_ENV: test
+
+      - name: Upload smoke test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Smoke Tests (Node ${{ matrix.node-version }})
+          path: 'test-results/smoke-results.xml'
           reporter: jest-junit
 
   # End-to-End Tests

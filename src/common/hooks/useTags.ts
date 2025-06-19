@@ -58,7 +58,7 @@ export const useTags = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, log]);
 
   // Create a new tag
   const createTag = useCallback(
@@ -103,7 +103,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall, log],
   );
 
   // Update an existing tag
@@ -152,7 +152,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall, log],
   );
 
   // Delete a tag
@@ -211,7 +211,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall, log],
   );
 
   // Get tags for a specific newsletter
@@ -241,7 +241,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user],
+    [user, log],
   );
 
   // Update tags for a newsletter
@@ -294,7 +294,7 @@ export const useTags = () => {
         setLoading(false);
       }
     },
-    [user, cacheManager, safeCacheCall],
+    [user, cacheManager, safeCacheCall, log],
   );
 
   return {

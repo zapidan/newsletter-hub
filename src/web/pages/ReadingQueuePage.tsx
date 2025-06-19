@@ -160,7 +160,7 @@ const ReadingQueuePage: React.FC = () => {
     };
 
     loadTags();
-  }, [getTags, readingQueue]);
+  }, [getTags, readingQueue, log, user?.id]);
 
   // Check if a newsletter is in the reading queue
   const isInQueue = useCallback(
@@ -221,7 +221,7 @@ const ReadingQueuePage: React.FC = () => {
         toast.error("Failed to update reading queue");
       }
     },
-    [readingQueue, isInQueue, removeFromQueue, cacheManager],
+    [readingQueue, isInQueue, removeFromQueue, cacheManager, log, user?.id],
   );
 
   const [sortByDate, setSortByDate] = useState(false);
@@ -288,7 +288,7 @@ const ReadingQueuePage: React.FC = () => {
         );
       }
     },
-    [handleMarkAsRead, handleMarkAsUnread, validQueueItems, cacheManager],
+    [handleMarkAsRead, handleMarkAsUnread, validQueueItems, cacheManager, log, user?.id],
   );
 
   // Handle newsletter click with proper navigation state
@@ -344,7 +344,7 @@ const ReadingQueuePage: React.FC = () => {
         });
       }
     },
-    [navigate, handleToggleRead],
+    [navigate, handleToggleRead, log, user?.id],
   );
 
   // Handle error state with toast notifications
@@ -401,7 +401,7 @@ const ReadingQueuePage: React.FC = () => {
         }
       }
     },
-    [validQueueItems, reorderQueue],
+    [validQueueItems, reorderQueue, log, user?.id],
   );
 
   // Handle toggling like status with shared actions
@@ -445,7 +445,7 @@ const ReadingQueuePage: React.FC = () => {
         );
       }
     },
-    [handleToggleLike, validQueueItems, cacheManager],
+    [handleToggleLike, validQueueItems, cacheManager, log, user?.id],
   );
 
   // Handle toggling archive status with shared actions
@@ -479,7 +479,7 @@ const ReadingQueuePage: React.FC = () => {
         );
       }
     },
-    [handleToggleArchive, validQueueItems, cacheManager],
+    [handleToggleArchive, validQueueItems, cacheManager, log, user?.id],
   );
 
   // Toggle sort mode between manual and date
@@ -606,11 +606,10 @@ const ReadingQueuePage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={toggleSortMode}
-              className={`px-3 py-1 text-sm rounded-md ${
-                sortByDate
-                  ? "bg-blue-100 text-blue-700"
-                  : "bg-gray-100 text-gray-700"
-              }`}
+              className={`px-3 py-1 text-sm rounded-md ${sortByDate
+                ? "bg-blue-100 text-blue-700"
+                : "bg-gray-100 text-gray-700"
+                }`}
             >
               {sortByDate ? "Sort by Position" : "Sort by Date"}
             </button>
@@ -675,7 +674,7 @@ const ReadingQueuePage: React.FC = () => {
                   }}
                   onToggleArchive={handleToggleArchiveAction}
                   onToggleQueue={toggleInQueue}
-                  onTrash={() => {}}
+                  onTrash={() => { }}
                   onNewsletterClick={(newsletter) => {
                     // Convert back to NewsletterWithRelations for handleNewsletterClick
                     const newsletterWithRelations = {
@@ -749,9 +748,9 @@ const ReadingQueuePage: React.FC = () => {
                           // Show success message with details
                           const message = [
                             result.added > 0 &&
-                              `${result.added} tag${result.added !== 1 ? "s" : ""} added`,
+                            `${result.added} tag${result.added !== 1 ? "s" : ""} added`,
                             result.removed > 0 &&
-                              `${result.removed} tag${result.removed !== 1 ? "s" : ""} removed`,
+                            `${result.removed} tag${result.removed !== 1 ? "s" : ""} removed`,
                           ]
                             .filter(Boolean)
                             .join(", ");

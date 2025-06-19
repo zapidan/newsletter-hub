@@ -186,7 +186,7 @@ export const useSearch = () => {
     if (initialQuery) {
       performSearch(initialQuery, filters, initialPage);
     }
-  }, [initialQuery, initialPage]); // Only run on mount
+  }, [initialQuery, initialPage, filters, performSearch]); // Only run on mount
 
   return {
     // State

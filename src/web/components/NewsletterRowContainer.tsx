@@ -1,9 +1,9 @@
-import React, { useCallback, useMemo } from "react";
-import { NewsletterWithRelations, Tag } from "@common/types";
 import { useNewsletterOperations } from "@common/hooks/business/useNewsletterOperations";
 import { useTagOperations } from "@common/hooks/business/useTagOperations";
 import { useNewsletterRowState } from "@common/hooks/ui/useNewsletterRowState";
+import { NewsletterWithRelations, Tag } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
+import React, { useCallback, useMemo } from "react";
 import NewsletterRowPresentation from "./NewsletterRowPresentation";
 
 interface NewsletterRowContainerProps {
@@ -108,7 +108,7 @@ const NewsletterRowContainer: React.FC<NewsletterRowContainerProps> = ({
     } finally {
       rowState.setLoadingState('like', false);
     }
-  }, [newsletter.id, newsletterOps.toggleLike, rowState]);
+  }, [newsletter.id, newsletterOps, rowState]);
 
   const handleToggleArchive = useCallback(async () => {
     if (!rowState.canInteract) return;
@@ -119,7 +119,7 @@ const NewsletterRowContainer: React.FC<NewsletterRowContainerProps> = ({
     } finally {
       rowState.setLoadingState('archive', false);
     }
-  }, [newsletter.id, newsletterOps.toggleArchive, rowState]);
+  }, [newsletter.id, newsletterOps, rowState]);
 
   const handleToggleRead = useCallback(async () => {
     if (!rowState.canInteract) return;
@@ -134,9 +134,9 @@ const NewsletterRowContainer: React.FC<NewsletterRowContainerProps> = ({
     } finally {
       rowState.setLoadingState('read', false);
     }
-  }, [newsletter.id, newsletter.is_read, newsletterOps.markAsRead, newsletterOps.markAsUnread, rowState]);
+  }, [newsletter.id, newsletter.is_read, newsletterOps, rowState]);
 
-  const handleTrash = useCallback((id: string) => {
+  const handleTrash = useCallback(() => {
     // For now, just archive the newsletter
     // In the future, this could move to trash/deleted state
     handleToggleArchive();
@@ -155,7 +155,7 @@ const NewsletterRowContainer: React.FC<NewsletterRowContainerProps> = ({
     } finally {
       rowState.setLoadingState('queue', false);
     }
-  }, [newsletter.id, isInReadingQueue, newsletterOps.addToQueue, newsletterOps.removeFromQueue, rowState]);
+  }, [newsletter.id, isInReadingQueue, newsletterOps, rowState]);
 
   const handleUpdateTags = useCallback(
     async (tagIds: string[]) => {
@@ -176,7 +176,7 @@ const NewsletterRowContainer: React.FC<NewsletterRowContainerProps> = ({
         rowState.setLoadingState('tags', false);
       }
     },
-    [newsletter.id, tagOps.updateNewsletterTags, rowState]
+    [newsletter.id, tagOps, rowState]
   );
 
   // Computed loading states for backward compatibility

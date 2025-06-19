@@ -63,7 +63,7 @@ export function useEmailAlias() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, log]);
 
   // Copy email alias to clipboard
   const copyToClipboard = useCallback(async () => {
@@ -85,7 +85,7 @@ export function useEmailAlias() {
       );
       return false;
     }
-  }, [emailAlias]);
+  }, [emailAlias, log]);
 
   // Initial fetch of email alias
   useEffect(() => {

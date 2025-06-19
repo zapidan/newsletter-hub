@@ -1,19 +1,19 @@
-import {
-  supabase,
-  handleSupabaseError,
-  requireAuth,
-  withPerformanceLogging,
-} from "./supabaseClient";
 import { NewsletterWithRelations, Tag } from "../types";
 import {
-  NewsletterQueryParams,
-  CreateNewsletterParams,
-  UpdateNewsletterParams,
-  BulkUpdateNewsletterParams,
-  PaginatedResponse,
   BatchResult,
+  BulkUpdateNewsletterParams,
+  CreateNewsletterParams,
+  NewsletterQueryParams,
+  PaginatedResponse,
+  UpdateNewsletterParams,
 } from "../types/api";
 import { logger } from "../utils/logger";
+import {
+  handleSupabaseError,
+  requireAuth,
+  supabase,
+  withPerformanceLogging,
+} from "./supabaseClient";
 
 // Initialize logger
 const log = logger;
@@ -68,20 +68,20 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Transform tags if they exist
   const transformedTags: Tag[] = Array.isArray(data.tags)
     ? data.tags
-        .map((t: { tag: any }) => {
-          if (t.tag && typeof t.tag === "object") {
-            return {
-              id: t.tag.id as string,
-              name: t.tag.name as string,
-              color: t.tag.color as string,
-              user_id: t.tag.user_id as string,
-              created_at: t.tag.created_at as string,
-              newsletter_count: t.tag.newsletter_count as number | undefined,
-            } as Tag;
-          }
-          return null;
-        })
-        .filter((tag: Tag | null): tag is Tag => tag !== null)
+      .map((t: { tag: any }) => {
+        if (t.tag && typeof t.tag === "object") {
+          return {
+            id: t.tag.id as string,
+            name: t.tag.name as string,
+            color: t.tag.color as string,
+            user_id: t.tag.user_id as string,
+            created_at: t.tag.created_at as string,
+            newsletter_count: t.tag.newsletter_count as number | undefined,
+          } as Tag;
+        }
+        return null;
+      })
+      .filter((tag: Tag | null): tag is Tag => tag !== null)
     : [];
 
   const result: NewsletterWithRelations = {
@@ -300,11 +300,11 @@ export const newsletterApi = {
           sourceIds: params.sourceIds || null,
           firstItem: data?.[0]
             ? {
-                id: (data[0] as any).id,
-                title: (data[0] as any).title,
-                sourceId: (data[0] as any).newsletter_source_id,
-                hasSource: !!(data[0] as any).source,
-              }
+              id: (data[0] as any).id,
+              title: (data[0] as any).title,
+              sourceId: (data[0] as any).newsletter_source_id,
+              hasSource: !!(data[0] as any).source,
+            }
             : null,
         },
       });

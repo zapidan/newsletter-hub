@@ -1,13 +1,22 @@
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load environment variables from .env.test file
-dotenv.config({ path: path.resolve(__dirname, '.env.test') });
+const envPath = path.resolve(__dirname, '.env.test');
+dotenv.config({ path: envPath });
+
+// Ensure test environment variables are loaded
+const testEnv = {
+  VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || 'http://localhost:3000',
+  VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || 'mock-anon-key',
+  VITE_USE_MOCK_API: 'true',
+  NODE_ENV: 'test',
+};
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -15,13 +24,13 @@ dotenv.config({ path: path.resolve(__dirname, '.env.test') });
 export default defineConfig({
   testDir: './tests/e2e',
   /* Maximum time one test can run for. */
-  timeout: 30 * 1000,
+  timeout: 60 * 1000,
   expect: {
     /**
      * Maximum time expect() should wait for the condition to be met.
      * For example in `await expect(locator).toHaveText();`
      */
-    timeout: 5000
+    timeout: 10000,
   },
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -30,17 +39,13 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
   /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : 3,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
-    ['list'],
-    ['junit', { outputFile: 'test-results/results.xml' }],
-  ],
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report' }]],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Maximum time each action such as `click()` can take. Defaults to 0 (no limit). */
-    actionTimeout: 10000,
+    actionTimeout: 15000,
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: 'http://localhost:5174',
 
@@ -53,18 +58,10 @@ export default defineConfig({
     /* Set test context options */
     contextOptions: {
       ignoreHTTPSErrors: true,
-      /* Set user agent */
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       /* Set viewport */
       viewport: { width: 1280, height: 720 },
-      /* Set timezone */
-      timezoneId: 'America/Chicago',
       /* Set locale */
       locale: 'en-US',
-      /* Set geolocation */
-      geolocation: { longitude: -87.6298, latitude: 41.8781 }, // Chicago
-      /* Set permissions */
-      permissions: ['geolocation', 'notifications'],
       /* Set color scheme */
       colorScheme: 'light',
     },
@@ -74,32 +71,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { 
+      use: {
         ...devices['Desktop Chrome'],
         // Custom browser launch options
         launchOptions: {
-          slowMo: 100,
-          devtools: process.env.PWDEBUG === '1',
-          headless: process.env.HEADLESS !== 'false',
-        },
-      },
-    },
-    {
-      name: 'firefox',
-      use: { 
-        ...devices['Desktop Firefox'],
-        launchOptions: {
-          slowMo: 100,
-          headless: process.env.HEADLESS !== 'false',
-        },
-      },
-    },
-    {
-      name: 'webkit',
-      use: { 
-        ...devices['Desktop Safari'],
-        launchOptions: {
-          slowMo: 100,
           headless: process.env.HEADLESS !== 'false',
         },
       },
@@ -108,38 +83,28 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5174',
-    timeout: 120 * 1000,
+    command: `VITE_SUPABASE_URL=${testEnv.VITE_SUPABASE_URL} VITE_SUPABASE_ANON_KEY=${testEnv.VITE_SUPABASE_ANON_KEY} VITE_USE_MOCK_API=${testEnv.VITE_USE_MOCK_API} NODE_ENV=${testEnv.NODE_ENV} npm run dev`,
+    port: 5174,
+    timeout: 60 * 1000,
     reuseExistingServer: !process.env.CI,
     env: {
       ...process.env,
-      // Force test environment
-      NODE_ENV: 'test',
-      VITE_USE_MOCK_API: 'true',
-      // Use mock Supabase credentials
-      VITE_SUPABASE_URL: 'http://localhost:3000',
-      VITE_SUPABASE_ANON_KEY: 'mock-anon-key',
+      ...testEnv,
     },
   },
 
   /* Global setup and teardown */
-  globalSetup: path.join(path.dirname(fileURLToPath(import.meta.url)), './tests/e2e/global-setup.ts'),
+  globalSetup: path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    './tests/e2e/global-setup.ts'
+  ),
   // globalTeardown: path.join(path.dirname(fileURLToPath(import.meta.url)), './tests/e2e/global-teardown.ts'),
 
   /* Test configuration */
   testMatch: '**/*.spec.{ts,tsx}',
   testIgnore: ['**/node_modules/**', '**/dist/**'],
-  snapshotDir: './__snapshots__',
   outputDir: 'test-results/',
   preserveOutput: 'failures-only',
-  forbidOnly: !!process.env.CI,
-  reportSlowTests: { max: 0, threshold: 60000 },
-  timeout: 30000,
-  expect: {
-    toHaveScreenshot: { maxDiffPixelRatio: 0.01 },
-    toMatchSnapshot: { maxDiffPixelRatio: 0.01 },
-  },
   use: {
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',

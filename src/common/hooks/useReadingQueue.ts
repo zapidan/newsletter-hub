@@ -1,13 +1,13 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { updateNewsletterTags } from "@common/utils/tagUtils";
-import { AuthContext } from "@common/contexts/AuthContext";
-import { useContext, useCallback, useMemo, useRef } from "react";
-import type { ReadingQueueItem } from "@common/types";
-import { queryKeyFactory } from "../utils/queryKeyFactory";
-import { getCacheManagerSafe } from "../utils/cacheUtils";
-import { readingQueueApi } from "@common/api/readingQueueApi";
 import { newsletterApi } from "@common/api/newsletterApi";
+import { readingQueueApi } from "@common/api/readingQueueApi";
+import { AuthContext } from "@common/contexts/AuthContext";
+import type { ReadingQueueItem } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
+import { updateNewsletterTags } from "@common/utils/tagUtils";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useCallback, useContext, useMemo, useRef } from "react";
+import { getCacheManagerSafe } from "../utils/cacheUtils";
+import { queryKeyFactory } from "../utils/queryKeyFactory";
 
 export const useReadingQueue = () => {
   const auth = useContext(AuthContext);
@@ -50,7 +50,7 @@ export const useReadingQueue = () => {
       });
       performanceTimers.current.delete(operation);
     }
-  }, []);
+  }, [log]);
 
   // Helper function to fetch reading queue
   const fetchReadingQueue = useCallback(async (): Promise<
@@ -97,7 +97,7 @@ export const useReadingQueue = () => {
       // For other errors, return empty array to prevent UI breaks
       return [];
     }
-  }, []);
+  }, [log, user?.id]);
 
   // Query for reading queue
   const {

@@ -1,10 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { useContext, useCallback, useMemo } from "react";
-import { supabase } from "@common/services/supabaseClient";
 import { AuthContext } from "@common/contexts/AuthContext";
+import { supabase } from "@common/services/supabaseClient";
 import { NewsletterWithRelations } from "@common/types";
-import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { useLogger } from "@common/utils/logger/useLogger";
 import {
   getCacheManagerSafe,
   getQueriesData,
@@ -12,6 +8,10 @@ import {
   getQueryState,
   prefetchQuery,
 } from "@common/utils/cacheUtils";
+import { useLogger } from "@common/utils/logger/useLogger";
+import { queryKeyFactory } from "@common/utils/queryKeyFactory";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useContext, useMemo } from "react";
 
 export interface UseNewsletterDetailOptions {
   enabled?: boolean;
@@ -159,7 +159,7 @@ export const useNewsletterDetail = (
       };
 
       return transformedData;
-    }, [user, newsletterId]);
+    }, [user, newsletterId, log]);
 
   // Main query for newsletter detail
   const query = useQuery({
@@ -346,7 +346,7 @@ export const useNewsletterDetail = (
     // Execute all prefetch operations
     try {
       await Promise.allSettled(prefetchPromises);
-    } catch (error) {
+    } catch (_) {
       log.warn("Some prefetch operations failed", {
         action: "prefetch_operations",
         metadata: {
@@ -357,7 +357,7 @@ export const useNewsletterDetail = (
       });
       // Don't throw - prefetching failures shouldn't break the main functionality
     }
-  }, [query.data, user, prefetchTags, prefetchSource]);
+  }, [query.data, user, prefetchTags, prefetchSource, log, newsletterId]);
 
   // Enhanced refetch that also updates cache manager
   const refetch = useCallback(() => {
@@ -452,7 +452,7 @@ export const usePrefetchNewsletterDetail = () => {
             gcTime: priority ? 60 * 60 * 1000 : 30 * 60 * 1000,
           },
         );
-      } catch (error) {
+      } catch (_) {
         log.warn("Failed to prefetch newsletter", {
           action: "prefetch_newsletter",
           metadata: { newsletterId },

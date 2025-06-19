@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useLogger } from "@common/utils/logger/useLogger";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type LoadingState = "idle" | "loading" | "success" | "error";
 
@@ -109,7 +109,7 @@ export const useLoadingStates = (
         const currentInfo = prev[key];
         const now = new Date();
 
-        let newInfo: LoadingStateInfo = {
+        const newInfo: LoadingStateInfo = {
           state: newState,
           startTime: newState === "loading" ? now : currentInfo?.startTime,
           endTime: newState !== "loading" ? now : undefined,
@@ -157,7 +157,7 @@ export const useLoadingStates = (
         return updatedStates;
       });
     },
-    [trackTiming, maxHistorySize, enableDebug, onStateChange],
+    [trackTiming, maxHistorySize, enableDebug, onStateChange, log],
   );
 
   // State queries
@@ -244,7 +244,7 @@ export const useLoadingStates = (
 
   const reset = useCallback((key: string) => {
     setStates((prev) => {
-      const { [key]: removed, ...rest } = prev;
+      const { ...rest } = prev;
       return rest;
     });
 
@@ -342,9 +342,9 @@ export const useLoadingStates = (
     const averageDuration =
       completedOperations.length > 0
         ? completedOperations.reduce(
-            (sum, entry) => sum + (entry.info.duration || 0),
-            0,
-          ) / completedOperations.length
+          (sum, entry) => sum + (entry.info.duration || 0),
+          0,
+        ) / completedOperations.length
         : 0;
 
     const errorOperations = history.filter(

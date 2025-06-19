@@ -311,9 +311,8 @@ export const tagApi = {
         }),
       );
 
-      // Remove the newsletter_tags property as it's no longer needed
       return tagsWithCounts.map(
-        ({ newsletter_tags, ...tag }) => tag,
+        ({ ...tag }) => tag,
       ) as (Tag & { newsletter_count: number })[];
     });
   },

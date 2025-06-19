@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+scripts/*
 
 # Editor directories and files
 .vscode/*
@@ -24,3 +25,12 @@ dist-ssr
 *.sw?
 .env
 .env.test
+.prettierrc
+.prettierrc.js
+.prettierrc.json
+
+supabase/.temp
+test-results/
+coverage/
+playwright-report/
+stats.html

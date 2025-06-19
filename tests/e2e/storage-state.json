@@ -5,8 +5,8 @@
       "origin": "http://localhost:5174",
       "localStorage": [
         {
-          "name": "sb-mock-anon-key-auth-token",
-          "value": "{\"access_token\":\"mock-access-token-1750307105383\",\"refresh_token\":\"mock-refresh-token-1750307105383\",\"expires_at\":1750310705,\"token_type\":\"bearer\",\"user\":{\"id\":\"mock-user-1750307105382\",\"email\":\"test@example.com\",\"user_metadata\":{\"full_name\":\"Test User\"},\"created_at\":\"2025-06-19T04:25:05.383Z\",\"updated_at\":\"2025-06-19T04:25:05.383Z\"}}"
+          "name": "sb-mock-auth-token",
+          "value": "{\"access_token\":\"mock-access-token-123\",\"refresh_token\":\"mock-refresh-token-123\",\"expires_at\":1750369435,\"token_type\":\"bearer\",\"user\":{\"id\":\"test-user-123\",\"email\":\"test@example.com\",\"user_metadata\":{\"full_name\":\"Test User\"},\"created_at\":\"2025-06-19T20:43:55.990Z\",\"updated_at\":\"2025-06-19T20:43:55.990Z\"}}"
         }
       ]
     }
