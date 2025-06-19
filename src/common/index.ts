@@ -1,9 +1,61 @@
 // Re-export common modules
 export * from "./types";
 export * from "./contexts";
-export * from "./services";
-export * from "./hooks";
 export * from "./components";
+
+// Re-export services with explicit names to avoid conflicts
+export {
+  // Base service exports
+  BaseService,
+  ServiceError,
+  NetworkError,
+  ValidationError as ServiceValidationError,
+  NotFoundError as ServiceNotFoundError,
+  UnauthorizedError,
+  ServiceOptions,
+  RetryOptions as ServiceRetryOptions,
+
+  // Newsletter service
+  NewsletterService,
+  newsletterService,
+
+  // Tag service
+  TagService,
+  tagService,
+
+  // Reading queue service
+  ReadingQueueService,
+  readingQueueService,
+
+  // Search service
+  SearchService,
+  searchService,
+} from "./services";
+
+// Re-export hooks with explicit names to avoid conflicts
+export {
+  // Business logic hooks
+  useNewsletterOperations,
+  useTagOperations,
+  useReadingQueueOperations,
+
+  // UI hooks
+  useNewsletters,
+  useInfiniteNewsletters,
+  useNewsletterDetail,
+  useTags,
+  useReadingQueue,
+  useUnreadCount,
+  useEmailAlias,
+  useUrlParams,
+  useInboxFilters,
+  usePerformanceOptimizations,
+  useTagsPageState,
+
+  // Error handling
+  useErrorHandling,
+  RetryOptions as HookRetryOptions,
+} from "./hooks";
 
 // Explicitly re-export API to avoid conflicts with hooks
 export {

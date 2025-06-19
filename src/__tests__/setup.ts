@@ -123,32 +123,70 @@ vi.mock("@common/config/supabase", () => ({
 }));
 
 // Mock logger
-vi.mock("@common/utils/logger", () => ({
-  useLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    logUserAction: vi.fn(),
-    logNavigation: vi.fn(),
-    logError: vi.fn(),
-  }),
-  useLoggerStatic: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    logUserAction: vi.fn(),
-    logNavigation: vi.fn(),
-    logError: vi.fn(),
-  }),
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  },
-}));
+const loggerMock = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  auth: vi.fn(),
+  api: vi.fn(),
+  ui: vi.fn(),
+  logUserAction: vi.fn(),
+  logComponentError: vi.fn(),
+  logApiRequest: vi.fn(),
+  logApiResponse: vi.fn(),
+  logNavigation: vi.fn(),
+  startTimer: vi.fn(() => ({ stop: vi.fn() })),
+  setUserId: vi.fn(),
+  setContext: vi.fn(),
+  clearContext: vi.fn(),
+};
+
+vi.mock("@common/utils/logger", () => {
+  const mockFn = vi.fn();
+  return {
+    logger: loggerMock,
+    useLogger: () => ({
+      debug: mockFn,
+      info: mockFn,
+      warn: mockFn,
+      error: mockFn,
+      auth: mockFn,
+      api: mockFn,
+      ui: mockFn,
+      logUserAction: mockFn,
+      logComponentError: mockFn,
+      startTimer: () => ({ stop: mockFn }),
+    }),
+    useLoggerStatic: () => ({
+      debug: mockFn,
+      info: mockFn,
+      warn: mockFn,
+      error: mockFn,
+      auth: mockFn,
+      api: mockFn,
+      ui: mockFn,
+      logUserAction: mockFn,
+      logApiRequest: mockFn,
+      logApiResponse: mockFn,
+      logNavigation: mockFn,
+      startTimer: () => ({ stop: mockFn }),
+      setContext: mockFn,
+      clearContext: mockFn,
+    }),
+    LogLevel: {
+      DEBUG: "DEBUG",
+      INFO: "INFO",
+      WARN: "WARN",
+      ERROR: "ERROR",
+    },
+    ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+    withErrorBoundary: <P extends object>(
+      component: React.ComponentType<P>
+    ) => component,
+    default: loggerMock,
+  };
+});
 
 // Mock toast notifications
 vi.mock("react-hot-toast", () => ({

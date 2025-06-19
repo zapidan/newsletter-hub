@@ -5,10 +5,10 @@ import {
   withPerformanceLogging,
 } from "./supabaseClient";
 import { ReadingQueueItem, Tag } from "../types";
-import { useLoggerStatic } from "../utils/logger/useLogger";
+import { logger } from "../utils/logger";
 
 // Initialize logger
-const log = useLoggerStatic();
+const log = logger;
 
 // Transform raw Supabase response to ReadingQueueItem
 const transformQueueItem = (data: {

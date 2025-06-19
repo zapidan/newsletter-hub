@@ -1,5 +1,5 @@
 import { AuthError } from "@supabase/supabase-js";
-import { useLoggerStatic } from "../utils/logger/useLogger";
+import { logger } from "../utils/logger";
 
 // Custom error types
 export enum ErrorType {
@@ -21,14 +21,8 @@ export enum ErrorSeverity {
   CRITICAL = "critical",
 }
 
-// Initialize logger lazily
-let log: ReturnType<typeof useLoggerStatic> | null = null;
-const getLogger = () => {
-  if (!log) {
-    log = useLoggerStatic();
-  }
-  return log;
-};
+// Initialize logger
+const log = logger;
 
 // Base application error class
 export class AppError extends Error {
@@ -301,7 +295,7 @@ export const logError = (
     error.severity === ErrorSeverity.HIGH
       ? "error"
       : "warn";
-  const logMethod = logLevel === "error" ? getLogger().error : getLogger().warn;
+  const logMethod = logLevel === "error" ? log.error : log.warn;
 
   logMethod(
     `${error.name}: ${error.message}`,
@@ -348,7 +342,7 @@ const reportErrorToService = async (logEntry: ErrorLogEntry): Promise<void> => {
       });
     }
   } catch (reportingError) {
-    getLogger().error(
+    log.error(
       "Failed to report error to external service",
       {
         component: "ErrorHandler",

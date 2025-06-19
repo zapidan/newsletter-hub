@@ -22,7 +22,7 @@ import {
   getQueryData,
   cancelQueries,
 } from "../utils/cacheUtils";
-import { useLogger } from "../utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 type PreviousNewslettersState = {
   previousNewsletters?: NewsletterWithRelations[];

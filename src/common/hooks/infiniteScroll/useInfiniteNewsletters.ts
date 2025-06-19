@@ -5,7 +5,7 @@ import { NewsletterFilter } from "../../types/cache";
 import { newsletterApi } from "../../api/newsletterApi";
 import { queryKeyFactory } from "../../utils/queryKeyFactory";
 import { useAuth } from "../../contexts/AuthContext";
-import { useLogger } from "../../utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 export interface UseInfiniteNewslettersOptions {
   enabled?: boolean;

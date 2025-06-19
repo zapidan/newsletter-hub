@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient, AuthError } from "@supabase/supabase-js";
-import { useLoggerStatic } from "../utils/logger/useLogger";
+import { logger } from "../utils/logger";
 
 // Configuration constants
 const SUPABASE_CONFIG = {
@@ -24,14 +24,8 @@ const SUPABASE_CONFIG = {
   },
 } as const;
 
-// Initialize logger lazily
-let log: ReturnType<typeof useLoggerStatic> | null = null;
-const getLogger = () => {
-  if (!log) {
-    log = useLoggerStatic();
-  }
-  return log;
-};
+// Initialize logger
+const log = logger;
 
 // Environment variables validation
 const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
@@ -42,7 +36,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   if (!supabaseUrl) missingVars.push("VITE_SUPABASE_URL");
   if (!supabaseAnonKey) missingVars.push("VITE_SUPABASE_ANON_KEY");
 
-  getLogger().error(
+  log.error(
     `Missing required Supabase environment variables: ${missingVars.join(", ")}`,
     {
       component: "SupabaseClient",
@@ -54,7 +48,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 
   if (import.meta.env.MODE === "development") {
-    getLogger().warn(
+    log.warn(
       "Running in development mode with missing Supabase configuration",
       { component: "SupabaseClient" },
     );
@@ -239,7 +233,7 @@ export const withPerformanceLogging = async <T>(
 ): Promise<T> => {
   const start = performance.now();
 
-  getLogger().debug(`Starting operation: ${operation}`, {
+  log.debug(`Starting operation: ${operation}`, {
     component: "SupabaseClient",
     action: "performance_start",
     metadata: { operation },
@@ -249,7 +243,7 @@ export const withPerformanceLogging = async <T>(
     const result = await fn();
     const duration = performance.now() - start;
 
-    getLogger().info(`Operation completed: ${operation}`, {
+    log.info(`Operation completed: ${operation}`, {
       component: "SupabaseClient",
       action: "performance_success",
       metadata: {
@@ -263,7 +257,7 @@ export const withPerformanceLogging = async <T>(
   } catch (error) {
     const duration = performance.now() - start;
 
-    getLogger().error(
+    log.error(
       `Operation failed: ${operation}`,
       {
         component: "SupabaseClient",

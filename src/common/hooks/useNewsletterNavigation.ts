@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useInfiniteNewsletters } from "./infiniteScroll";
 import { useInboxFilters } from "./useInboxFilters";
-import { useLogger } from "../utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import type { NewsletterWithRelations, NewsletterFilter } from "../types";
 
 export interface NewsletterNavigationState {

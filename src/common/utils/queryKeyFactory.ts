@@ -15,10 +15,11 @@ export interface QueryKeyFactoryParams {
  * Centralized query key factory for consistent cache key generation
  * across all newsletter and reading queue operations
  */
-export const queryKeyFactory = {
+export const queryKeyFactory: any = {
   // Root keys
   all: ["newsletters"] as const,
   readingQueue: ["readingQueue"] as const,
+  tagRoot: ["tags"] as const,
 
   // Newsletter keys
   newsletters: {
@@ -98,6 +99,7 @@ export const queryKeyFactory = {
         "total-counts",
         "by-source",
       ] as const,
+    inbox: () => [...queryKeyFactory.newsletters.all(), "inbox"] as const,
   },
 
   // Reading queue keys
@@ -111,6 +113,25 @@ export const queryKeyFactory = {
     positions: () => [...queryKeyFactory.queue.all(), "positions"] as const,
     position: (userId: string) =>
       [...queryKeyFactory.queue.positions(), userId] as const,
+  },
+
+  // Tag keys
+  tags: {
+    all: () => [...queryKeyFactory.tagRoot] as const,
+    lists: () => [...queryKeyFactory.tags.all(), "list"] as const,
+    list: (userId?: string) => {
+      const baseKey = [...queryKeyFactory.tags.lists()] as const;
+      return userId ? ([...baseKey, userId] as const) : baseKey;
+    },
+    details: () => [...queryKeyFactory.tags.all(), "detail"] as const,
+    detail: (tagId: string) =>
+      [...queryKeyFactory.tags.details(), tagId] as const,
+    counts: () => [...queryKeyFactory.tags.all(), "counts"] as const,
+    stats: () => [...queryKeyFactory.tags.all(), "stats"] as const,
+    usageStats: (tagId: string) =>
+      [...queryKeyFactory.tags.stats(), "usage", tagId] as const,
+    operations: (tagId: string) =>
+      [...queryKeyFactory.tags.detail(tagId), "operations"] as const,
   },
 
   // Cross-feature keys for related data
@@ -297,8 +318,8 @@ export const queryKeyFactory = {
 
 /**
  * Legacy compatibility function - maintains backward compatibility
- * with existing buildQueryKey usage while encouraging migration to new factory
- * @deprecated Use queryKeyFactory.newsletters.list() instead
+ * with existing usage while encouraging migration to new factory
+ * @deprecated Use queryKeyFactory methods instead
  */
 export const buildQueryKey = (params: {
   scope: "list" | "detail" | "tags";
@@ -350,10 +371,10 @@ export const buildQueryKey = (params: {
  * Type-safe query key generator with validation
  */
 export const createQueryKey = (
-  category: keyof typeof queryKeyFactory,
+  category: string,
   ...args: unknown[]
 ): readonly unknown[] => {
-  const factory = queryKeyFactory[category];
+  const factory = (queryKeyFactory as any)[category];
 
   if (typeof factory === "function") {
     return (factory as (...args: unknown[]) => readonly unknown[])(...args);

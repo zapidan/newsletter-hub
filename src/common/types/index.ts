@@ -114,7 +114,7 @@ export interface NewsletterUpdate {
 
 export interface TagCreate {
   name: string;
-  color: string;
+  color?: string;
 }
 
 export interface TagUpdate extends Partial<TagCreate> {
@@ -131,4 +131,34 @@ export interface NewsletterFilter {
   start_date?: string;
   end_date?: string;
   group_id?: string;
+}
+
+export interface NewsletterQueryParams {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  isRead?: boolean;
+  isArchived?: boolean;
+  isLiked?: boolean;
+  sourceIds?: string[];
+  tagIds?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  includeSource?: boolean;
+  includeTags?: boolean;
+  orderBy?: string;
+  orderDirection?: "asc" | "desc";
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  filter?: any;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  count: number;
+  page?: number;
+  hasMore?: boolean;
+  totalPages?: number;
+  limit?: number;
+  offset?: number;
 }

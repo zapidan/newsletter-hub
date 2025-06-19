@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { queryKeyFactory } from "./queryKeyFactory";
-import { useLoggerStatic } from "./logger";
+import { logger } from "./logger";
 import type {
   NewsletterWithRelations,
   ReadingQueueItem,
@@ -16,7 +16,7 @@ interface CacheManagerConfig {
 export class SimpleCacheManager {
   public queryClient: QueryClient;
   private config: CacheManagerConfig;
-  private log = useLoggerStatic();
+  private log = logger;
 
   constructor(queryClient: QueryClient, config: CacheManagerConfig = {}) {
     this.queryClient = queryClient;

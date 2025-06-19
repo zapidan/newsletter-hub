@@ -1,7 +1,7 @@
 import { toast } from "react-hot-toast";
 import { getCacheManager } from "./cacheUtils";
 import { readingQueueApi } from "@common/api";
-import { useLoggerStatic } from "./logger/useLogger";
+import { logger } from "./logger";
 import type { NewsletterWithRelations } from "@common/types";
 
 export interface NewsletterActionHandlers {
@@ -29,18 +29,11 @@ export interface NewsletterActionOptions {
 export class SharedNewsletterActionHandlers {
   private cacheManager: ReturnType<typeof getCacheManager>;
   private handlers: NewsletterActionHandlers;
-  private _log: ReturnType<typeof useLoggerStatic> | null = null;
+  private log = logger;
   private defaultOptions: NewsletterActionOptions = {
     showToasts: true,
     optimisticUpdates: true,
   };
-
-  private get log() {
-    if (!this._log) {
-      this._log = useLoggerStatic();
-    }
-    return this._log;
-  }
 
   constructor(
     handlers: NewsletterActionHandlers,

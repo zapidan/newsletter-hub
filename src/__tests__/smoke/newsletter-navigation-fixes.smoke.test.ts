@@ -25,14 +25,67 @@ vi.mock("@common/hooks/useInboxFilters", () => ({
   })),
 }));
 
-vi.mock("@common/utils/logger", () => ({
-  useLogger: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
-}));
+vi.mock("@common/utils/logger", () => {
+  const mockFn = vi.fn();
+  const loggerMock = {
+    debug: mockFn,
+    info: mockFn,
+    warn: mockFn,
+    error: mockFn,
+    auth: mockFn,
+    api: mockFn,
+    ui: mockFn,
+    logUserAction: mockFn,
+    logComponentError: mockFn,
+    startTimer: () => ({ stop: mockFn }),
+    setUserId: mockFn,
+    setContext: mockFn,
+    clearContext: mockFn,
+  };
+
+  return {
+    logger: loggerMock,
+    useLogger: () => ({
+      debug: mockFn,
+      info: mockFn,
+      warn: mockFn,
+      error: mockFn,
+      auth: mockFn,
+      api: mockFn,
+      ui: mockFn,
+      logUserAction: mockFn,
+      logComponentError: mockFn,
+      startTimer: () => ({ stop: mockFn }),
+    }),
+    useLoggerStatic: () => ({
+      debug: mockFn,
+      info: mockFn,
+      warn: mockFn,
+      error: mockFn,
+      auth: mockFn,
+      api: mockFn,
+      ui: mockFn,
+      logUserAction: mockFn,
+      logApiRequest: mockFn,
+      logApiResponse: mockFn,
+      logNavigation: mockFn,
+      startTimer: () => ({ stop: mockFn }),
+      setContext: mockFn,
+      clearContext: mockFn,
+    }),
+    LogLevel: {
+      DEBUG: "DEBUG",
+      INFO: "INFO",
+      WARN: "WARN",
+      ERROR: "ERROR",
+    },
+    ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
+    withErrorBoundary: <P extends object>(
+      component: React.ComponentType<P>
+    ) => component,
+    default: loggerMock,
+  };
+});
 
 vi.mock("@common/hooks/useSharedNewsletterActions", () => ({
   useSharedNewsletterActions: vi.fn(),
@@ -40,6 +93,18 @@ vi.mock("@common/hooks/useSharedNewsletterActions", () => ({
 
 vi.mock("react-router-dom", () => ({
   useNavigate: vi.fn(() => vi.fn()),
+}));
+
+vi.mock("@common/contexts/AuthContext", () => ({
+  useAuth: vi.fn(() => ({
+    user: { id: "test-user-id" },
+    session: { access_token: "test-token" },
+    isLoading: false,
+    isAuthenticated: true,
+  })),
+  AuthContext: {
+    Provider: ({ children }: { children: React.ReactNode }) => children,
+  },
 }));
 
 describe("Newsletter Navigation Fixes Smoke Tests", () => {

@@ -1,7 +1,7 @@
 import { useState, FormEvent } from "react";
 import { useAuth } from "@common/contexts/AuthContext";
 import { useEmailAlias } from "@common/hooks/useEmailAlias";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
 import { motion } from "framer-motion";
 import {

@@ -19,7 +19,7 @@ import { useTags } from "@common/hooks/useTags";
 import { updateNewsletterTags } from "@common/utils/tagUtils";
 import { useCache } from "@common/hooks/useCache";
 import { AuthContext } from "@common/contexts/AuthContext";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 import {
   DndContext,
   closestCenter,
@@ -413,7 +413,7 @@ const ReadingQueuePage: React.FC = () => {
 
         if (typeof newsletter === "string") {
           const item = validQueueItems.find(
-            (item) => item.newsletter.id === newsletter,
+            (item: any) => item.newsletter.id === newsletter,
           );
           if (!item) return;
           newsletterObj = item.newsletter;

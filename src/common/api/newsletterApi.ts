@@ -13,10 +13,10 @@ import {
   PaginatedResponse,
   BatchResult,
 } from "../types/api";
-import { useLoggerStatic } from "../utils/logger";
+import { logger } from "../utils/logger";
 
 // Initialize logger
-const log = useLoggerStatic();
+const log = logger;
 
 // Transform raw Supabase response to our Newsletter type
 const transformNewsletterResponse = (data: any): NewsletterWithRelations => {

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Loader } from "lucide-react";
 import { useNewsletterNavigation } from "@common/hooks/useNewsletterNavigation";
 import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 interface NewsletterNavigationProps {
   currentNewsletterId: string;

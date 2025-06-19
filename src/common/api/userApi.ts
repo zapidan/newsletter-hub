@@ -5,7 +5,7 @@ import {
   withPerformanceLogging,
 } from "./supabaseClient";
 import { generateEmailAliasFromEmail } from "../utils/emailAlias";
-import { useLoggerStatic } from "../utils/logger";
+import { logger } from "../utils/logger";
 
 interface UserProfile {
   id: string;
@@ -28,14 +28,8 @@ interface UpdateUserParams {
   email_alias?: string;
 }
 
-// Initialize logger lazily
-let log: ReturnType<typeof useLoggerStatic> | null = null;
-const getLogger = () => {
-  if (!log) {
-    log = useLoggerStatic();
-  }
-  return log;
-};
+// Initialize logger
+const log = logger;
 
 // User API Service
 export const userApi = {
@@ -96,7 +90,7 @@ export const userApi = {
           .eq("id", user.id);
 
         if (error) {
-          getLogger().error(
+          log.error(
             "Error saving email alias",
             {
               component: "UserApi",
@@ -110,7 +104,7 @@ export const userApi = {
 
         return { email: emailAlias };
       } catch (error) {
-        getLogger().error(
+        log.error(
           "Error generating email alias",
           {
             component: "UserApi",
@@ -157,7 +151,7 @@ export const userApi = {
 
         return email;
       } catch (error) {
-        getLogger().error(
+        log.error(
           "Error in getEmailAlias",
           {
             component: "UserApi",
@@ -196,7 +190,7 @@ export const userApi = {
           .eq("id", user.id);
 
         if (updateError) {
-          getLogger().error(
+          log.error(
             "Error updating user with email alias",
             {
               component: "UserApi",
@@ -210,7 +204,7 @@ export const userApi = {
 
         return { email: newAlias };
       } catch (error) {
-        getLogger().error(
+        log.error(
           "Error in updateEmailAlias",
           {
             component: "UserApi",
@@ -255,7 +249,7 @@ export const userApi = {
         user.id,
       );
       if (authError) {
-        getLogger().error(
+        log.error(
           "Error deleting user from auth",
           {
             component: "UserApi",

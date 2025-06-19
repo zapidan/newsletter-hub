@@ -109,6 +109,7 @@ const Login = () => {
                   required
                   className="input-field pl-10 pr-4 py-3"
                   placeholder="you@example.com"
+                  data-testid="password-input"
                 />
               </div>
             </div>
@@ -143,6 +144,7 @@ const Login = () => {
                   className="input-field pl-10 pr-4 py-3"
                   placeholder={isSignUp ? "Create a password" : "••••••••"}
                   minLength={8}
+                  data-testid="password-input"
                 />
               </div>
 

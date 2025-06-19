@@ -8,7 +8,7 @@ import {
 } from "@common/utils/cacheUtils";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 import { tagApi } from "@common/api/tagApi";
-import { useLogger } from "@common/utils/logger";
+import { useLogger } from "@common/utils/logger/useLogger";
 
 export const useTags = () => {
   const auth = useContext(AuthContext);
