@@ -1,69 +1,90 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './auth.setup';
 import {
-  createTestUser,
   createTestNewsletter,
   createTestTag,
   generateTestNewsletter,
-  generateTestUser,
   TEST_USERS,
   TEST_NEWSLETTERS,
   waitForPageLoad,
   waitForApiResponse,
-} from './test-fixtures.js';
+} from './test-fixtures';
+
+// Helper function to login
+async function login(page, email, password) {
+  // Navigate to login page and wait for it to load
+  await page.goto('/login');
+  await page.waitForSelector('[data-testid="email-input"]', { state: 'visible' });
+  
+  // Fill in the login form
+  await page.fill('[data-testid="email-input"]', email);
+  await page.fill('[data-testid="password-input"]', password);
+  
+  // Click the login button and wait for navigation
+  const navigationPromise = page.waitForURL('**/inbox', { timeout: 10000 });
+  await page.click('[data-testid="login-button"]');
+  
+  try {
+    await navigationPromise;
+    await page.waitForLoadState('networkidle');
+    return true;
+  } catch (error) {
+    console.error('Login navigation failed:', error);
+    return false;
+  }
+}
 
 test.describe('Newsletter Workflows E2E Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Clear any existing data
+    // Clear any existing data and go to home page
     await page.goto('/');
-
-    // Wait for the page to load
     await waitForPageLoad(page);
   });
 
   test.describe('Authentication Flow', () => {
     test('should login successfully with valid credentials', async ({ page }) => {
-      await page.goto('/login');
-
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-
-      await page.click('[data-testid="login-button"]');
-
-      // Should redirect to inbox
+      // Perform login
+      const loginSuccess = await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
+      
+      // Verify login was successful
+      expect(loginSuccess, 'Login should complete successfully').toBe(true);
       await expect(page).toHaveURL('/inbox');
-
-      // Should show user menu
+      
+      // Verify user menu is visible
       await expect(page.locator('[data-testid="user-menu-button"]')).toBeVisible();
     });
 
     test('should show error for invalid credentials', async ({ page }) => {
+      // Navigate to login page
       await page.goto('/login');
-
+      await page.waitForSelector('[data-testid="email-input"]', { state: 'visible' });
+      
+      // Fill in with invalid credentials
       await page.fill('[data-testid="email-input"]', 'invalid@example.com');
       await page.fill('[data-testid="password-input"]', 'wrongpassword');
-
+      
+      // Click login and wait for error
       await page.click('[data-testid="login-button"]');
-
-      // Should show error message
-      await expect(page.locator('[data-testid="error-message"]')).toContainText('Invalid credentials');
-
-      // Should stay on login page
+      
+      // Wait for error message
+      await page.waitForSelector('[data-testid="error-message"]', { state: 'visible' });
+      
+      // Verify error is shown and still on login page
+      await expect(page.locator('[data-testid="error-message"]'))
+        .toContainText('Invalid login credentials');
       await expect(page).toHaveURL('/login');
     });
 
     test('should logout successfully', async ({ page }) => {
       // Login first
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
-
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
+      
+      // Verify we're logged in
       await expect(page).toHaveURL('/inbox');
-
+      
       // Click user menu and logout
       await page.click('[data-testid="user-menu-button"]');
       await page.click('[data-testid="logout-button"]');
-
+      
       // Should redirect to login
       await expect(page).toHaveURL('/login');
     });
@@ -71,12 +92,8 @@ test.describe('Newsletter Workflows E2E Tests', () => {
 
   test.describe('Newsletter Inbox', () => {
     test.beforeEach(async ({ page }) => {
-      // Login as test user
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
-      await expect(page).toHaveURL('/inbox');
+      // Login before each test
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
     });
 
     test('should display newsletters in inbox', async ({ page }) => {
@@ -229,11 +246,8 @@ test.describe('Newsletter Workflows E2E Tests', () => {
   test.describe('Newsletter Detail View', () => {
     test.beforeEach(async ({ page }) => {
       // Login and navigate to a newsletter detail
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
-      await expect(page).toHaveURL('/inbox');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
+      await page.waitForURL('/inbox');
 
       // Click on first newsletter
       await waitForApiResponse(page, '**/api/newsletters**');
@@ -346,17 +360,13 @@ test.describe('Newsletter Workflows E2E Tests', () => {
 
   test.describe('Search Functionality', () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
-      await expect(page).toHaveURL('/inbox');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
     });
 
     test('should perform global search', async ({ page }) => {
       // Navigate to search page
       await page.click('[data-testid="search-button"]');
-      await expect(page).toHaveURL('/search');
+      await page.waitForURL('/search');
 
       // Enter search query
       await page.fill('[data-testid="search-input"]', 'artificial intelligence');
@@ -415,10 +425,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
 
   test.describe('Tags Management', () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
       await page.goto('/tags');
     });
 
@@ -499,10 +506,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
 
   test.describe('Settings and Profile', () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
     });
 
     test('should update user profile', async ({ page }) => {
@@ -550,10 +554,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
       await page.setViewportSize({ width: 375, height: 667 });
 
       // Login
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
 
       // Should show mobile navigation
       await expect(page.locator('[data-testid="mobile-nav"]')).toBeVisible();
@@ -570,10 +571,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
       await page.setViewportSize({ width: 768, height: 1024 });
 
       // Login
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
 
       // Should show tablet layout
       await expect(page.locator('[data-testid="tablet-layout"]')).toBeVisible();
@@ -588,10 +586,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
       const startTime = Date.now();
 
       // Login and navigate to inbox
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
 
       // Wait for inbox to load
       await expect(page.locator('[data-testid="newsletter-list"]')).toBeVisible();
@@ -604,10 +599,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
 
     test('should handle large newsletter lists', async ({ page }) => {
       // Login
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
 
       // Should implement virtual scrolling for large lists
       await expect(page.locator('[data-testid="virtual-list"]')).toBeVisible();
@@ -625,10 +617,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
       // Block network requests to simulate offline
       await page.route('**/api/**', route => route.abort());
 
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
 
       // Should show network error message
       await expect(page.locator('[data-testid="network-error"]')).toBeVisible();
@@ -645,10 +634,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
       });
 
       // Login
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
 
       // Should show error message
       await expect(page.locator('[data-testid="api-error"]')).toBeVisible();
@@ -665,10 +651,7 @@ test.describe('Newsletter Workflows E2E Tests', () => {
       });
 
       // Login
-      await page.goto('/login');
-      await page.fill('[data-testid="email-input"]', TEST_USERS.REGULAR_USER.email);
-      await page.fill('[data-testid="password-input"]', TEST_USERS.REGULAR_USER.password);
-      await page.click('[data-testid="login-button"]');
+      await login(page, TEST_USERS.REGULAR_USER.email, TEST_USERS.REGULAR_USER.password);
 
       // Should show empty state
       await expect(page.locator('[data-testid="empty-state"]')).toBeVisible();

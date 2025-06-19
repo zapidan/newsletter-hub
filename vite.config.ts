@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -10,84 +10,104 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),
-    visualizer({
-      open: true, // Automatically opens the report in the browser
-      gzipSize: true,
-      brotliSize: true,
-    }),
-  ],
-  resolve: {
-    alias: [
-      { find: "@", replacement: path.resolve(__dirname, "./src") },
-      { find: "@common", replacement: path.resolve(__dirname, "./src/common") },
-      { find: "@web", replacement: path.resolve(__dirname, "./src/web") },
-      { find: "@mobile", replacement: path.resolve(__dirname, "./src/mobile") },
-    ],
-  },
-  optimizeDeps: {
-    exclude: ["lucide-react"],
-    include: [
-      "@dnd-kit/core",
-      "@dnd-kit/sortable",
-      "@dnd-kit/utilities",
-      "@dnd-kit/modifiers",
-    ],
-    esbuildOptions: {
-      treeShaking: true,
+export default defineConfig(({ mode }) => {
+  // Load environment variables based on the current mode
+  const env = loadEnv(mode, process.cwd(), '');
+  
+  // Check if we're in test environment
+  const isTest = mode === 'test';
+  const isDev = mode === 'development';
+  const isProd = mode === 'production';
+
+  // Base alias configuration
+  const baseAliases = [
+    { find: "@", replacement: path.resolve(__dirname, "./src") },
+    { find: "@common", replacement: path.resolve(__dirname, "./src/common") },
+    { find: "@web", replacement: path.resolve(__dirname, "./src/web") },
+    { find: "@mobile", replacement: path.resolve(__dirname, "./src/mobile") },
+    { find: "@test-utils", replacement: path.resolve(__dirname, "./tests/test-utils") },
+  ];
+
+  // Add test-specific aliases
+  const testAliases = isTest ? [
+    // Point all Supabase client imports to our mock implementation
+    { 
+      find: /@supabase\/supabase-js$/, 
+      replacement: path.resolve(__dirname, 'tests/test-utils/mock-supabase-client.ts')
     },
-  },
-  define: {
-    "process.env": {},
-  },
-  server: {
-    port: 5174,
-    strictPort: true,
-    open: true,
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-    sourcemap: true,
-    chunkSizeWarningLimit: 1000, // Increase chunk size warning limit (in kbs)
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Group large dependencies into separate chunks
-          react: ["react", "react-dom", "react-router-dom"],
-          ui: [
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-dropdown-menu",
-            "@radix-ui/react-slot",
-          ],
-          dnd: [
-            "@dnd-kit/core",
-            "@dnd-kit/sortable",
-            "@dnd-kit/utilities",
-            "@dnd-kit/modifiers",
-          ],
-          // Add other large dependencies here
+    // Alias the application's supabase client to our mock
+    {
+      find: /@\/common\/services\/supabaseClient$/,
+      replacement: path.resolve(__dirname, 'tests/test-utils/mock-supabase-client.ts')
+    },
+    // Ensure any other supabase client imports use our mock
+    {
+      find: /supabase-js/,
+      replacement: path.resolve(__dirname, 'tests/test-utils/mock-supabase-client.ts')
+    }
+  ] : [];
+
+  return {
+    plugins: [
+      react(),
+      // Visualize bundle size in development
+      isDev && visualizer({
+        open: true,
+        filename: './dist/stats.html',
+        gzipSize: true,
+        brotliSize: true,
+      }),
+    ].filter(Boolean),
+    
+    resolve: {
+      alias: [...baseAliases, ...testAliases],
+    },
+    
+    // Test configuration
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./tests/setup.ts'],
+      coverage: {
+        reporter: ['text', 'json', 'html'],
+      },
+    },
+    
+    // Server configuration
+    server: {
+      port: 5174, // Use a different port for test to avoid conflicts
+      strictPort: true,
+      open: !isTest, // Don't open browser in test mode
+    },
+    
+    // Build configuration
+    build: {
+      outDir: 'dist',
+      sourcemap: isDev,
+      minify: isProd ? 'esbuild' : false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom'],
+            vendor: ['@tanstack/react-query', 'date-fns'],
+          },
         },
       },
     },
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/__tests__/setup.ts'],
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      reportsDirectory: './coverage',
-      exclude: [
-        '**/node_modules/**',
-        '**/__tests__/**',
-      ],
+    
+    // Environment variables
+    define: {
+      'process.env': {
+        ...Object.entries(env).reduce((acc, [key, val]) => {
+          // Only include VITE_ prefixed env vars
+          if (key.startsWith('VITE_')) {
+            acc[key] = JSON.stringify(val);
+          }
+          return acc;
+        }, {} as Record<string, string>),
+        // Ensure test environment knows it's in test mode
+        VITE_IS_TEST: JSON.stringify(isTest),
+      },
     },
-  },
-  esbuild: {
-    logOverride: { "this-is-undefined-in-esm": "silent" },
-  },
+  };
 });

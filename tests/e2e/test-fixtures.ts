@@ -1,14 +1,96 @@
 import type { Page, Browser, BrowserContext } from '@playwright/test';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { test as base, expect } from '@playwright/test';
+import { createMockSupabaseClient } from './test-utils/mock-supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export interface TestUser {
+export type TestUser = {
   email: string;
   password: string;
   fullName: string;
   role?: 'user' | 'admin';
   id?: string;
-}
+};
+
+type TestFixtures = {
+  supabase: SupabaseClient;
+  createTestUser: (user: Omit<TestUser, 'id'>) => Promise<TestUser>;
+  loginAsUser: (user: TestUser) => Promise<void>;
+};
+
+export const test = base.extend<TestFixtures>({
+  supabase: async ({}, use) => {
+    // Create a new mock Supabase client for each test
+    const supabase = createMockSupabaseClient();
+    await use(supabase);
+  },
+
+  createTestUser: async ({ supabase }, use) => {
+    const createUser = async (user: Omit<TestUser, 'id'>): Promise<TestUser> => {
+      const { email, password, fullName, role = 'user' } = user;
+      
+      // Sign up the user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role,
+          },
+        },
+      });
+
+      if (authError) {
+        throw new Error(`Failed to create test user: ${authError.message}`);
+      }
+
+      if (!authData.user) {
+        throw new Error('No user data returned after sign up');
+      }
+
+      // Create user profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: authData.user.id,
+          full_name: fullName,
+          email,
+          role,
+        });
+
+      if (profileError) {
+        throw new Error(`Failed to create user profile: ${profileError.message}`);
+      }
+
+      return {
+        ...user,
+        id: authData.user.id,
+        role,
+      };
+    };
+
+    await use(createUser);
+  },
+
+  loginAsUser: async ({ page, baseURL }, use) => {
+    const login = async (user: TestUser) => {
+      await page.goto(`${baseURL}/login`);
+      await page.fill('[data-testid="email-input"]', user.email);
+      await page.fill('[data-testid="password-input"]', user.password);
+      await page.click('[data-testid="login-button"]');
+      
+      // Wait for navigation after login
+      await page.waitForURL(`${baseURL}/inbox`);
+      
+      // Verify we're logged in by checking for an element that only exists when logged in
+      await expect(page.locator('[data-testid="user-menu"]')).toBeVisible();
+    };
+
+    await use(login);
+  },
+});
 
 export interface TestNewsletter {
   id?: string;
@@ -91,11 +173,16 @@ async function resetDatabaseSequences(): Promise<void> {
 
 // User management functions
 export async function createTestUser(userData: TestUser): Promise<TestUser> {
-  console.log(`Creating test user: ${userData.email}`);
-  // Implementation depends on your test database
-  // Example: const result = await databaseClient.query('INSERT INTO users (...) VALUES (...) RETURNING *', [...]);
-  // return result.rows[0];
-  return { ...userData, id: 'test-user-id' };
+  try {
+    console.log(`Creating test user: ${userData.email}`);
+    // Use the Supabase utility to create the user
+    const user = await createTestUserInSupabase(userData);
+    console.log(`✅ Created test user: ${user.email} (ID: ${user.id})`);
+    return user;
+  } catch (error) {
+    console.error('Error in createTestUser:', error);
+    throw error;
+  }
 }
 
 export async function removeTestUser(email: string): Promise<void> {
@@ -346,3 +433,5 @@ export function shouldRunVisualTests(): boolean {
 export function shouldRunSlowTests(): boolean {
   return process.env.RUN_SLOW_TESTS === 'true';
 }
+
+export * from './test-db-utils';

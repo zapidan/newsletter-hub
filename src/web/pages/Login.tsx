@@ -109,7 +109,7 @@ const Login = () => {
                   required
                   className="input-field pl-10 pr-4 py-3"
                   placeholder="you@example.com"
-                  data-testid="password-input"
+                  data-testid="email-input"
                 />
               </div>
             </div>
@@ -179,6 +179,7 @@ const Login = () => {
                 type="submit"
                 disabled={loading || (isSignUp && !isPasswordStrong)}
                 className="btn btn-primary btn-lg w-full"
+                data-testid="login-button"
               >
                 {loading ? (
                   <span className="inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>

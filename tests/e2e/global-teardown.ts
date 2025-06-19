@@ -1,12 +1,17 @@
 import { type FullConfig } from '@playwright/test';
-import { cleanupTestDatabase } from './test-fixtures.js';
-import { promises as fs } from 'fs';
+import { cleanupTestDatabase, deleteAllTestUsers } from './test-fixtures.js';
+import { promises as fs, existsSync, unlinkSync } from 'fs';
 import path from 'path';
 
 async function globalTeardown(config: FullConfig) {
   console.log('🧹 Starting global E2E test teardown...');
 
   try {
+    // Clean up test users
+    console.log('🧹 Cleaning up test users...');
+    await deleteAllTestUsers();
+    console.log('✅ Test users cleaned up');
+
     // Clean up test database
     await cleanupTestDatabase();
     console.log('✅ Test database cleaned up');
@@ -26,6 +31,10 @@ async function globalTeardown(config: FullConfig) {
     // Clean up test cache
     await cleanupTestCache();
     console.log('✅ Test cache cleared');
+
+    // Clean up in-memory test data
+    await cleanupTestData();
+    console.log('✅ In-memory test data cleaned up');
 
     console.log('🎉 Global E2E test teardown completed successfully!');
   } catch (error) {
@@ -110,6 +119,27 @@ async function cleanupTestCache() {
     }
   } catch (error) {
     console.error('Error cleaning up test cache:', error);
+    throw error;
+  }
+}
+
+async function cleanupTestData() {
+  try {
+    // Remove test users file if it exists
+    const testUsersPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'test-users.json');
+    if (existsSync(testUsersPath)) {
+      try {
+        await fs.unlink(testUsersPath);
+        console.log('Removed test users file');
+      } catch (error) {
+        console.warn('Failed to remove test users file:', error);
+      }
+    }
+    
+    // Any additional cleanup can go here
+    console.log('Test data cleanup complete');
+  } catch (error) {
+    console.error('Error cleaning up test data:', error);
     throw error;
   }
 }

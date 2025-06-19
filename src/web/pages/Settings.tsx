@@ -284,6 +284,7 @@ const Settings = () => {
                 <button
                   onClick={signOut}
                   className="btn btn-ghost btn-danger w-full justify-start gap-3 text-red-600 hover:bg-red-50"
+                  data-testid="logout-button"
                 >
                   <LogOut size={18} />
                   <span>Sign out</span>
