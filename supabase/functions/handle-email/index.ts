@@ -36,6 +36,7 @@ export default async function handler(req: Request) {
     try {
       let emailData: EmailData;
       const contentType = req.headers.get('content-type') || '';
+      let formData: FormData | null = null;
 
       // Clone the request for potential multiple reads
       const reqClone = req.clone();
@@ -70,23 +71,26 @@ export default async function handler(req: Request) {
             'body-html': formData.get('body-html') as string || formData.get('html') as string || '',
             'message-headers': formData.get('message-headers') as string || `From: ${formData.get('from')}\nTo: ${formData.get('recipient')}\nSubject: ${formData.get('subject')}`
           };
-        } catch (e) {
-          console.error('Error parsing form data:', e);
-          return new Response('Invalid form data', { status: 400 });
-        }
+      } catch (e) {
+        console.error('Error parsing form data:', e);
+        return new Response('Invalid form data', { status: 400 });
       }
+    }
 
       // Verify the request is from Mailgun (in production)
       if (Deno.env.get('SUPABASE_ENVIRONMENT') === 'production') {
-        const signature = req.headers.get('x-mailgun-signature');
-        const token = req.headers.get('x-mailgun-token');
-        const timestamp = req.headers.get('x-mailgun-timestamp');
+        const signature = formData.get('signature') as string;
+        const token = formData.get('token') as string;
+        const timestamp = formData.get('timestamp') as string;
         
         if (!signature || !token || !timestamp) {
-          return new Response('Missing Mailgun signature headers', { status: 400 });
+          console.error('Missing Mailgun signature parameters in form data');
+          return new Response('Missing Mailgun signature parameters', { status: 400 });
         }
         
-        if (!verifyMailgunWebhook(token, timestamp, signature)) {
+        const isValid = await verifyMailgunWebhook(token, timestamp, signature);
+        if (!isValid) {
+          console.error('Invalid Mailgun signature');
           return new Response('Invalid signature', { status: 403 });
         }
       }
@@ -112,12 +116,18 @@ export default async function handler(req: Request) {
       });
     } catch (error) {
       console.error('Error handling request:', error);
-      return new Response('Error processing request', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Error processing request' }), { 
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      });
     }
   }
 
   // Handle other HTTP methods
-  return new Response('Method not allowed', { 
+  return new Response(JSON.stringify({ error: 'Method not allowed' }), { 
     status: 405,
     headers: {
       ...corsHeaders,
@@ -141,7 +151,7 @@ async function findOrCreateSource(
   email: string, 
   name: string,
   supabase: any
-): Promise<{ source: Source; created: boolean }> {
+): Promise<{ source: Source; created: boolean; isArchived: boolean }> {
   // First, try to find an existing source by 'from' field (case-insensitive)
   const { data: existingSource, error: findError } = await supabase
     .from('newsletter_sources')
@@ -154,23 +164,13 @@ async function findOrCreateSource(
     throw new Error(`Failed to find source: ${findError.message}`);
   }
 
-  // If source exists, update if archived
+  // If source exists, check if it's archived
   if (existingSource) {
     if (existingSource.is_archived) {
-      const { data: updatedSource, error: updateError } = await supabase
-        .from('newsletter_sources')
-        .update({ is_archived: false })
-        .eq('id', existingSource.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('Error unarchiving source:', updateError);
-        throw new Error(`Failed to unarchive source: ${updateError.message}`);
-      }
-      return { source: updatedSource, created: false };
+      // Return the source with isArchived: true - we don't unarchive it anymore
+      return { source: existingSource, created: false, isArchived: true };
     }
-    return { source: existingSource, created: false };
+    return { source: existingSource, created: false, isArchived: false };
   }
 
   // If source doesn't exist, create a new one
@@ -191,7 +191,7 @@ async function findOrCreateSource(
     throw new Error(`Failed to create source: ${createError.message}`);
   }
 
-  return { source: newSource, created: true };
+  return { source: newSource, created: true, isArchived: false };
 }
 
 async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailResult> {
@@ -220,6 +220,18 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
     const fromMatch = emailData.from.match(/<?([^<>]+@[^>\s]+)>?/);
     const fromEmail = fromMatch ? fromMatch[1] : emailData.from;
     const fromName = emailData.from.replace(/<[^>]+>/g, '').trim();
+
+    // Find or create the source
+    const { source, isArchived } = await findOrCreateSource(fromEmail, fromName, supabaseWithAuth);
+    
+    // If source is archived, skip processing
+    if (isArchived) {
+      console.log(`Skipping processing for archived source: ${fromEmail}`);
+      return {
+        success: true,
+        data: { skipped: true, reason: 'Source is archived' }
+      };
+    }
 
     // Check if 'to' is a full email or just an alias
     let userEmail: string;
@@ -298,49 +310,73 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
 }
 
 /**
- * Verifies the signature of a Mailgun webhook request
+ * Verifies the signature of a Mailgun webhook request using POST body parameters
  */
-async function verifyMailgunWebhook(token: string, timestamp: string, signature: string): Promise<boolean> {
+async function verifyMailgunWebhook(
+  token: string,
+  timestamp: string,
+  signature: string
+): Promise<boolean> {
   try {
-    const apiKey = Deno.env.get('MAILGUN_WEBHOOK_SIGNING_KEY');
-    if (!apiKey) {
-      console.error('MAILGUN_WEBHOOK_SIGNING_KEY is not set');
+    // Get the Mailgun API key from environment variables
+    const mailgunApiKey = Deno.env.get('MAILGUN_API_KEY');
+    if (!mailgunApiKey) {
+      console.error('MAILGUN_API_KEY is not set');
       return false;
     }
 
-    // The signature is a HMAC-SHA256 hash of timestamp + token
+    // Convert the API key to a Uint8Array for use with WebCrypto
     const encoder = new TextEncoder();
-    const data = `${timestamp}${token}`;
-    const key = encoder.encode(apiKey);
-    const msg = encoder.encode(data);
-
-    // Import crypto.subtle for HMAC
-    const cryptoKey = await crypto.subtle.importKey(
+    const keyData = encoder.encode(mailgunApiKey);
+    const key = await crypto.subtle.importKey(
       'raw',
-      key,
+      keyData,
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify']
     );
 
-    // Convert the signature from hex to ArrayBuffer
-    const signatureBytes = new Uint8Array(
-      signature.match(/[\da-f]{2}/gi)!.map(h => parseInt(h, 16))
-    ).buffer;
+    // Create the signature string to verify
+    const signatureData = `${timestamp}${token}`;
+    const signatureBytes = encoder.encode(signatureData);
+    
+    // Convert the hex signature to bytes
+    const signatureHex = atob(signature.replace(/-/g, '+').replace(/_/g, '/'));
+    const signatureBuffer = new Uint8Array(signatureHex.length);
+    for (let i = 0; i < signatureHex.length; i++) {
+      signatureBuffer[i] = signatureHex.charCodeAt(i);
+    }
 
     // Verify the signature
     const isValid = await crypto.subtle.verify(
       'HMAC',
-      cryptoKey,
-      signatureBytes,
-      msg
+      key,
+      signatureBuffer,
+      signatureBytes
     );
 
     return isValid;
   } catch (error) {
-    console.error('Error verifying webhook signature:', error);
+    console.error('Error verifying Mailgun webhook signature:', error);
     return false;
   }
+}
+
+// Helper function to parse message headers string into an object
+function parseMessageHeaders(headersString: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (!headersString) return headers;
+  
+  const lines = headersString.split('\n');
+  for (const line of lines) {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex > 0) {
+      const key = line.substring(0, separatorIndex).trim().toLowerCase();
+      const value = line.substring(separatorIndex + 1).trim();
+      headers[key] = value;
+    }
+  }
+  return headers;
 }
 
 // For local development
