@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { TagService } from "../tag/TagService";
-import { tagApi } from "@common/api/tagApi";
 import { newsletterApi } from "@common/api/newsletterApi";
-import { Tag, TagWithCount, NewsletterWithRelations } from "@common/types";
+import { tagApi } from "@common/api/tagApi";
+import { NewsletterWithRelations, Tag, TagWithCount } from "@common/types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TagService } from "../tag/TagService";
 
 // Mock the API modules
 vi.mock("@common/api/tagApi");
@@ -526,7 +526,7 @@ describe("TagService", () => {
       const newsletters = Array.from({ length: 10 }, (_, i) => ({
         ...mockNewsletter,
         id: `newsletter-${i + 1}`,
-        received_at: new Date(2024, 0, i + 1).toISOString(),
+        received_at: new Date(Date.UTC(2024, 0, i + 1)).toISOString(),
       }));
       mockTagApi.getById.mockResolvedValue(mockTag);
       mockNewsletterApi.getAll.mockResolvedValue({
@@ -540,7 +540,7 @@ describe("TagService", () => {
       expect(result?.recentNewsletters).toHaveLength(5);
       // Should be sorted by received_at desc (most recent first)
       expect(result?.recentNewsletters[0].received_at).toBe(
-        "2024-01-10T06:00:00.000Z",
+        "2024-01-10T00:00:00.000Z",
       );
     });
   });

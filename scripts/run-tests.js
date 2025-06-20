@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
-const { execSync, spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const chalk = require('chalk');
+import chalk from 'chalk';
+import { execSync, spawn } from 'child_process';
+import fs from 'fs';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Configuration
 const TEST_CONFIG = {
@@ -431,41 +436,37 @@ class TestRunner {
   }
 }
 
-// Handle CLI arguments
+// At the end of the file, export the TestRunner class
+export default TestRunner;
+
+// Run tests if this file is executed directly
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    showHelp();
+    process.exit(0);
+  }
+
+  const runner = new TestRunner();
+  runner.run();
+}
+
 function showHelp() {
   console.log(`
-Newsletter Hub Test Runner
+Test Runner for Newsletter Hub
 
-Usage: npm run test [options] [test-type]
+Usage:
+  node scripts/run-tests.js [test-type] [options]
 
 Test Types:
-  unit         Run unit tests only
-  integration  Run integration tests only
-  e2e          Run end-to-end tests only
   all          Run all tests (default)
+  unit         Run unit tests
+  integration  Run integration tests
+  e2e          Run end-to-end tests
 
 Options:
-  --verbose, -v    Show detailed output
-  --watch, -w      Run tests in watch mode
-  --coverage, -c   Include coverage report
-  --ci             Run in CI mode
-  --help, -h       Show this help message
-
-Examples:
-  npm run test unit --verbose
-  npm run test e2e --coverage
-  npm run test all --ci
-  `);
+  -w, --watch    Watch for file changes
+  -c, --coverage  Generate coverage report
+  -v, --verbose   Show detailed output
+  -h, --help      Show this help message
+`);
 }
-
-if (process.argv.includes('--help') || process.argv.includes('-h')) {
-  showHelp();
-  process.exit(0);
-}
-
-// Run the test runner
-const runner = new TestRunner();
-runner.run().catch((error) => {
-  console.error('Test runner failed:', error);
-  process.exit(1);
-});

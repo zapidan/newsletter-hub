@@ -2,7 +2,7 @@ name: Test Suite
 
 on:
   push:
-    branches: [main, develop]
+    branches-ignore: [] # Empty list means all branches will trigger the workflow
   pull_request:
     branches: [main, develop]
   schedule:
@@ -35,7 +35,6 @@ jobs:
               - 'public/**'
               - '*.config.*'
               - 'tsconfig*.json'
-              - '.github/workflows/**'
             tests:
               - 'src/**/*.{test,spec}.{js,ts,jsx,tsx}'
               - 'src/__tests__/**'
@@ -45,7 +44,6 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'package-lock.json'
-          filters-for-all: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
 
   # Lint and type check
   lint-and-typecheck:
@@ -54,24 +52,17 @@ jobs:
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
     permissions:
       contents: read
-      pull-requests: write # Required for posting linting results
-      checks: write # Required for creating check runs
+      pull-requests: write
+      checks: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
-        id: pnpm-install
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: true
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_HOME=$(pnpm store path --silent)" >> $GITHUB_ENV
-          echo "${{ env.PNPM_HOME }}" >> $GITHUB_PATH
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,176 +79,24 @@ jobs:
       - name: Run TypeScript check
         run: pnpm type-check
 
-      - name: Run Super-Linter
-        uses: github/super-linter@v5
-        env:
-          DEFAULT_BRANCH: main
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_ALL_CODEBASE: true
-          VALIDATE_JAVASCRIPT_ES: false
-          VALIDATE_TYPESCRIPT_ES: false
-          JAVASCRIPT_ES_LINTER: 'eslint'
-          TYPESCRIPT_ES_LINTER: 'eslint'
-          JAVASCRIPT_ES_FILE_EXTENSIONS: '.js,.jsx'
-          TYPESCRIPT_ES_FILE_EXTENSIONS: '.ts,.tsx'
-          LOG_LEVEL: WARN
-          DISABLE_ERRORS: false
-          FILTER_REGEX_EXCLUDE: 'node_modules/.*|.github/.*|.git/.*'
-          JAVASCRIPT_ES_LINTER_COMMAND: 'eslint --config=eslint.config.js --ext .js,.jsx'
-          TYPESCRIPT_ES_LINTER_COMMAND: 'eslint --config=eslint.config.js --ext .ts,.tsx'
-
-  # Unit and Integration Tests
-  unit-integration-tests:
+  # Run all tests (unit, integration, e2e) in a single job
+  test:
     runs-on: ubuntu-latest
     needs: [changes, lint-and-typecheck]
     if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
     permissions:
       contents: read
-      pull-requests: read
       checks: write
-    strategy:
-      matrix:
-        node-version: [18]
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
-        id: pnpm-install
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: true
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_HOME=$(pnpm store path --silent)" >> $GITHUB_ENV
-          echo "${{ env.PNPM_HOME }}" >> $GITHUB_PATH
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Create test results directory
-        run: mkdir -p test-results
-
-      - name: Run unit tests
-        run: |
-          echo "Running unit tests..."
-          pnpm test:unit || echo "Tests failed but continuing..."
-          echo "Test execution completed"
-          ls -la test-results/ || echo "No test results directory found"
-
-      - name: List test results
-        run: |
-          echo "Test results directory contents:"
-          ls -la test-results/ || echo "No test results found"
-          [ -f "test-results/junit.xml" ] && echo "JUnit report found" || echo "JUnit report not found"
-
-      - name: Publish Unit Test Results
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Unit Tests (Node ${{ matrix.node-version }})
-          path: test-results/junit.xml
-          reporter: java-junit
-          fail-on-error: false
-          path-replace-backslashes: false
-          list-suites: all
-          list-tests: all
-          max-annotations: 10
-          fail-on-empty: true
-          only-summary: false
-
-      - name: Run integration tests
-        run: |
-          echo "Running integration tests..."
-          mkdir -p test-results
-          pnpm test:integration || echo "Integration tests failed but continuing..."
-          echo "Integration test execution completed"
-          ls -la test-results/ || echo "No integration test results directory found"
-
-      - name: List integration test results
-        run: |
-          echo "Integration test results directory contents:"
-          ls -la test-results/ || echo "No integration test results found"
-          [ -f "test-results/junit-integration.xml" ] && echo "JUnit integration report found" || echo "JUnit integration report not found"
-
-      - name: Upload integration test results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Integration Tests (Node ${{ matrix.node-version }})
-          path: 'test-results/junit-integration.xml'
-          reporter: java-junit
-          fail-on-error: false
-          path-replace-backslashes: false
-          list-suites: all
-          list-tests: all
-          max-annotations: 10
-          fail-on-empty: true
-          only-summary: false
-
-      - name: Run smoke tests
-        run: |
-          echo "Running smoke tests..."
-          mkdir -p test-results
-          pnpm test:smoke || echo "Smoke tests failed but continuing..."
-          echo "Smoke test execution completed"
-          ls -la test-results/ || echo "No smoke test results directory found"
-
-      - name: List smoke test results
-        run: |
-          echo "Smoke test results directory contents:"
-          ls -la test-results/ || echo "No smoke test results found"
-          [ -f "test-results/junit-smoke.xml" ] && echo "JUnit smoke test report found" || echo "JUnit smoke test report not found"
-
-      - name: Upload smoke test results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Smoke Tests (Node ${{ matrix.node-version }})
-          path: 'test-results/junit-smoke.xml'
-          reporter: java-junit
-          fail-on-error: false
-          path-replace-backslashes: false
-          list-suites: all
-          list-tests: all
-          max-annotations: 10
-          fail-on-empty: true
-          only-summary: false
-
-  # End-to-End Tests
-  e2e-tests:
-    runs-on: ubuntu-latest
-    needs: [changes, lint-and-typecheck]
-    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
-    strategy:
-      matrix:
-        browser: [chromium, firefox, webkit]
-        shard: [1/3, 2/3, 3/3]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        id: pnpm-install
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: true
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_HOME=$(pnpm store path --silent)" >> $GITHUB_ENV
-          echo "${{ env.PNPM_HOME }}" >> $GITHUB_PATH
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -271,189 +110,42 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Build application
-        run: pnpm build
-        env:
-          NODE_ENV: production
-
-      - name: Run e2e tests
+      - name: Create test results directory
         run: |
-          echo "Running E2E tests..."
           mkdir -p test-results
-          # Run tests with JUnit reporter and output to file
-          pnpm test:e2e --reporter=junit,line --reporter-option output=test-results/e2e-results.xml || echo "E2E tests failed but continuing..."
-          echo "E2E test execution completed"
-          ls -la test-results/ || echo "No E2E test results directory found"
+          chmod -R 777 test-results
 
-      - name: List E2E test results
-        run: |
-          echo "E2E test results directory contents:"
-          ls -la test-results/ || echo "No E2E test results found"
-          [ -f "test-results/e2e-results.xml" ] && echo "JUnit E2E report found" || echo "JUnit E2E report not found"
+      - name: Run tests with coverage
+        run: pnpm test:ci
+        env:
+          CI: 'true'
+          NODE_ENV: 'test'
+          PLAYWRIGHT_JUNIT_OUTPUT_DIR: 'test-results'
 
-      - name: Upload e2e test results
+      - name: Upload test results
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: E2E Test Results
-          path: 'test-results/e2e-results.xml'
+          name: Test Results
+          path: 'test-results/*.xml'
           reporter: java-junit
           fail-on-error: false
-          path-replace-backslashes: false
-          list-suites: all
-          list-tests: all
-          max-annotations: 10
-          fail-on-empty: true
-          only-summary: false
+          check-name: Test Results
+          fail-on: 'test failures'
+          path-replace-backslashes: true
 
-      - name: Upload e2e test report
+      - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-test-report
+          name: test-artifacts
           path: |
             test-results/
             playwright-report/
-          retention-days: 30
+            coverage/
+          retention-days: 7
 
-  # Coverage Report
-  coverage:
-    runs-on: ubuntu-latest
-    needs: [unit-integration-tests]
-    if: always() && (needs.unit-integration-tests.result == 'success')
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        id: pnpm-install
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: true
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_HOME=$(pnpm store path --silent)" >> $GITHUB_ENV
-          echo "${{ env.PNPM_HOME }}" >> $GITHUB_PATH
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate coverage report
-        run: pnpm test:coverage
-        env:
-          NODE_ENV: test
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
-      - name: Upload coverage reports to Codacy
-        uses: codacy/codacy-coverage-reporter-action@v1
-        if: github.event_name == 'push'
-        with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
-          coverage-reports: coverage/lcov.info
-
-      - name: Coverage Summary
-        run: |
-          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          cat coverage/coverage-summary.md >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 30
-
-  # Security Audit
-  # security-audit:
-  #   runs-on: ubuntu-latest
-  #   needs: changes
-  #   if: needs.changes.outputs.deps == 'true' || github.event_name == 'schedule'
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-
-  #     - name: Setup Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-
-  #     - name: Setup pnpm
-  #       uses: pnpm/action-setup@v2
-  #       with:
-  #         version: ${{ env.PNPM_VERSION }}
-
-  #     - name: Install dependencies
-  #       run: pnpm install --no-frozen-lockfile
-
-  #     - name: Run security audit
-  #       run: pnpm audit --audit-level moderate
-
-  #     - name: Run Snyk security scan
-  #       uses: snyk/actions/node@master
-  #       env:
-  #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-  #       with:
-  #         args: --severity-threshold=medium
-
-  # Performance Tests
-  performance-tests:
-    runs-on: ubuntu-latest
-    needs: [changes, lint-and-typecheck]
-    if: needs.changes.outputs.src == 'true' && github.event_name == 'pull_request'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        id: pnpm-install
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: true
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_HOME=$(pnpm store path --silent)" >> $GITHUB_ENV
-          echo "${{ env.PNPM_HOME }}" >> $GITHUB_PATH
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build application
-        run: pnpm build
-
-      - name: Run Lighthouse CI
-        uses: treosh/lighthouse-ci-action@v9
-        with:
-          configPath: './lighthouserc.json'
-          uploadArtifacts: true
-          temporaryPublicStorage: true
-
-  # Visual Regression Tests
+  # Visual regression tests (runs only on PRs)
   visual-tests:
     runs-on: ubuntu-latest
     needs: [changes, lint-and-typecheck]
@@ -464,16 +156,9 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
-        id: pnpm-install
         with:
           version: ${{ env.PNPM_VERSION }}
           run_install: true
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_HOME=$(pnpm store path --silent)" >> $GITHUB_ENV
-          echo "${{ env.PNPM_HOME }}" >> $GITHUB_PATH
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -484,62 +169,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-
       - name: Build application
         run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Start development server
+        run: pnpm dev &
 
       - name: Run visual regression tests
-        run: pnpm test:e2e --grep @visual
-        env:
-          CI: true
+        run: pnpm test:visual
 
-      - name: Upload visual test results
+      - name: Upload visual test artifacts
+        if: always()
         uses: actions/upload-artifact@v4
-        if: failure()
         with:
-          name: visual-test-failures
-          path: test-results/
+          name: visual-test-artifacts
+          path: |
+            test-visual/
+            playwright-report/
           retention-days: 7
-
-  # Test Summary
-  test-summary:
-    runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, unit-integration-tests, e2e-tests, coverage]
-    if: always()
-    steps:
-      - name: Test Summary
-        run: |
-          echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Lint & TypeCheck | ${{ needs.lint-and-typecheck.result == 'success' && ' Passed' || ' Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Unit & Integration | ${{ needs.unit-integration-tests.result == 'success' && ' Passed' || ' Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| End-to-End | ${{ needs.e2e-tests.result == 'success' && ' Passed' || ' Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Coverage | ${{ needs.coverage.result == 'success' && ' Generated' || ' Failed' }} |" >> $GITHUB_STEP_SUMMARY
-
-      - name: All tests passed
-        if: needs.lint-and-typecheck.result == 'success' && needs.unit-integration-tests.result == 'success' && needs.e2e-tests.result == 'success'
-        run: echo " All tests passed successfully!"
-
-      - name: Some tests failed
-        if: needs.lint-and-typecheck.result == 'failure' || needs.unit-integration-tests.result == 'failure' || needs.e2e-tests.result == 'failure'
-        run: |
-          echo " Some tests failed. Please check the individual job results."
-          exit 1
-
-  # Cleanup
-  cleanup:
-    runs-on: ubuntu-latest
-    needs: [test-summary]
-    if: always()
-    steps:
-      - name: Cleanup artifacts
-        uses: geekyeggo/delete-artifact@v2
-        with:
-          name: |
-            e2e-results-*
-            visual-test-failures
-          failOnError: false

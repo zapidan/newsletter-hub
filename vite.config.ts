@@ -1,9 +1,9 @@
 /// <reference types="vitest" />
-import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import { fileURLToPath } from "url";
 import path from "path";
 import { visualizer } from "rollup-plugin-visualizer";
+import { fileURLToPath } from "url";
+import { defineConfig, loadEnv } from "vite";
 
 // Convert file URL to directory name
 const __filename = fileURLToPath(import.meta.url);
@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig(({ mode }) => {
   // Load environment variables based on the current mode
   const env = loadEnv(mode, process.cwd(), '');
-  
+
   // Check if we're in test environment
   const isTest = mode === 'test';
   const isDev = mode === 'development';
@@ -31,8 +31,8 @@ export default defineConfig(({ mode }) => {
   // Add test-specific aliases
   const testAliases = isTest ? [
     // Point all Supabase client imports to our mock implementation
-    { 
-      find: /@supabase\/supabase-js$/, 
+    {
+      find: /@supabase\/supabase-js$/,
       replacement: path.resolve(__dirname, 'tests/test-utils/mock-supabase-client.ts')
     },
     // Alias the application's supabase client to our mock
@@ -58,28 +58,48 @@ export default defineConfig(({ mode }) => {
         brotliSize: true,
       }),
     ].filter(Boolean),
-    
+
     resolve: {
       alias: [...baseAliases, ...testAliases],
     },
-    
+
     // Test configuration
     test: {
       globals: true,
       environment: 'jsdom',
       setupFiles: ['./tests/setup.ts'],
       coverage: {
+        enabled: true,
+        provider: 'v8',
         reporter: ['text', 'json', 'html'],
+        reportsDirectory: './coverage',
+        exclude: [
+          '**/node_modules/**',
+          '**/dist/**',
+          '**/coverage/**',
+          '**/*.d.ts',
+          '**/*.test.{js,ts,jsx,tsx}',
+          '**/test-utils/**',
+          '**/__mocks__/**',
+          '**/__tests__/**',
+          '**/vite.config.*',
+        ],
+        thresholds: {
+          lines: 80,
+          functions: 80,
+          branches: 80,
+          statements: 80,
+        },
       },
     },
-    
+
     // Server configuration
     server: {
       port: 5174, // Use a different port for test to avoid conflicts
       strictPort: true,
       open: !isTest, // Don't open browser in test mode
     },
-    
+
     // Build configuration
     build: {
       outDir: 'dist',
@@ -94,7 +114,7 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    
+
     // Environment variables
     define: {
       'process.env': {
