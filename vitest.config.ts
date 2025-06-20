@@ -1,5 +1,5 @@
-import { defineConfig } from "vitest/config";
 import { resolve } from "path";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -9,7 +9,7 @@ export default defineConfig({
     css: true,
     reporters: ["default", "junit"],
     outputFile: {
-      junit: "test-results/junit.xml",
+      junit: "test-results/junit.xml"
     },
     coverage: {
       provider: "v8",
@@ -38,6 +38,10 @@ export default defineConfig({
     typecheck: {
       tsconfig: "./tsconfig.test.json",
     },
+    // Add test timeout
+    testTimeout: 30000,
+    // Ensure test files are discovered
+    watchExclude: ["**/node_modules/**", "**/dist/**"],
   },
   resolve: {
     alias: {

@@ -24,7 +24,6 @@ scripts/*
 *.sln
 *.sw?
 .env
-.env.test
 .prettierrc
 .prettierrc.js
 .prettierrc.json
