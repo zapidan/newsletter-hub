@@ -1,15 +1,15 @@
-import React from "react";
-import {
-  Heart,
-  BookmarkIcon,
-  Archive,
-  ArchiveX,
-  Trash,
-  Eye,
-  EyeOff,
-} from "lucide-react";
 import { NewsletterWithRelations } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
+import {
+  Archive,
+  ArchiveX,
+  BookmarkIcon,
+  Eye,
+  EyeOff,
+  Heart,
+  Trash,
+} from "lucide-react";
+import React from "react";
 
 interface NewsletterActionsProps {
   newsletter: NewsletterWithRelations;
@@ -127,11 +127,10 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
           <LoadingSpinner />
         ) : (
           <Heart
-            className={`${iconSize} ${
-              newsletter.is_liked
+            className={`${iconSize} ${newsletter.is_liked
                 ? "text-red-500 fill-current"
                 : "text-gray-600 hover:text-red-500"
-            }`}
+              }`}
           />
         )}
       </button>
@@ -165,11 +164,10 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             <LoadingSpinner />
           ) : (
             <BookmarkIcon
-              className={`${iconSize} rounded border-2 ${
-                isInReadingQueue
+              className={`${iconSize} ${isInReadingQueue
                   ? "text-yellow-500 fill-current"
                   : "text-gray-600 hover:text-yellow-500"
-              }`}
+                }`}
             />
           )}
         </button>
