@@ -235,10 +235,10 @@ const NewslettersPage: React.FC = () => {
           selectedGroupId,
           foundGroup: group
             ? {
-                id: group.id,
-                name: group.name,
-                sourceCount: group.sources?.length || 0,
-              }
+              id: group.id,
+              name: group.name,
+              sourceCount: group.sources?.length || 0,
+            }
             : null,
           sourceIds,
           totalGroups: groups.length,
@@ -1053,11 +1053,10 @@ const NewslettersPage: React.FC = () => {
                         <div className="flex justify-end gap-2">
                           <button
                             type="submit"
-                            className={`inline-flex items-center px-4 py-2 font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                              isUpdating
-                                ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-300'
-                            }`}
+                            className={`inline-flex items-center px-4 py-2 font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${isUpdating
+                              ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-300'
+                              }`}
                             disabled={isUpdating}
                           >
                             {isUpdating ? (
@@ -1074,7 +1073,7 @@ const NewslettersPage: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
                             onClick={() => {
                               setShowEditModal(false);
                               setEditModalSourceId(null);
@@ -1182,11 +1181,10 @@ const NewslettersPage: React.FC = () => {
                 return (
                   <div
                     key={source.id}
-                    className={`group relative rounded-xl border transition-colors shadow-sm p-4 bg-white hover:border-blue-300 hover:shadow-md flex flex-col justify-between cursor-pointer ${
-                      selectedSourceId === source.id
-                        ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50'
-                        : 'border-neutral-200'
-                    }`}
+                    className={`group relative rounded-xl border transition-colors shadow-sm p-4 bg-white hover:border-blue-300 hover:shadow-md flex flex-col justify-between cursor-pointer ${selectedSourceId === source.id
+                      ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50'
+                      : 'border-neutral-200'
+                      }`}
                     style={{ minHeight: 170 }}
                     onClick={() => {
                       log.debug('Source selected', {
@@ -1252,30 +1250,28 @@ const NewslettersPage: React.FC = () => {
                     )}
                     <div className="flex-1 flex flex-col items-center justify-center pt-2 pb-4">
                       <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
-                          selectedSourceId === source.id ? 'bg-blue-200' : 'bg-gray-100'
-                        }`}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${selectedSourceId === source.id
+                          ? 'bg-blue-200'
+                          : 'bg-gray-100'
+                          }`}
                       >
                         <span
-                          className={`text-lg font-bold ${
-                            selectedSourceId === source.id ? 'text-blue-800' : 'text-gray-600'
-                          }`}
+                          className={`text-lg font-bold ${selectedSourceId === source.id ? 'text-blue-800' : 'text-gray-600'
+                            }`}
                         >
                           {source.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <h3
-                        className={`font-medium text-xs truncate mb-1 max-w-full px-2 ${
-                          selectedSourceId === source.id ? 'text-blue-900' : 'text-neutral-900'
-                        }`}
+                        className={`font-medium text-xs truncate mb-1 max-w-full px-2 ${selectedSourceId === source.id ? 'text-blue-900' : 'text-neutral-900'
+                          }`}
                         title={source.name}
                       >
                         {source.name}
                       </h3>
                       <p
-                        className={`text-xs truncate max-w-full ${
-                          selectedSourceId === source.id ? 'text-blue-700' : 'text-neutral-500'
-                        }`}
+                        className={`text-xs truncate max-w-full ${selectedSourceId === source.id ? 'text-blue-700' : 'text-neutral-500'
+                          }`}
                         title={source.from}
                       >
                         {source.from}
@@ -1290,11 +1286,11 @@ const NewslettersPage: React.FC = () => {
                             {source.newsletter_count || 0}{' '}
                             {(source.newsletter_count || 0) === 1 ? 'newsletter' : 'newsletters'}
                           </span>
-                          {source.unread_count && source.unread_count > 0 && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                              {source.unread_count} unread
-                            </span>
-                          )}
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${source.unread_count ? 'bg-orange-100 text-orange-800' : 'bg-white text-gray-500'}`}
+                          >
+                            {source.unread_count || 0} unread
+                          </span>
                         </>
                       )}
                     </div>
@@ -1429,10 +1425,10 @@ const NewslettersPage: React.FC = () => {
           groupToEdit={
             editingGroup
               ? {
-                  id: editingGroup.id,
-                  name: editingGroup.name,
-                  sources: editingGroup.sources || [],
-                }
+                id: editingGroup.id,
+                name: editingGroup.name,
+                sources: editingGroup.sources || [],
+              }
               : undefined
           }
         />
