@@ -1,14 +1,25 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { newsletterApi } from '@common/api/newsletterApi';
 import { AuthContext } from '@common/contexts/AuthContext';
-import { useContext, useEffect, useRef, useMemo } from 'react';
-
+import { useContext, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLogger } from '@common/utils/logger/useLogger';
 
 // Cache time constants (in milliseconds)
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes stale time
 const CACHE_TIME = 60 * 60 * 1000; // 1 hour cache time
+const REFETCH_INTERVAL = 5 * 60 * 1000; // 5 minutes refetch interval
+const DEBOUNCE_DELAY = 500; // 500ms debounce for invalidations
 
+interface UnreadCountData {
+  total: number;
+  bySource: Record<string, number>;
+}
+
+/**
+ * Optimized hook for fetching unread newsletter counts
+ * Fetches all counts in a single query and uses React Query's select for per-source counts
+ * Implements debouncing to reduce database queries
+ */
 export const useUnreadCount = (sourceId?: string | null) => {
   const log = useLogger('useUnreadCount');
   const auth = useContext(AuthContext);
@@ -16,75 +27,89 @@ export const useUnreadCount = (sourceId?: string | null) => {
   const queryClient = useQueryClient();
   const initialLoadComplete = useRef(false);
   const previousCount = useRef<number | null>(null);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Only enable the query when we have a user
+  // Single query key for all unread count data
   const queryKey = useMemo(() => {
-    const key = sourceId
-      ? ['unreadCount', user?.id, 'source', sourceId]
-      : ['unreadCount', user?.id];
-    log.debug('Unread count query key generated', {
-      action: 'generate_query_key',
-      metadata: { key, sourceId, userId: user?.id },
-    });
-    return key;
-  }, [user?.id, sourceId, log]);
+    return ['unreadCount', 'all', user?.id];
+  }, [user?.id]);
 
-  // Use a stable query function with refs to track state
+  // Selector function to extract the needed count
+  const selectCount = useCallback(
+    (data: UnreadCountData | undefined): number => {
+      if (!data) return 0;
+
+      if (sourceId) {
+        return data.bySource[sourceId] || 0;
+      }
+
+      return data.total;
+    },
+    [sourceId]
+  );
+
+  // Single query that fetches all unread counts
   const {
     data: unreadCount = 0,
     isLoading,
     isError,
     error,
-  } = useQuery<number, Error>({
+  } = useQuery<UnreadCountData, Error, number>({
     queryKey,
     queryFn: async () => {
       if (!user) {
-        log.debug('No user, returning 0 for unread count', {
+        log.debug('No user, returning empty unread count data', {
           action: 'fetch_unread_count_no_user',
         });
-        return 0;
+        return { total: 0, bySource: {} };
       }
 
-      log.debug('Fetching unread count', {
+      log.debug('Fetching all unread counts', {
         action: 'fetch_unread_count_start',
-        metadata: { sourceId, userId: user.id },
+        metadata: { userId: user.id },
       });
 
       try {
-        const count = await newsletterApi.getUnreadCount(sourceId);
+        // Fetch both total and per-source counts in parallel
+        const [total, bySource] = await Promise.all([
+          newsletterApi.getUnreadCount(),
+          newsletterApi.getUnreadCountBySource(),
+        ]);
+
+        const result = { total, bySource };
 
         log.debug('Unread count result', {
           action: 'fetch_unread_count_result',
           metadata: {
+            total,
+            sourceCount: Object.keys(bySource).length,
             sourceId,
-            count,
+            count: sourceId ? bySource[sourceId] || 0 : total,
           },
         });
 
-        return count;
+        return result;
       } catch (error) {
         log.error(
-          'Error fetching unread count',
+          'Error fetching unread counts',
           {
             action: 'fetch_unread_count_error',
-            metadata: { sourceId, userId: user.id },
+            metadata: { userId: user.id },
           },
           error instanceof Error ? error : new Error(String(error))
         );
         throw error;
       }
     },
+    select: selectCount,
     enabled: !!user,
     staleTime: STALE_TIME,
     gcTime: CACHE_TIME,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: true,
-    // Don't use placeholder data to ensure fresh updates
-    refetchInterval: 60 * 60 * 1000, // Refetch every hour
-    // Don't refetch in background to reduce database calls
+    refetchInterval: REFETCH_INTERVAL,
     refetchIntervalInBackground: false,
-    // Force network fetch
     networkMode: 'always',
   });
 
@@ -104,44 +129,37 @@ export const useUnreadCount = (sourceId?: string | null) => {
     }
   }, [unreadCount]);
 
-  // Listen for newsletter updates and invalidate unread count
+  // Debounced invalidation function
+  const debouncedInvalidate = useCallback(() => {
+    // Clear any existing timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    // Set new timeout
+    debounceTimeoutRef.current = setTimeout(() => {
+      log.debug('Invalidating unread count after debounce', {
+        action: 'invalidate_unread_count_debounced',
+      });
+
+      // Single invalidation for all unread count data
+      queryClient.invalidateQueries({
+        queryKey: ['unreadCount', 'all'],
+        exact: false,
+        refetchType: 'active', // Only refetch active queries
+      });
+    }, DEBOUNCE_DELAY);
+  }, [queryClient, log]);
+
+  // Listen for newsletter updates and invalidate unread count with debouncing
   useEffect(() => {
     if (!user) return;
 
     const handleNewsletterUpdate = () => {
-      log.debug('Invalidating unread count due to newsletter update', {
-        action: 'invalidate_unread_count',
+      log.debug('Newsletter update event received', {
+        action: 'newsletter_update_event',
       });
-
-      // Force immediate invalidation and refetch - more aggressive
-      queryClient.invalidateQueries({
-        queryKey: ['unreadCount'],
-        exact: false,
-        refetchType: 'all', // Refetch all, not just active
-      });
-
-      // Also invalidate source-specific queries
-      queryClient.invalidateQueries({
-        queryKey: ['unreadCount', user.id, 'source'],
-        exact: false,
-        refetchType: 'all',
-      });
-
-      // Force immediate refetch of current query with timeout to ensure execution
-      // Force immediate and thorough refetch
-      Promise.resolve().then(async () => {
-        await queryClient.invalidateQueries({
-          queryKey: ['unreadCount'],
-          exact: false,
-          refetchType: 'all',
-        });
-
-        await queryClient.refetchQueries({
-          queryKey,
-          exact: true,
-          type: 'all',
-        });
-      });
+      debouncedInvalidate();
     };
 
     // Listen for custom events from newsletter actions
@@ -153,16 +171,21 @@ export const useUnreadCount = (sourceId?: string | null) => {
       window.removeEventListener('newsletter:read-status-changed', handleNewsletterUpdate);
       window.removeEventListener('newsletter:archived', handleNewsletterUpdate);
       window.removeEventListener('newsletter:deleted', handleNewsletterUpdate);
-    };
-  }, [user, queryClient, queryKey, log]);
 
-  // During initial load, return undefined to hide the counter
-  // After initial load, always return the previous count until we have a new stable value
-  const displayCount = !initialLoadComplete.current
-    ? undefined
-    : unreadCount !== undefined
+      // Clear debounce timeout on cleanup
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, [user, debouncedInvalidate]);
+
+  // Return 0 during initial load, then return actual count or fallback to previous count
+  const displayCount =
+    unreadCount !== undefined
       ? unreadCount
-      : previousCount.current || 0;
+      : previousCount.current !== null
+        ? previousCount.current
+        : 0;
 
   return {
     unreadCount: displayCount,
@@ -170,4 +193,53 @@ export const useUnreadCount = (sourceId?: string | null) => {
     isError,
     error,
   };
+};
+
+/**
+ * Hook to prefetch all unread counts
+ * Useful for warming the cache before navigation
+ */
+export const usePrefetchUnreadCounts = () => {
+  const auth = useContext(AuthContext);
+  const user = auth?.user;
+  const queryClient = useQueryClient();
+  const log = useLogger('usePrefetchUnreadCounts');
+
+  const prefetchCounts = useCallback(async () => {
+    if (!user) return;
+
+    const queryKey = ['unreadCount', 'all', user.id];
+
+    // Check if data is already fresh
+    const state = queryClient.getQueryState(queryKey);
+    if (state?.dataUpdatedAt && Date.now() - state.dataUpdatedAt < STALE_TIME) {
+      log.debug('Unread counts are fresh, skipping prefetch', {
+        action: 'prefetch_skip',
+        metadata: {
+          dataAge: Date.now() - state.dataUpdatedAt,
+          staleTime: STALE_TIME,
+        },
+      });
+      return; // Data is fresh, no need to prefetch
+    }
+
+    log.debug('Prefetching unread counts', {
+      action: 'prefetch_start',
+    });
+
+    await queryClient.prefetchQuery({
+      queryKey,
+      queryFn: async () => {
+        const [total, bySource] = await Promise.all([
+          newsletterApi.getUnreadCount(),
+          newsletterApi.getUnreadCountBySource(),
+        ]);
+
+        return { total, bySource };
+      },
+      staleTime: STALE_TIME,
+    });
+  }, [user, queryClient, log]);
+
+  return { prefetchCounts };
 };

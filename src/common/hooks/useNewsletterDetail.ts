@@ -170,7 +170,9 @@ export const useNewsletterDetail = (
     refetchOnWindowFocus,
     // Optimistic updates - try to get data from newsletter lists first
     initialData: () => {
-      const listsData = getQueriesData<any>(queryKeyFactory.newsletters.lists());
+      const listsData = getQueriesData<
+        NewsletterWithRelations[] | { data: NewsletterWithRelations[] }
+      >(queryKeyFactory.newsletters.lists());
 
       for (const [, data] of listsData) {
         if (data) {
@@ -188,7 +190,9 @@ export const useNewsletterDetail = (
     },
     initialDataUpdatedAt: () => {
       // Get the timestamp of when the list data was last updated
-      const listsData = getQueriesData<any>(queryKeyFactory.newsletters.lists());
+      const listsData = getQueriesData<
+        NewsletterWithRelations[] | { data: NewsletterWithRelations[] }
+      >(queryKeyFactory.newsletters.lists());
 
       let latestUpdate = 0;
       for (const [queryKey, data] of listsData) {
@@ -228,7 +232,7 @@ export const useNewsletterDetail = (
     // Prefetch tags if enabled and newsletter has tags
     if (prefetchTags && newsletter.tags && newsletter.tags.length > 0) {
       // Prefetch individual tag details
-      newsletter.tags.forEach((tag) => {
+      newsletter.tags.forEach((tag: { id: string }) => {
         prefetchPromises.push(
           prefetchQuery(
             [...queryKeyFactory.newsletters.tag(tag.id)],
@@ -249,7 +253,7 @@ export const useNewsletterDetail = (
       });
 
       // Prefetch newsletters with same tags
-      const tagIds = newsletter.tags.map((t) => t.id);
+      const tagIds = newsletter.tags.map((t: { id: string }) => t.id);
       if (tagIds.length > 0) {
         prefetchPromises.push(
           prefetchQuery(

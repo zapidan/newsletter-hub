@@ -350,7 +350,7 @@ export const useVirtualScrolling = (
 };
 
 // Intersection Observer for infinite scrolling
-export const useInfiniteScroll = (
+export const useGenericInfiniteScroll = (
   hasNextPage: boolean,
   isFetching: boolean,
   fetchNextPage: () => void,

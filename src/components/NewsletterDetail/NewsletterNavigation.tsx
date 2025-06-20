@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Loader } from "lucide-react";
-import { useNewsletterNavigation } from "@common/hooks/useNewsletterNavigation";
-import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
-import { useLogger } from "@common/utils/logger/useLogger";
+import React, { useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
+import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { useLogger } from '@common/utils/logger/useLogger';
 
 interface NewsletterNavigationProps {
   currentNewsletterId: string;
@@ -16,14 +16,14 @@ interface NewsletterNavigationProps {
 
 export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
   currentNewsletterId,
-  className = "",
+  className = '',
   showLabels = true,
   showCounter = true,
   disabled = false,
   autoMarkAsRead = true,
 }) => {
   const navigate = useNavigate();
-  const log = useLogger("NewsletterNavigation");
+  const log = useLogger('NewsletterNavigation');
 
   const {
     hasPrevious,
@@ -47,17 +47,12 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
 
   // Auto-mark current newsletter as read when it loads (instantaneous)
   useEffect(() => {
-    if (
-      autoMarkAsRead &&
-      currentNewsletter &&
-      !currentNewsletter.is_read &&
-      !disabled
-    ) {
+    if (autoMarkAsRead && currentNewsletter && !currentNewsletter.is_read && !disabled) {
       const markAsRead = async () => {
         try {
           await handleMarkAsRead(currentNewsletter.id);
-          log.debug("Auto-marked newsletter as read via navigation", {
-            action: "auto_mark_read_navigation",
+          log.debug('Auto-marked newsletter as read via navigation', {
+            action: 'auto_mark_read_navigation',
             metadata: {
               newsletterId: currentNewsletter.id,
               title: currentNewsletter.title,
@@ -65,12 +60,12 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
           });
         } catch (error) {
           log.error(
-            "Failed to auto-mark newsletter as read via navigation",
+            'Failed to auto-mark newsletter as read via navigation',
             {
-              action: "auto_mark_read_navigation_error",
+              action: 'auto_mark_read_navigation_error',
               metadata: { newsletterId: currentNewsletter.id },
             },
-            error instanceof Error ? error : new Error(String(error)),
+            error instanceof Error ? error : new Error(String(error))
           );
         }
       };
@@ -95,29 +90,30 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         }
       } catch (error) {
         log.error(
-          "Failed to process current newsletter before navigation",
+          'Failed to process current newsletter before navigation',
           {
-            action: "navigate_previous_process_error",
+            action: 'navigate_previous_process_error',
             metadata: { newsletterId: currentNewsletter.id },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
       }
     }
 
     const previousId = navigateToPrevious();
     if (previousId) {
-      log.debug("Navigating to previous newsletter", {
-        action: "navigate_previous",
+      log.debug('Navigating to previous newsletter', {
+        action: 'navigate_previous',
         metadata: {
           fromId: currentNewsletterId,
           toId: previousId,
         },
       });
       navigate(`/newsletters/${previousId}`, {
+        replace: false,
         state: {
           from: `/newsletters/${currentNewsletterId}`,
-          autoMarkAsRead: autoMarkAsRead,
+          fromNavigation: true,
         },
       });
     }
@@ -146,29 +142,30 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         }
       } catch (error) {
         log.error(
-          "Failed to process current newsletter before navigation",
+          'Failed to process current newsletter before navigation',
           {
-            action: "navigate_next_process_error",
+            action: 'navigate_next_process_error',
             metadata: { newsletterId: currentNewsletter.id },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
       }
     }
 
     const nextId = navigateToNext();
     if (nextId) {
-      log.debug("Navigating to next newsletter", {
-        action: "navigate_next",
+      log.debug('Navigating to next newsletter', {
+        action: 'navigate_next',
         metadata: {
           fromId: currentNewsletterId,
           toId: nextId,
         },
       });
       navigate(`/newsletters/${nextId}`, {
+        replace: false,
         state: {
           from: `/newsletters/${currentNewsletterId}`,
-          autoMarkAsRead: autoMarkAsRead,
+          fromNavigation: true,
         },
       });
     }
@@ -190,29 +187,29 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
 
       // Only handle shortcuts when not typing in an input
       if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA" ||
-        document.activeElement?.getAttribute("contenteditable") === "true"
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        document.activeElement?.getAttribute('contenteditable') === 'true'
       ) {
         return;
       }
 
-      if (event.key === "ArrowLeft" || event.key === "j") {
+      if (event.key === 'ArrowLeft' || event.key === 'j') {
         event.preventDefault();
         handlePrevious();
-      } else if (event.key === "ArrowRight" || event.key === "k") {
+      } else if (event.key === 'ArrowRight' || event.key === 'k') {
         event.preventDefault();
         handleNext();
       }
     },
-    [disabled, handlePrevious, handleNext],
+    [disabled, handlePrevious, handleNext]
   );
 
   // Add keyboard event listeners
   React.useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleKeyDown]);
 
@@ -231,15 +228,11 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
           flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
           ${
             hasPrevious && !disabled && !isLoading
-              ? "text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
-              : "text-gray-400 cursor-not-allowed"
+              ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200'
+              : 'text-gray-400 cursor-not-allowed'
           }
         `}
-        title={
-          hasPrevious
-            ? "Previous newsletter (← or J)"
-            : "No previous newsletter"
-        }
+        title={hasPrevious ? 'Previous newsletter (← or J)' : 'No previous newsletter'}
         aria-label="Navigate to previous newsletter"
       >
         {isLoading ? (
@@ -260,12 +253,10 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
             </div>
           ) : currentIndex >= 0 ? (
             <>
-              <span className="font-medium text-gray-700">
-                {currentIndex + 1}
-              </span>
+              <span className="font-medium text-gray-700">{currentIndex + 1}</span>
               <span>of</span>
               <span className="font-medium text-gray-700">
-                {totalCount > 0 ? totalCount.toLocaleString() : "?"}
+                {totalCount > 0 ? totalCount.toLocaleString() : '?'}
               </span>
             </>
           ) : (
@@ -282,11 +273,11 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
           flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
           ${
             hasNext && !disabled && !isLoading
-              ? "text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
-              : "text-gray-400 cursor-not-allowed"
+              ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200'
+              : 'text-gray-400 cursor-not-allowed'
           }
         `}
-        title={hasNext ? "Next newsletter (→ or K)" : "No next newsletter"}
+        title={hasNext ? 'Next newsletter (→ or K)' : 'No next newsletter'}
         aria-label="Navigate to next newsletter"
       >
         {showLabels && <span>Next</span>}

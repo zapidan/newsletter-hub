@@ -1,16 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useCallback, useState, useEffect } from "react";
-import {
-  Heart,
-  Bookmark as BookmarkIcon,
-  Archive,
-  ArchiveX,
-} from "lucide-react";
-import { toast } from "react-hot-toast";
-import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
-import { readingQueueApi } from "@common/api/readingQueueApi";
-import { useLogger } from "@common/utils/logger/useLogger";
-import type { NewsletterWithRelations } from "@common/types";
+import React, { useCallback, useState, useEffect } from 'react';
+import { Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { readingQueueApi } from '@common/api/readingQueueApi';
+import { useLogger } from '@common/utils/logger/useLogger';
+import type { NewsletterWithRelations } from '@common/types';
 
 interface NewsletterDetailActionsProps {
   newsletter: NewsletterWithRelations;
@@ -18,9 +13,11 @@ interface NewsletterDetailActionsProps {
   isFromReadingQueue?: boolean;
 }
 
-export const NewsletterDetailActions: React.FC<
-  NewsletterDetailActionsProps
-> = ({ newsletter, onNewsletterUpdate, isFromReadingQueue = false }) => {
+export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = ({
+  newsletter,
+  onNewsletterUpdate,
+  isFromReadingQueue = false,
+}) => {
   const log = useLogger();
 
   // Use shared newsletter actions for consistent cache management
@@ -44,19 +41,18 @@ export const NewsletterDetailActions: React.FC<
     },
     onError: (error) => {
       log.error(
-        "Newsletter action failed",
+        'Newsletter action failed',
         {
-          action: "newsletter_action",
+          action: 'newsletter_action',
           metadata: { newsletterId: newsletter.id },
         },
-        error,
+        error
       );
     },
   });
 
   // Optimistic local state for immediate UI feedback
-  const [localNewsletter, setLocalNewsletter] =
-    useState<NewsletterWithRelations>(newsletter);
+  const [localNewsletter, setLocalNewsletter] = useState<NewsletterWithRelations>(newsletter);
 
   // Enhanced loading states
   const [isLiking, setIsLiking] = useState(false);
@@ -84,12 +80,12 @@ export const NewsletterDetailActions: React.FC<
         setIsInQueue(inQueue);
       } catch (error) {
         log.error(
-          "Failed to check queue status",
+          'Failed to check queue status',
           {
-            action: "check_queue_status",
+            action: 'check_queue_status',
             metadata: { newsletterId: newsletter.id },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
         // Fallback to prop value if API fails
         setIsInQueue(isFromReadingQueue);
@@ -122,17 +118,17 @@ export const NewsletterDetailActions: React.FC<
       }
     } catch (error) {
       log.error(
-        "Failed to toggle read status",
+        'Failed to toggle read status',
         {
-          action: "toggle_read_status",
+          action: 'toggle_read_status',
           metadata: { newsletterId: newsletter.id },
         },
-        error instanceof Error ? error : new Error(String(error)) ,
+        error instanceof Error ? error : new Error(String(error))
       );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      toast.error("Failed to update read status");
+      toast.error('Failed to update read status');
     } finally {
       setIsTogglingReadStatus(false);
     }
@@ -150,39 +146,33 @@ export const NewsletterDetailActions: React.FC<
 
     setIsLiking(true);
 
-    // Optimistic update to local state
-    const optimisticNewsletter = {
-      ...localNewsletter,
-      is_liked: !localNewsletter.is_liked,
-    };
-    setLocalNewsletter(optimisticNewsletter);
-    onNewsletterUpdate(optimisticNewsletter);
-
     try {
-      await handleToggleLike(localNewsletter);
+      // Let the shared action handler manage optimistic updates
+      await handleToggleLike(localNewsletter, {
+        optimisticUpdates: true,
+        showToasts: true,
+        onSuccess: (updatedNewsletter) => {
+          // Update local state with the result
+          if (updatedNewsletter) {
+            setLocalNewsletter(updatedNewsletter);
+            onNewsletterUpdate(updatedNewsletter);
+          }
+        },
+      });
     } catch (error) {
       log.error(
-        "Failed to update like status",
+        'Failed to update like status',
         {
-          action: "toggle_like_status",
+          action: 'toggle_like_status',
           metadata: { newsletterId: newsletter.id },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
-      // Revert optimistic update
-      setLocalNewsletter(newsletter);
-      onNewsletterUpdate(newsletter);
-      toast.error("Failed to update like status");
+      toast.error('Failed to update like status');
     } finally {
       setIsLiking(false);
     }
-  }, [
-    localNewsletter,
-    isLiking,
-    handleToggleLike,
-    newsletter,
-    onNewsletterUpdate,
-  ]);
+  }, [localNewsletter, isLiking, handleToggleLike, newsletter, onNewsletterUpdate, log]);
 
   const handleToggleQueue = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingQueue || isCheckingQueue) return;
@@ -197,30 +187,23 @@ export const NewsletterDetailActions: React.FC<
       await handleToggleInQueue(localNewsletter, isInQueue);
     } catch (error) {
       log.error(
-        "Failed to toggle reading queue",
+        'Failed to toggle reading queue',
         {
-          action: "toggle_reading_queue",
+          action: 'toggle_reading_queue',
           metadata: { newsletterId: newsletter.id },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
       // Revert optimistic update on error
       setIsInQueue(isInQueue);
-      toast.error("Failed to update reading queue");
+      toast.error('Failed to update reading queue');
     } finally {
       setIsTogglingQueue(false);
     }
-  }, [
-    localNewsletter,
-    isTogglingQueue,
-    isCheckingQueue,
-    isInQueue,
-    handleToggleInQueue,
-  ]);
+  }, [localNewsletter, isTogglingQueue, isCheckingQueue, isInQueue, handleToggleInQueue]);
 
   const handleArchive = useCallback(async () => {
-    if (!localNewsletter?.id || isArchiving || localNewsletter.is_archived)
-      return;
+    if (!localNewsletter?.id || isArchiving || localNewsletter.is_archived) return;
 
     setIsArchiving(true);
 
@@ -236,31 +219,24 @@ export const NewsletterDetailActions: React.FC<
       await handleToggleArchive(localNewsletter);
     } catch (error) {
       log.error(
-        "Failed to archive newsletter",
+        'Failed to archive newsletter',
         {
-          action: "archive_newsletter",
+          action: 'archive_newsletter',
           metadata: { newsletterId: newsletter.id },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      toast.error("Failed to archive newsletter");
+      toast.error('Failed to archive newsletter');
     } finally {
       setIsArchiving(false);
     }
-  }, [
-    localNewsletter,
-    isArchiving,
-    handleToggleArchive,
-    onNewsletterUpdate,
-    newsletter,
-  ]);
+  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter]);
 
   const handleUnarchive = useCallback(async () => {
-    if (!localNewsletter?.id || isArchiving || !localNewsletter.is_archived)
-      return;
+    if (!localNewsletter?.id || isArchiving || !localNewsletter.is_archived) return;
 
     setIsArchiving(true);
 
@@ -276,36 +252,26 @@ export const NewsletterDetailActions: React.FC<
       await handleToggleArchive(localNewsletter);
     } catch (error) {
       log.error(
-        "Failed to unarchive newsletter",
+        'Failed to unarchive newsletter',
         {
-          action: "unarchive_newsletter",
+          action: 'unarchive_newsletter',
           metadata: { newsletterId: newsletter.id },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
       // Revert optimistic update
       setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      toast.error("Failed to unarchive newsletter");
+      toast.error('Failed to unarchive newsletter');
     } finally {
       setIsArchiving(false);
     }
-  }, [
-    localNewsletter,
-    isArchiving,
-    handleToggleArchive,
-    onNewsletterUpdate,
-    newsletter,
-  ]);
+  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter]);
 
   const handleTrash = useCallback(async () => {
     if (!localNewsletter?.id) return;
 
-    if (
-      !window.confirm(
-        "Are you sure? This action is final and cannot be undone.",
-      )
-    ) {
+    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) {
       return;
     }
 
@@ -314,20 +280,20 @@ export const NewsletterDetailActions: React.FC<
 
       // Navigate back after deletion
       if (isFromReadingQueue) {
-        window.location.href = "/reading-queue";
+        window.location.href = '/reading-queue';
       } else {
-        window.location.href = "/inbox?filter=archived";
+        window.location.href = '/inbox?filter=archived';
       }
     } catch (error) {
       log.error(
-        "Failed to delete newsletter",
+        'Failed to delete newsletter',
         {
-          action: "delete_newsletter",
+          action: 'delete_newsletter',
           metadata: { newsletterId: newsletter.id },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
-      toast.error("Failed to delete newsletter");
+      toast.error('Failed to delete newsletter');
     }
   }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue]);
 
@@ -339,17 +305,15 @@ export const NewsletterDetailActions: React.FC<
         disabled={isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread}
         className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           localNewsletter?.is_read
-            ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-            : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+            : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
         }`}
-        aria-label={
-          localNewsletter?.is_read ? "Mark as unread" : "Mark as read"
-        }
+        aria-label={localNewsletter?.is_read ? 'Mark as unread' : 'Mark as read'}
       >
         {(isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread) && (
           <div className="w-4 h-4 mr-1 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
-        <span>{localNewsletter?.is_read ? "Mark Unread" : "Mark Read"}</span>
+        <span>{localNewsletter?.is_read ? 'Mark Unread' : 'Mark Read'}</span>
       </button>
 
       {/* Like Toggle */}
@@ -358,21 +322,19 @@ export const NewsletterDetailActions: React.FC<
         disabled={isLiking}
         className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           localNewsletter?.is_liked
-            ? "bg-red-100 text-red-600 hover:bg-red-200"
-            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            ? 'bg-red-100 text-red-600 hover:bg-red-200'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}
-        aria-label={localNewsletter?.is_liked ? "Unlike" : "Like"}
+        aria-label={localNewsletter?.is_liked ? 'Unlike' : 'Like'}
       >
         {isLiking && (
           <div className="w-4 h-4 mr-1 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
         <Heart
-          className={`h-4 w-4 ${localNewsletter?.is_liked ? "fill-red-500" : "fill-none"}`}
-          stroke={localNewsletter?.is_liked ? "currentColor" : "currentColor"}
+          className={`h-4 w-4 ${localNewsletter?.is_liked ? 'fill-red-500' : 'fill-none'}`}
+          stroke={localNewsletter?.is_liked ? 'currentColor' : 'currentColor'}
         />
-        <span className="ml-1">
-          {localNewsletter?.is_liked ? "Liked" : "Like"}
-        </span>
+        <span className="ml-1">{localNewsletter?.is_liked ? 'Liked' : 'Like'}</span>
       </button>
 
       {/* Bookmark Toggle */}
@@ -381,19 +343,19 @@ export const NewsletterDetailActions: React.FC<
         disabled={isTogglingQueue || isCheckingQueue}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           isInQueue
-            ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
-            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
         }`}
-        aria-label={isInQueue ? "Remove from queue" : "Add to queue"}
+        aria-label={isInQueue ? 'Remove from queue' : 'Add to queue'}
       >
         {(isTogglingQueue || isCheckingQueue) && (
           <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
         <BookmarkIcon
-          className={`h-4 w-4 ${isInQueue ? "fill-yellow-500" : "fill-none"}`}
+          className={`h-4 w-4 ${isInQueue ? 'fill-yellow-500' : 'fill-none'}`}
           stroke="currentColor"
         />
-        <span>{isInQueue ? "Saved" : "Save for later"}</span>
+        <span>{isInQueue ? 'Saved' : 'Save for later'}</span>
       </button>
 
       {/* Archive/Unarchive Toggle */}

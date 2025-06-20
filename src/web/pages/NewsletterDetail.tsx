@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useState, useMemo, memo } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useRef } from "react";
-import { ArrowLeft } from "lucide-react";
-import { useNewsletters } from "@common/hooks/useNewsletters";
-import { useTags } from "@common/hooks/useTags";
-import { useAuth } from "@common/contexts/AuthContext";
-import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
-import { useLogger } from "@common/utils/logger/useLogger";
-import LoadingScreen from "@common/components/common/LoadingScreen";
-import TagSelector from "@web/components/TagSelector";
-import NewsletterDetailActions from "../../components/NewsletterDetail/NewsletterDetailActions";
-import NewsletterNavigation from "../../components/NewsletterDetail/NewsletterNavigation";
-import type { NewsletterWithRelations, Tag } from "@common/types";
+import { useCallback, useEffect, useState, useMemo, memo } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useRef } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { useNewsletterDetail } from '@common/hooks/useNewsletterDetail';
+import { useTags } from '@common/hooks/useTags';
+import { useAuth } from '@common/contexts/AuthContext';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { useLogger } from '@common/utils/logger/useLogger';
+import LoadingScreen from '@common/components/common/LoadingScreen';
+import TagSelector from '@web/components/TagSelector';
+import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
+import NewsletterNavigation from '../../components/NewsletterDetail/NewsletterNavigation';
+import type { NewsletterWithRelations, Tag } from '@common/types';
 
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
@@ -23,11 +23,9 @@ const NewsletterDetail = memo(() => {
   const isFromReadingQueue = useMemo(() => {
     return (
       location.state?.fromReadingQueue === true ||
-      location.state?.from === "/reading-queue" ||
-      (typeof location.state?.from === "string" &&
-        location.state.from.includes("reading-queue")) ||
-      (typeof document.referrer === "string" &&
-        document.referrer.includes("reading-queue"))
+      location.state?.from === '/reading-queue' ||
+      (typeof location.state?.from === 'string' && location.state.from.includes('reading-queue')) ||
+      (typeof document.referrer === 'string' && document.referrer.includes('reading-queue'))
     );
   }, [location.state]);
 
@@ -35,30 +33,30 @@ const NewsletterDetail = memo(() => {
   const isFromNewsletterSources = useMemo(() => {
     return (
       location.state?.fromNewsletterSources === true ||
-      location.state?.from === "/newsletters" ||
-      (typeof location.state?.from === "string" &&
-        location.state.from.includes("/newsletters") &&
-        !location.state.from.includes("reading-queue")) ||
-      (typeof document.referrer === "string" &&
-        document.referrer.includes("/newsletters") &&
-        !document.referrer.includes("reading-queue"))
+      location.state?.from === '/newsletters' ||
+      (typeof location.state?.from === 'string' &&
+        location.state.from.includes('/newsletters') &&
+        !location.state.from.includes('reading-queue')) ||
+      (typeof document.referrer === 'string' &&
+        document.referrer.includes('/newsletters') &&
+        !document.referrer.includes('reading-queue'))
     );
   }, [location.state]);
 
   // Helper function to get the correct back button text
   const getBackButtonText = useCallback(() => {
     if (isFromReadingQueue) {
-      return "Back to Reading Queue";
+      return 'Back to Reading Queue';
     } else if (isFromNewsletterSources) {
-      return "Back to Newsletter Sources";
+      return 'Back to Newsletter Sources';
     } else {
-      return "Back to Inbox";
+      return 'Back to Inbox';
     }
   }, [isFromReadingQueue, isFromNewsletterSources]);
 
   const handleBack = useCallback(() => {
-    log.debug("Navigation state for back action", {
-      action: "navigate_back",
+    log.debug('Navigation state for back action', {
+      action: 'navigate_back',
       metadata: {
         locationState: location.state,
         documentReferrer: document.referrer,
@@ -68,24 +66,22 @@ const NewsletterDetail = memo(() => {
     // Check multiple indicators to determine where we came from
     const fromReadingQueue =
       location.state?.fromReadingQueue === true ||
-      location.state?.from === "/reading-queue" ||
-      (typeof document.referrer === "string" &&
-        document.referrer.includes("reading-queue")) ||
-      (typeof location.state?.from === "string" &&
-        location.state.from.includes("reading-queue"));
+      location.state?.from === '/reading-queue' ||
+      (typeof document.referrer === 'string' && document.referrer.includes('reading-queue')) ||
+      (typeof location.state?.from === 'string' && location.state.from.includes('reading-queue'));
 
     const fromNewsletterSources =
       location.state?.fromNewsletterSources === true ||
-      location.state?.from === "/newsletters" ||
-      (typeof document.referrer === "string" &&
-        document.referrer.includes("/newsletters") &&
-        !document.referrer.includes("reading-queue")) ||
-      (typeof location.state?.from === "string" &&
-        location.state.from.includes("/newsletters") &&
-        !location.state.from.includes("reading-queue"));
+      location.state?.from === '/newsletters' ||
+      (typeof document.referrer === 'string' &&
+        document.referrer.includes('/newsletters') &&
+        !document.referrer.includes('reading-queue')) ||
+      (typeof location.state?.from === 'string' &&
+        location.state.from.includes('/newsletters') &&
+        !location.state.from.includes('reading-queue'));
 
-    log.debug("Determined navigation context", {
-      action: "navigate_back",
+    log.debug('Determined navigation context', {
+      action: 'navigate_back',
       metadata: {
         fromReadingQueue,
         fromNewsletterSources,
@@ -93,11 +89,11 @@ const NewsletterDetail = memo(() => {
     });
 
     // Determine target route
-    let targetRoute = "/inbox";
+    let targetRoute = '/inbox';
     if (fromReadingQueue) {
-      targetRoute = "/queue";
+      targetRoute = '/queue';
     } else if (fromNewsletterSources) {
-      targetRoute = "/newsletters";
+      targetRoute = '/newsletters';
     }
 
     // Use window.history to go back first, then navigate if needed
@@ -106,7 +102,7 @@ const NewsletterDetail = memo(() => {
       window.history.back();
       // Then navigate to the correct route if needed (as a fallback)
       setTimeout(() => {
-        if (window.location.pathname === "/newsletters/" + id) {
+        if (window.location.pathname === '/newsletters/' + id) {
           // If we're still on the same page, force navigation
           navigate(targetRoute, {
             replace: true,
@@ -121,7 +117,6 @@ const NewsletterDetail = memo(() => {
     }
   }, [navigate, location.state, id]);
   const { updateNewsletterTags } = useTags();
-  const { getNewsletter } = useNewsletters({}, { enabled: false });
   const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
     showToasts: false,
     optimisticUpdates: true,
@@ -129,18 +124,27 @@ const NewsletterDetail = memo(() => {
 
   const { user } = useAuth();
 
-  const [newsletter, setNewsletter] = useState<NewsletterWithRelations | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use the optimized newsletter detail hook
+  const {
+    newsletter,
+    isLoading: loading,
+    isError,
+    error: fetchError,
+    refetch,
+    prefetchRelated,
+  } = useNewsletterDetail(id || '', {
+    enabled: !!id && !!user?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+    prefetchTags: true,
+    prefetchSource: true,
+  });
+
   const [hasAutoMarkedAsRead, setHasAutoMarkedAsRead] = useState(false);
   const [hasAutoArchived, setHasAutoArchived] = useState(false);
 
-  // Track the fetch state and mount status
+  // Track mount status for cleanup
   const isMounted = useRef(true);
-  const lastFetchedId = useRef<string | null>(null);
-  const isFetching = useRef(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -149,131 +153,19 @@ const NewsletterDetail = memo(() => {
     };
   }, []);
 
-  // Fetch newsletter detail when id or user?.id changes
+  // Prefetch related data when newsletter loads
   useEffect(() => {
-    // Skip if no ID or user
-    if (!id || !user?.id) {
-      setLoading(true);
-      return;
+    if (newsletter && !loading) {
+      prefetchRelated();
     }
-
-    // Skip if already fetching this ID
-    if (isFetching.current && lastFetchedId.current === id) {
-      log.debug("Newsletter fetch already in progress", {
-        action: "fetch_newsletter_detail",
-        metadata: { newsletterId: id },
-      });
-      return;
-    }
-
-    // Skip if we already have this newsletter loaded
-    if (newsletter?.id === id) {
-      log.debug("Using cached newsletter data", {
-        action: "fetch_newsletter_detail",
-        metadata: { newsletterId: id },
-      });
-      setLoading(false);
-      return;
-    }
-
-    log.debug("Initializing newsletter fetch", {
-      action: "fetch_newsletter_detail",
-      metadata: { newsletterId: id },
-    });
-
-    // Update state
-    lastFetchedId.current = id;
-    isFetching.current = true;
-    setLoading(true);
-    setError(null);
-
-    // Create a flag to track if the component is still mounted
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      if (!controller.signal.aborted) {
-        controller.abort("Request timed out");
-      }
-    }, 10000); // 10 second timeout
-
-    const fetchData = async () => {
-      try {
-        const data = await getNewsletter(id);
-
-        // Skip if component unmounted or ID changed
-        if (!isMounted.current || lastFetchedId.current !== id) {
-          log.debug(
-            "Skipping state update - component unmounted or ID changed",
-            {
-              action: "fetch_newsletter_detail",
-              metadata: {
-                newsletterId: id,
-                isMounted: isMounted.current,
-                lastFetchedId: lastFetchedId.current,
-              },
-            },
-          );
-          return;
-        }
-
-        log.debug("Processing newsletter data", {
-          action: "fetch_newsletter_detail",
-          metadata: { newsletterId: data?.id },
-        });
-
-        if (data?.id === id) {
-          setNewsletter(data);
-          setError(null);
-        } else {
-          setError("Newsletter not found");
-          setNewsletter(null);
-        }
-      } catch (err) {
-        log.error(
-          "Failed to fetch newsletter detail",
-          {
-            action: "fetch_newsletter_detail",
-            metadata: { newsletterId: id },
-          },
-          err instanceof Error ? err : new Error(String(err)),
-        );
-
-        // Skip if component unmounted or ID changed
-        if (!isMounted.current || lastFetchedId.current !== id) {
-          return;
-        }
-
-        setError(
-          err instanceof Error ? err.message : "Failed to load newsletter",
-        );
-        setNewsletter(null);
-      } finally {
-        // Clear the timeout
-        clearTimeout(timeoutId);
-
-        // Only update state if this is still the current fetch
-        if (isMounted.current && lastFetchedId.current === id) {
-          isFetching.current = false;
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
-
-    // Cleanup function
-    return () => {
-      controller.abort("Component unmounted or ID changed");
-      clearTimeout(timeoutId);
-    };
-  }, [id, user?.id, getNewsletter]); // Include getNewsletter in deps
+  }, [newsletter, loading, prefetchRelated]);
 
   // Memoize the transformed tags to prevent unnecessary re-renders
   const tagsForUI = useMemo((): Tag[] => {
     if (!newsletter?.tags) return [];
     return (newsletter.tags as unknown[]).map((t: unknown) => {
-      if (typeof t === "object" && t !== null && "name" in t && "color" in t)
-        return t as Tag;
-      if (typeof t === "object" && t !== null && "tag" in t && (t as any).tag)
+      if (typeof t === 'object' && t !== null && 'name' in t && 'color' in t) return t as Tag;
+      if (typeof t === 'object' && t !== null && 'tag' in t && (t as any).tag)
         return (t as any).tag as Tag;
       return t as Tag;
     });
@@ -281,43 +173,39 @@ const NewsletterDetail = memo(() => {
 
   // Handle newsletter updates from the actions component
   const handleNewsletterUpdate = useCallback(
-    (updatedNewsletter: NewsletterWithRelations) => {
-      setNewsletter(updatedNewsletter);
+    (_updatedNewsletter: NewsletterWithRelations) => {
+      // Force immediate refetch to ensure UI updates
+      refetch();
+      // Also trigger related queries to update
+      prefetchRelated();
     },
-    [],
+    [refetch, prefetchRelated]
   );
 
   // Auto-mark newsletter as read when it loads (instantaneous)
   useEffect(() => {
-    if (
-      newsletter &&
-      !newsletter.is_read &&
-      !hasAutoMarkedAsRead &&
-      !loading &&
-      !error
-    ) {
+    if (newsletter && !newsletter.is_read && !hasAutoMarkedAsRead && !loading && !fetchError) {
       const markAsRead = async () => {
         try {
           await handleMarkAsRead(newsletter.id);
           setHasAutoMarkedAsRead(true);
-          log.debug("Auto-marked newsletter as read on detail view", {
-            action: "auto_mark_read_detail",
+          log.debug('Auto-marked newsletter as read on detail view', {
+            action: 'auto_mark_read_detail',
             metadata: {
               newsletterId: newsletter.id,
               title: newsletter.title,
             },
           });
-
-          // Update local state to reflect the change
-          setNewsletter((prev) => (prev ? { ...prev, is_read: true } : null));
+          // Force refetch to update UI
+          await refetch();
         } catch (error) {
           log.error(
-            "Failed to auto-mark newsletter as read in detail view",
+            'Failed to auto-mark newsletter as read in detail view',
             {
-              action: "auto_mark_read_detail_error",
+              action: 'auto_mark_read_detail_error',
               metadata: { newsletterId: newsletter.id },
             },
-            error instanceof Error ? error : new Error(String(error)),
+            error instanceof Error ? error : new Error(String(error))
           );
         }
       };
@@ -325,7 +213,7 @@ const NewsletterDetail = memo(() => {
       // Mark as read immediately for instant feedback
       markAsRead();
     }
-  }, [newsletter?.id, hasAutoMarkedAsRead, loading, error]);
+  }, [newsletter?.id, hasAutoMarkedAsRead, loading, fetchError, handleMarkAsRead, refetch, log]);
 
   // Auto-archive newsletter after it's been read and viewed for a short time
   useEffect(() => {
@@ -335,32 +223,29 @@ const NewsletterDetail = memo(() => {
       !newsletter.is_archived &&
       !hasAutoArchived &&
       !loading &&
-      !error
+      !fetchError
     ) {
       const archiveNewsletter = async () => {
         try {
           await handleToggleArchive(newsletter);
           setHasAutoArchived(true);
-          log.debug("Auto-archived newsletter after reading", {
-            action: "auto_archive_detail",
+          log.debug('Auto-archived newsletter after reading', {
+            action: 'auto_archive_detail',
             metadata: {
               newsletterId: newsletter.id,
               title: newsletter.title,
             },
           });
-
-          // Update local state to reflect the change
-          setNewsletter((prev) =>
-            prev ? { ...prev, is_archived: true } : null,
-          );
+          // Force refetch to update UI
+          await refetch();
         } catch (error) {
           log.error(
-            "Failed to auto-archive newsletter in detail view",
+            'Failed to auto-archive newsletter in detail view',
             {
-              action: "auto_archive_detail_error",
+              action: 'auto_archive_detail_error',
               metadata: { newsletterId: newsletter.id },
             },
-            error instanceof Error ? error : new Error(String(error)),
+            error instanceof Error ? error : new Error(String(error))
           );
         }
       };
@@ -369,7 +254,17 @@ const NewsletterDetail = memo(() => {
       const timeoutId = setTimeout(archiveNewsletter, 3000);
       return () => clearTimeout(timeoutId);
     }
-  }, [newsletter?.id, newsletter?.is_read, hasAutoArchived, loading, error]);
+  }, [
+    newsletter?.id,
+    newsletter?.is_read,
+    newsletter?.is_archived,
+    hasAutoArchived,
+    loading,
+    fetchError,
+    handleToggleArchive,
+    refetch,
+    log,
+  ]);
 
   // Reset auto-mark and auto-archive state when newsletter ID changes
   useEffect(() => {
@@ -377,43 +272,11 @@ const NewsletterDetail = memo(() => {
     setHasAutoArchived(false);
   }, [id]);
 
-  // Load newsletter data when component mounts or id changes
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!id || !user?.id) return;
-
-      try {
-        setLoading(true);
-        const data = await getNewsletter(id);
-        if (data) {
-          setNewsletter(data as NewsletterWithRelations);
-        } else {
-          setError("Newsletter not found");
-        }
-      } catch (err) {
-        log.error(
-          "Failed to load newsletter",
-          {
-            action: "load_newsletter",
-            metadata: { newsletterId: id },
-          },
-          err instanceof Error ? err : new Error(String(err)),
-        );
-        setError("Failed to load newsletter. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user?.id]);
-
   if (loading) {
     return <LoadingScreen />;
   }
 
-  if (error) {
+  if (isError) {
     return (
       <div key={`error-${id}`} className="max-w-6xl w-full mx-auto px-4 py-8">
         <button
@@ -424,7 +287,7 @@ const NewsletterDetail = memo(() => {
           {getBackButtonText()}
         </button>
         <div className="bg-red-100 text-red-700 px-4 py-3 rounded-md mb-6">
-          {error}
+          {fetchError?.message || 'Failed to load newsletter. Please try again.'}
         </div>
       </div>
     );
@@ -436,10 +299,7 @@ const NewsletterDetail = memo(() => {
 
   // Add key to force remount when ID changes
   return (
-    <div
-      key={`newsletter-${id}`}
-      className="max-w-6xl w-full mx-auto px-4 py-8"
-    >
+    <div key={`newsletter-${id}`} className="max-w-6xl w-full mx-auto px-4 py-8">
       <button
         onClick={handleBack}
         className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
@@ -462,7 +322,7 @@ const NewsletterDetail = memo(() => {
       )}
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {" "}
+        {' '}
         {/* Main Content */}
         <div className="flex-1">
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
@@ -478,20 +338,17 @@ const NewsletterDetail = memo(() => {
                     try {
                       const ok = await updateNewsletterTags(id, newTags);
                       if (ok) {
-                        const updated = await getNewsletter(id);
-                        if (updated) setNewsletter(updated);
+                        await refetch();
                         setTagSelectorKey((k) => k + 1);
                       }
                     } catch (error) {
                       log.error(
-                        "Failed to update tags",
+                        'Failed to update tags',
                         {
-                          action: "update_tags",
+                          action: 'update_tags',
                           metadata: { newsletterId: id },
                         },
-                        error instanceof Error
-                          ? error
-                          : new Error(String(error)),
+                        error instanceof Error ? error : new Error(String(error))
                       );
                     }
                   }}
@@ -500,20 +357,17 @@ const NewsletterDetail = memo(() => {
                     try {
                       const ok = await updateNewsletterTags(id, []);
                       if (ok) {
-                        const updated = await getNewsletter(id);
-                        if (updated) setNewsletter(updated);
+                        await refetch();
                         setTagSelectorKey((k) => k + 1);
                       }
                     } catch (error) {
                       log.error(
-                        "Failed to delete tag",
+                        'Failed to delete tag',
                         {
-                          action: "delete_tag",
+                          action: 'delete_tag',
                           metadata: { newsletterId: id },
                         },
-                        error instanceof Error
-                          ? error
-                          : new Error(String(error)),
+                        error instanceof Error ? error : new Error(String(error))
                       );
                     }
                   }}
@@ -538,20 +392,17 @@ const NewsletterDetail = memo(() => {
             {newsletter?.received_at && (
               <div className="text-sm text-gray-500 mb-6">
                 <div>
-                  {new Date(newsletter.received_at).toLocaleDateString(
-                    "en-US",
-                    {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    },
-                  )}
+                  {new Date(newsletter.received_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </div>
                 {newsletter.estimated_read_time > 0 && (
                   <div className="mt-1 text-gray-400">
-                    {newsletter.estimated_read_time} min read •{" "}
+                    {newsletter.estimated_read_time} min read •{' '}
                     {newsletter.word_count.toLocaleString()} words
                   </div>
                 )}
@@ -565,11 +416,9 @@ const NewsletterDetail = memo(() => {
         {/* Sidebar */}
         <div className="lg:w-80 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h3 className="font-medium text-gray-900 mb-4">
-              Context & Insights
-            </h3>
+            <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
             <div className="text-sm text-gray-600">
-              {newsletter?.summary || "No summary available"}
+              {newsletter?.summary || 'No summary available'}
             </div>
           </div>
 
@@ -577,16 +426,14 @@ const NewsletterDetail = memo(() => {
             <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
             <div className="flex flex-wrap gap-2">
               {[
-                { id: "1", name: "Tech News", count: 5 },
-                { id: "2", name: "AI", count: 8 },
-                { id: "3", name: "Product", count: 3 },
-                { id: "4", name: "Industry", count: 6 },
+                { id: '1', name: 'Tech News', count: 5 },
+                { id: '2', name: 'AI', count: 8 },
+                { id: '3', name: 'Product', count: 3 },
+                { id: '4', name: 'Industry', count: 6 },
               ].map((topic) => (
                 <button
                   key={topic.id}
-                  onClick={() =>
-                    navigate(`/inbox?topic=${topic.name.toLowerCase()}`)
-                  }
+                  onClick={() => navigate(`/inbox?topic=${topic.name.toLowerCase()}`)}
                   className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full flex items-center gap-1.5"
                 >
                   <span>{topic.name}</span>

@@ -5,8 +5,9 @@ import {
   UseMutateAsyncFunction,
   useMutation,
   useQuery,
+  useQueryClient,
 } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useLogger } from '@common/utils/logger/useLogger';
 import { newsletterApi } from '../api/newsletterApi';
@@ -21,6 +22,7 @@ import {
   getQueryData,
   SimpleCacheManager,
 } from '../utils/cacheUtils';
+import { invalidateForOperation } from '../utils/optimizedCacheInvalidation';
 import { queryKeyFactory } from '../utils/queryKeyFactory';
 import { updateNewsletterTags } from '../utils/tagUtils';
 
@@ -149,6 +151,7 @@ export const useNewsletters = (
 ): UseNewslettersReturn => {
   const { user } = useAuth();
   const log = useLogger('useNewsletters');
+  const queryClient = useQueryClient();
   const lastCallTimeRef = useRef<number>(0);
   const {
     enabled = true,
@@ -423,7 +426,7 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          cacheManager.invalidateRelatedQueries([id], 'mark-as-read');
+          invalidateForOperation(queryClient, 'mark-read', [id]);
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -492,7 +495,7 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          cacheManager.invalidateRelatedQueries([id], 'mark-as-unread');
+          invalidateForOperation(queryClient, 'mark-unread', [id]);
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -571,7 +574,7 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          cacheManager.invalidateRelatedQueries(ids, 'bulk-mark-as-read');
+          invalidateForOperation(queryClient, 'bulk-mark-read', ids);
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -650,7 +653,7 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          cacheManager.invalidateRelatedQueries(ids, 'bulk-mark-as-unread');
+          invalidateForOperation(queryClient, 'bulk-mark-unread', ids);
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -820,7 +823,7 @@ export const useNewsletters = (
     onSettled: (_data, _error, id) => {
       // Use minimal invalidation to preserve filter state
       setTimeout(() => {
-        cacheManager.invalidateRelatedQueries([id], 'toggle-archive');
+        invalidateForOperation(queryClient, 'toggle-archive', [id]);
         // Dispatch event for unread count updates
         window.dispatchEvent(new CustomEvent('newsletter:archived'));
       }, 100);
@@ -877,7 +880,7 @@ export const useNewsletters = (
       }
     },
     onSettled: (_data, _error, ids) => {
-      cacheManager.invalidateRelatedQueries(ids, 'bulk-archive');
+      invalidateForOperation(queryClient, 'bulk-archive', ids);
       // Dispatch event for unread count updates
       window.dispatchEvent(new CustomEvent('newsletter:archived'));
     },
@@ -933,7 +936,7 @@ export const useNewsletters = (
       }
     },
     onSettled: (_data, _error, ids) => {
-      cacheManager.invalidateRelatedQueries(ids, 'bulk-unarchive');
+      invalidateForOperation(queryClient, 'bulk-unarchive', ids);
       // Dispatch event for unread count updates
       window.dispatchEvent(new CustomEvent('newsletter:archived'));
     },
@@ -945,7 +948,7 @@ export const useNewsletters = (
       return newsletterApi.delete(id);
     },
     onSettled: (_data, _error, id) => {
-      cacheManager.invalidateRelatedQueries([id], 'delete');
+      invalidateForOperation(queryClient, 'delete', [id]);
     },
   });
 
@@ -962,7 +965,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, ids) => {
       if (ids && Array.isArray(ids)) {
-        cacheManager.invalidateRelatedQueries(ids, 'bulk-delete');
+        invalidateForOperation(queryClient, 'bulk-delete', ids);
       }
       // Dispatch event for unread count updates
       window.dispatchEvent(new CustomEvent('newsletter:deleted'));
@@ -1124,7 +1127,7 @@ export const useNewsletters = (
       }
 
       // Force refresh of queue data as fallback
-      cacheManager.invalidateRelatedQueries([id], 'toggle-queue-error');
+      invalidateForOperation(queryClient, 'toggle-queue-error', [id]);
     },
     onSuccess: (_result, id) => {
       // Use smart invalidation for efficient cache updates
@@ -1136,7 +1139,7 @@ export const useNewsletters = (
     },
     onSettled: (_data, _error, id) => {
       // Ensure fresh data with minimal invalidation
-      cacheManager.invalidateRelatedQueries([id], 'toggle-queue');
+      invalidateForOperation(queryClient, 'toggle-queue', [id]);
     },
   });
 
