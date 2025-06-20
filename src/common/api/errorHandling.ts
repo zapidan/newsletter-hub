@@ -1,24 +1,24 @@
-import { AuthError } from "@supabase/supabase-js";
-import { logger } from "../utils/logger";
+import { AuthError } from '@supabase/supabase-js';
+import { logger } from '../utils/logger';
 
 // Custom error types
 export enum ErrorType {
-  NETWORK = "NETWORK_ERROR",
-  AUTH = "AUTH_ERROR",
-  VALIDATION = "VALIDATION_ERROR",
-  NOT_FOUND = "NOT_FOUND",
-  PERMISSION_DENIED = "PERMISSION_DENIED",
-  RATE_LIMIT = "RATE_LIMIT",
-  SERVER = "SERVER_ERROR",
-  DATABASE = "DATABASE_ERROR",
-  UNKNOWN = "UNKNOWN_ERROR",
+  NETWORK = 'NETWORK_ERROR',
+  AUTH = 'AUTH_ERROR',
+  VALIDATION = 'VALIDATION_ERROR',
+  NOT_FOUND = 'NOT_FOUND',
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  RATE_LIMIT = 'RATE_LIMIT',
+  SERVER = 'SERVER_ERROR',
+  DATABASE = 'DATABASE_ERROR',
+  UNKNOWN = 'UNKNOWN_ERROR',
 }
 
 export enum ErrorSeverity {
-  LOW = "low",
-  MEDIUM = "medium",
-  HIGH = "high",
-  CRITICAL = "critical",
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+  CRITICAL = 'critical',
 }
 
 // Initialize logger
@@ -41,10 +41,10 @@ export class AppError extends Error {
     code?: string,
     details?: any,
     hint?: string,
-    context?: Record<string, any>,
+    context?: Record<string, any>
   ) {
     super(message);
-    this.name = "AppError";
+    this.name = 'AppError';
     this.type = type;
     this.severity = severity;
     this.code = code;
@@ -80,14 +80,14 @@ export class AppError extends Error {
 export class NetworkError extends AppError {
   constructor(message: string, code?: string, details?: any) {
     super(message, ErrorType.NETWORK, ErrorSeverity.MEDIUM, code, details);
-    this.name = "NetworkError";
+    this.name = 'NetworkError';
   }
 }
 
 export class AuthenticationError extends AppError {
   constructor(message: string, code?: string, details?: any) {
     super(message, ErrorType.AUTH, ErrorSeverity.HIGH, code, details);
-    this.name = "AuthenticationError";
+    this.name = 'AuthenticationError';
   }
 }
 
@@ -96,7 +96,7 @@ export class ValidationError extends AppError {
 
   constructor(message: string, field?: string, code?: string, details?: any) {
     super(message, ErrorType.VALIDATION, ErrorSeverity.LOW, code, details);
-    this.name = "ValidationError";
+    this.name = 'ValidationError';
     this.field = field;
   }
 }
@@ -107,7 +107,7 @@ export class NotFoundError extends AppError {
       ? `${resource} with identifier '${identifier}' not found`
       : `${resource} not found`;
     super(message, ErrorType.NOT_FOUND, ErrorSeverity.LOW);
-    this.name = "NotFoundError";
+    this.name = 'NotFoundError';
   }
 }
 
@@ -117,112 +117,107 @@ export class PermissionError extends AppError {
       ? `Permission denied: cannot ${action} ${resource}`
       : `Permission denied: cannot ${action}`;
     super(message, ErrorType.PERMISSION_DENIED, ErrorSeverity.HIGH);
-    this.name = "PermissionError";
+    this.name = 'PermissionError';
   }
 }
 
 // Error transformation utilities
 export const transformSupabaseError = (error: any): AppError => {
   if (!error) {
-    return new AppError("Unknown error occurred");
+    return new AppError('Unknown error occurred');
   }
 
   // Handle PostgrestError (database errors)
   if (error.code) {
     switch (error.code) {
-      case "PGRST116":
-        return new NotFoundError("Resource");
+      case 'PGRST116':
+        return new NotFoundError('Resource');
 
-      case "23505":
+      case '23505':
         return new ValidationError(
-          "This record already exists",
+          'This record already exists',
           undefined,
           error.code,
-          error.details,
+          error.details
         );
 
-      case "23503":
+      case '23503':
         return new ValidationError(
-          "Referenced record does not exist",
+          'Referenced record does not exist',
           undefined,
           error.code,
-          error.details,
+          error.details
         );
 
-      case "42501":
-        return new PermissionError("perform this action");
+      case '42501':
+        return new PermissionError('perform this action');
 
-      case "PGRST301":
-        return new AppError(
-          "Request timeout",
-          ErrorType.NETWORK,
-          ErrorSeverity.MEDIUM,
-          error.code,
-        );
+      case 'PGRST301':
+        return new AppError('Request timeout', ErrorType.NETWORK, ErrorSeverity.MEDIUM, error.code);
 
       default:
         return new AppError(
-          error.message || "Database error occurred",
+          error.message || 'Database error occurred',
           ErrorType.DATABASE,
           ErrorSeverity.MEDIUM,
           error.code,
           error.details,
-          error.hint,
+          error.hint
         );
     }
   }
 
   // Handle AuthError
-  if (error instanceof AuthError || error.name === "AuthError") {
+  if (error instanceof AuthError || error.name === 'AuthError') {
     return new AuthenticationError(
-      error.message || "Authentication failed",
+      error.message || 'Authentication failed',
       error.status?.toString(),
-      error,
+      error
     );
   }
 
   // Handle network errors
   if (
-    error.name === "NetworkError" ||
-    error.message?.includes("fetch") ||
-    error.message?.includes("network") ||
-    error.code === "NETWORK_ERROR"
+    error.name === 'NetworkError' ||
+    error.message?.includes('fetch') ||
+    error.message?.includes('network') ||
+    error.code === 'NETWORK_ERROR'
   ) {
     return new NetworkError(
-      "Network connection failed. Please check your internet connection.",
+      'Network connection failed. Please check your internet connection.',
       error.code,
-      error,
+      error
     );
   }
 
   // Handle rate limiting
-  if (error.status === 429 || error.code === "RATE_LIMIT_EXCEEDED") {
+  if (error.status === 429 || error.code === 'RATE_LIMIT_EXCEEDED') {
     return new AppError(
-      "Too many requests. Please try again later.",
+      'Too many requests. Please try again later.',
       ErrorType.RATE_LIMIT,
       ErrorSeverity.MEDIUM,
-      error.code,
+      error.code
     );
   }
 
   // Handle server errors
-  if (error.status >= 500 || error.code?.startsWith("5")) {
+  if (error.status >= 500 || error.code?.startsWith('5')) {
     return new AppError(
-      "Server error occurred. Please try again later.",
+      'Server error occurred. Please try again later.',
       ErrorType.SERVER,
       ErrorSeverity.HIGH,
       error.status?.toString() || error.code,
-      error,
+      error
     );
   }
 
   // Generic error handling
   return new AppError(
-    error.message || "An unexpected error occurred",
+    error.message || 'An unexpected error occurred',
     ErrorType.UNKNOWN,
     ErrorSeverity.MEDIUM,
     error.code,
-    error,
+    error
   );
 };
 
@@ -230,16 +225,16 @@ export const transformSupabaseError = (error: any): AppError => {
 export const getUserFriendlyMessage = (error: AppError): string => {
   switch (error.type) {
     case ErrorType.NETWORK:
-      return "Connection problem. Please check your internet and try again.";
+      return 'Connection problem. Please check your internet and try again.';
 
     case ErrorType.AUTH:
-      return "Please sign in to continue.";
+      return 'Please sign in to continue.';
 
     case ErrorType.VALIDATION:
       return error.message; // Validation messages are usually user-friendly
 
     case ErrorType.NOT_FOUND:
-      return "The requested item could not be found.";
+      return 'The requested item could not be found.';
 
     case ErrorType.PERMISSION_DENIED:
       return "You don't have permission to perform this action.";
@@ -248,13 +243,13 @@ export const getUserFriendlyMessage = (error: AppError): string => {
       return "You're doing that too quickly. Please slow down and try again.";
 
     case ErrorType.SERVER:
-      return "Something went wrong on our end. Please try again in a moment.";
+      return 'Something went wrong on our end. Please try again in a moment.';
 
     case ErrorType.DATABASE:
-      return "There was a problem saving your data. Please try again.";
+      return 'There was a problem saving your data. Please try again.';
 
     default:
-      return "Something unexpected happened. Please try again.";
+      return 'Something unexpected happened. Please try again.';
   }
 };
 
@@ -277,7 +272,7 @@ export const logError = (
     component?: string;
     source?: string;
     additionalData?: Record<string, any>;
-  },
+  }
 ): void => {
   const logEntry: ErrorLogEntry = {
     error,
@@ -291,17 +286,16 @@ export const logError = (
 
   // Structured error logging
   const logLevel =
-    error.severity === ErrorSeverity.CRITICAL ||
-    error.severity === ErrorSeverity.HIGH
-      ? "error"
-      : "warn";
-  const logMethod = logLevel === "error" ? log.error : log.warn;
+    error.severity === ErrorSeverity.CRITICAL || error.severity === ErrorSeverity.HIGH
+      ? 'error'
+      : 'warn';
+  const logMethod = logLevel === 'error' ? log.error : log.warn;
 
   logMethod(
     `${error.name}: ${error.message}`,
     {
-      component: "ErrorHandler",
-      action: "log_error",
+      component: 'ErrorHandler',
+      action: 'log_error',
       metadata: {
         errorType: error.type,
         errorCode: error.code,
@@ -313,14 +307,11 @@ export const logError = (
         buildVersion: import.meta.env.VITE_APP_VERSION,
       },
     },
-    error,
+    error
   );
 
   // Send to error reporting service in production
-  if (
-    import.meta.env.MODE === "production" &&
-    error.severity !== ErrorSeverity.LOW
-  ) {
+  if (import.meta.env.MODE === 'production' && error.severity !== ErrorSeverity.LOW) {
     reportErrorToService(logEntry);
   }
 };
@@ -334,27 +325,25 @@ const reportErrorToService = async (logEntry: ErrorLogEntry): Promise<void> => {
     // For now, we'll just store it locally or send to a custom endpoint
     if (import.meta.env.VITE_ERROR_REPORTING_ENDPOINT) {
       await fetch(import.meta.env.VITE_ERROR_REPORTING_ENDPOINT, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(logEntry),
       });
     }
   } catch (reportingError) {
     log.error(
-      "Failed to report error to external service",
+      'Failed to report error to external service',
       {
-        component: "ErrorHandler",
-        action: "report_error",
+        component: 'ErrorHandler',
+        action: 'report_error',
         metadata: {
           originalError: logEntry.error?.message,
           reportingEndpoint: import.meta.env.VITE_ERROR_REPORTING_ENDPOINT,
         },
       },
-      reportingError instanceof Error
-        ? reportingError
-        : new Error(String(reportingError)),
+      reportingError instanceof Error ? reportingError : new Error(String(reportingError))
     );
   }
 };
@@ -380,7 +369,7 @@ export interface RetryOptions {
 
 export const withRetry = async <T>(
   operation: () => Promise<T>,
-  options: RetryOptions = {},
+  options: RetryOptions = {}
 ): Promise<T> => {
   const {
     maxAttempts = 3,
@@ -390,7 +379,7 @@ export const withRetry = async <T>(
     retryCondition = (error: AppError) =>
       error.type === ErrorType.NETWORK ||
       error.type === ErrorType.SERVER ||
-      error.code === "PGRST301", // timeout
+      error.code === 'PGRST301', // timeout
   } = options;
 
   let lastError: AppError;
@@ -399,8 +388,7 @@ export const withRetry = async <T>(
     try {
       return await operation();
     } catch (error) {
-      const appError =
-        error instanceof AppError ? error : transformSupabaseError(error);
+      const appError = error instanceof AppError ? error : transformSupabaseError(error);
       lastError = appError;
 
       // Don't retry if this is the last attempt or if retry condition is not met
@@ -409,14 +397,11 @@ export const withRetry = async <T>(
       }
 
       // Calculate delay with exponential backoff
-      const delay = Math.min(
-        baseDelay * Math.pow(backoffFactor, attempt - 1),
-        maxDelay,
-      );
+      const delay = Math.min(baseDelay * Math.pow(backoffFactor, attempt - 1), maxDelay);
 
       console.warn(
         `Operation failed (attempt ${attempt}/${maxAttempts}). Retrying in ${delay}ms...`,
-        appError.message,
+        appError.message
       );
 
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -439,36 +424,32 @@ export const handleAsyncError = (error: unknown): AppError => {
 export const createValidationError = (
   field: string,
   message: string,
-  value?: any,
+  value?: any
 ): ValidationError => {
-  return new ValidationError(message, field, "VALIDATION_FAILED", {
+  return new ValidationError(message, field, 'VALIDATION_FAILED', {
     field,
     value,
   });
 };
 
 export const validateRequired = (value: any, fieldName: string): void => {
-  if (value === null || value === undefined || value === "") {
+  if (value === null || value === undefined || value === '') {
     throw createValidationError(fieldName, `${fieldName} is required`);
   }
 };
 
-export const validateEmail = (email: string, fieldName = "email"): void => {
+export const validateEmail = (email: string, fieldName = 'email'): void => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    throw createValidationError(fieldName, "Invalid email format");
+    throw createValidationError(fieldName, 'Invalid email format');
   }
 };
 
-export const validateMinLength = (
-  value: string,
-  minLength: number,
-  fieldName: string,
-): void => {
+export const validateMinLength = (value: string, minLength: number, fieldName: string): void => {
   if (value.length < minLength) {
     throw createValidationError(
       fieldName,
-      `${fieldName} must be at least ${minLength} characters long`,
+      `${fieldName} must be at least ${minLength} characters long`
     );
   }
 };
@@ -499,18 +480,18 @@ export const useErrorHandler = () => {
 // Global error handler
 export const setupGlobalErrorHandling = (): void => {
   // Handle unhandled promise rejections
-  window.addEventListener("unhandledrejection", (event) => {
+  window.addEventListener('unhandledrejection', (event) => {
     const error = transformSupabaseError(event.reason);
-    logError(error, { source: "unhandledRejection" });
+    logError(error, { source: 'unhandledRejection' });
 
     // Prevent the default browser behavior
     event.preventDefault();
   });
 
   // Handle uncaught errors
-  window.addEventListener("error", (event) => {
+  window.addEventListener('error', (event) => {
     const error = new AppError(
-      event.message || "Uncaught error",
+      event.message || 'Uncaught error',
       ErrorType.UNKNOWN,
       ErrorSeverity.HIGH,
       undefined,
@@ -518,35 +499,35 @@ export const setupGlobalErrorHandling = (): void => {
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
-      },
+      }
     );
 
-    logError(error, { source: "uncaughtError" });
+    logError(error, { source: 'uncaughtError' });
   });
 };
 
 // Development helpers
 export const simulateError = (type: ErrorType, message?: string): AppError => {
-  if (import.meta.env.MODE !== "development") {
-    throw new Error("simulateError is only available in development mode");
+  if (import.meta.env.MODE !== 'development') {
+    throw new Error('simulateError is only available in development mode');
   }
 
   const defaultMessages = {
-    [ErrorType.NETWORK]: "Simulated network error",
-    [ErrorType.AUTH]: "Simulated authentication error",
-    [ErrorType.VALIDATION]: "Simulated validation error",
-    [ErrorType.NOT_FOUND]: "Simulated not found error",
-    [ErrorType.PERMISSION_DENIED]: "Simulated permission error",
-    [ErrorType.RATE_LIMIT]: "Simulated rate limit error",
-    [ErrorType.SERVER]: "Simulated server error",
-    [ErrorType.DATABASE]: "Simulated database error",
-    [ErrorType.UNKNOWN]: "Simulated unknown error",
+    [ErrorType.NETWORK]: 'Simulated network error',
+    [ErrorType.AUTH]: 'Simulated authentication error',
+    [ErrorType.VALIDATION]: 'Simulated validation error',
+    [ErrorType.NOT_FOUND]: 'Simulated not found error',
+    [ErrorType.PERMISSION_DENIED]: 'Simulated permission error',
+    [ErrorType.RATE_LIMIT]: 'Simulated rate limit error',
+    [ErrorType.SERVER]: 'Simulated server error',
+    [ErrorType.DATABASE]: 'Simulated database error',
+    [ErrorType.UNKNOWN]: 'Simulated unknown error',
   };
 
   return new AppError(
     message || defaultMessages[type],
     type,
     ErrorSeverity.MEDIUM,
-    "SIMULATED_ERROR",
+    'SIMULATED_ERROR'
   );
 };

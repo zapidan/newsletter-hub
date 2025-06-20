@@ -105,9 +105,4 @@ export default defineConfig({
   testIgnore: ['**/node_modules/**', '**/dist/**'],
   outputDir: 'test-results/',
   preserveOutput: 'failures-only',
-  use: {
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'on-first-retry',
-  },
 });

@@ -1,17 +1,17 @@
-import { AuthContext } from "@common/contexts/AuthContext";
-import { supabase } from "@common/services/supabaseClient";
-import { NewsletterWithRelations } from "@common/types";
+import { AuthContext } from '@common/contexts/AuthContext';
+import { supabase } from '@common/services/supabaseClient';
+import { NewsletterWithRelations } from '@common/types';
 import {
   getCacheManagerSafe,
   getQueriesData,
   getQueryData,
   getQueryState,
   prefetchQuery,
-} from "@common/utils/cacheUtils";
-import { useLogger } from "@common/utils/logger/useLogger";
-import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { useQuery } from "@tanstack/react-query";
-import { useCallback, useContext, useMemo } from "react";
+} from '@common/utils/cacheUtils';
+import { useLogger } from '@common/utils/logger/useLogger';
+import { queryKeyFactory } from '@common/utils/queryKeyFactory';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useContext, useMemo } from 'react';
 
 export interface UseNewsletterDetailOptions {
   enabled?: boolean;
@@ -73,7 +73,7 @@ interface SupabaseNewsletterResponse {
  */
 export const useNewsletterDetail = (
   newsletterId: string,
-  options: UseNewsletterDetailOptions = {},
+  options: UseNewsletterDetailOptions = {}
 ) => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
@@ -94,20 +94,19 @@ export const useNewsletterDetail = (
   } = options;
 
   // Fetch newsletter detail from Supabase
-  const fetchNewsletterDetail =
-    useCallback(async (): Promise<NewsletterWithRelations> => {
-      if (!user) {
-        throw new Error("User not authenticated");
-      }
+  const fetchNewsletterDetail = useCallback(async (): Promise<NewsletterWithRelations> => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
 
-      if (!newsletterId) {
-        throw new Error("Newsletter ID is required");
-      }
+    if (!newsletterId) {
+      throw new Error('Newsletter ID is required');
+    }
 
-      const { data, error } = await supabase
-        .from("newsletters")
-        .select(
-          `
+    const { data, error } = await supabase
+      .from('newsletters')
+      .select(
+        `
         *,
         source:newsletter_sources(
           id,
@@ -127,39 +126,39 @@ export const useNewsletterDetail = (
             created_at
           )
         )
-      `,
-        )
-        .eq("id", newsletterId)
-        .eq("user_id", user.id)
-        .single();
+      `
+      )
+      .eq('id', newsletterId)
+      .eq('user_id', user.id)
+      .single();
 
-      if (error) {
-        log.error(
-          "Failed to fetch newsletter detail",
-          {
-            action: "fetch_newsletter_detail",
-            metadata: { newsletterId, userId: user.id },
-          },
-          error,
-        );
-        throw new Error(error.message || "Failed to fetch newsletter details");
-      }
+    if (error) {
+      log.error(
+        'Failed to fetch newsletter detail',
+        {
+          action: 'fetch_newsletter_detail',
+          metadata: { newsletterId, userId: user.id },
+        },
+        error
+      );
+      throw new Error(error.message || 'Failed to fetch newsletter details');
+    }
 
-      if (!data) {
-        throw new Error("Newsletter not found");
-      }
+    if (!data) {
+      throw new Error('Newsletter not found');
+    }
 
-      // Transform the data to match our expected format
-      const typedData = data as SupabaseNewsletterResponse;
-      const transformedData: NewsletterWithRelations = {
-        ...typedData,
-        source: typedData.source || null,
-        tags: typedData.tags?.map((t) => t.tag).filter(Boolean) || [],
-        newsletter_source_id: typedData.newsletter_source_id || null,
-      };
+    // Transform the data to match our expected format
+    const typedData = data as SupabaseNewsletterResponse;
+    const transformedData: NewsletterWithRelations = {
+      ...typedData,
+      source: typedData.source || null,
+      tags: typedData.tags?.map((t) => t.tag).filter(Boolean) || [],
+      newsletter_source_id: typedData.newsletter_source_id || null,
+    };
 
-      return transformedData;
-    }, [user, newsletterId, log]);
+    return transformedData;
+  }, [user, newsletterId, log]);
 
   // Main query for newsletter detail
   const query = useQuery({
@@ -171,15 +170,17 @@ export const useNewsletterDetail = (
     refetchOnWindowFocus,
     // Optimistic updates - try to get data from newsletter lists first
     initialData: () => {
-      const listsData = getQueriesData<NewsletterWithRelations[]>(
-        queryKeyFactory.newsletters.lists(),
-      );
+      const listsData = getQueriesData<any>(queryKeyFactory.newsletters.lists());
 
-      for (const [, newsletters] of listsData) {
-        if (newsletters) {
-          const found = newsletters.find((n) => n.id === newsletterId);
-          if (found) {
-            return found;
+      for (const [, data] of listsData) {
+        if (data) {
+          // Handle both array and paginated response formats
+          const newsletters = Array.isArray(data) ? data : data.data;
+          if (Array.isArray(newsletters)) {
+            const found = newsletters.find((n: NewsletterWithRelations) => n.id === newsletterId);
+            if (found) {
+              return found;
+            }
           }
         }
       }
@@ -187,17 +188,19 @@ export const useNewsletterDetail = (
     },
     initialDataUpdatedAt: () => {
       // Get the timestamp of when the list data was last updated
-      const listsData = getQueriesData<NewsletterWithRelations[]>(
-        queryKeyFactory.newsletters.lists(),
-      );
+      const listsData = getQueriesData<any>(queryKeyFactory.newsletters.lists());
 
       let latestUpdate = 0;
-      for (const [queryKey, newsletters] of listsData) {
-        if (newsletters) {
-          const found = newsletters.find((n) => n.id === newsletterId);
-          if (found) {
-            const state = getQueryState(queryKey);
-            latestUpdate = Math.max(latestUpdate, state?.dataUpdatedAt || 0);
+      for (const [queryKey, data] of listsData) {
+        if (data) {
+          // Handle both array and paginated response formats
+          const newsletters = Array.isArray(data) ? data : data.data;
+          if (Array.isArray(newsletters)) {
+            const found = newsletters.find((n: NewsletterWithRelations) => n.id === newsletterId);
+            if (found) {
+              const state = getQueryState(queryKey);
+              latestUpdate = Math.max(latestUpdate, state?.dataUpdatedAt || 0);
+            }
           }
         }
       }
@@ -207,10 +210,7 @@ export const useNewsletterDetail = (
     // Retry configuration
     retry: (failureCount, error: Error) => {
       // Don't retry on 404 or authentication errors
-      if (
-        error?.message?.includes("not found") ||
-        error?.message?.includes("authenticated")
-      ) {
+      if (error?.message?.includes('not found') || error?.message?.includes('authenticated')) {
         return false;
       }
       return failureCount < 3;
@@ -234,17 +234,17 @@ export const useNewsletterDetail = (
             [...queryKeyFactory.newsletters.tag(tag.id)],
             async () => {
               const { data, error } = await supabase
-                .from("tags")
-                .select("*")
-                .eq("id", tag.id)
-                .eq("user_id", user.id)
+                .from('tags')
+                .select('*')
+                .eq('id', tag.id)
+                .eq('user_id', user.id)
                 .single();
 
               if (error) throw error;
               return data;
             },
-            { staleTime: 10 * 60 * 1000 }, // 10 minutes
-          ),
+            { staleTime: 10 * 60 * 1000 } // 10 minutes
+          )
         );
       });
 
@@ -256,15 +256,15 @@ export const useNewsletterDetail = (
             [...queryKeyFactory.newsletters.list({ tagIds })],
             async () => {
               const { data, error } = await supabase
-                .from("newsletters")
+                .from('newsletters')
                 .select(
                   `
                     *,
                     source:newsletter_sources(*),
                     tags:newsletter_tags(tag:tags(*))
-                  `,
+                  `
                 )
-                .eq("user_id", user.id)
+                .eq('user_id', user.id)
                 .limit(20);
 
               if (error) throw error;
@@ -278,8 +278,8 @@ export const useNewsletterDetail = (
                 })) || []
               );
             },
-            { staleTime: 2 * 60 * 1000 }, // 2 minutes
-          ),
+            { staleTime: 2 * 60 * 1000 } // 2 minutes
+          )
         );
       }
     }
@@ -291,17 +291,17 @@ export const useNewsletterDetail = (
           [...queryKeyFactory.newsletters.source(newsletter.source.id)],
           async () => {
             const { data, error } = await supabase
-              .from("newsletter_sources")
-              .select("*")
-              .eq("id", newsletter.source!.id)
-              .eq("user_id", user.id)
+              .from('newsletter_sources')
+              .select('*')
+              .eq('id', newsletter.source!.id)
+              .eq('user_id', user.id)
               .single();
 
             if (error) throw error;
             return data;
           },
-          { staleTime: 15 * 60 * 1000 }, // 15 minutes
-        ),
+          { staleTime: 15 * 60 * 1000 } // 15 minutes
+        )
       );
 
       // Prefetch other newsletters from same source
@@ -314,17 +314,17 @@ export const useNewsletterDetail = (
           ],
           async () => {
             const { data, error } = await supabase
-              .from("newsletters")
+              .from('newsletters')
               .select(
                 `
                 *,
                 source:newsletter_sources(*),
                 tags:newsletter_tags(tag:tags(*))
-              `,
+              `
               )
-              .eq("user_id", user.id)
-              .eq("newsletter_source_id", newsletter.source!.id)
-              .order("received_at", { ascending: false })
+              .eq('user_id', user.id)
+              .eq('newsletter_source_id', newsletter.source!.id)
+              .order('received_at', { ascending: false })
               .limit(10);
 
             if (error) throw error;
@@ -338,8 +338,8 @@ export const useNewsletterDetail = (
               })) || []
             );
           },
-          { staleTime: 2 * 60 * 1000 }, // 2 minutes
-        ),
+          { staleTime: 2 * 60 * 1000 } // 2 minutes
+        )
       );
     }
 
@@ -347,8 +347,8 @@ export const useNewsletterDetail = (
     try {
       await Promise.allSettled(prefetchPromises);
     } catch (_) {
-      log.warn("Some prefetch operations failed", {
-        action: "prefetch_operations",
+      log.warn('Some prefetch operations failed', {
+        action: 'prefetch_operations',
         metadata: {
           newsletterId,
           prefetchTags,
@@ -403,12 +403,8 @@ export const usePrefetchNewsletterDetail = () => {
       const { priority = false } = options;
 
       // Check if already cached and fresh
-      const existingData = getQueryData(
-        queryKeyFactory.newsletters.detail(newsletterId),
-      );
-      const queryState = getQueryState(
-        queryKeyFactory.newsletters.detail(newsletterId),
-      );
+      const existingData = getQueryData(queryKeyFactory.newsletters.detail(newsletterId));
+      const queryState = getQueryState(queryKeyFactory.newsletters.detail(newsletterId));
 
       // If we have fresh data, no need to prefetch
       if (
@@ -424,16 +420,16 @@ export const usePrefetchNewsletterDetail = () => {
           queryKeyFactory.newsletters.detail(newsletterId),
           async () => {
             const { data, error } = await supabase
-              .from("newsletters")
+              .from('newsletters')
               .select(
                 `
                 *,
                 source:newsletter_sources(*),
                 tags:newsletter_tags(tag:tags(*))
-              `,
+              `
               )
-              .eq("id", newsletterId)
-              .eq("user_id", user.id)
+              .eq('id', newsletterId)
+              .eq('user_id', user.id)
               .single();
 
             if (error) throw error;
@@ -450,17 +446,17 @@ export const usePrefetchNewsletterDetail = () => {
             staleTime: 5 * 60 * 1000, // 5 minutes
             // Higher priority prefetches get longer cache time
             gcTime: priority ? 60 * 60 * 1000 : 30 * 60 * 1000,
-          },
+          }
         );
       } catch (_) {
-        log.warn("Failed to prefetch newsletter", {
-          action: "prefetch_newsletter",
+        log.warn('Failed to prefetch newsletter', {
+          action: 'prefetch_newsletter',
           metadata: { newsletterId },
         });
         // Don't throw - prefetch failures shouldn't break the app
       }
     },
-    [user, log],
+    [user, log]
   );
 
   return { prefetchNewsletter };

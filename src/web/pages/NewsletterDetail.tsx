@@ -119,7 +119,7 @@ const NewsletterDetail = memo(() => {
         replace: true,
       });
     }
-  }, [navigate, location.state, id, log]);
+  }, [navigate, location.state, id]);
   const { updateNewsletterTags } = useTags();
   const { getNewsletter } = useNewsletters({}, { enabled: false });
   const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
@@ -265,7 +265,7 @@ const NewsletterDetail = memo(() => {
       controller.abort("Component unmounted or ID changed");
       clearTimeout(timeoutId);
     };
-  }, [id, user?.id, getNewsletter, log, newsletter]); // Include getNewsletter in deps
+  }, [id, user?.id, getNewsletter]); // Include getNewsletter in deps
 
   // Memoize the transformed tags to prevent unnecessary re-renders
   const tagsForUI = useMemo((): Tag[] => {
@@ -325,7 +325,7 @@ const NewsletterDetail = memo(() => {
       // Mark as read immediately for instant feedback
       markAsRead();
     }
-  }, [newsletter?.id, hasAutoMarkedAsRead, loading, error, handleMarkAsRead, log, newsletter]);
+  }, [newsletter?.id, hasAutoMarkedAsRead, loading, error]);
 
   // Auto-archive newsletter after it's been read and viewed for a short time
   useEffect(() => {
@@ -369,13 +369,13 @@ const NewsletterDetail = memo(() => {
       const timeoutId = setTimeout(archiveNewsletter, 3000);
       return () => clearTimeout(timeoutId);
     }
-  }, [newsletter?.id, newsletter?.is_read, hasAutoArchived, loading, error, handleToggleArchive, log, newsletter]);
+  }, [newsletter?.id, newsletter?.is_read, hasAutoArchived, loading, error]);
 
   // Reset auto-mark and auto-archive state when newsletter ID changes
   useEffect(() => {
     setHasAutoMarkedAsRead(false);
     setHasAutoArchived(false);
-  }, [id, log]);
+  }, [id]);
 
   // Load newsletter data when component mounts or id changes
   useEffect(() => {
@@ -407,7 +407,7 @@ const NewsletterDetail = memo(() => {
 
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user?.id, getNewsletter, log]);
+  }, [id, user?.id]);
 
   if (loading) {
     return <LoadingScreen />;

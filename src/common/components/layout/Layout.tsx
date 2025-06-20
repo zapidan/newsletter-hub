@@ -1,18 +1,25 @@
-import { Outlet } from "react-router-dom";
-import Sidebar from "./Sidebar";
-import Header from "./Header";
+import { useAuth } from '@common/contexts/AuthContext';
 import { motion } from "framer-motion";
 import { ReactNode } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import Header from "./Header";
+import Sidebar from "./Sidebar";
 
 interface LayoutProps {
   children?: ReactNode;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // Don't show sidebar on login page or if user is not authenticated
+  const showSidebar = user && !loading && !location.pathname.startsWith('/login');
+
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50/30">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
+      {showSidebar && <Sidebar />}
+      <div className={`flex flex-col ${showSidebar ? 'flex-1' : 'w-full'} overflow-hidden`}>
         <Header />
         <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
           <motion.div

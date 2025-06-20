@@ -1,13 +1,7 @@
-import { useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
-export type ParamValue =
-  | string
-  | number
-  | boolean
-  | string[]
-  | null
-  | undefined;
+export type ParamValue = string | number | boolean | string[] | null | undefined;
 
 export interface ParamConfig<T extends Record<string, ParamValue>> {
   [key: string]: {
@@ -25,7 +19,7 @@ export interface UseUrlParamsOptions {
 
 export function useUrlParams<T extends Record<string, ParamValue>>(
   config: ParamConfig<T>,
-  options: UseUrlParamsOptions = {},
+  options: UseUrlParamsOptions = {}
 ) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { replace = true } = options;
@@ -43,10 +37,7 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
         result[key as keyof T] = paramConfig.deserialize(urlValue);
       } else {
         // Default deserialization logic
-        result[key as keyof T] = deserializeValue(
-          urlValue,
-          paramConfig.defaultValue,
-        ) as T[keyof T];
+        result[key as keyof T] = deserializeValue(urlValue, paramConfig.defaultValue) as T[keyof T];
       }
     }
 
@@ -57,8 +48,7 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
   const updateParams = useCallback(
     (updates: Partial<T> | ((current: T) => Partial<T>)) => {
       const currentParams = params;
-      const newParams =
-        typeof updates === "function" ? updates(currentParams) : updates;
+      const newParams = typeof updates === 'function' ? updates(currentParams) : updates;
 
       setSearchParams(
         (prevParams) => {
@@ -94,10 +84,10 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
 
           return newSearchParams;
         },
-        { replace },
+        { replace }
       );
     },
-    [params, config, setSearchParams, replace],
+    [params, config, setSearchParams, replace]
   );
 
   // Update a single parameter
@@ -105,10 +95,10 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
     <K extends keyof T>(key: K, value: T[K] | ((current: T[K]) => T[K])) => {
       const currentValue = params[key];
       const newValue =
-        typeof value === "function" ? (value as Function)(currentValue) : value;
+        typeof value === 'function' ? (value as (current: T[K]) => T[K])(currentValue) : value;
       updateParams({ [key]: newValue } as Partial<T>);
     },
-    [params, updateParams],
+    [params, updateParams]
   );
 
   // Get a single parameter
@@ -116,7 +106,7 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
     <K extends keyof T>(key: K): T[K] => {
       return params[key];
     },
-    [params],
+    [params]
   );
 
   // Reset all parameters to defaults
@@ -161,7 +151,7 @@ function serializeValue(value: ParamValue): string | null {
   }
 
   if (Array.isArray(value)) {
-    return value.length > 0 ? value.join(",") : null;
+    return value.length > 0 ? value.join(',') : null;
   }
 
   return String(value);
@@ -170,14 +160,14 @@ function serializeValue(value: ParamValue): string | null {
 // Default deserialization logic
 function deserializeValue(value: string, defaultValue: ParamValue): ParamValue {
   if (Array.isArray(defaultValue)) {
-    return value ? value.split(",").filter(Boolean) : [];
+    return value ? value.split(',').filter(Boolean) : [];
   }
 
-  if (typeof defaultValue === "boolean") {
-    return value === "true";
+  if (typeof defaultValue === 'boolean') {
+    return value === 'true';
   }
 
-  if (typeof defaultValue === "number") {
+  if (typeof defaultValue === 'number') {
     const num = Number(value);
     return isNaN(num) ? defaultValue : num;
   }
@@ -189,7 +179,7 @@ function deserializeValue(value: string, defaultValue: ParamValue): ParamValue {
 export function useInboxUrlParams() {
   return useUrlParams({
     filter: {
-      defaultValue: "all" as const,
+      defaultValue: 'all' as const,
       omitIfDefault: true,
     },
     source: {
@@ -197,16 +187,15 @@ export function useInboxUrlParams() {
       omitIfDefault: true,
     },
     time: {
-      defaultValue: "all" as const,
+      defaultValue: 'all' as const,
       omitIfDefault: true,
     },
     tags: {
       defaultValue: [] as string[],
       omitIfDefault: true,
       serialize: (value: ParamValue) =>
-        Array.isArray(value) && value.length > 0 ? value.join(",") : null,
-      deserialize: (value: string) =>
-        value ? value.split(",").filter(Boolean) : [],
+        Array.isArray(value) && value.length > 0 ? value.join(',') : null,
+      deserialize: (value: string) => (value ? value.split(',').filter(Boolean) : []),
     },
   });
 }
@@ -220,11 +209,11 @@ export function useReadingQueueUrlParams() {
       deserialize: (value: string) => Math.max(1, parseInt(value, 10) || 1),
     },
     sort: {
-      defaultValue: "created_at" as const,
+      defaultValue: 'created_at' as const,
       omitIfDefault: true,
     },
     order: {
-      defaultValue: "desc" as const,
+      defaultValue: 'desc' as const,
       omitIfDefault: true,
     },
   });

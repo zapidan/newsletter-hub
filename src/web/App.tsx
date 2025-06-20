@@ -1,37 +1,31 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { Suspense, lazy, useEffect } from "react";
-import {
-  Routes,
-  Route,
-  Navigate,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
-import { Toaster } from "react-hot-toast";
-import { ToastProvider } from "@common/contexts/ToastContext";
-import { FilterProvider } from "@common/contexts/FilterContext";
-import { Layout } from "@common/components/layout";
-import { ProtectedRoute } from "@common/components/ProtectedRoute";
-import { CacheInitializer } from "@common/components/CacheInitializer";
-import ErrorBoundary from "@web/components/ErrorBoundary";
-import { useAuth } from "@common/contexts/AuthContext";
-import { useLogger, useLoggerStatic } from "@common/utils/logger/useLogger";
-import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import React, { Suspense, lazy, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { ToastProvider } from '@common/contexts/ToastContext';
+import { FilterProvider } from '@common/contexts/FilterContext';
+import { Layout } from '@common/components/layout';
+import { ProtectedRoute } from '@common/components/ProtectedRoute';
+import { CacheInitializer } from '@common/components/CacheInitializer';
+import ErrorBoundary from '@web/components/ErrorBoundary';
+import { useAuth } from '@common/contexts/AuthContext';
+import { useLogger, useLoggerStatic } from '@common/utils/logger/useLogger';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 // Lazy load page components
-const InboxPage = lazy(() => import("@web/pages/Inbox"));
-const NewsletterDetailPage = lazy(() => import("@web/pages/NewsletterDetail"));
-const NewslettersPage = lazy(() => import("@web/pages/NewslettersPage"));
-const TrendingTopicsPage = lazy(() => import("@web/pages/TrendingTopics"));
-const SearchPage = lazy(() => import("@web/pages/Search"));
-const TagsPage = lazy(() => import("@web/pages/TagsPage"));
-const ReadingQueuePage = lazy(() => import("@web/pages/ReadingQueuePage"));
-const SettingsPage = lazy(() => import("@web/pages/Settings"));
-const ProfilePage = lazy(() => import("@web/pages/ProfilePage"));
-const LoginPage = lazy(() => import("@web/pages/Login"));
-const ForgotPasswordPage = lazy(() => import("@web/pages/ForgotPassword"));
-const ResetPasswordPage = lazy(() => import("@web/pages/ResetPassword"));
-const DailySummary = lazy(() => import("@web/pages/DailySummary"));
+const InboxPage = lazy(() => import('@web/pages/Inbox'));
+const NewsletterDetailPage = lazy(() => import('@web/pages/NewsletterDetail'));
+const NewslettersPage = lazy(() => import('@web/pages/NewslettersPage'));
+const TrendingTopicsPage = lazy(() => import('@web/pages/TrendingTopics'));
+const SearchPage = lazy(() => import('@web/pages/Search'));
+const TagsPage = lazy(() => import('@web/pages/TagsPage'));
+const ReadingQueuePage = lazy(() => import('@web/pages/ReadingQueuePage'));
+const SettingsPage = lazy(() => import('@web/pages/Settings'));
+const ProfilePage = lazy(() => import('@web/pages/ProfilePage'));
+const LoginPage = lazy(() => import('@web/pages/Login'));
+const ForgotPasswordPage = lazy(() => import('@web/pages/ForgotPassword'));
+const ResetPasswordPage = lazy(() => import('@web/pages/ResetPassword'));
+const DailySummary = lazy(() => import('@web/pages/DailySummary'));
 
 // Loading component
 const LoadingFallback = () => (
@@ -51,14 +45,14 @@ const App: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const query = useQuery();
-  const redirectTo = query.get("redirectTo");
-  const log = useLogger("App");
+  const redirectTo = query.get('redirectTo');
+  const log = useLogger('App');
   const staticLog = useLoggerStatic();
 
   // Log navigation changes
   useEffect(() => {
     staticLog.logNavigation(
-      document.referrer ? new URL(document.referrer).pathname : "external",
+      document.referrer ? new URL(document.referrer).pathname : 'external',
       location.pathname,
       {
         metadata: {
@@ -66,16 +60,16 @@ const App: React.FC = () => {
           hash: location.hash,
           timestamp: new Date().toISOString(),
         },
-      },
+      }
     );
   }, [location, staticLog]);
 
   // Handle redirect after login
   React.useEffect(() => {
-    if (user && (location.pathname === "/login" || location.pathname === "/")) {
-      const destination = redirectTo || "/inbox";
-      log.info("Redirecting authenticated user", {
-        action: "auth_redirect",
+    if (user && (location.pathname === '/login' || location.pathname === '/')) {
+      const destination = redirectTo || '/inbox';
+      log.info('Redirecting authenticated user', {
+        action: 'auth_redirect',
         metadata: {
           from: location.pathname,
           to: destination,
@@ -88,8 +82,8 @@ const App: React.FC = () => {
 
   // Log app initialization
   useEffect(() => {
-    log.info("App initialized", {
-      action: "app_init",
+    log.info('App initialized', {
+      action: 'app_init',
       metadata: {
         pathname: location.pathname,
         userAgent: navigator.userAgent,
@@ -100,8 +94,8 @@ const App: React.FC = () => {
   }, []);
 
   if (loading) {
-    log.debug("App loading - showing loading fallback", {
-      action: "app_loading",
+    log.debug('App loading - showing loading fallback', {
+      action: 'app_loading',
     });
     return <LoadingFallback />;
   }
@@ -111,17 +105,14 @@ const App: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="text-center">
         <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-500" />
-        <h3 className="mt-2 text-lg font-medium text-gray-900">
-          Oops! Something went wrong
-        </h3>
+        <h3 className="mt-2 text-lg font-medium text-gray-900">Oops! Something went wrong</h3>
         <p className="mt-1 text-sm text-gray-500">
-          We're having trouble loading the application. Please try refreshing
-          the page.
+          We're having trouble loading the application. Please try refreshing the page.
         </p>
         <div className="mt-6">
           <button
             onClick={() => {
-              log.logUserAction("app_error_refresh", {
+              log.logUserAction('app_error_refresh', {
                 metadata: {
                   pathname: location.pathname,
                   timestamp: new Date().toISOString(),
@@ -141,7 +132,7 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary fallback={errorFallback}>
       <ToastProvider>
-        <FilterProvider>
+        <FilterProvider useLocalTagFiltering={true}>
           <CacheInitializer>
             <div className="min-h-screen bg-gray-50">
               <Toaster
@@ -149,24 +140,24 @@ const App: React.FC = () => {
                 toastOptions={{
                   duration: 5000,
                   style: {
-                    background: "#fff",
-                    color: "#1f2937",
+                    background: '#fff',
+                    color: '#1f2937',
                     boxShadow:
-                      "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                    borderRadius: "0.5rem",
-                    padding: "0.75rem 1rem",
-                    fontSize: "0.875rem",
+                      '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    borderRadius: '0.5rem',
+                    padding: '0.75rem 1rem',
+                    fontSize: '0.875rem',
                   },
                   success: {
                     iconTheme: {
-                      primary: "#10B981",
-                      secondary: "#fff",
+                      primary: '#10B981',
+                      secondary: '#fff',
                     },
                   },
                   error: {
                     iconTheme: {
-                      primary: "#EF4444",
-                      secondary: "#fff",
+                      primary: '#EF4444',
+                      secondary: '#fff',
                     },
                   },
                 }}
@@ -181,25 +172,15 @@ const App: React.FC = () => {
                         user ? (
                           <Navigate to="/inbox" replace />
                         ) : (
-                          <Navigate
-                            to="/login"
-                            state={{ from: location }}
-                            replace
-                          />
+                          <Navigate to="/login" state={{ from: location }} replace />
                         )
                       }
                     />
 
                     {/* Public routes */}
                     <Route path="/login" element={<LoginPage />} />
-                    <Route
-                      path="/forgot-password"
-                      element={<ForgotPasswordPage />}
-                    />
-                    <Route
-                      path="/reset-password"
-                      element={<ResetPasswordPage />}
-                    />
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                     {/* Protected routes */}
                     <Route
@@ -288,7 +269,7 @@ const App: React.FC = () => {
                       path="*"
                       element={
                         <Navigate
-                          to={user ? "/inbox" : "/login"}
+                          to={user ? '/inbox' : '/login'}
                           state={{ from: location }}
                           replace
                         />

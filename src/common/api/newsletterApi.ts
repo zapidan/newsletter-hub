@@ -1,4 +1,4 @@
-import { NewsletterWithRelations, Tag } from "../types";
+import { NewsletterWithRelations, Tag } from '../types';
 import {
   BatchResult,
   BulkUpdateNewsletterParams,
@@ -6,14 +6,14 @@ import {
   NewsletterQueryParams,
   PaginatedResponse,
   UpdateNewsletterParams,
-} from "../types/api";
-import { logger } from "../utils/logger";
+} from '../types/api';
+import { logger } from '../utils/logger';
 import {
   handleSupabaseError,
   requireAuth,
   supabase,
   withPerformanceLogging,
-} from "./supabaseClient";
+} from './supabaseClient';
 
 // Initialize logger
 const log = logger;
@@ -21,9 +21,9 @@ const log = logger;
 // Transform raw Supabase response to our Newsletter type
 const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Log the raw data we receive
-  log.debug("Newsletter response transformation started", {
-    component: "NewsletterApi",
-    action: "transform_response",
+  log.debug('Newsletter response transformation started', {
+    component: 'NewsletterApi',
+    action: 'transform_response',
     metadata: {
       id: data.id,
       newsletter_source_id: data.newsletter_source_id,
@@ -44,7 +44,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
     if (sourceData) {
       transformedSource = {
         id: sourceData.id,
-        name: sourceData.name || "Unknown",
+        name: sourceData.name || 'Unknown',
         from: sourceData.from || null,
         created_at: sourceData.created_at || new Date().toISOString(),
         updated_at: sourceData.updated_at || new Date().toISOString(),
@@ -53,11 +53,11 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
     }
   }
   // Fallback to direct source property for backward compatibility
-  else if (data.source && typeof data.source === "object") {
+  else if (data.source && typeof data.source === 'object') {
     const source = data.source as any;
     transformedSource = {
       id: source.id,
-      name: source.name || "Unknown",
+      name: source.name || 'Unknown',
       from: source.from || null,
       created_at: source.created_at || new Date().toISOString(),
       updated_at: source.updated_at || new Date().toISOString(),
@@ -69,7 +69,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   const transformedTags: Tag[] = Array.isArray(data.tags)
     ? data.tags
       .map((t: { tag: any }) => {
-        if (t.tag && typeof t.tag === "object") {
+        if (t.tag && typeof t.tag === 'object') {
           return {
             id: t.tag.id as string,
             name: t.tag.name as string,
@@ -110,9 +110,9 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   };
 
   // Log the transformed data
-  log.debug("Newsletter response transformation completed", {
-    component: "NewsletterApi",
-    action: "transform_response_complete",
+  log.debug('Newsletter response transformation completed', {
+    component: 'NewsletterApi',
+    action: 'transform_response_complete',
     metadata: {
       id: result.id,
       title: result.title,
@@ -128,7 +128,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
 // Build query based on parameters
 const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
   // Build select clause
-  let selectClause = "*";
+  let selectClause = '*';
   const relations = [];
 
   // Always include source relation when sourceIds is provided or includeSource is true
@@ -136,48 +136,46 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     params.includeSource || (params.sourceIds && params.sourceIds.length > 0);
   if (shouldIncludeSource) {
     // Include the relation with the source filter
-    relations.push("source:newsletter_sources(*)");
+    relations.push('source:newsletter_sources(*)');
   }
-  if (params.includeTags) relations.push("tags:newsletter_tags(tag:tags(*))");
+  if (params.includeTags) relations.push('tags:newsletter_tags(tag:tags(*))');
 
   if (relations.length > 0) {
-    selectClause = `*, ${relations.join(", ")}`;
+    selectClause = `*, ${relations.join(', ')}`;
   }
 
   // Start with base query and select
-  let query = supabase
-    .from("newsletters")
-    .select(selectClause, { count: "exact" });
+  let query = supabase.from('newsletters').select(selectClause, { count: 'exact' });
 
   // CRITICAL: Filter by user_id first to ensure data isolation
   if (params.user_id) {
-    query = query.eq("user_id", params.user_id);
+    query = query.eq('user_id', params.user_id);
   }
 
   // Apply filters with proper chaining
   if (params.search) {
     query = query.or(
-      `title.ilike.%${params.search}%, content.ilike.%${params.search}%, summary.ilike.%${params.search}%`,
+      `title.ilike.%${params.search}%, content.ilike.%${params.search}%, summary.ilike.%${params.search}%`
     );
   }
 
   if (params.isRead !== undefined) {
-    query = query.eq("is_read", params.isRead);
+    query = query.eq('is_read', params.isRead);
   }
 
   if (params.isArchived !== undefined) {
-    query = query.eq("is_archived", params.isArchived);
+    query = query.eq('is_archived', params.isArchived);
   }
 
   if (params.isLiked !== undefined) {
-    query = query.eq("is_liked", params.isLiked);
+    query = query.eq('is_liked', params.isLiked);
   }
 
   // Apply source filter if sourceIds is provided
   if (params.sourceIds && params.sourceIds.length > 0) {
-    log.debug("Applying source filter to newsletter query", {
-      component: "NewsletterApi",
-      action: "build_query_source_filter",
+    log.debug('Applying source filter to newsletter query', {
+      component: 'NewsletterApi',
+      action: 'build_query_source_filter',
       metadata: {
         sourceIds: params.sourceIds,
         count: params.sourceIds.length,
@@ -186,23 +184,23 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
 
     if (params.sourceIds.length === 1) {
       // Single source - use eq for better performance
-      query = query.eq("newsletter_source_id", params.sourceIds[0]);
+      query = query.eq('newsletter_source_id', params.sourceIds[0]);
     } else {
       // Multiple sources - use in clause
-      query = query.in("newsletter_source_id", params.sourceIds);
+      query = query.in('newsletter_source_id', params.sourceIds);
     }
   }
 
   if (params.dateFrom) {
-    query = query.gte("received_at", params.dateFrom);
+    query = query.gte('received_at', params.dateFrom);
   }
 
   if (params.dateTo) {
-    query = query.lte("received_at", params.dateTo);
+    query = query.lte('received_at', params.dateTo);
   }
 
   // Apply ordering
-  const orderColumn = params.orderBy || "received_at";
+  const orderColumn = params.orderBy || 'received_at';
   const ascending = params.ascending ?? false;
   query = query.order(orderColumn, { ascending });
 
@@ -212,16 +210,14 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
   }
 
   if (params.offset !== undefined) {
-    const end = params.limit
-      ? params.offset + params.limit - 1
-      : params.offset + 50 - 1;
+    const end = params.limit ? params.offset + params.limit - 1 : params.offset + 50 - 1;
     query = query.range(params.offset, end);
   }
 
   // Debug logging
-  log.debug("Newsletter query build completed", {
-    component: "NewsletterApi",
-    action: "build_query_complete",
+  log.debug('Newsletter query build completed', {
+    component: 'NewsletterApi',
+    action: 'build_query_complete',
     metadata: {
       select: selectClause,
       filters: {
@@ -244,14 +240,14 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
 export const newsletterApi = {
   // Get all newsletters with filters and pagination
   async getAll(
-    params: NewsletterQueryParams = {},
+    params: NewsletterQueryParams = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    return withPerformanceLogging("newsletters.getAll", async () => {
+    return withPerformanceLogging('newsletters.getAll', async () => {
       const user = await requireAuth();
 
-      log.debug("Building newsletter query", {
-        component: "NewsletterApi",
-        action: "get_all_build_query",
+      log.debug('Building newsletter query', {
+        component: 'NewsletterApi',
+        action: 'get_all_build_query',
         metadata: {
           ...params,
           sourceIds: params.sourceIds || null,
@@ -264,9 +260,9 @@ export const newsletterApi = {
         user_id: user.id, // Pass user_id to ensure it's included in the query
       });
 
-      log.debug("Executing newsletter query", {
-        component: "NewsletterApi",
-        action: "get_all_execute_query",
+      log.debug('Executing newsletter query', {
+        component: 'NewsletterApi',
+        action: 'get_all_execute_query',
         metadata: {
           userId: user.id,
           sourceIds: params.sourceIds || null,
@@ -280,20 +276,20 @@ export const newsletterApi = {
 
       if (error) {
         log.error(
-          "Newsletter query failed",
+          'Newsletter query failed',
           {
-            component: "NewsletterApi",
-            action: "get_all_query_error",
+            component: 'NewsletterApi',
+            action: 'get_all_query_error',
             metadata: { userId: user.id, params },
           },
-          error,
+          error
         );
         handleSupabaseError(error);
       }
 
-      log.debug("Newsletter query results retrieved", {
-        component: "NewsletterApi",
-        action: "get_all_query_results",
+      log.debug('Newsletter query results retrieved', {
+        component: 'NewsletterApi',
+        action: 'get_all_query_results',
         metadata: {
           count: data?.length || 0,
           hasSourceIds: !!params.sourceIds,
@@ -312,9 +308,9 @@ export const newsletterApi = {
       // Log the raw response for the first item if available
       if (data?.[0]) {
         const firstItem = data[0] as any;
-        log.debug("Newsletter raw data sample", {
-          component: "NewsletterApi",
-          action: "get_all_raw_data_sample",
+        log.debug('Newsletter raw data sample', {
+          component: 'NewsletterApi',
+          action: 'get_all_raw_data_sample',
           metadata: {
             id: firstItem.id,
             title: firstItem.title,
@@ -331,9 +327,9 @@ export const newsletterApi = {
 
       // Log the transformed data for the first item if available
       if (transformedData[0]) {
-        log.debug("Newsletter transformed data sample", {
-          component: "NewsletterApi",
-          action: "get_all_transformed_data_sample",
+        log.debug('Newsletter transformed data sample', {
+          component: 'NewsletterApi',
+          action: 'get_all_transformed_data_sample',
           metadata: {
             id: transformedData[0].id,
             title: transformedData[0].title,
@@ -346,9 +342,7 @@ export const newsletterApi = {
       // Handle tag filtering post-query with AND logic (newsletters must have ALL specified tags)
       if (params.tagIds?.length) {
         transformedData = transformedData.filter((newsletter) =>
-          params.tagIds!.every((tagId) =>
-            newsletter.tags?.some((tag) => tag.id === tagId),
-          ),
+          params.tagIds!.every((tagId) => newsletter.tags?.some((tag) => tag.id === tagId))
         );
       }
 
@@ -371,14 +365,11 @@ export const newsletterApi = {
   },
 
   // Get newsletter by ID
-  async getById(
-    id: string,
-    includeRelations = true,
-  ): Promise<NewsletterWithRelations | null> {
-    return withPerformanceLogging("newsletters.getById", async () => {
+  async getById(id: string, includeRelations = true): Promise<NewsletterWithRelations | null> {
+    return withPerformanceLogging('newsletters.getById', async () => {
       const user = await requireAuth();
 
-      let selectClause = "*";
+      let selectClause = '*';
       if (includeRelations) {
         selectClause = `
           *,
@@ -388,14 +379,14 @@ export const newsletterApi = {
       }
 
       const { data, error } = await supabase
-        .from("newsletters")
+        .from('newsletters')
         .select(selectClause)
-        .eq("id", id)
-        .eq("user_id", user.id)
+        .eq('id', id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) {
-        if (error.code === "PGRST116") {
+        if (error.code === 'PGRST116') {
           return null; // Not found
         }
         handleSupabaseError(error);
@@ -406,17 +397,15 @@ export const newsletterApi = {
   },
 
   // Create new newsletter
-  async create(
-    params: CreateNewsletterParams,
-  ): Promise<NewsletterWithRelations> {
-    return withPerformanceLogging("newsletters.create", async () => {
+  async create(params: CreateNewsletterParams): Promise<NewsletterWithRelations> {
+    return withPerformanceLogging('newsletters.create', async () => {
       const user = await requireAuth();
 
       const { tag_ids, ...newsletterData } = params;
 
       // Create the newsletter first
       const { data: newsletter, error: newsletterError } = await supabase
-        .from("newsletters")
+        .from('newsletters')
         .insert({
           ...newsletterData,
           user_id: user.id,
@@ -434,9 +423,7 @@ export const newsletterApi = {
           tag_id: tagId,
         }));
 
-        const { error: tagError } = await supabase
-          .from("newsletter_tags")
-          .insert(tagAssociations);
+        const { error: tagError } = await supabase.from('newsletter_tags').insert(tagAssociations);
 
         if (tagError) handleSupabaseError(tagError);
       }
@@ -444,7 +431,7 @@ export const newsletterApi = {
       // Fetch the complete newsletter with relations
       const createdNewsletter = await this.getById(newsletter.id);
       if (!createdNewsletter) {
-        throw new Error("Failed to retrieve created newsletter");
+        throw new Error('Failed to retrieve created newsletter');
       }
 
       return createdNewsletter;
@@ -452,41 +439,37 @@ export const newsletterApi = {
   },
 
   // Update newsletter
-  async update(
-    params: UpdateNewsletterParams,
-  ): Promise<NewsletterWithRelations> {
-    return withPerformanceLogging("newsletters.update", async () => {
+  async update(params: UpdateNewsletterParams): Promise<NewsletterWithRelations> {
+    return withPerformanceLogging('newsletters.update', async () => {
       const user = await requireAuth();
 
       // Validate user ID
       if (!user?.id) {
-        throw new Error("User authentication required for newsletter updates");
+        throw new Error('User authentication required for newsletter updates');
       }
 
       const { id, tag_ids, ...updateData } = params;
 
       // Validate newsletter ID
       if (!id) {
-        throw new Error("Newsletter ID is required for updates");
+        throw new Error('Newsletter ID is required for updates');
       }
 
       // First, verify the newsletter exists and belongs to the user
       const existingNewsletter = await this.getById(id, false);
       if (!existingNewsletter) {
-        throw new Error(
-          "Newsletter not found or you do not have permission to update it",
-        );
+        throw new Error('Newsletter not found or you do not have permission to update it');
       }
 
       // Update the newsletter
       const { error: updateError } = await supabase
-        .from("newsletters")
+        .from('newsletters')
         .update({
           ...updateData,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", id)
-        .eq("user_id", user.id)
+        .eq('id', id)
+        .eq('user_id', user.id)
         .select()
         .single();
 
@@ -497,15 +480,13 @@ export const newsletterApi = {
         try {
           // Remove existing tags (with user_id validation)
           const { error: deleteError } = await supabase
-            .from("newsletter_tags")
+            .from('newsletter_tags')
             .delete()
-            .eq("newsletter_id", id)
-            .eq("user_id", user.id);
+            .eq('newsletter_id', id)
+            .eq('user_id', user.id);
 
           if (deleteError) {
-            throw new Error(
-              `Failed to remove existing tags: ${deleteError.message}`,
-            );
+            throw new Error(`Failed to remove existing tags: ${deleteError.message}`);
           }
 
           // Add new tags
@@ -517,7 +498,7 @@ export const newsletterApi = {
             }));
 
             const { error: tagError } = await supabase
-              .from("newsletter_tags")
+              .from('newsletter_tags')
               .insert(tagAssociations);
 
             if (tagError) {
@@ -528,16 +509,16 @@ export const newsletterApi = {
           // If tag operations fail, we should still return the updated newsletter
           // but log the error for debugging
           log.error(
-            "Tag update failed for newsletter",
+            'Tag update failed for newsletter',
             {
-              component: "NewsletterApi",
-              action: "update_newsletter_tags",
+              component: 'NewsletterApi',
+              action: 'update_newsletter_tags',
               metadata: { newsletterId: id },
             },
-            error instanceof Error ? error : new Error(String(error)),
+            error instanceof Error ? error : new Error(String(error))
           );
           throw new Error(
-            `Tag update failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+            `Tag update failed: ${error instanceof Error ? error.message : 'Unknown error'}`
           );
         }
       }
@@ -545,7 +526,7 @@ export const newsletterApi = {
       // Fetch the updated newsletter with relations
       const updatedNewsletter = await this.getById(id);
       if (!updatedNewsletter) {
-        throw new Error("Failed to retrieve updated newsletter");
+        throw new Error('Failed to retrieve updated newsletter');
       }
 
       return updatedNewsletter;
@@ -554,14 +535,14 @@ export const newsletterApi = {
 
   // Delete newsletter
   async delete(id: string): Promise<boolean> {
-    return withPerformanceLogging("newsletters.delete", async () => {
+    return withPerformanceLogging('newsletters.delete', async () => {
       const user = await requireAuth();
 
       const { error } = await supabase
-        .from("newsletters")
+        .from('newsletters')
         .delete()
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) handleSupabaseError(error);
 
@@ -571,9 +552,9 @@ export const newsletterApi = {
 
   // Bulk update newsletters
   async bulkUpdate(
-    params: BulkUpdateNewsletterParams,
+    params: BulkUpdateNewsletterParams
   ): Promise<BatchResult<NewsletterWithRelations>> {
-    return withPerformanceLogging("newsletters.bulkUpdate", async () => {
+    return withPerformanceLogging('newsletters.bulkUpdate', async () => {
       const user = await requireAuth();
 
       const { ids, updates } = params;
@@ -581,13 +562,13 @@ export const newsletterApi = {
       const errors: (Error | null)[] = [];
 
       const { data, error } = await supabase
-        .from("newsletters")
+        .from('newsletters')
         .update({
           ...updates,
           updated_at: new Date().toISOString(),
         })
-        .in("id", ids)
-        .eq("user_id", user.id)
+        .in('id', ids)
+        .eq('user_id', user.id)
         .select();
 
       if (error) {
@@ -598,15 +579,11 @@ export const newsletterApi = {
         });
       } else {
         // Transform successful results
-        const transformedResults = (data || []).map(
-          transformNewsletterResponse,
-        );
+        const transformedResults = (data || []).map(transformNewsletterResponse);
         ids.forEach((id) => {
           const result = transformedResults.find((r) => r.id === id);
           results.push(result || null);
-          errors.push(
-            result ? null : new Error("Newsletter not found or not updated"),
-          );
+          errors.push(result ? null : new Error('Newsletter not found or not updated'));
         });
       }
 
@@ -633,23 +610,19 @@ export const newsletterApi = {
   async toggleArchive(id: string): Promise<NewsletterWithRelations> {
     const newsletter = await this.getById(id, false);
     if (!newsletter) {
-      throw new Error("Newsletter not found");
+      throw new Error('Newsletter not found');
     }
 
     return this.update({ id, is_archived: !newsletter.is_archived });
   },
 
   // Bulk archive
-  async bulkArchive(
-    ids: string[],
-  ): Promise<BatchResult<NewsletterWithRelations>> {
+  async bulkArchive(ids: string[]): Promise<BatchResult<NewsletterWithRelations>> {
     return this.bulkUpdate({ ids, updates: { is_archived: true } });
   },
 
   // Bulk unarchive
-  async bulkUnarchive(
-    ids: string[],
-  ): Promise<BatchResult<NewsletterWithRelations>> {
+  async bulkUnarchive(ids: string[]): Promise<BatchResult<NewsletterWithRelations>> {
     return this.bulkUpdate({ ids, updates: { is_archived: false } });
   },
 
@@ -657,7 +630,7 @@ export const newsletterApi = {
   async toggleLike(id: string): Promise<NewsletterWithRelations> {
     const newsletter = await this.getById(id, false);
     if (!newsletter) {
-      throw new Error("Newsletter not found");
+      throw new Error('Newsletter not found');
     }
 
     return this.update({ id, is_liked: !newsletter.is_liked });
@@ -666,7 +639,7 @@ export const newsletterApi = {
   // Get newsletters by tag
   async getByTag(
     tagId: string,
-    params: Omit<NewsletterQueryParams, "tagIds"> = {},
+    params: Omit<NewsletterQueryParams, 'tagIds'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.getAll({ ...params, tagIds: [tagId] });
   },
@@ -674,7 +647,7 @@ export const newsletterApi = {
   // Get newsletters by source
   async getBySource(
     sourceId: string,
-    params: Omit<NewsletterQueryParams, "sourceIds"> = {},
+    params: Omit<NewsletterQueryParams, 'sourceIds'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.getAll({ ...params, sourceIds: [sourceId] });
   },
@@ -682,7 +655,7 @@ export const newsletterApi = {
   // Search newsletters
   async search(
     query: string,
-    params: Omit<NewsletterQueryParams, "search"> = {},
+    params: Omit<NewsletterQueryParams, 'search'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return newsletterApi.getAll({ ...params, search: query });
   },
@@ -695,13 +668,13 @@ export const newsletterApi = {
     archived: number;
     liked: number;
   }> {
-    return withPerformanceLogging("newsletters.getStats", async () => {
+    return withPerformanceLogging('newsletters.getStats', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("newsletters")
-        .select("is_read, is_archived, is_liked")
-        .eq("user_id", user.id);
+        .from('newsletters')
+        .select('is_read, is_archived, is_liked')
+        .eq('user_id', user.id);
 
       if (error) handleSupabaseError(error);
 
@@ -719,27 +692,27 @@ export const newsletterApi = {
 
   // Count newsletters by source (excluding archived)
   async countBySource(): Promise<Record<string, number>> {
-    return withPerformanceLogging("newsletters.countBySource", async () => {
+    return withPerformanceLogging('newsletters.countBySource', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("newsletters")
-        .select("newsletter_source_id")
-        .eq("user_id", user.id)
-        .eq("is_archived", false);
+        .from('newsletters')
+        .select('newsletter_source_id')
+        .eq('user_id', user.id)
+        .eq('is_archived', false);
 
       if (error) handleSupabaseError(error);
 
       const counts: Record<string, number> = {};
 
       data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
-        const sourceId = newsletter.newsletter_source_id || "unknown";
+        const sourceId = newsletter.newsletter_source_id || 'unknown';
         counts[sourceId] = (counts[sourceId] || 0) + 1;
       });
 
-      log.debug("Newsletter counts by source retrieved", {
-        component: "NewsletterApi",
-        action: "count_by_source",
+      log.debug('Newsletter counts by source retrieved', {
+        component: 'NewsletterApi',
+        action: 'count_by_source',
         metadata: { counts },
       });
 
@@ -749,63 +722,99 @@ export const newsletterApi = {
 
   // Get total counts grouped by source (excluding archived)
   async getTotalCountBySource(): Promise<Record<string, number>> {
-    return withPerformanceLogging(
-      "newsletters.getTotalCountBySource",
-      async () => {
-        const user = await requireAuth();
+    return withPerformanceLogging('newsletters.getTotalCountBySource', async () => {
+      const user = await requireAuth();
 
-        const { data, error } = await supabase
-          .from("newsletters")
-          .select("newsletter_source_id")
-          .eq("user_id", user.id)
-          .eq("is_archived", false);
+      const { data, error } = await supabase
+        .from('newsletters')
+        .select('newsletter_source_id')
+        .eq('user_id', user.id)
+        .eq('is_archived', false);
 
-        if (error) handleSupabaseError(error);
+      if (error) handleSupabaseError(error);
 
-        const totalCounts: Record<string, number> = {};
+      const totalCounts: Record<string, number> = {};
 
-        data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
-          const sourceId = newsletter.newsletter_source_id || "unknown";
-          totalCounts[sourceId] = (totalCounts[sourceId] || 0) + 1;
-        });
+      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+        const sourceId = newsletter.newsletter_source_id || 'unknown';
+        totalCounts[sourceId] = (totalCounts[sourceId] || 0) + 1;
+      });
 
-        log.debug("Total newsletter counts by source retrieved", {
-          component: "NewsletterApi",
-          action: "total_count_by_source",
-          metadata: { totalCounts },
-        });
+      log.debug('Total newsletter counts by source retrieved', {
+        component: 'NewsletterApi',
+        action: 'total_count_by_source',
+        metadata: { totalCounts },
+      });
 
-        return totalCounts;
-      },
-    );
+      return totalCounts;
+    });
   },
 
   // Get unread counts grouped by source
   async getUnreadCountBySource(): Promise<Record<string, number>> {
-    return withPerformanceLogging(
-      "newsletters.getUnreadCountBySource",
-      async () => {
-        const user = await requireAuth();
+    return withPerformanceLogging('newsletters.getUnreadCountBySource', async () => {
+      const user = await requireAuth();
 
-        const { data, error } = await supabase
-          .from("newsletters")
-          .select("newsletter_source_id")
-          .eq("user_id", user.id)
-          .eq("is_read", false)
-          .eq("is_archived", false);
+      const { data, error } = await supabase
+        .from('newsletters')
+        .select('newsletter_source_id')
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .eq('is_archived', false);
 
-        if (error) handleSupabaseError(error);
+      if (error) handleSupabaseError(error);
 
-        const unreadCounts: Record<string, number> = {};
+      const unreadCounts: Record<string, number> = {};
 
-        data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
-          const sourceId = newsletter.newsletter_source_id || "unknown";
-          unreadCounts[sourceId] = (unreadCounts[sourceId] || 0) + 1;
-        });
+      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+        const sourceId = newsletter.newsletter_source_id || 'unknown';
+        unreadCounts[sourceId] = (unreadCounts[sourceId] || 0) + 1;
+      });
 
-        return unreadCounts;
-      },
-    );
+      return unreadCounts;
+    });
+  },
+
+  // Get unread count for a specific source or all sources
+  async getUnreadCount(sourceId?: string | null): Promise<number> {
+    return withPerformanceLogging('newsletters.getUnreadCount', async () => {
+      const user = await requireAuth();
+
+      let query = supabase
+        .from('newsletters')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .eq('is_archived', false);
+
+      // Apply source filter if provided
+      if (sourceId) {
+        query = query.eq('newsletter_source_id', sourceId);
+      }
+
+      const { count, error } = await query;
+
+      if (error) {
+        log.error(
+          'Failed to get unread count',
+          {
+            component: 'NewsletterApi',
+            action: 'get_unread_count',
+            metadata: { sourceId, userId: user.id },
+          },
+          error
+        );
+        handleSupabaseError(error);
+      }
+
+      log.debug('Unread count retrieved', {
+        component: 'NewsletterApi',
+        action: 'get_unread_count',
+        metadata: { count, sourceId },
+      });
+
+      return count || 0;
+    });
   },
 };
 
@@ -829,6 +838,7 @@ export const {
   getStats: getNewsletterStats,
   countBySource,
   getUnreadCountBySource,
+  getUnreadCount,
 } = newsletterApi;
 
 export default newsletterApi;

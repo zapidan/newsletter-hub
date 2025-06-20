@@ -3,9 +3,9 @@ import {
   handleSupabaseError,
   requireAuth,
   withPerformanceLogging,
-} from "./supabaseClient";
-import { generateEmailAliasFromEmail } from "../utils/emailAlias";
-import { logger } from "../utils/logger";
+} from './supabaseClient';
+import { generateEmailAliasFromEmail } from '../utils/emailAlias';
+import { logger } from '../utils/logger';
 
 interface UserProfile {
   id: string;
@@ -35,17 +35,13 @@ const log = logger;
 export const userApi = {
   // Get current user profile
   async getProfile(): Promise<UserProfile | null> {
-    return withPerformanceLogging("user.getProfile", async () => {
+    return withPerformanceLogging('user.getProfile', async () => {
       const user = await requireAuth();
 
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
 
       if (error) {
-        if (error.code === "PGRST116") {
+        if (error.code === 'PGRST116') {
           return null; // Not found
         }
         handleSupabaseError(error);
@@ -57,16 +53,16 @@ export const userApi = {
 
   // Update user profile
   async updateProfile(updates: UpdateUserParams): Promise<UserProfile> {
-    return withPerformanceLogging("user.updateProfile", async () => {
+    return withPerformanceLogging('user.updateProfile', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("users")
+        .from('users')
         .update({
           ...updates,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", user.id)
+        .eq('id', user.id)
         .select()
         .single();
 
@@ -77,7 +73,7 @@ export const userApi = {
 
   // Generate a unique email alias for a user
   async generateEmailAlias(email: string): Promise<EmailAliasResult> {
-    return withPerformanceLogging("user.generateEmailAlias", async () => {
+    return withPerformanceLogging('user.generateEmailAlias', async () => {
       const user = await requireAuth();
 
       try {
@@ -85,50 +81,50 @@ export const userApi = {
 
         // Save to the database
         const { error } = await supabase
-          .from("users")
+          .from('users')
           .update({ email_alias: emailAlias })
-          .eq("id", user.id);
+          .eq('id', user.id);
 
         if (error) {
           log.error(
-            "Error saving email alias",
+            'Error saving email alias',
             {
-              component: "UserApi",
-              action: "save_email_alias",
+              component: 'UserApi',
+              action: 'save_email_alias',
               metadata: { userId: user.id },
             },
-            error,
+            error
           );
-          return { email: "", error: "Failed to save email alias" };
+          return { email: '', error: 'Failed to save email alias' };
         }
 
         return { email: emailAlias };
       } catch (error) {
         log.error(
-          "Error generating email alias",
+          'Error generating email alias',
           {
-            component: "UserApi",
-            action: "generate_email_alias",
+            component: 'UserApi',
+            action: 'generate_email_alias',
             metadata: { email },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
-        return { email: "", error: "Failed to generate email alias" };
+        return { email: '', error: 'Failed to generate email alias' };
       }
     });
   },
 
   // Get or create an email alias for the current user
   async getEmailAlias(): Promise<string> {
-    return withPerformanceLogging("user.getEmailAlias", async () => {
+    return withPerformanceLogging('user.getEmailAlias', async () => {
       const user = await requireAuth();
 
       try {
         // First check if user already has an email alias
         const { data: userData } = await supabase
-          .from("users")
-          .select("email_alias")
-          .eq("id", user.id)
+          .from('users')
+          .select('email_alias')
+          .eq('id', user.id)
           .single();
 
         // If we got the user data and they have an alias, return it
@@ -138,27 +134,25 @@ export const userApi = {
 
         // If no alias exists, generate a new one
         if (!user.email) {
-          throw new Error("User email not found");
+          throw new Error('User email not found');
         }
 
-        const { email, error: genError } = await this.generateEmailAlias(
-          user.email,
-        );
+        const { email, error: genError } = await this.generateEmailAlias(user.email);
 
         if (genError || !email) {
-          throw new Error(genError || "Failed to generate email alias");
+          throw new Error(genError || 'Failed to generate email alias');
         }
 
         return email;
       } catch (error) {
         log.error(
-          "Error in getEmailAlias",
+          'Error in getEmailAlias',
           {
-            component: "UserApi",
-            action: "get_email_alias",
+            component: 'UserApi',
+            action: 'get_email_alias',
             metadata: { userId: user.id },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
         throw error;
       }
@@ -167,67 +161,67 @@ export const userApi = {
 
   // Update a user's email alias
   async updateEmailAlias(newAlias: string): Promise<EmailAliasResult> {
-    return withPerformanceLogging("user.updateEmailAlias", async () => {
+    return withPerformanceLogging('user.updateEmailAlias', async () => {
       const user = await requireAuth();
 
       try {
         // Check if the alias is already taken
         const { data } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email_alias", newAlias)
-          .neq("id", user.id)
-          .single();
+          .from('users')
+          .select('id')
+          .eq('email_alias', newAlias)
+          .neq('id', user.id)
+          .maybeSingle();
 
         if (data) {
-          return { email: "", error: "This email alias is already taken" };
+          return { email: '', error: 'This email alias is already taken' };
         }
 
         // Update the user's email alias
         const { error: updateError } = await supabase
-          .from("users")
+          .from('users')
           .update({ email_alias: newAlias })
-          .eq("id", user.id);
+          .eq('id', user.id);
 
         if (updateError) {
           log.error(
-            "Error updating user with email alias",
+            'Error updating user with email alias',
             {
-              component: "UserApi",
-              action: "update_email_alias",
+              component: 'UserApi',
+              action: 'update_email_alias',
               metadata: { userId: user.id, newAlias },
             },
-            updateError,
+            updateError
           );
-          return { email: "", error: "Error saving email alias" };
+          return { email: '', error: 'Error saving email alias' };
         }
 
         return { email: newAlias };
       } catch (error) {
         log.error(
-          "Error in updateEmailAlias",
+          'Error in updateEmailAlias',
           {
-            component: "UserApi",
-            action: "update_email_alias",
+            component: 'UserApi',
+            action: 'update_email_alias',
             metadata: { userId: user.id, newAlias },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
-        return { email: "", error: "Internal server error" };
+        return { email: '', error: 'Internal server error' };
       }
     });
   },
 
   // Check if email alias is available
   async isEmailAliasAvailable(alias: string): Promise<boolean> {
-    return withPerformanceLogging("user.isEmailAliasAvailable", async () => {
+    return withPerformanceLogging('user.isEmailAliasAvailable', async () => {
       const user = await requireAuth();
 
       const { data } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email_alias", alias)
-        .neq("id", user.id)
+        .from('users')
+        .select('id')
+        .eq('email_alias', alias)
+        .neq('id', user.id)
         .maybeSingle();
 
       return !data; // Available if no data found
@@ -236,27 +230,25 @@ export const userApi = {
 
   // Delete user account and all associated data
   async deleteAccount(): Promise<boolean> {
-    return withPerformanceLogging("user.deleteAccount", async () => {
+    return withPerformanceLogging('user.deleteAccount', async () => {
       const user = await requireAuth();
 
       // Note: This should cascade delete related data based on your database constraints
-      const { error } = await supabase.from("users").delete().eq("id", user.id);
+      const { error } = await supabase.from('users').delete().eq('id', user.id);
 
       if (error) handleSupabaseError(error);
 
       // Also delete from auth
-      const { error: authError } = await supabase.auth.admin.deleteUser(
-        user.id,
-      );
+      const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
       if (authError) {
         log.error(
-          "Error deleting user from auth",
+          'Error deleting user from auth',
           {
-            component: "UserApi",
-            action: "delete_user",
+            component: 'UserApi',
+            action: 'delete_user',
             metadata: { userId: user.id },
           },
-          authError,
+          authError
         );
         // Continue anyway as the user data is deleted
       }
@@ -273,32 +265,32 @@ export const userApi = {
     readingQueueCount: number;
     joinedAt: string;
   }> {
-    return withPerformanceLogging("user.getStats", async () => {
+    return withPerformanceLogging('user.getStats', async () => {
       const user = await requireAuth();
 
       // Get newsletters count
       const { count: newslettersCount } = await supabase
-        .from("newsletters")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
+        .from('newsletters')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
 
       // Get tags count
       const { count: tagsCount } = await supabase
-        .from("tags")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
+        .from('tags')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
 
       // Get sources count
       const { count: sourcesCount } = await supabase
-        .from("newsletter_sources")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
+        .from('newsletter_sources')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
 
       // Get reading queue count
       const { count: readingQueueCount } = await supabase
-        .from("reading_queue")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
+        .from('reading_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
 
       // Get user profile for join date
       const profile = await this.getProfile();
@@ -314,21 +306,19 @@ export const userApi = {
   },
 
   // Update user preferences
-  async updatePreferences(
-    preferences: Record<string, unknown>,
-  ): Promise<boolean> {
-    return withPerformanceLogging("user.updatePreferences", async () => {
+  async updatePreferences(preferences: Record<string, unknown>): Promise<boolean> {
+    return withPerformanceLogging('user.updatePreferences', async () => {
       const user = await requireAuth();
 
-      const { error } = await supabase.from("user_preferences").upsert(
+      const { error } = await supabase.from('user_preferences').upsert(
         {
           user_id: user.id,
           preferences,
           updated_at: new Date().toISOString(),
         },
         {
-          onConflict: "user_id",
-        },
+          onConflict: 'user_id',
+        }
       );
 
       if (error) handleSupabaseError(error);
@@ -338,17 +328,17 @@ export const userApi = {
 
   // Get user preferences
   async getPreferences(): Promise<Record<string, unknown> | null> {
-    return withPerformanceLogging("user.getPreferences", async () => {
+    return withPerformanceLogging('user.getPreferences', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("user_preferences")
-        .select("preferences")
-        .eq("user_id", user.id)
+        .from('user_preferences')
+        .select('preferences')
+        .eq('user_id', user.id)
         .single();
 
       if (error) {
-        if (error.code === "PGRST116") {
+        if (error.code === 'PGRST116') {
           return null; // No preferences found
         }
         handleSupabaseError(error);

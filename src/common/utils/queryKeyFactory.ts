@@ -1,4 +1,4 @@
-import type { NewsletterFilter } from "../types/cache";
+import type { NewsletterFilter } from '../types/cache';
 
 export interface QueryKeyFactoryParams {
   userId?: string;
@@ -17,35 +17,30 @@ export interface QueryKeyFactoryParams {
  */
 export const queryKeyFactory: any = {
   // Root keys
-  all: ["newsletters"] as const,
-  readingQueue: ["readingQueue"] as const,
-  tagRoot: ["tags"] as const,
+  all: ['newsletters'] as const,
+  readingQueue: ['readingQueue'] as const,
+  tagRoot: ['tags'] as const,
+  userRoot: ['user'] as const,
 
   // Newsletter keys
   newsletters: {
     all: () => [...queryKeyFactory.all] as const,
-    lists: () => [...queryKeyFactory.newsletters.all(), "list"] as const,
+    lists: () => [...queryKeyFactory.newsletters.all(), 'list'] as const,
     list: (params: QueryKeyFactoryParams = {}) => {
       const baseKey = [...queryKeyFactory.newsletters.lists()] as const;
 
       // Build filters object excluding undefined values
       const filters: Record<string, unknown> = {};
       if (params.userId) filters.userId = params.userId;
-      if (params.filter && typeof params.filter === "object")
-        filters.filter = params.filter;
+      if (params.filter && typeof params.filter === 'object') filters.filter = params.filter;
       if (params.tagIds?.length) filters.tagIds = [...params.tagIds].sort(); // Sort for consistency
       if (params.sourceId !== undefined) filters.sourceId = params.sourceId;
-      if (params.groupSourceIds?.length)
-        filters.groupSourceIds = [...params.groupSourceIds].sort();
-      if (params.timeRange && params.timeRange !== "all")
-        filters.timeRange = params.timeRange;
+      if (params.groupSourceIds?.length) filters.groupSourceIds = [...params.groupSourceIds].sort();
+      if (params.timeRange && params.timeRange !== 'all') filters.timeRange = params.timeRange;
 
-      return Object.keys(filters).length > 0
-        ? ([...baseKey, filters] as const)
-        : baseKey;
+      return Object.keys(filters).length > 0 ? ([...baseKey, filters] as const) : baseKey;
     },
-    infinites: () =>
-      [...queryKeyFactory.newsletters.all(), "infinite"] as const,
+    infinites: () => [...queryKeyFactory.newsletters.all(), 'infinite'] as const,
     infinite: (filter: NewsletterFilter) => {
       const baseKey = [...queryKeyFactory.newsletters.infinites()] as const;
 
@@ -53,159 +48,130 @@ export const queryKeyFactory: any = {
       const filters: Record<string, unknown> = {};
       if (filter.search) filters.search = filter.search;
       if (filter.isRead !== undefined) filters.isRead = filter.isRead;
-      if (filter.isArchived !== undefined)
-        filters.isArchived = filter.isArchived;
+      if (filter.isArchived !== undefined) filters.isArchived = filter.isArchived;
       if (filter.isLiked !== undefined) filters.isLiked = filter.isLiked;
       if (filter.tagIds?.length) filters.tagIds = [...filter.tagIds].sort();
-      if (filter.sourceIds?.length)
-        filters.sourceIds = [...filter.sourceIds].sort();
+      if (filter.sourceIds?.length) filters.sourceIds = [...filter.sourceIds].sort();
       if (filter.dateFrom) filters.dateFrom = filter.dateFrom;
       if (filter.dateTo) filters.dateTo = filter.dateTo;
       if (filter.orderBy) filters.orderBy = filter.orderBy;
       if (filter.ascending !== undefined) filters.ascending = filter.ascending;
 
-      return Object.keys(filters).length > 0
-        ? ([...baseKey, filters] as const)
-        : baseKey;
+      return Object.keys(filters).length > 0 ? ([...baseKey, filters] as const) : baseKey;
     },
-    details: () => [...queryKeyFactory.newsletters.all(), "detail"] as const,
-    detail: (id: string) =>
-      [...queryKeyFactory.newsletters.details(), id] as const,
-    tags: () => [...queryKeyFactory.newsletters.all(), "tags"] as const,
-    tag: (tagId: string) =>
-      [...queryKeyFactory.newsletters.tags(), tagId] as const,
-    tagLists: () => [...queryKeyFactory.newsletters.tags(), "list"] as const,
+    details: () => [...queryKeyFactory.newsletters.all(), 'detail'] as const,
+    detail: (id: string) => [...queryKeyFactory.newsletters.details(), id] as const,
+    tags: () => [...queryKeyFactory.newsletters.all(), 'tags'] as const,
+    tag: (tagId: string) => [...queryKeyFactory.newsletters.tags(), tagId] as const,
+    tagLists: () => [...queryKeyFactory.newsletters.tags(), 'list'] as const,
     tagList: (userId?: string) => {
       const baseKey = [...queryKeyFactory.newsletters.tagLists()] as const;
       return userId ? ([...baseKey, userId] as const) : baseKey;
     },
-    tagDetails: () =>
-      [...queryKeyFactory.newsletters.tags(), "detail"] as const,
-    tagDetail: (tagId: string) =>
-      [...queryKeyFactory.newsletters.tagDetails(), tagId] as const,
-    tagCounts: () => [...queryKeyFactory.newsletters.tags(), "counts"] as const,
-    sources: () => [...queryKeyFactory.newsletters.all(), "sources"] as const,
-    source: (sourceId: string) =>
-      [...queryKeyFactory.newsletters.sources(), sourceId] as const,
-    sourceCounts: () =>
-      [...queryKeyFactory.newsletters.all(), "source-counts"] as const,
-    unreadCounts: () =>
-      [...queryKeyFactory.newsletters.all(), "unread-counts"] as const,
+    tagDetails: () => [...queryKeyFactory.newsletters.tags(), 'detail'] as const,
+    tagDetail: (tagId: string) => [...queryKeyFactory.newsletters.tagDetails(), tagId] as const,
+    tagCounts: () => [...queryKeyFactory.newsletters.tags(), 'counts'] as const,
+    sources: () => [...queryKeyFactory.newsletters.all(), 'sources'] as const,
+    source: (sourceId: string) => [...queryKeyFactory.newsletters.sources(), sourceId] as const,
+    sourceCounts: () => [...queryKeyFactory.newsletters.all(), 'source-counts'] as const,
+    unreadCounts: () => [...queryKeyFactory.newsletters.all(), 'unread-counts'] as const,
     unreadCountsBySource: () =>
-      [...queryKeyFactory.newsletters.unreadCounts(), "by-source"] as const,
+      [...queryKeyFactory.newsletters.unreadCounts(), 'by-source'] as const,
     totalCountsBySource: () =>
-      [
-        ...queryKeyFactory.newsletters.all(),
-        "total-counts",
-        "by-source",
-      ] as const,
-    inbox: () => [...queryKeyFactory.newsletters.all(), "inbox"] as const,
+      [...queryKeyFactory.newsletters.all(), 'total-counts', 'by-source'] as const,
+    inbox: () => [...queryKeyFactory.newsletters.all(), 'inbox'] as const,
   },
 
   // Reading queue keys
   queue: {
     all: () => [...queryKeyFactory.readingQueue] as const,
-    lists: () => [...queryKeyFactory.queue.all(), "list"] as const,
-    list: (userId: string) =>
-      [...queryKeyFactory.queue.lists(), userId] as const,
-    details: () => [...queryKeyFactory.queue.all(), "detail"] as const,
+    lists: () => [...queryKeyFactory.queue.all(), 'list'] as const,
+    list: (userId: string) => [...queryKeyFactory.queue.lists(), userId] as const,
+    details: () => [...queryKeyFactory.queue.all(), 'detail'] as const,
     detail: (id: string) => [...queryKeyFactory.queue.details(), id] as const,
-    positions: () => [...queryKeyFactory.queue.all(), "positions"] as const,
-    position: (userId: string) =>
-      [...queryKeyFactory.queue.positions(), userId] as const,
+    positions: () => [...queryKeyFactory.queue.all(), 'positions'] as const,
+    position: (userId: string) => [...queryKeyFactory.queue.positions(), userId] as const,
   },
 
   // Tag keys
   tags: {
     all: () => [...queryKeyFactory.tagRoot] as const,
-    lists: () => [...queryKeyFactory.tags.all(), "list"] as const,
+    lists: () => [...queryKeyFactory.tags.all(), 'list'] as const,
     list: (userId?: string) => {
       const baseKey = [...queryKeyFactory.tags.lists()] as const;
       return userId ? ([...baseKey, userId] as const) : baseKey;
     },
-    details: () => [...queryKeyFactory.tags.all(), "detail"] as const,
-    detail: (tagId: string) =>
-      [...queryKeyFactory.tags.details(), tagId] as const,
-    counts: () => [...queryKeyFactory.tags.all(), "counts"] as const,
-    stats: () => [...queryKeyFactory.tags.all(), "stats"] as const,
-    usageStats: (tagId: string) =>
-      [...queryKeyFactory.tags.stats(), "usage", tagId] as const,
-    operations: (tagId: string) =>
-      [...queryKeyFactory.tags.detail(tagId), "operations"] as const,
+    details: () => [...queryKeyFactory.tags.all(), 'detail'] as const,
+    detail: (tagId: string) => [...queryKeyFactory.tags.details(), tagId] as const,
+    counts: () => [...queryKeyFactory.tags.all(), 'counts'] as const,
+    stats: () => [...queryKeyFactory.tags.all(), 'stats'] as const,
+    usageStats: (tagId: string) => [...queryKeyFactory.tags.stats(), 'usage', tagId] as const,
+    operations: (tagId: string) => [...queryKeyFactory.tags.detail(tagId), 'operations'] as const,
+  },
+
+  // User keys
+  user: {
+    all: () => [...queryKeyFactory.userRoot] as const,
+    emailAlias: (userId?: string) => {
+      const baseKey = [...queryKeyFactory.user.all(), 'email-alias'] as const;
+      return userId ? ([...baseKey, userId] as const) : baseKey;
+    },
+    profile: (userId: string) => [...queryKeyFactory.user.all(), 'profile', userId] as const,
   },
 
   // Cross-feature keys for related data
   related: {
     // Keys for newsletter-queue relationships
     newsletterQueue: (newsletterId: string) =>
-      [...queryKeyFactory.all, "queue-status", newsletterId] as const,
+      [...queryKeyFactory.all, 'queue-status', newsletterId] as const,
 
     // Keys for tag-newsletter relationships
     tagNewsletters: (tagId: string) =>
-      [...queryKeyFactory.newsletters.tags(), tagId, "newsletters"] as const,
+      [...queryKeyFactory.newsletters.tags(), tagId, 'newsletters'] as const,
 
     // Keys for newsletter-tag relationships
     newsletterTags: (newsletterId: string) =>
-      [...queryKeyFactory.newsletters.details(), newsletterId, "tags"] as const,
+      [...queryKeyFactory.newsletters.details(), newsletterId, 'tags'] as const,
 
     // Keys for tag operations
     tagOperations: (tagId: string) =>
-      [...queryKeyFactory.newsletters.tags(), tagId, "operations"] as const,
+      [...queryKeyFactory.newsletters.tags(), tagId, 'operations'] as const,
 
     // Keys for tag statistics and counts
-    tagStats: () => [...queryKeyFactory.newsletters.tags(), "stats"] as const,
+    tagStats: () => [...queryKeyFactory.newsletters.tags(), 'stats'] as const,
 
     // Keys for source-newsletter relationships
     sourceNewsletters: (sourceId: string) =>
-      [
-        ...queryKeyFactory.newsletters.sources(),
-        sourceId,
-        "newsletters",
-      ] as const,
+      [...queryKeyFactory.newsletters.sources(), sourceId, 'newsletters'] as const,
 
     // Keys for unread counts by source
-    unreadCountsBySource: () =>
-      [...queryKeyFactory.newsletters.unreadCountsBySource()] as const,
+    unreadCountsBySource: () => [...queryKeyFactory.newsletters.unreadCountsBySource()] as const,
 
     // Keys for newsletter counts by source
-    newsletterCountsBySource: () =>
-      [...queryKeyFactory.newsletters.sourceCounts()] as const,
+    newsletterCountsBySource: () => [...queryKeyFactory.newsletters.sourceCounts()] as const,
   },
 
   // Utility functions for query key matching
   matchers: {
     // Check if a query key matches newsletter list pattern
     isNewsletterListKey: (queryKey: unknown[]): boolean => {
-      return (
-        queryKey.length >= 2 &&
-        queryKey[0] === "newsletters" &&
-        queryKey[1] === "list"
-      );
+      return queryKey.length >= 2 && queryKey[0] === 'newsletters' && queryKey[1] === 'list';
     },
 
     // Check if a query key matches newsletter infinite pattern
     isNewsletterInfiniteKey: (queryKey: unknown[]): boolean => {
-      return (
-        queryKey.length >= 2 &&
-        queryKey[0] === "newsletters" &&
-        queryKey[1] === "infinite"
-      );
+      return queryKey.length >= 2 && queryKey[0] === 'newsletters' && queryKey[1] === 'infinite';
     },
 
     // Check if a query key matches reading queue pattern
     isReadingQueueKey: (queryKey: unknown[]): boolean => {
-      return queryKey.length >= 1 && queryKey[0] === "readingQueue";
+      return queryKey.length >= 1 && queryKey[0] === 'readingQueue';
     },
 
     // Check if a query key is for a specific newsletter
-    isNewsletterDetailKey: (
-      queryKey: unknown[],
-      newsletterId?: string,
-    ): boolean => {
+    isNewsletterDetailKey: (queryKey: unknown[], newsletterId?: string): boolean => {
       const isDetailKey =
-        queryKey.length >= 3 &&
-        queryKey[0] === "newsletters" &&
-        queryKey[1] === "detail";
+        queryKey.length >= 3 && queryKey[0] === 'newsletters' && queryKey[1] === 'detail';
 
       if (!newsletterId) return isDetailKey;
       return isDetailKey && queryKey[2] === newsletterId;
@@ -213,20 +179,16 @@ export const queryKeyFactory: any = {
 
     // Check if a query key is tag-related
     isTagKey: (queryKey: unknown[]): boolean => {
-      return (
-        queryKey.length >= 2 &&
-        queryKey[0] === "newsletters" &&
-        queryKey[1] === "tags"
-      );
+      return queryKey.length >= 2 && queryKey[0] === 'newsletters' && queryKey[1] === 'tags';
     },
 
     // Check if a query key is for a specific tag
     isTagDetailKey: (queryKey: unknown[], tagId?: string): boolean => {
       const isTagKey =
         queryKey.length >= 4 &&
-        queryKey[0] === "newsletters" &&
-        queryKey[1] === "tags" &&
-        queryKey[2] === "detail";
+        queryKey[0] === 'newsletters' &&
+        queryKey[1] === 'tags' &&
+        queryKey[2] === 'detail';
 
       if (!tagId) return isTagKey;
       return isTagKey && queryKey[3] === tagId;
@@ -236,9 +198,9 @@ export const queryKeyFactory: any = {
     isTagListKey: (queryKey: unknown[]): boolean => {
       return (
         queryKey.length >= 3 &&
-        queryKey[0] === "newsletters" &&
-        queryKey[1] === "tags" &&
-        queryKey[2] === "list"
+        queryKey[0] === 'newsletters' &&
+        queryKey[1] === 'tags' &&
+        queryKey[2] === 'list'
       );
     },
 
@@ -247,8 +209,7 @@ export const queryKeyFactory: any = {
       if (!queryKeyFactory.matchers.isNewsletterListKey(queryKey)) return false;
 
       const filtersObj = queryKey[2];
-      if (typeof filtersObj !== "object" || !filtersObj)
-        return filter.status === "all";
+      if (typeof filtersObj !== 'object' || !filtersObj) return filter.status === 'all';
 
       return (filtersObj as Record<string, unknown>).filter === filter;
     },
@@ -258,16 +219,12 @@ export const queryKeyFactory: any = {
       if (!queryKeyFactory.matchers.isNewsletterListKey(queryKey)) return false;
 
       const filtersObj = queryKey[2];
-      if (typeof filtersObj !== "object" || !filtersObj)
-        return tagIds.length === 0;
+      if (typeof filtersObj !== 'object' || !filtersObj) return tagIds.length === 0;
 
       const keyTagIds = (filtersObj as Record<string, unknown>).tagIds;
       if (!Array.isArray(keyTagIds)) return tagIds.length === 0;
 
-      return (
-        keyTagIds.length === tagIds.length &&
-        keyTagIds.every((id) => tagIds.includes(id))
-      );
+      return keyTagIds.length === tagIds.length && keyTagIds.every((id) => tagIds.includes(id));
     },
 
     // Check if a query key involves any of the specified tags
@@ -275,7 +232,7 @@ export const queryKeyFactory: any = {
       if (!queryKeyFactory.matchers.isNewsletterListKey(queryKey)) return false;
 
       const filtersObj = queryKey[2];
-      if (typeof filtersObj !== "object" || !filtersObj) return false;
+      if (typeof filtersObj !== 'object' || !filtersObj) return false;
 
       const keyTagIds = (filtersObj as Record<string, unknown>).tagIds;
       if (!Array.isArray(keyTagIds)) return false;
@@ -308,8 +265,7 @@ export const queryKeyFactory: any = {
       if (!queryKeyFactory.matchers.isNewsletterListKey(queryKey)) return false;
 
       const filtersObj = queryKey[2];
-      if (typeof filtersObj !== "object" || !filtersObj)
-        return sourceId === null;
+      if (typeof filtersObj !== 'object' || !filtersObj) return sourceId === null;
 
       return (filtersObj as Record<string, unknown>).sourceId === sourceId;
     },
@@ -322,7 +278,7 @@ export const queryKeyFactory: any = {
  * @deprecated Use queryKeyFactory methods instead
  */
 export const buildQueryKey = (params: {
-  scope: "list" | "detail" | "tags";
+  scope: 'list' | 'detail' | 'tags';
   userId?: string;
   id?: string;
   filter?: NewsletterFilter;
@@ -331,18 +287,9 @@ export const buildQueryKey = (params: {
   groupSourceIds?: string[];
   timeRange?: string;
 }) => {
-  const {
-    scope,
-    userId,
-    id,
-    filter,
-    tagId,
-    sourceId,
-    groupSourceIds,
-    timeRange,
-  } = params;
+  const { scope, userId, id, filter, tagId, sourceId, groupSourceIds, timeRange } = params;
 
-  if (scope === "list") {
+  if (scope === 'list') {
     return queryKeyFactory.newsletters.list({
       userId,
       filter,
@@ -353,14 +300,12 @@ export const buildQueryKey = (params: {
     });
   }
 
-  if (scope === "detail" && id) {
+  if (scope === 'detail' && id) {
     return queryKeyFactory.newsletters.detail(id);
   }
 
-  if (scope === "tags") {
-    return tagId
-      ? queryKeyFactory.newsletters.tag(tagId)
-      : queryKeyFactory.newsletters.tags();
+  if (scope === 'tags') {
+    return tagId ? queryKeyFactory.newsletters.tag(tagId) : queryKeyFactory.newsletters.tags();
   }
 
   // Fallback to basic key
@@ -370,22 +315,17 @@ export const buildQueryKey = (params: {
 /**
  * Type-safe query key generator with validation
  */
-export const createQueryKey = (
-  category: string,
-  ...args: unknown[]
-): readonly unknown[] => {
+export const createQueryKey = (category: string, ...args: unknown[]): readonly unknown[] => {
   const factory = (queryKeyFactory as any)[category];
 
-  if (typeof factory === "function") {
+  if (typeof factory === 'function') {
     return (factory as (...args: unknown[]) => readonly unknown[])(...args);
   }
 
-  if (typeof factory === "object" && args.length > 0) {
+  if (typeof factory === 'object' && args.length > 0) {
     const method = (factory as Record<string, unknown>)[args[0] as string];
-    if (typeof method === "function") {
-      return (method as (...args: unknown[]) => readonly unknown[])(
-        ...args.slice(1),
-      );
+    if (typeof method === 'function') {
+      return (method as (...args: unknown[]) => readonly unknown[])(...args.slice(1));
     }
   }
 
@@ -402,7 +342,7 @@ export const normalizeQueryKey = (queryKey: unknown[]): string => {
       return [...value].sort();
     }
     // Sort object keys for consistent string representation
-    if (typeof value === "object" && value !== null) {
+    if (typeof value === 'object' && value !== null) {
       const sorted: Record<string, unknown> = {};
       Object.keys(value)
         .sort()
@@ -422,16 +362,16 @@ export const debugQueryKey = (queryKey: unknown[]): string => {
   const patterns = [];
 
   if (queryKeyFactory.matchers.isNewsletterListKey(queryKey)) {
-    patterns.push("newsletter-list");
+    patterns.push('newsletter-list');
   }
 
   if (queryKeyFactory.matchers.isReadingQueueKey(queryKey)) {
-    patterns.push("reading-queue");
+    patterns.push('reading-queue');
   }
 
   if (queryKeyFactory.matchers.isNewsletterDetailKey(queryKey)) {
-    patterns.push("newsletter-detail");
+    patterns.push('newsletter-detail');
   }
 
-  return `QueryKey: ${JSON.stringify(queryKey)} | Patterns: [${patterns.join(", ")}]`;
+  return `QueryKey: ${JSON.stringify(queryKey)} | Patterns: [${patterns.join(', ')}]`;
 };

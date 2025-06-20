@@ -1,52 +1,37 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  Fragment,
-  useMemo,
-} from "react";
-import { useNavigate } from "react-router-dom";
-import { Dialog, Transition } from "@headlessui/react";
-import { toast } from "react-hot-toast";
+import { Dialog, Transition } from '@headlessui/react';
+import React, { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
-import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
-import { useLogger } from "@common/utils/logger/useLogger";
 import {
   useNewsletters,
-  useNewsletterSources,
   useNewsletterSourceGroups,
+  useNewsletterSources,
   useReadingQueue,
-} from "@common/hooks";
+  useTags,
+} from '@common/hooks';
+import { useLogger } from '@common/utils/logger/useLogger';
 
-import { newsletterApi } from "@common/api";
-import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
+import { newsletterApi } from '@common/api';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import {
   NewsletterSource,
   NewsletterSourceGroup,
   NewsletterWithRelations,
   Tag,
-} from "@common/types";
-import {
-  Loader2,
-  AlertTriangle,
-  ArrowLeft,
-  X,
-  Check,
-  FolderPlus,
-} from "lucide-react";
-import NewsletterRow from "@web/components/NewsletterRow";
-import { CreateSourceGroupModal } from "@web/components/CreateSourceGroupModal";
-import { SourceGroupCard } from "@web/components/SourceGroupCard";
-import { getCacheManager, prefetchQuery } from "@common/utils/cacheUtils";
-import { queryKeyFactory } from "@common/utils/queryKeyFactory";
+} from '@common/types';
+import { getCacheManager, prefetchQuery } from '@common/utils/cacheUtils';
+import { queryKeyFactory } from '@common/utils/queryKeyFactory';
+import { CreateSourceGroupModal } from '@web/components/CreateSourceGroupModal';
+import NewsletterRow from '@web/components/NewsletterRow';
+import { SourceGroupCard } from '@web/components/SourceGroupCard';
+import { AlertTriangle, ArrowLeft, Check, FolderPlus, Loader2, X } from 'lucide-react';
 
 const NewslettersPage: React.FC = () => {
   const navigate = useNavigate();
   const log = useLogger();
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editModalSourceId, setEditModalSourceId] = useState<string | null>(
-    null,
-  );
+  const [editModalSourceId, setEditModalSourceId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Initialize cache manager for advanced operations
@@ -63,7 +48,7 @@ const NewslettersPage: React.FC = () => {
   useEffect(() => {
     if (cacheManager) {
       // Warm up critical caches for better performance
-      cacheManager.warmCache("newsletters-page", "medium");
+      cacheManager.warmCache('newsletters-page', 'medium');
     }
   }, [cacheManager]);
 
@@ -81,9 +66,7 @@ const NewslettersPage: React.FC = () => {
     if (cacheManager && newsletterSources.length > 0) {
       // Preload data for sources with high newsletter counts
       const popularSources = newsletterSources
-        .filter(
-          (source) => source.newsletter_count && source.newsletter_count > 5,
-        )
+        .filter((source) => source.newsletter_count && source.newsletter_count > 5)
         .slice(0, 3);
 
       popularSources.forEach(async (source) => {
@@ -98,15 +81,15 @@ const NewslettersPage: React.FC = () => {
             // This would be replaced with actual fetch function
             return [];
           },
-          { staleTime: 30000 },
+          { staleTime: 30000 }
         );
       });
     }
   }, [cacheManager, newsletterSources]);
 
   const [formData, setFormData] = useState({
-    name: "",
-    from: "",
+    name: '',
+    from: '',
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -136,8 +119,8 @@ const NewslettersPage: React.FC = () => {
     e.preventDefault();
     if (!editingId) return;
     const name = formData?.name;
-    if (!name || typeof name !== "string" || !name.trim()) {
-      toast.error("Please enter a valid name");
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      toast.error('Please enter a valid name');
       return;
     }
     setIsUpdating(true);
@@ -147,20 +130,20 @@ const NewslettersPage: React.FC = () => {
         id: editingId,
         name: formData.name,
       });
-      toast.success("Source updated successfully");
+      toast.success('Source updated successfully');
       setShowEditModal(false);
       setEditModalSourceId(null);
     } catch (error) {
       log.error(
-        "Failed to update newsletter source",
+        'Failed to update newsletter source',
         {
-          action: "update_source",
+          action: 'update_source',
           metadata: { sourceId: editModalSourceId },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
       setUpdateError(error as Error);
-      toast.error("Failed to update source");
+      toast.error('Failed to update source');
     } finally {
       setIsUpdating(false);
     }
@@ -169,9 +152,26 @@ const NewslettersPage: React.FC = () => {
   // State for selected source and groups
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const [allTags, setAllTags] = useState<Tag[]>([]);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
-  const [editingGroup, setEditingGroup] =
-    useState<NewsletterSourceGroup | null>(null);
+  const [editingGroup, setEditingGroup] = useState<NewsletterSourceGroup | null>(null);
+
+  // Fetch tags
+  const { getTags } = useTags();
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const tags = await getTags();
+        setAllTags(tags || []);
+      } catch (error) {
+        log.error('Failed to fetch tags', { error });
+        setAllTags([]);
+      }
+    };
+    fetchTags();
+  }, [getTags, log]);
 
   // Reset source selection when group is selected and vice versa
   useEffect(() => {
@@ -204,17 +204,17 @@ const NewslettersPage: React.FC = () => {
         }
       } catch (error) {
         log.error(
-          "Failed to delete source group",
+          'Failed to delete source group',
           {
-            action: "delete_group",
+            action: 'delete_group',
             metadata: { groupId },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
-        toast.error("Failed to delete group");
+        toast.error('Failed to delete group');
       }
     },
-    [deleteGroup, selectedGroupId, log],
+    [deleteGroup, selectedGroupId, log]
   );
 
   // Memoize the groups to prevent unnecessary re-renders
@@ -227,21 +227,24 @@ const NewslettersPage: React.FC = () => {
     const group = groups.find((g) => g.id === selectedGroupId);
     const sourceIds = group?.sources?.map((s) => s.id) || [];
 
-    log.debug("Selected group sources computed", {
-      action: "compute_group_sources",
-      metadata: {
-        selectedGroupId,
-        foundGroup: group
-          ? {
-            id: group.id,
-            name: group.name,
-            sourceCount: group.sources?.length || 0,
-          }
-          : null,
-        sourceIds,
-        totalGroups: groups.length,
-      },
-    });
+    // Only log if there's a meaningful change to reduce log spam
+    if (sourceIds.length > 0 || selectedGroupId) {
+      log.debug('Selected group sources computed', {
+        action: 'compute_group_sources',
+        metadata: {
+          selectedGroupId,
+          foundGroup: group
+            ? {
+                id: group.id,
+                name: group.name,
+                sourceCount: group.sources?.length || 0,
+              }
+            : null,
+          sourceIds,
+          totalGroups: groups.length,
+        },
+      });
+    }
 
     return sourceIds;
   }, [selectedGroupId, groups, log]);
@@ -254,8 +257,8 @@ const NewslettersPage: React.FC = () => {
 
   // Debug modal states
   React.useEffect(() => {
-    log.debug("Modal states changed", {
-      action: "modal_state_change",
+    log.debug('Modal states changed', {
+      action: 'modal_state_change',
       metadata: {
         isGroupModalOpen,
         showEditModal,
@@ -284,21 +287,20 @@ const NewslettersPage: React.FC = () => {
         await bulkArchive(newsletterIds);
       }
       await setSourceArchiveStatus(deleteConfirmId, true);
-      toast.success("Source and its newsletters have been archived");
+      toast.success('Source and its newsletters have been archived');
       if (selectedSourceId === deleteConfirmId) {
         setSelectedSourceId(null);
       }
     } catch (error) {
       log.error(
-        "Failed to archive newsletter source",
+        'Failed to archive newsletter source',
         {
-          action: "archive_source",
+          action: 'archive_source',
           metadata: { deleteConfirmId },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to archive source";
+      const errorMessage = error instanceof Error ? error.message : 'Failed to archive source';
       toast.error(errorMessage);
     } finally {
       setDeleteConfirmId(null);
@@ -309,7 +311,10 @@ const NewslettersPage: React.FC = () => {
 
   const { readingQueue } = useReadingQueue();
 
-  // Build newsletter filter for debugging
+  // Ref to track filter changes - must be outside useMemo
+  const prevFilterKeyRef = React.useRef<string>();
+
+  // Build newsletter filter with stable reference to prevent unnecessary refetches
   const newsletterFilter = useMemo(() => {
     const filter = {
       isArchived: false, // Explicitly exclude archived newsletters
@@ -320,15 +325,21 @@ const NewslettersPage: React.FC = () => {
           : undefined,
     };
 
-    log.debug("Newsletter filter built", {
-      action: "build_newsletter_filter",
-      metadata: {
-        selectedSourceId,
-        selectedGroupId,
-        selectedGroupSourceIds,
-        filter,
-      },
-    });
+    // Only log when filter actually changes to reduce log spam
+    const filterKey = JSON.stringify(filter);
+
+    if (prevFilterKeyRef.current !== filterKey) {
+      log.debug('Newsletter filter built', {
+        action: 'build_newsletter_filter',
+        metadata: {
+          selectedSourceId,
+          selectedGroupId,
+          selectedGroupSourceIds,
+          filter,
+        },
+      });
+      prevFilterKeyRef.current = filterKey;
+    }
 
     return filter;
   }, [selectedSourceId, selectedGroupId, selectedGroupSourceIds, log]);
@@ -344,13 +355,11 @@ const NewslettersPage: React.FC = () => {
   } = useNewsletters(newsletterFilter, {
     debug: true,
     refetchOnWindowFocus: false,
-    staleTime: 0, // Force fresh data on filter changes
+    staleTime: 30000, // Use 30 second stale time to prevent excessive refetches
   });
 
   // Stable newsletter list with preserved order
-  const [stableNewsletters, setStableNewsletters] = useState<
-    NewsletterWithRelations[]
-  >([]);
+  const [stableNewsletters, setStableNewsletters] = useState<NewsletterWithRelations[]>([]);
 
   // Update stable newsletter list while preserving order
   useEffect(() => {
@@ -387,7 +396,25 @@ const NewslettersPage: React.FC = () => {
     }
   }, [rawNewsletters, isLoadingNewsletters]);
 
-  const fetchedNewsletters = stableNewsletters;
+  // Apply local tag filtering
+  const filteredNewsletters = useMemo(() => {
+    if (selectedTagIds.size === 0) {
+      return stableNewsletters;
+    }
+
+    return stableNewsletters.filter((newsletter) => {
+      if (!newsletter.tags || newsletter.tags.length === 0) {
+        return false;
+      }
+
+      // Newsletter must have ALL selected tags (AND logic)
+      return Array.from(selectedTagIds).every((tagId) =>
+        newsletter.tags?.some((tag) => tag.id === tagId)
+      );
+    });
+  }, [stableNewsletters, selectedTagIds]);
+
+  const fetchedNewsletters = filteredNewsletters;
 
   // Shared newsletter action handlers
   const {
@@ -417,8 +444,8 @@ const NewslettersPage: React.FC = () => {
 
   // Generate stable keys for newsletters
   const newsletterIds = useMemo(
-    () => fetchedNewsletters.map((n) => n.id).join(","),
-    [fetchedNewsletters],
+    () => fetchedNewsletters.map((n) => n.id).join(','),
+    [fetchedNewsletters]
   );
   useEffect(() => {
     setStableKeys((prev) => {
@@ -435,8 +462,8 @@ const NewslettersPage: React.FC = () => {
   // Debug newsletters data
   // Debug fetched newsletters and trigger refetch on filter changes
   useEffect(() => {
-    log.debug("Fetched newsletters updated", {
-      action: "newsletters_data_update",
+    log.debug('Fetched newsletters updated', {
+      action: 'newsletters_data_update',
       metadata: {
         count: fetchedNewsletters.length,
         selectedSourceId,
@@ -446,19 +473,20 @@ const NewslettersPage: React.FC = () => {
     });
   }, [fetchedNewsletters, selectedSourceId, selectedGroupId, log]);
 
-  // Force refetch when filters change to ensure fresh data (but not during actions)
+  // Refetch when source or group filter changes (but not for tag changes)
   useEffect(() => {
     // Skip refetch if action is in progress to preserve optimistic updates
     if (isActionInProgress) {
-      log.debug("Skipping refetch - action in progress", {
-        action: "filter_change_refetch",
+      log.debug('Skipping refetch - action in progress', {
+        action: 'source_filter_change_refetch',
         metadata: { isActionInProgress },
       });
       return;
     }
 
-    log.debug("Filter changed, refetching newsletters", {
-      action: "filter_change_refetch",
+    // Only refetch for source/group changes, not tag changes
+    log.debug('Source/Group filter changed, refetching newsletters', {
+      action: 'source_filter_change_refetch',
       metadata: {
         selectedSourceId,
         selectedGroupId,
@@ -477,9 +505,29 @@ const NewslettersPage: React.FC = () => {
 
   const handleTagClick = useCallback(
     (tag: Tag, e: React.MouseEvent) => {
-      handleTagClickWithNavigation(tag, navigate, "/inbox", e);
+      e.preventDefault();
+      e.stopPropagation();
+
+      setSelectedTagIds((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(tag.id)) {
+          newSet.delete(tag.id);
+        } else {
+          newSet.add(tag.id);
+        }
+        return newSet;
+      });
+
+      log.debug('Tag filter toggled', {
+        action: 'toggle_tag_filter',
+        metadata: {
+          tagId: tag.id,
+          tagName: tag.name,
+          isSelected: !selectedTagIds.has(tag.id),
+        },
+      });
     },
-    [navigate],
+    [selectedTagIds, log]
   );
 
   // Newsletter action wrapper handlers with optimistic updates
@@ -502,9 +550,7 @@ const NewslettersPage: React.FC = () => {
 
       try {
         await handleToggleLike(newsletter);
-        toast.success(
-          newsletter.is_liked ? "Newsletter unliked" : "Newsletter liked",
-        );
+        toast.success(newsletter.is_liked ? 'Newsletter unliked' : 'Newsletter liked');
       } catch (error) {
         // Revert optimistic update on error
         setStableNewsletters((prev) => {
@@ -523,7 +569,7 @@ const NewslettersPage: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [handleToggleLike],
+    [handleToggleLike]
   );
 
   const handleToggleSelect = useCallback(async () => {
@@ -565,9 +611,7 @@ const NewslettersPage: React.FC = () => {
 
       try {
         await handleToggleArchive(newsletter);
-        const successMessage = willBeArchived
-          ? "Newsletter archived"
-          : "Newsletter unarchived";
+        const successMessage = willBeArchived ? 'Newsletter archived' : 'Newsletter unarchived';
         toast.success(successMessage);
       } catch (error) {
         // Revert optimistic update on error
@@ -593,7 +637,7 @@ const NewslettersPage: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [handleToggleArchive, fetchedNewsletters],
+    [handleToggleArchive, fetchedNewsletters]
   );
 
   const handleToggleReadWrapper = useCallback(
@@ -621,9 +665,7 @@ const NewslettersPage: React.FC = () => {
 
       try {
         await handleToggleRead(newsletter);
-        toast.success(
-          newsletter.is_read ? "Marked as unread" : "Marked as read",
-        );
+        toast.success(newsletter.is_read ? 'Marked as unread' : 'Marked as read');
       } catch (error) {
         // Revert optimistic update on error
         setStableNewsletters((prev) => {
@@ -642,7 +684,7 @@ const NewslettersPage: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [handleToggleRead, fetchedNewsletters],
+    [handleToggleRead, fetchedNewsletters]
   );
 
   const handleToggleInQueueWrapper = useCallback(
@@ -656,45 +698,37 @@ const NewslettersPage: React.FC = () => {
       }
 
       // Check current queue status using actual reading queue data
-      const isCurrentlyInQueue = readingQueue.some(
-        (item) => item.newsletter_id === newsletterId,
-      );
+      const isCurrentlyInQueue = readingQueue.some((item) => item.newsletter_id === newsletterId);
 
       try {
         await handleToggleInQueue(newsletter, isCurrentlyInQueue);
-        toast.success(
-          isCurrentlyInQueue ? "Removed from queue" : "Added to queue",
-        );
+        toast.success(isCurrentlyInQueue ? 'Removed from queue' : 'Added to queue');
       } catch (error) {
         log.error(
-          "Failed to toggle queue status",
+          'Failed to toggle queue status',
           {
-            action: "toggle_queue",
+            action: 'toggle_queue',
             metadata: { newsletterId },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
-        toast.error("Failed to update queue status");
+        toast.error('Failed to update queue status');
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [handleToggleInQueue, fetchedNewsletters, readingQueue, log],
+    [handleToggleInQueue, fetchedNewsletters, readingQueue, log]
   );
 
   const handleTrashWrapper = useCallback(
     async (id: string) => {
-      if (
-        !window.confirm(
-          "Are you sure? This action is final and cannot be undone.",
-        )
-      ) {
+      if (!window.confirm('Are you sure? This action is final and cannot be undone.')) {
         return;
       }
 
       await handleDeleteNewsletter(id);
     },
-    [handleDeleteNewsletter],
+    [handleDeleteNewsletter]
   );
 
   const handleUpdateTags = useCallback(
@@ -704,19 +738,19 @@ const NewslettersPage: React.FC = () => {
         await sharedHandleUpdateTags(newsletterId, tagIds);
       } catch (error) {
         log.error(
-          "Failed to update newsletter tags",
+          'Failed to update newsletter tags',
           {
-            action: "update_tags",
+            action: 'update_tags',
             metadata: { newsletterId, tagCount: tagIds.length },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
         // Error handling is already done by shared actions
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [sharedHandleUpdateTags, log],
+    [sharedHandleUpdateTags, log]
   );
 
   const toggleTagVisibility = useCallback(
@@ -733,7 +767,7 @@ const NewslettersPage: React.FC = () => {
         return newSet;
       });
     },
-    [setVisibleTags],
+    [setVisibleTags]
   );
 
   // Handle newsletter click with proper navigation state
@@ -746,14 +780,12 @@ const NewslettersPage: React.FC = () => {
             await handleToggleRead(newsletter);
           } catch (readError) {
             log.error(
-              "Failed to mark newsletter as read",
+              'Failed to mark newsletter as read',
               {
-                action: "mark_as_read",
+                action: 'mark_as_read',
                 metadata: { newsletterId: newsletter.id },
               },
-              readError instanceof Error
-                ? readError
-                : new Error(String(readError)),
+              readError instanceof Error ? readError : new Error(String(readError))
             );
           }
         }
@@ -764,14 +796,12 @@ const NewslettersPage: React.FC = () => {
             await handleToggleArchive(newsletter);
           } catch (archiveError) {
             log.error(
-              "Failed to archive newsletter",
+              'Failed to archive newsletter',
               {
-                action: "archive_newsletter",
+                action: 'archive_newsletter',
                 metadata: { newsletterId: newsletter.id },
               },
-              archiveError instanceof Error
-                ? archiveError
-                : new Error(String(archiveError)),
+              archiveError instanceof Error ? archiveError : new Error(String(archiveError))
             );
           }
         }
@@ -780,41 +810,39 @@ const NewslettersPage: React.FC = () => {
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
             fromNewsletterSources: true,
-            from: "/newsletters",
+            from: '/newsletters',
           },
         });
       } catch (error) {
         log.error(
-          "Unexpected error in newsletter click handler",
+          'Unexpected error in newsletter click handler',
           {
-            action: "newsletter_click",
+            action: 'newsletter_click',
             metadata: { newsletterId: newsletter.id },
           },
-          error instanceof Error ? error : new Error(String(error)),
+          error instanceof Error ? error : new Error(String(error))
         );
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
             fromNewsletterSources: true,
-            from: "/newsletters",
+            from: '/newsletters',
           },
         });
       }
     },
-    [navigate, handleToggleRead, handleToggleArchive, log],
+    [navigate, handleToggleRead, handleToggleArchive, log]
   );
 
   useEffect(() => {
     if (errorNewsletters) {
       log.error(
-        "Failed to load newsletters",
+        'Failed to load newsletters',
         {
-          action: "load_newsletters",
+          action: 'load_newsletters',
           metadata: { selectedSourceId, selectedGroupId },
         },
-        errorNewsletters instanceof Error
-          ? errorNewsletters
-          : new Error(String(errorNewsletters)),
+        errorNewsletters instanceof Error ? errorNewsletters : new Error(String(errorNewsletters))
       );
     }
   }, [errorNewsletters, log, selectedGroupId, selectedSourceId]);
@@ -824,9 +852,9 @@ const NewslettersPage: React.FC = () => {
 
   // Log modal state changes in development
   React.useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      log.debug("Modal state changed", {
-        action: "debug_modal_state",
+    if (process.env.NODE_ENV === 'development') {
+      log.debug('Modal state changed', {
+        action: 'debug_modal_state',
         metadata: {
           isGroupModalOpen,
           showEditModal,
@@ -845,7 +873,7 @@ const NewslettersPage: React.FC = () => {
       hasDeleteConfirmId: !!deleteConfirmId,
       anyModalOpen,
     }),
-    [isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen],
+    [isGroupModalOpen, showEditModal, deleteConfirmId, anyModalOpen]
   );
 
   return (
@@ -855,7 +883,7 @@ const NewslettersPage: React.FC = () => {
           onClick={(e) => {
             e.preventDefault();
             // Use React Router's navigate for client-side navigation
-            navigate("/inbox");
+            navigate('/inbox');
           }}
           className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-6"
         >
@@ -865,12 +893,9 @@ const NewslettersPage: React.FC = () => {
 
         <header className="mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-primary-900">
-              Manage Newsletter Sources
-            </h1>
+            <h1 className="text-3xl font-bold text-primary-900">Manage Newsletter Sources</h1>
             <p className="text-gray-600 mt-1">
-              Define your newsletter sources by name and their primary email
-              from.
+              Define your newsletter sources by name and their primary email from.
             </p>
           </div>
         </header>
@@ -879,9 +904,7 @@ const NewslettersPage: React.FC = () => {
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold text-gray-800">
-                Your Groups
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-800">Your Groups</h2>
               {selectedGroupId && (
                 <button
                   onClick={clearGroupFilter}
@@ -893,48 +916,44 @@ const NewslettersPage: React.FC = () => {
             </div>
             <div
               style={{
-                padding: "2px",
-                background: "linear-gradient(45deg, #3b82f6, #1d4ed8)",
-                borderRadius: "0.375rem",
-                boxShadow:
-                  "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                padding: '2px',
+                background: 'linear-gradient(45deg, #3b82f6, #1d4ed8)',
+                borderRadius: '0.375rem',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
               }}
             >
               <button
                 onClick={() => {
-                  log.debug("New Group button clicked", {
-                    action: "new_group_button_click",
+                  log.debug('New Group button clicked', {
+                    action: 'new_group_button_click',
                     metadata: {},
                   });
                   setEditingGroup(null);
                   setIsGroupModalOpen(true);
                 }}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "#2563eb",
-                  color: "white",
-                  borderRadius: "0.25rem",
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  borderRadius: '0.25rem',
                   fontWeight: 500,
-                  fontSize: "0.875rem",
-                  lineHeight: "1.25rem",
-                  border: "none",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+                  fontSize: '0.875rem',
+                  lineHeight: '1.25rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                 }}
                 onMouseOver={(e) => {
-                  e.currentTarget.style.backgroundColor = "#1d4ed8";
+                  e.currentTarget.style.backgroundColor = '#1d4ed8';
                 }}
                 onMouseOut={(e) => {
-                  e.currentTarget.style.backgroundColor = "#2563eb";
+                  e.currentTarget.style.backgroundColor = '#2563eb';
                 }}
               >
-                <FolderPlus
-                  className="mr-2 h-4 w-4"
-                  style={{ color: "white" }}
-                />
+                <FolderPlus className="mr-2 h-4 w-4" style={{ color: 'white' }} />
                 <span>New Group</span>
               </button>
             </div>
@@ -1024,10 +1043,7 @@ const NewslettersPage: React.FC = () => {
                           />
                         </div>
                         <div className="mb-4">
-                          <label
-                            htmlFor="from"
-                            className="block text-sm font-medium text-gray-700"
-                          >
+                          <label htmlFor="from" className="block text-sm font-medium text-gray-700">
                             From Email
                           </label>
                           <div className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 p-2 text-sm text-gray-600">
@@ -1037,10 +1053,11 @@ const NewslettersPage: React.FC = () => {
                         <div className="flex justify-end gap-2">
                           <button
                             type="submit"
-                            className={`inline-flex items-center px-4 py-2 font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${isUpdating
-                                ? "bg-gray-200 text-gray-700 cursor-not-allowed"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-300"
-                              }`}
+                            className={`inline-flex items-center px-4 py-2 font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                              isUpdating
+                                ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-300'
+                            }`}
                             disabled={isUpdating}
                           >
                             {isUpdating ? (
@@ -1071,10 +1088,7 @@ const NewslettersPage: React.FC = () => {
                       </form>
                       {updateError && (
                         <div className="flex items-center text-red-600 bg-red-50 p-4 rounded-md mt-4">
-                          <AlertTriangle
-                            size={18}
-                            className="mr-2 flex-shrink-0"
-                          />
+                          <AlertTriangle size={18} className="mr-2 flex-shrink-0" />
                           <span>Error: {updateError.message}</span>
                         </div>
                       )}
@@ -1124,8 +1138,8 @@ const NewslettersPage: React.FC = () => {
                         Delete Newsletter Source
                       </Dialog.Title>
                       <p className="text-sm text-gray-500 mb-6">
-                        Are you sure you want to delete this source? This will
-                        archive all newsletters from this source.
+                        Are you sure you want to delete this source? This will archive all
+                        newsletters from this source.
                       </p>
                       <div className="flex justify-end gap-2">
                         <button
@@ -1157,147 +1171,138 @@ const NewslettersPage: React.FC = () => {
           {(showEditModal || !!deleteConfirmId) && (
             <div className="fixed inset-0 bg-gray-400 bg-opacity-40 z-40 pointer-events-auto transition-opacity" />
           )}
-          {!isLoadingSources &&
-            !isErrorSources &&
-            newsletterSources.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-2 relative z-50">
-                {newsletterSources.map((source: NewsletterSource) => {
-                  const isEditing = editModalSourceId === source.id;
-                  const isDeleting = deleteConfirmId === source.id;
-                  // Only show buttons if not editing/deleting any card, or if this is the card being edited/deleted
-                  const showButtons =
-                    !(showEditModal || !!deleteConfirmId) ||
-                    isEditing ||
-                    isDeleting;
-                  return (
-                    <div
-                      key={source.id}
-                      className={`group relative rounded-xl border transition-colors shadow-sm p-4 bg-white hover:border-blue-300 hover:shadow-md flex flex-col justify-between cursor-pointer ${selectedSourceId === source.id
-                          ? "border-blue-500 ring-2 ring-blue-100 bg-blue-50"
-                          : "border-neutral-200"
-                        }`}
-                      style={{ minHeight: 170 }}
-                      onClick={() => {
-                        log.debug("Source selected", {
-                          action: "source_selection",
-                          metadata: {
-                            sourceId: source.id,
-                            sourceName: source.name,
-                            previousSelection: selectedSourceId,
-                          },
-                        });
-                        setSelectedSourceId(source.id);
-                      }}
-                    >
-                      {/* Edit/Delete icons on the right, only if allowed */}
-                      {showButtons && !(isEditing || isDeleting) && (
-                        <div className="absolute top-3 right-3 flex space-x-1 z-10">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(source);
-                            }}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 focus:outline-none rounded-full bg-white shadow"
-                            title="Edit source"
+          {!isLoadingSources && !isErrorSources && newsletterSources.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-2 relative z-50">
+              {newsletterSources.map((source: NewsletterSource) => {
+                const isEditing = editModalSourceId === source.id;
+                const isDeleting = deleteConfirmId === source.id;
+                // Only show buttons if not editing/deleting any card, or if this is the card being edited/deleted
+                const showButtons =
+                  !(showEditModal || !!deleteConfirmId) || isEditing || isDeleting;
+                return (
+                  <div
+                    key={source.id}
+                    className={`group relative rounded-xl border transition-colors shadow-sm p-4 bg-white hover:border-blue-300 hover:shadow-md flex flex-col justify-between cursor-pointer ${
+                      selectedSourceId === source.id
+                        ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50'
+                        : 'border-neutral-200'
+                    }`}
+                    style={{ minHeight: 170 }}
+                    onClick={() => {
+                      log.debug('Source selected', {
+                        action: 'source_selection',
+                        metadata: {
+                          sourceId: source.id,
+                          sourceName: source.name,
+                          previousSelection: selectedSourceId,
+                        },
+                      });
+                      setSelectedSourceId(source.id);
+                    }}
+                  >
+                    {/* Edit/Delete icons on the right, only if allowed */}
+                    {showButtons && !(isEditing || isDeleting) && (
+                      <div className="absolute top-3 right-3 flex space-x-1 z-10">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(source);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 focus:outline-none rounded-full bg-white shadow"
+                          title="Edit source"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
                           >
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArchiveSource(source.id);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 focus:outline-none rounded-full bg-white shadow"
+                          title="Delete source"
+                          disabled={isArchivingSource}
+                        >
+                          {isArchivingSource ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               className="h-4 w-4"
                               viewBox="0 0 20 20"
                               fill="currentColor"
                             >
-                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                              <path
+                                fillRule="evenodd"
+                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                clipRule="evenodd"
+                              />
                             </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleArchiveSource(source.id);
-                            }}
-                            className="p-1.5 text-gray-400 hover:text-red-600 focus:outline-none rounded-full bg-white shadow"
-                            title="Delete source"
-                            disabled={isArchivingSource}
-                          >
-                            {isArchivingSource ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      )}
-                      <div className="flex-1 flex flex-col items-center justify-center pt-2 pb-4">
-                        <div
-                          className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${selectedSourceId === source.id
-                              ? "bg-blue-200"
-                              : "bg-gray-100"
-                            }`}
-                        >
-                          <span
-                            className={`text-lg font-bold ${selectedSourceId === source.id
-                                ? "text-blue-800"
-                                : "text-gray-600"
-                              }`}
-                          >
-                            {source.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <h3
-                          className={`font-medium text-xs truncate mb-1 max-w-full px-2 ${selectedSourceId === source.id
-                              ? "text-blue-900"
-                              : "text-neutral-900"
-                            }`}
-                          title={source.name}
-                        >
-                          {source.name}
-                        </h3>
-                        <p
-                          className={`text-xs truncate max-w-full ${selectedSourceId === source.id
-                              ? "text-blue-700"
-                              : "text-neutral-500"
-                            }`}
-                          title={source.from}
-                        >
-                          {source.from}
-                        </p>
+                          )}
+                        </button>
                       </div>
-                      <div className="flex justify-center flex-col gap-1">
-                        {isLoadingSources ? (
-                          <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" />
-                        ) : (
-                          <>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {source.newsletter_count || 0}{" "}
-                              {(source.newsletter_count || 0) === 1
-                                ? "newsletter"
-                                : "newsletters"}
-                            </span>
-                            {source.unread_count && source.unread_count > 0 && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                {source.unread_count} unread
-                              </span>
-                            )}
-                          </>
-                        )}
+                    )}
+                    <div className="flex-1 flex flex-col items-center justify-center pt-2 pb-4">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                          selectedSourceId === source.id ? 'bg-blue-200' : 'bg-gray-100'
+                        }`}
+                      >
+                        <span
+                          className={`text-lg font-bold ${
+                            selectedSourceId === source.id ? 'text-blue-800' : 'text-gray-600'
+                          }`}
+                        >
+                          {source.name.charAt(0).toUpperCase()}
+                        </span>
                       </div>
+                      <h3
+                        className={`font-medium text-xs truncate mb-1 max-w-full px-2 ${
+                          selectedSourceId === source.id ? 'text-blue-900' : 'text-neutral-900'
+                        }`}
+                        title={source.name}
+                      >
+                        {source.name}
+                      </h3>
+                      <p
+                        className={`text-xs truncate max-w-full ${
+                          selectedSourceId === source.id ? 'text-blue-700' : 'text-neutral-500'
+                        }`}
+                        title={source.from}
+                      >
+                        {source.from}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <div className="flex justify-center flex-col gap-1">
+                      {isLoadingSources ? (
+                        <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" />
+                      ) : (
+                        <>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {source.newsletter_count || 0}{' '}
+                            {(source.newsletter_count || 0) === 1 ? 'newsletter' : 'newsletters'}
+                          </span>
+                          {source.unread_count && source.unread_count > 0 && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                              {source.unread_count} unread
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* Newsletters for selected source or group */}
@@ -1305,9 +1310,7 @@ const NewslettersPage: React.FC = () => {
           <section className="mt-12">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-neutral-900">
-                {selectedSourceId
-                  ? `Newsletters from this Source`
-                  : `Newsletters in this Group`}
+                {selectedSourceId ? `Newsletters from this Source` : `Newsletters in this Group`}
               </h3>
               <div className="flex items-center space-x-2">
                 <button
@@ -1330,6 +1333,38 @@ const NewslettersPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Tag Filter Display */}
+            {selectedTagIds.size > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-gray-700">Filtering by tags:</span>
+                    {Array.from(selectedTagIds).map((tagId) => {
+                      const tag = allTags.find((t) => t.id === tagId);
+                      if (!tag) return null;
+                      return (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80"
+                          style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                          onClick={(e) => handleTagClick(tag, e)}
+                        >
+                          {tag.name}
+                          <span className="ml-1">×</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setSelectedTagIds(new Set())}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    Clear tags
+                  </button>
+                </div>
+              </div>
+            )}
+
             {isLoadingNewsletters ? (
               <div className="flex justify-center items-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
@@ -1337,56 +1372,48 @@ const NewslettersPage: React.FC = () => {
             ) : isErrorNewsletters ? (
               <div className="text-center text-red-500 p-4">
                 <AlertTriangle className="h-6 w-6 mx-auto mb-2" />
-                <p>
-                  Error loading newsletters:{" "}
-                  {errorNewsletters?.message || "Unknown error"}
-                </p>
+                <p>Error loading newsletters: {errorNewsletters?.message || 'Unknown error'}</p>
               </div>
             ) : fetchedNewsletters.length === 0 ? (
               <div className="text-gray-500 italic">
-                <p>
-                  No newsletters found for this{" "}
-                  {selectedSourceId ? "source" : "group"}.
-                </p>
+                <p>No newsletters found for this {selectedSourceId ? 'source' : 'group'}.</p>
                 <p className="text-xs mt-1">
-                  Filter:{" "}
+                  Filter:{' '}
                   {selectedSourceId
                     ? `Source ID: ${selectedSourceId}`
                     : selectedGroupId
                       ? `Group ID: ${selectedGroupId}`
-                      : "None"}
+                      : 'None'}
                 </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {fetchedNewsletters.map(
-                  (newsletter: NewsletterWithRelations) => (
-                    <NewsletterRow
-                      key={stableKeys.get(newsletter.id) || newsletter.id}
-                      newsletter={newsletter}
-                      isSelected={false}
-                      onToggleSelect={handleToggleSelect}
-                      onToggleLike={handleToggleLikeWrapper}
-                      onToggleArchive={handleToggleArchiveWrapper}
-                      onToggleRead={handleToggleReadWrapper}
-                      onToggleQueue={handleToggleInQueueWrapper}
-                      onTrash={handleTrashWrapper}
-                      onToggleTagVisibility={toggleTagVisibility}
-                      onUpdateTags={handleUpdateTags}
-                      onTagClick={handleTagClick}
-                      onNewsletterClick={handleNewsletterClick}
-                      visibleTags={visibleTags}
-                      readingQueue={readingQueue}
-                      isInReadingQueue={readingQueue.some(
-                        (item) => item.newsletter_id === newsletter.id,
-                      )}
-                      isDeletingNewsletter={false}
-                      loadingStates={{}}
-                      errorTogglingLike={errorTogglingLike}
-                      isUpdatingTags={isUpdatingTags}
-                    />
-                  ),
-                )}
+                {fetchedNewsletters.map((newsletter: NewsletterWithRelations) => (
+                  <NewsletterRow
+                    key={stableKeys.get(newsletter.id) || newsletter.id}
+                    newsletter={newsletter}
+                    isSelected={false}
+                    onToggleSelect={handleToggleSelect}
+                    onToggleLike={handleToggleLikeWrapper}
+                    onToggleArchive={handleToggleArchiveWrapper}
+                    onToggleRead={handleToggleReadWrapper}
+                    onToggleQueue={handleToggleInQueueWrapper}
+                    onTrash={handleTrashWrapper}
+                    onToggleTagVisibility={toggleTagVisibility}
+                    onUpdateTags={handleUpdateTags}
+                    onTagClick={handleTagClick}
+                    onNewsletterClick={handleNewsletterClick}
+                    visibleTags={visibleTags}
+                    readingQueue={readingQueue}
+                    isInReadingQueue={readingQueue.some(
+                      (item) => item.newsletter_id === newsletter.id
+                    )}
+                    isDeletingNewsletter={false}
+                    loadingStates={{}}
+                    errorTogglingLike={errorTogglingLike}
+                    isUpdatingTags={isUpdatingTags}
+                  />
+                ))}
               </div>
             )}
           </section>
@@ -1402,10 +1429,10 @@ const NewslettersPage: React.FC = () => {
           groupToEdit={
             editingGroup
               ? {
-                id: editingGroup.id,
-                name: editingGroup.name,
-                sources: editingGroup.sources || [],
-              }
+                  id: editingGroup.id,
+                  name: editingGroup.name,
+                  sources: editingGroup.sources || [],
+                }
               : undefined
           }
         />
@@ -1433,9 +1460,9 @@ const SourceGroupsList = React.memo(
   }) => {
     const log = useLogger();
 
-    if (process.env.NODE_ENV === "development") {
-      log.debug("Rendering SourceGroupsList", {
-        action: "debug_component_render",
+    if (process.env.NODE_ENV === 'development') {
+      log.debug('Rendering SourceGroupsList', {
+        action: 'debug_component_render',
         metadata: { isAnyModalOpen },
       });
     }
@@ -1451,7 +1478,7 @@ const SourceGroupsList = React.memo(
             onEdit={onEditGroup}
             onDelete={() => {
               if (selectedGroupId === group.id) {
-                onGroupClick(""); // Clear the selected group
+                onGroupClick(''); // Clear the selected group
               }
               onDeleteGroup(group.id);
             }}
@@ -1460,7 +1487,7 @@ const SourceGroupsList = React.memo(
         ))}
       </div>
     );
-  },
+  }
 );
 
 export default NewslettersPage;

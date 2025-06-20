@@ -1,17 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@common/services/supabaseClient";
-import { getUserEmailAlias } from "@common/utils/emailAlias"; // Updated path to match actual file location
-import { User } from "@supabase/supabase-js";
-import { useLogger } from "@common/utils/logger/useLogger";
+import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@common/services/supabaseClient';
+import { getUserEmailAlias } from '@common/utils/emailAlias'; // Updated path to match actual file location
+import { User } from '@supabase/supabase-js';
+import { useLogger } from '@common/utils/logger/useLogger';
+import { queryKeyFactory } from '@common/utils/queryKeyFactory';
 
 type AppUser = User | null;
 
 export function useEmailAlias() {
-  const log = useLogger("useEmailAlias");
+  const log = useLogger('useEmailAlias');
   const [user, setUser] = useState<AppUser>(null);
-  const [emailAlias, setEmailAlias] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
   // Fetch the current user when the component mounts
@@ -37,33 +36,30 @@ export function useEmailAlias() {
     };
   }, []);
 
-  // Fetch email alias when user changes
-  const fetchEmailAlias = useCallback(async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+  // Use React Query to fetch email alias with proper caching
+  const {
+    data: emailAlias = '',
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeyFactory.user.emailAlias(user?.id),
+    queryFn: getUserEmailAlias,
+    enabled: !!user, // Only fetch when user is authenticated
+    staleTime: 5 * 60 * 1000, // 5 minutes - email alias doesn't change often
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: (failureCount, error) => {
+      // Don't retry if user is not authenticated
+      if (error?.message?.includes('Auth session missing')) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 5000),
+  });
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const alias = await getUserEmailAlias();
-      setEmailAlias(alias);
-    } catch (err) {
-      log.error(
-        "Error fetching email alias",
-        {
-          action: "fetch_email_alias",
-          metadata: { userId: user?.id },
-        },
-        err instanceof Error ? err : new Error(String(err)),
-      );
-      setError("Failed to load email alias");
-    } finally {
-      setLoading(false);
-    }
-  }, [user, log]);
+  // Convert query error to string
+  const error = queryError ? 'Failed to load email alias' : null;
 
   // Copy email alias to clipboard
   const copyToClipboard = useCallback(async () => {
@@ -76,21 +72,24 @@ export function useEmailAlias() {
       return true;
     } catch (err) {
       log.error(
-        "Failed to copy email alias",
+        'Failed to copy email alias',
         {
-          action: "copy_email_alias",
+          action: 'copy_email_alias',
           metadata: { emailAlias },
         },
-        err instanceof Error ? err : new Error(String(err)),
+        err instanceof Error ? err : new Error(String(err))
       );
       return false;
     }
   }, [emailAlias, log]);
 
-  // Initial fetch of email alias
-  useEffect(() => {
-    fetchEmailAlias();
-  }, [fetchEmailAlias]);
+  // Create refresh function that uses React Query's refetch
+  const refresh = useCallback(() => {
+    if (user) {
+      return refetch();
+    }
+    return Promise.resolve();
+  }, [user, refetch]);
 
   return {
     emailAlias,
@@ -98,6 +97,6 @@ export function useEmailAlias() {
     error,
     copied,
     copyToClipboard,
-    refresh: fetchEmailAlias,
+    refresh,
   };
 }

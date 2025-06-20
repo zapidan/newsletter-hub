@@ -1,19 +1,13 @@
-import { useFilters } from "@common/contexts/FilterContext";
-import { useTags } from "@common/hooks/useTags";
-import type { NewsletterSource, Tag } from "@common/types";
-import { useLogger } from "@common/utils/logger/useLogger";
-import type { TimeRange } from "@web/components/TimeFilter";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { useNewsletterSources } from "./useNewsletterSources";
+import { useFilters } from '@common/contexts/FilterContext';
+import { useTags } from '@common/hooks/useTags';
+import type { NewsletterSource, Tag } from '@common/types';
+import { useLogger } from '@common/utils/logger/useLogger';
+import type { TimeRange } from '@web/components/TimeFilter';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNewsletterSources } from './useNewsletterSources';
 
 export interface InboxFiltersState {
-  filter: "all" | "unread" | "liked" | "archived";
+  filter: 'all' | 'unread' | 'liked' | 'archived';
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
@@ -24,7 +18,7 @@ export interface InboxFiltersState {
 }
 
 export interface InboxFiltersActions {
-  setFilter: (filter: "all" | "unread" | "liked" | "archived") => void;
+  setFilter: (filter: 'all' | 'unread' | 'liked' | 'archived') => void;
   setSourceFilter: (sourceId: string | null) => void;
   setTimeRange: (range: TimeRange) => void;
   setTagIds: (tagIds: string[]) => void;
@@ -44,10 +38,8 @@ export interface UseInboxFiltersOptions {
   preserveUrlOnActions?: boolean;
 }
 
-export interface UseInboxFiltersReturn
-  extends InboxFiltersState,
-  InboxFiltersActions {
-  newsletterFilter: ReturnType<typeof useFilters>["newsletterFilter"];
+export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersActions {
+  newsletterFilter: ReturnType<typeof useFilters>['newsletterFilter'];
   hasActiveFilters: boolean;
   isFilterActive: (filterName: keyof InboxFiltersState) => boolean;
   newsletterSources: NewsletterSource[];
@@ -55,9 +47,7 @@ export interface UseInboxFiltersReturn
   isLoadingSources: boolean;
 }
 
-export const useInboxFilters = (
-  options: UseInboxFiltersOptions = {},
-): UseInboxFiltersReturn => {
+export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxFiltersReturn => {
   const {
     debounceMs = 300,
     autoLoadTags = true,
@@ -89,18 +79,33 @@ export const useInboxFilters = (
   // Refs for debouncing
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Hooks
+  // Hooks - memoize getTags to prevent infinite loops
   const { getTags } = useTags();
+  const memoizedGetTags = useCallback(getTags, [getTags]);
   const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
     includeCount: true,
   });
 
-  // Sync pendingTagUpdates with URL changes
+  // Sync pendingTagUpdates with URL changes - only if they actually differ
+  const prevTagIds = useRef<string>('');
+  const prevPendingTagUpdates = useRef<string>('');
+
   useEffect(() => {
-    setPendingTagUpdates(tagIds);
-  }, [tagIds]);
+    const tagIdsStr = tagIds.join(',');
+    const pendingStr = pendingTagUpdates.join(',');
+
+    // Only update if tagIds changed and they're different from pending
+    if (prevTagIds.current !== tagIdsStr && tagIdsStr !== pendingStr) {
+      setPendingTagUpdates(tagIds);
+    }
+    prevTagIds.current = tagIdsStr;
+    prevPendingTagUpdates.current = pendingStr;
+  }, [tagIds, pendingTagUpdates]);
 
   // Debounce tag updates
+  const isUpdatingTagsRef = useRef(false);
+  const stableSetTagIds = useCallback(setTagIds, [setTagIds]);
+
   useEffect(() => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
@@ -108,9 +113,17 @@ export const useInboxFilters = (
 
     debounceTimeoutRef.current = setTimeout(() => {
       setDebouncedTagIds([...pendingTagUpdates]);
-      // Update the actual filter state after debounce
-      if (pendingTagUpdates.join(",") !== tagIds.join(",")) {
-        setTagIds(pendingTagUpdates);
+
+      // Update the actual filter state after debounce - prevent circular updates
+      const pendingStr = pendingTagUpdates.join(',');
+      const currentStr = tagIds.join(',');
+      if (pendingStr !== currentStr && !isUpdatingTagsRef.current) {
+        isUpdatingTagsRef.current = true;
+        stableSetTagIds(pendingTagUpdates);
+        // Reset flag after a brief delay
+        setTimeout(() => {
+          isUpdatingTagsRef.current = false;
+        }, 100);
       }
     }, debounceMs);
 
@@ -119,47 +132,50 @@ export const useInboxFilters = (
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [pendingTagUpdates, debounceMs, tagIds, setTagIds]);
+  }, [pendingTagUpdates, debounceMs, tagIds, stableSetTagIds]);
 
   // Load tags if enabled
   const [isLoadingTags, setIsLoadingTags] = useState(false);
+  const [hasLoadedTags, setHasLoadedTags] = useState(false);
 
   useEffect(() => {
-    if (autoLoadTags) {
+    if (autoLoadTags && !hasLoadedTags && !isLoadingTags) {
       setIsLoadingTags(true);
-      getTags()
+      memoizedGetTags()
         .then((tags) => {
           if (tags && tags.length > 0) {
             setAllTags(tags);
           } else {
-            log.warn("No tags loaded for inbox filters", {
-              action: "load_tags",
+            log.warn('No tags loaded for inbox filters', {
+              action: 'load_tags',
               metadata: {
                 autoLoadTags,
                 tagCount: 0,
-                impact: "filter_functionality_affected",
+                impact: 'filter_functionality_affected',
               },
             });
             setAllTags([]);
           }
+          setHasLoadedTags(true);
         })
         .catch((error) => {
           log.error(
-            "Failed to load tags for inbox filters",
+            'Failed to load tags for inbox filters',
             {
-              action: "load_tags",
+              action: 'load_tags',
               metadata: { autoLoadTags },
             },
-            error,
+            error
           );
           // Show error to user if needed
           setAllTags([]);
+          setHasLoadedTags(true);
         })
         .finally(() => {
           setIsLoadingTags(false);
         });
     }
-  }, [autoLoadTags, getTags, log]);
+  }, [autoLoadTags, memoizedGetTags, log, hasLoadedTags, isLoadingTags]);
 
   // Update visible tags based on current tag selection
   useEffect(() => {
@@ -177,14 +193,17 @@ export const useInboxFilters = (
   // Enhanced tag update function with debouncing
   const updateTagDebounced = useCallback(
     (newTagIds: string[]) => {
+      // Don't update if the arrays are the same
+      if (newTagIds.join(',') === pendingTagUpdates.join(',')) {
+        return;
+      }
+
       // Validate tag IDs exist in allTags if we have tags loaded
       if (allTags.length > 0) {
-        const validTagIds = newTagIds.filter((tagId) =>
-          allTags.some((tag) => tag.id === tagId),
-        );
+        const validTagIds = newTagIds.filter((tagId) => allTags.some((tag) => tag.id === tagId));
         if (validTagIds.length !== newTagIds.length) {
-          log.warn("Some tag IDs not found in available tags", {
-            action: "validate_tags",
+          log.warn('Some tag IDs not found in available tags', {
+            action: 'validate_tags',
             metadata: {
               requested: newTagIds,
               valid: validTagIds,
@@ -199,14 +218,14 @@ export const useInboxFilters = (
         setPendingTagUpdates(newTagIds);
       }
     },
-    [allTags, log],
+    [allTags, log, pendingTagUpdates]
   );
 
   // Internal function for handling tag clicks with Tag object
   const handleTagClickInternal = useCallback(
     (tag: Tag, e?: React.MouseEvent) => {
-      log.debug("Tag clicked in inbox filters", {
-        action: "tag_click",
+      log.debug('Tag clicked in inbox filters', {
+        action: 'tag_click',
         metadata: {
           tagId: tag.id,
           tagName: tag.name,
@@ -224,12 +243,12 @@ export const useInboxFilters = (
         ? currentTags.filter((id) => id !== tagId)
         : [...currentTags, tagId];
 
-      log.debug("Tag toggle result in inbox filters", {
-        action: "tag_toggle",
+      log.debug('Tag toggle result in inbox filters', {
+        action: 'tag_toggle',
         metadata: {
           tagId: tag.id,
           wasSelected: isCurrentlySelected,
-          operation: isCurrentlySelected ? "REMOVE" : "ADD",
+          operation: isCurrentlySelected ? 'REMOVE' : 'ADD',
           oldTags: currentTags,
           newTags: newTags,
           changeCount: Math.abs(newTags.length - currentTags.length),
@@ -238,7 +257,7 @@ export const useInboxFilters = (
 
       updateTagDebounced(newTags);
     },
-    [pendingTagUpdates, updateTagDebounced, allTags.length, log],
+    [pendingTagUpdates, updateTagDebounced, allTags.length, log]
   );
 
   // Handle tag click with toggle logic - matches interface signature
@@ -249,7 +268,7 @@ export const useInboxFilters = (
         handleTagClickInternal(tag);
       }
     },
-    [allTags, handleTagClickInternal],
+    [allTags, handleTagClickInternal]
   );
 
   // Enhanced filter actions that work with debounced tags
@@ -257,7 +276,7 @@ export const useInboxFilters = (
     (tagId: string) => {
       handleTagClick(tagId);
     },
-    [handleTagClick],
+    [handleTagClick]
   );
 
   const enhancedAddTag = useCallback(
@@ -267,7 +286,7 @@ export const useInboxFilters = (
         updateTagDebounced([...currentTags, tagId]);
       }
     },
-    [pendingTagUpdates, updateTagDebounced],
+    [pendingTagUpdates, updateTagDebounced]
   );
 
   const enhancedRemoveTag = useCallback(
@@ -275,7 +294,7 @@ export const useInboxFilters = (
       const currentTags = pendingTagUpdates;
       updateTagDebounced(currentTags.filter((id) => id !== tagId));
     },
-    [pendingTagUpdates, updateTagDebounced],
+    [pendingTagUpdates, updateTagDebounced]
   );
 
   const enhancedClearTags = useCallback(() => {
@@ -292,41 +311,45 @@ export const useInboxFilters = (
   const enhancedIsFilterActive = useCallback(
     (filterName: keyof InboxFiltersState): boolean => {
       switch (filterName) {
-        case "filter":
-          return filter !== "all";
-        case "sourceFilter":
+        case 'filter':
+          return filter !== 'all';
+        case 'sourceFilter':
           return sourceFilter !== null;
-        case "timeRange":
-          return timeRange !== "all";
-        case "tagIds":
-        case "debouncedTagIds":
-        case "pendingTagUpdates":
+        case 'timeRange':
+          return timeRange !== 'all';
+        case 'tagIds':
+        case 'debouncedTagIds':
+        case 'pendingTagUpdates':
           return debouncedTagIds.length > 0 || pendingTagUpdates.length > 0;
         default:
           return false;
       }
     },
-    [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates],
+    [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]
   );
 
   // Enhanced hasActiveFilters that considers debounced state
   const enhancedHasActiveFilters = useMemo(() => {
     return (
-      filter !== "all" ||
+      filter !== 'all' ||
       sourceFilter !== null ||
-      timeRange !== "all" ||
+      timeRange !== 'all' ||
       debouncedTagIds.length > 0 ||
       pendingTagUpdates.length > 0
     );
   }, [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]);
 
-  // Create newsletter filter that uses debounced tag IDs
+  // Create newsletter filter that excludes tagIds for local filtering
   const enhancedNewsletterFilter = useMemo(() => {
-    return {
-      ...newsletterFilter,
-      ...(debouncedTagIds.length > 0 && { tagIds: debouncedTagIds }),
-    };
-  }, [newsletterFilter, debouncedTagIds]);
+    // Always exclude tagIds from server filter to enable local filtering
+    if (!newsletterFilter.tagIds || newsletterFilter.tagIds.length === 0) {
+      return newsletterFilter; // Already has no tagIds, return same reference
+    }
+
+    // Remove tagIds from the filter
+    const { tagIds: _tagIds, ...filterWithoutTags } = newsletterFilter;
+    return filterWithoutTags;
+  }, [newsletterFilter]);
 
   const state: InboxFiltersState = {
     filter,

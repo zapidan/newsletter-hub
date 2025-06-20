@@ -1,21 +1,18 @@
-import { useState, useCallback, useContext, useMemo } from "react";
+import { useCallback, useContext, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { AuthContext } from "@common/contexts/AuthContext";
-import { Tag, TagCreate, TagUpdate } from "@common/types";
-import {
-  getCacheManagerSafe,
-  invalidateQueries,
-} from "@common/utils/cacheUtils";
-import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { tagApi } from "@common/api/tagApi";
-import { useLogger } from "@common/utils/logger/useLogger";
+import { AuthContext } from '@common/contexts/AuthContext';
+import { Tag, TagCreate, TagUpdate } from '@common/types';
+import { getCacheManagerSafe, invalidateQueries } from '@common/utils/cacheUtils';
+import { queryKeyFactory } from '@common/utils/queryKeyFactory';
+import { tagApi } from '@common/api/tagApi';
+import { useLogger } from '@common/utils/logger/useLogger';
 
 export const useTags = () => {
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const log = useLogger();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   // Initialize cache manager safely
   const cacheManager = useMemo(() => {
@@ -24,194 +21,216 @@ export const useTags = () => {
 
   // Safe cache manager helper
   const safeCacheCall = useCallback(
-    (
-      fn: (
-        manager: NonNullable<ReturnType<typeof getCacheManagerSafe>>,
-      ) => void,
-    ) => {
+    (fn: (manager: NonNullable<ReturnType<typeof getCacheManagerSafe>>) => void) => {
       if (cacheManager) {
         fn(cacheManager);
       }
     },
-    [cacheManager],
+    [cacheManager]
   );
 
-  // Get all tags for the current user
-  const getTags = useCallback(async (): Promise<Tag[]> => {
-    if (!user) return [];
+  // Get all tags for the current user using React Query
+  const {
+    data: tags = [],
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
+    queryKey: queryKeyFactory.newsletters.tags(),
+    queryFn: async (): Promise<Tag[]> => {
+      if (!user) return [];
 
-    try {
-      setLoading(true);
-      return await tagApi.getAll();
-    } catch (err: unknown) {
+      try {
+        return await tagApi.getAll();
+      } catch (err: unknown) {
+        const error = err as Error;
+        log.error(
+          'Failed to fetch tags',
+          {
+            action: 'fetch_tags',
+            metadata: { userId: user?.id },
+          },
+          error
+        );
+        throw error;
+      }
+    },
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  });
+
+  const error = queryError?.message || null;
+
+  // Stable getTags function that returns cached data
+  const getTags = useCallback(async (): Promise<Tag[]> => {
+    return tags;
+  }, [tags]);
+
+  // Create a new tag using mutation
+  const createTagMutation = useMutation({
+    mutationFn: async (tag: TagCreate): Promise<Tag> => {
+      if (!user) throw new Error('User not authenticated');
+      return await tagApi.create(tag);
+    },
+    onSuccess: (data) => {
+      // Update cache
+      queryClient.setQueryData<Tag[]>(queryKeyFactory.newsletters.tags(), (oldTags = []) => [
+        ...oldTags,
+        data,
+      ]);
+
+      // Use cache manager for better tag cache management
+      safeCacheCall((manager) => {
+        manager.invalidateRelatedQueries([], 'tag-create');
+        manager.invalidateTagQueries();
+      });
+      if (!cacheManager) {
+        // Fallback to cache utils
+        invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.lists(),
+        });
+        invalidateQueries({ queryKey: ['newsletter_tags'] });
+      }
+    },
+    onError: (err: unknown) => {
       const error = err as Error;
       log.error(
-        "Failed to fetch tags",
+        'Failed to create tag',
         {
-          action: "fetch_tags",
-          metadata: { userId: user?.id },
+          action: 'create_tag',
+          metadata: {
+            userId: user?.id,
+          },
         },
-        error,
+        error
       );
-      setError(error.message || "Failed to load tags");
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [user, log]);
+    },
+  });
 
-  // Create a new tag
   const createTag = useCallback(
     async (tag: TagCreate): Promise<Tag | null> => {
-      if (!user) return null;
-
       try {
-        setLoading(true);
-        const data = await tagApi.create(tag);
-
-        // Use cache manager for better tag cache management
-        safeCacheCall((manager) => {
-          manager.invalidateRelatedQueries([], "tag-create");
-          manager.invalidateTagQueries();
-        });
-        if (!cacheManager) {
-          // Fallback to cache utils
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.tags(),
-          });
-          await invalidateQueries({ queryKey: ["newsletter_tags"] });
-        }
-
-        return data;
-      } catch (err: unknown) {
-        const error = err as Error;
-        log.error(
-          "Failed to create tag",
-          {
-            action: "create_tag",
-            metadata: {
-              userId: user?.id,
-              tagName: tag.name,
-              tagColor: tag.color,
-            },
-          },
-          error,
-        );
-        setError(error.message || "Failed to create tag");
+        return await createTagMutation.mutateAsync(tag);
+      } catch {
         return null;
-      } finally {
-        setLoading(false);
       }
     },
-    [user, cacheManager, safeCacheCall, log],
+    [createTagMutation]
   );
 
-  // Update an existing tag
+  // Update an existing tag using mutation
+  const updateTagMutation = useMutation({
+    mutationFn: async (tag: TagUpdate): Promise<Tag> => {
+      if (!user) throw new Error('User not authenticated');
+      return await tagApi.update(tag);
+    },
+    onSuccess: (data) => {
+      // Update cache
+      queryClient.setQueryData<Tag[]>(queryKeyFactory.newsletters.tags(), (oldTags = []) =>
+        oldTags.map((t) => (t.id === data.id ? data : t))
+      );
+
+      // Use cache manager for cross-feature cache synchronization
+      safeCacheCall((manager) => {
+        manager.invalidateRelatedQueries([data.id], 'tag-update');
+        manager.invalidateTagQueries();
+      });
+      if (!cacheManager) {
+        // Fallback to cache utils
+        invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.lists(),
+        });
+        invalidateQueries({ queryKey: ['newsletter_tags'] });
+      }
+    },
+    onError: (err: unknown) => {
+      const error = err as Error;
+      log.error(
+        'Failed to update tag',
+        {
+          action: 'update_tag',
+          metadata: {
+            userId: user?.id,
+          },
+        },
+        error
+      );
+    },
+  });
+
   const updateTag = useCallback(
     async (tag: TagUpdate): Promise<Tag | null> => {
-      if (!user) return null;
-
       try {
-        setLoading(true);
-        const data = await tagApi.update(tag);
-
-        // Use cache manager for cross-feature cache synchronization
-        safeCacheCall((manager) => {
-          manager.invalidateRelatedQueries([data.id], "tag-update");
-          manager.invalidateTagQueries();
-        });
-        if (!cacheManager) {
-          // Fallback to cache utils
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.tags(),
-          });
-          await invalidateQueries({ queryKey: ["newsletter_tags"] });
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.lists(),
-          });
-        }
-
-        return data;
-      } catch (err: unknown) {
-        const error = err as Error;
-        log.error(
-          "Failed to update tag",
-          {
-            action: "update_tag",
-            metadata: {
-              userId: user?.id,
-              tagId: tag.id,
-              updateFields: Object.keys(tag),
-            },
-          },
-          error,
-        );
-        setError(error.message || "Failed to update tag");
+        return await updateTagMutation.mutateAsync(tag);
+      } catch {
         return null;
-      } finally {
-        setLoading(false);
       }
     },
-    [user, cacheManager, safeCacheCall, log],
+    [updateTagMutation]
   );
 
-  // Delete a tag
-  const deleteTag = useCallback(
-    async (tagId: string): Promise<boolean> => {
-      if (!user) return false;
+  // Delete a tag using mutation
+  const deleteTagMutation = useMutation({
+    mutationFn: async (tagId: string): Promise<void> => {
+      if (!user) throw new Error('User not authenticated');
+      await tagApi.delete(tagId);
+    },
+    onSuccess: (_, tagId) => {
+      // Update cache
+      queryClient.setQueryData<Tag[]>(queryKeyFactory.newsletters.tags(), (oldTags = []) =>
+        oldTags.filter((t) => t.id !== tagId)
+      );
 
-      try {
-        setLoading(true);
-        await tagApi.delete(tagId);
-
-        // Use cache manager for comprehensive tag deletion cache management
-        safeCacheCall((manager) => {
-          manager.invalidateRelatedQueries([tagId], "tag-delete");
-          manager.removeTagFromAllNewsletters(tagId);
-        });
-        if (!cacheManager) {
-          // Fallback to cache utils
-          await invalidateQueries({
-            predicate: (query: { queryKey: unknown[] }) => {
-              return (
-                queryKeyFactory.matchers?.isAffectedByTagChange?.(
-                  query.queryKey as unknown[],
-                  tagId,
-                ) || false
-              );
-            },
-            refetchType: "active",
-          });
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.tags(),
-          });
-          await invalidateQueries({ queryKey: ["newsletter_tags"] });
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.lists(),
-          });
-        }
-
-        return true;
-      } catch (err: unknown) {
-        const error = err as Error;
-        log.error(
-          "Failed to delete tag",
-          {
-            action: "delete_tag",
-            metadata: {
-              userId: user?.id,
-              tagId: tagId,
-            },
+      // Use cache manager for comprehensive tag deletion cache management
+      safeCacheCall((manager) => {
+        manager.invalidateRelatedQueries([tagId], 'tag-delete');
+        manager.removeTagFromAllNewsletters(tagId);
+      });
+      if (!cacheManager) {
+        // Fallback to cache utils
+        invalidateQueries({
+          predicate: (query: { queryKey: unknown[] }) => {
+            return (
+              queryKeyFactory.matchers?.isAffectedByTagChange?.(
+                query.queryKey as unknown[],
+                tagId
+              ) || false
+            );
           },
-          error,
-        );
-        setError(error.message || "Failed to delete tag");
-        return false;
-      } finally {
-        setLoading(false);
+          refetchType: 'active',
+        });
+        invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.lists(),
+        });
+        invalidateQueries({ queryKey: ['newsletter_tags'] });
       }
     },
-    [user, cacheManager, safeCacheCall, log],
+    onError: (err: unknown, tagId) => {
+      const error = err as Error;
+      log.error(
+        'Failed to delete tag',
+        {
+          action: 'delete_tag',
+          metadata: {
+            userId: user?.id,
+            tagId: tagId,
+          },
+        },
+        error
+      );
+    },
+  });
+
+  const deleteTag = useCallback(
+    async (tagId: string): Promise<boolean> => {
+      try {
+        await deleteTagMutation.mutateAsync(tagId);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [deleteTagMutation]
   );
 
   // Get tags for a specific newsletter
@@ -220,85 +239,92 @@ export const useTags = () => {
       if (!user) return [];
 
       try {
-        setLoading(true);
         return await tagApi.getTagsForNewsletter(newsletterId);
       } catch (err: unknown) {
         const error = err as Error;
         log.error(
-          "Failed to fetch newsletter tags",
+          'Failed to fetch newsletter tags',
           {
-            action: "fetch_newsletter_tags",
+            action: 'fetch_newsletter_tags',
             metadata: {
               userId: user?.id,
               newsletterId,
             },
           },
-          error,
+          error
         );
-        setError(error.message || "Failed to load newsletter tags");
         return [];
-      } finally {
-        setLoading(false);
       }
     },
-    [user, log],
+    [user, log]
   );
 
-  // Update tags for a newsletter
-  const updateNewsletterTags = useCallback(
-    async (newsletterId: string, tags: Tag[]) => {
-      if (!user) return false;
+  // Update tags for a newsletter using mutation
+  const updateNewsletterTagsMutation = useMutation({
+    mutationFn: async ({
+      newsletterId,
+      tags,
+    }: {
+      newsletterId: string;
+      tags: Tag[];
+    }): Promise<void> => {
+      if (!user) throw new Error('User not authenticated');
+      await tagApi.updateNewsletterTags(newsletterId, tags);
+    },
+    onSuccess: (_, { newsletterId, tags }) => {
+      // Use cache manager for newsletter-tag relationship updates
+      safeCacheCall((manager) => {
+        manager.updateNewsletterTagsInCache(newsletterId, tags);
+        manager.invalidateRelatedQueries([], 'newsletter-tag-update');
+      });
 
-      try {
-        setLoading(true);
-        await tagApi.updateNewsletterTags(newsletterId, tags);
-
-        // Use cache manager for newsletter-tag relationship updates
-        safeCacheCall((manager) => {
-          manager.updateNewsletterTagsInCache(newsletterId, tags);
-          manager.invalidateRelatedQueries([], "newsletter-tag-update");
+      if (!cacheManager) {
+        // Fallback to cache utils
+        invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.detail(newsletterId),
         });
-
-        if (!cacheManager) {
-          // Fallback to cache utils
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.detail(newsletterId),
-          });
-          await invalidateQueries({ queryKey: ["newsletter_tags"] });
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.lists(),
-          });
-          await invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.tags(),
-          });
-        }
-
-        return true;
-      } catch (err: unknown) {
-        const error = err as Error;
-        log.error(
-          "Failed to update newsletter tags",
-          {
-            action: "update_newsletter_tags",
-            metadata: {
-              userId: user?.id,
-              newsletterId,
-              tagIds: tags.length,
-            },
-          },
-          error,
-        );
-        setError(error.message || "Failed to update newsletter tags");
-        return false;
-      } finally {
-        setLoading(false);
+        invalidateQueries({ queryKey: ['newsletter_tags'] });
+        invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.lists(),
+        });
       }
     },
-    [user, cacheManager, safeCacheCall, log],
+    onError: (err: unknown, { newsletterId, tags }) => {
+      const error = err as Error;
+      log.error(
+        'Failed to update newsletter tags',
+        {
+          action: 'update_newsletter_tags',
+          metadata: {
+            userId: user?.id,
+            newsletterId,
+            tagIds: tags.length,
+          },
+        },
+        error
+      );
+    },
+  });
+
+  const updateNewsletterTags = useCallback(
+    async (newsletterId: string, tags: Tag[]) => {
+      try {
+        await updateNewsletterTagsMutation.mutateAsync({ newsletterId, tags });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [updateNewsletterTagsMutation]
   );
 
   return {
-    loading,
+    loading:
+      loading ||
+      createTagMutation.isPending ||
+      updateTagMutation.isPending ||
+      deleteTagMutation.isPending ||
+      updateNewsletterTagsMutation.isPending,
     error,
     getTags,
     createTag,
