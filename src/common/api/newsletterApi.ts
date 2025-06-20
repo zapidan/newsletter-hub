@@ -533,26 +533,114 @@ export const newsletterApi = {
     });
   },
 
-  // Delete newsletter
+  // Delete newsletter (hard delete)
   async delete(id: string): Promise<boolean> {
     return withPerformanceLogging('newsletters.delete', async () => {
-      const user = await requireAuth();
+      try {
+        const user = await requireAuth();
+        const logContext = {
+          newsletterId: id,
+          userId: user.id,
+          timestamp: new Date().toISOString()
+        };
 
-      const { error } = await supabase
-        .from('newsletters')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        log.debug('🔍 Starting delete operation', logContext);
 
-      if (error) handleSupabaseError(error);
+        // Validate the ID format first
+        if (!id || typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          log.error('❌ Invalid newsletter ID format', {
+            ...logContext,
+            id,
+            type: typeof id
+          });
+          return false;
+        }
 
-      return true;
+        // Verify the newsletter exists and check ownership
+        log.debug('🔍 Verifying newsletter ownership', logContext);
+        const { data: existingNewsletter, error: fetchError } = await supabase
+          .from('newsletters')
+          .select('id, user_id')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (fetchError) {
+          log.error('❌ Error fetching newsletter', {
+            ...logContext,
+            error: fetchError
+          });
+          return false;
+        }
+
+        if (!existingNewsletter) {
+          log.warn('⚠️ Newsletter not found', logContext);
+          return false;
+        }
+
+        if (existingNewsletter.user_id !== user.id) {
+          log.warn('⚠️ Access denied: Newsletter does not belong to user', {
+            ...logContext,
+            ownerId: existingNewsletter.user_id,
+            requestingUserId: user.id
+          });
+          return false;
+        }
+
+        // Perform the delete
+        log.debug('🗑️ Attempting to delete newsletter', logContext);
+        const { error: deleteError } = await supabase
+          .from('newsletters')
+          .delete()
+          .eq('id', id);
+
+        if (deleteError) {
+          log.error('❌ Delete operation failed', {
+            ...logContext,
+            error: deleteError
+          });
+          return false;
+        }
+
+        // Verify the newsletter was actually deleted
+        log.debug('🔍 Verifying newsletter deletion', logContext);
+        const { data: deletedNewsletter, error: verifyError } = await supabase
+          .from('newsletters')
+          .select('id')
+          .eq('id', id)
+          .maybeSingle();
+
+        if (verifyError) {
+          log.error('❌ Error verifying deletion', {
+            ...logContext,
+            error: verifyError
+          });
+          return false;
+        }
+
+        if (deletedNewsletter) {
+          log.error('❌ Newsletter still exists after delete operation', logContext);
+          return false;
+        }
+
+        log.info('✅ Newsletter successfully deleted', logContext);
+        return true;
+
+      } catch (error) {
+        log.error('❌ Unexpected error in delete operation', {
+          error: error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          } : error
+        });
+        return false;
+      }
     });
   },
 
   // Bulk update newsletters
   async bulkUpdate(
-    params: BulkUpdateNewsletterParams
+    params: BulkUpdateNewsletterParams,
   ): Promise<BatchResult<NewsletterWithRelations>> {
     return withPerformanceLogging('newsletters.bulkUpdate', async () => {
       const user = await requireAuth();
@@ -639,7 +727,7 @@ export const newsletterApi = {
   // Get newsletters by tag
   async getByTag(
     tagId: string,
-    params: Omit<NewsletterQueryParams, 'tagIds'> = {}
+    params: Omit<NewsletterQueryParams, 'tagIds'> = {},
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.getAll({ ...params, tagIds: [tagId] });
   },
@@ -647,7 +735,7 @@ export const newsletterApi = {
   // Get newsletters by source
   async getBySource(
     sourceId: string,
-    params: Omit<NewsletterQueryParams, 'sourceIds'> = {}
+    params: Omit<NewsletterQueryParams, 'sourceIds'> = {},
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.getAll({ ...params, sourceIds: [sourceId] });
   },
@@ -655,7 +743,7 @@ export const newsletterApi = {
   // Search newsletters
   async search(
     query: string,
-    params: Omit<NewsletterQueryParams, 'search'> = {}
+    params: Omit<NewsletterQueryParams, 'search'> = {},
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return newsletterApi.getAll({ ...params, search: query });
   },
@@ -802,7 +890,7 @@ export const newsletterApi = {
             action: 'get_unread_count',
             metadata: { sourceId, userId: user.id },
           },
-          error
+          error,
         );
         handleSupabaseError(error);
       }
