@@ -1,13 +1,12 @@
-import { newsletterApi } from "@common/api/newsletterApi";
-import { readingQueueApi } from "@common/api/readingQueueApi";
-import { AuthContext } from "@common/contexts/AuthContext";
-import type { ReadingQueueItem } from "@common/types";
-import { useLogger } from "@common/utils/logger/useLogger";
-import { updateNewsletterTags } from "@common/utils/tagUtils";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useContext, useMemo, useRef } from "react";
-import { getCacheManagerSafe } from "../utils/cacheUtils";
-import { queryKeyFactory } from "../utils/queryKeyFactory";
+import { newsletterService, readingQueueService } from '@common/services';
+import { AuthContext } from '@common/contexts/AuthContext';
+import type { ReadingQueueItem } from '@common/types';
+import { useLogger } from '@common/utils/logger/useLogger';
+import { updateNewsletterTags } from '@common/utils/tagUtils';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useCallback, useContext, useMemo, useRef } from 'react';
+import { getCacheManagerSafe } from '../utils/cacheUtils';
+import { queryKeyFactory } from '../utils/queryKeyFactory';
 
 export const useReadingQueue = () => {
   const auth = useContext(AuthContext);
@@ -26,7 +25,7 @@ export const useReadingQueue = () => {
         fn(cacheManager);
       }
     },
-    [cacheManager],
+    [cacheManager]
   );
 
   // Performance monitoring
@@ -36,48 +35,49 @@ export const useReadingQueue = () => {
     performanceTimers.current.set(operation, performance.now());
   }, []);
 
-  const endTimer = useCallback((operation: string) => {
-    const start = performanceTimers.current.get(operation);
-    if (start && process.env.NODE_ENV === "development") {
-      const duration = performance.now() - start;
-      log.debug("Reading queue operation completed", {
-        action: "performance_timer",
-        metadata: {
-          operation,
-          duration: duration.toFixed(2),
-          unit: "ms",
-        },
-      });
-      performanceTimers.current.delete(operation);
-    }
-  }, [log]);
+  const endTimer = useCallback(
+    (operation: string) => {
+      const start = performanceTimers.current.get(operation);
+      if (start && process.env.NODE_ENV === 'development') {
+        const duration = performance.now() - start;
+        log.debug('Reading queue operation completed', {
+          action: 'performance_timer',
+          metadata: {
+            operation,
+            duration: duration.toFixed(2),
+            unit: 'ms',
+          },
+        });
+        performanceTimers.current.delete(operation);
+      }
+    },
+    [log]
+  );
 
   // Helper function to fetch reading queue
-  const fetchReadingQueue = useCallback(async (): Promise<
-    ReadingQueueItem[]
-  > => {
+  const fetchReadingQueue = useCallback(async (): Promise<ReadingQueueItem[]> => {
     try {
-      return await readingQueueApi.getAll();
+      return await readingQueueService.getAll();
     } catch (error) {
       log.error(
-        "Failed to fetch reading queue",
+        'Failed to fetch reading queue',
         {
-          action: "fetch_reading_queue",
+          action: 'fetch_reading_queue',
           metadata: { userId: user?.id },
         },
-        error instanceof Error ? error : new Error(String(error)),
+        error instanceof Error ? error : new Error(String(error))
       );
 
       // Handle specific error types
       if (error instanceof Error) {
         // If it's a null newsletter error, it means data integrity issues
-        if (error.message.includes("not found in reading queue item")) {
-          log.warn("Data integrity issue in reading queue", {
-            action: "data_integrity_check",
+        if (error.message.includes('not found in reading queue item')) {
+          log.warn('Data integrity issue in reading queue', {
+            action: 'data_integrity_check',
             metadata: {
               userId: user?.id,
-              issue: "missing_newsletter_in_queue_item",
-              resolution: "returning_empty_queue",
+              issue: 'missing_newsletter_in_queue_item',
+              resolution: 'returning_empty_queue',
             },
           });
           // Could potentially trigger a cleanup here if needed
@@ -86,9 +86,9 @@ export const useReadingQueue = () => {
 
         // If it's a network/auth error, re-throw to let React Query handle retries
         if (
-          error.message.includes("JWT") ||
-          error.message.includes("auth") ||
-          error.message.includes("network")
+          error.message.includes('JWT') ||
+          error.message.includes('auth') ||
+          error.message.includes('network')
         ) {
           throw error;
         }
@@ -107,7 +107,7 @@ export const useReadingQueue = () => {
     error,
     refetch,
   } = useQuery<ReadingQueueItem[], Error>({
-    queryKey: queryKeyFactory.queue.list(user?.id || ""),
+    queryKey: queryKeyFactory.queue.list(user?.id || ''),
     queryFn: () => fetchReadingQueue(),
     enabled: !!user?.id,
     staleTime: 1 * 60 * 1000, // 1 minute
@@ -115,10 +115,7 @@ export const useReadingQueue = () => {
     refetchOnWindowFocus: false,
     retry: (failureCount, error) => {
       // Don't retry on data integrity errors
-      if (
-        error instanceof Error &&
-        error.message.includes("not found in reading queue item")
-      ) {
+      if (error instanceof Error && error.message.includes('not found in reading queue item')) {
         return false;
       }
       // Retry up to 3 times for other errors
@@ -130,13 +127,13 @@ export const useReadingQueue = () => {
   // Add to reading queue
   const addToQueue = useMutation({
     mutationFn: async (newsletterId: string) => {
-      if (!user?.id) throw new Error("User not authenticated");
+      if (!user?.id) throw new Error('User not authenticated');
 
-      startTimer("addToQueue");
+      startTimer('addToQueue');
       try {
-        return await readingQueueApi.add(newsletterId);
+        return await readingQueueService.add(newsletterId);
       } finally {
-        endTimer("addToQueue");
+        endTimer('addToQueue');
       }
     },
     onMutate: async (newsletterId) => {
@@ -148,36 +145,36 @@ export const useReadingQueue = () => {
       // Use cache manager for optimistic update
       safeCacheCall((manager) =>
         manager.updateReadingQueueInCache({
-          type: "add",
+          type: 'add',
           newsletterId,
           userId: user.id,
-        }),
+        })
       );
 
       return { previousQueue };
     },
     onError: (error, _newsletterId, context) => {
       log.error(
-        "Failed to add newsletter to reading queue",
+        'Failed to add newsletter to reading queue',
         {
-          action: "add_to_queue",
+          action: 'add_to_queue',
           metadata: {
             newsletterId: _newsletterId,
             userId: user?.id,
             hasContext: !!context?.previousQueue,
           },
         },
-        error,
+        error
       );
 
       // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
         safeCacheCall((manager) =>
           manager.updateReadingQueueInCache({
-            type: "revert",
+            type: 'revert',
             queueItems: context.previousQueue,
             userId: user.id,
-          }),
+          })
         );
       }
     },
@@ -189,20 +186,18 @@ export const useReadingQueue = () => {
     onSettled: () => {
       if (!user) return;
       // Use cache manager for smart invalidation
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-add"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-add'));
     },
   });
 
   // Remove from reading queue
   const removeFromQueue = useMutation({
     mutationFn: async (queueItemId: string) => {
-      startTimer("removeFromQueue");
+      startTimer('removeFromQueue');
       try {
-        return await readingQueueApi.remove(queueItemId);
+        return await readingQueueService.remove(queueItemId);
       } finally {
-        endTimer("removeFromQueue");
+        endTimer('removeFromQueue');
       }
     },
     onMutate: async (queueItemId) => {
@@ -215,36 +210,36 @@ export const useReadingQueue = () => {
       // Use cache manager for optimistic removal
       safeCacheCall((manager) =>
         manager.updateReadingQueueInCache({
-          type: "remove",
+          type: 'remove',
           queueItemId,
           userId: user.id,
-        }),
+        })
       );
 
       return { previousQueue, removedItem: itemToRemove };
     },
     onError: (error, _queueItemId, context) => {
       log.error(
-        "Failed to remove newsletter from reading queue",
+        'Failed to remove newsletter from reading queue',
         {
-          action: "remove_from_queue",
+          action: 'remove_from_queue',
           metadata: {
             queueItemId: _queueItemId,
             userId: user?.id,
             hasContext: !!context?.previousQueue,
           },
         },
-        error,
+        error
       );
 
       // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
         safeCacheCall((manager) =>
           manager.updateReadingQueueInCache({
-            type: "revert",
+            type: 'revert',
             queueItems: context.previousQueue,
             userId: user.id,
-          }),
+          })
         );
       }
     },
@@ -256,22 +251,20 @@ export const useReadingQueue = () => {
     onSettled: () => {
       if (!user) return;
       // Use cache manager for smart invalidation
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-remove"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-remove'));
     },
   });
 
   // Reorder reading queue
   const reorderQueue = useMutation({
     mutationFn: async (updates: { id: string; position: number }[]) => {
-      if (!user) throw new Error("User not authenticated");
+      if (!user) throw new Error('User not authenticated');
 
-      startTimer("reorderQueue");
+      startTimer('reorderQueue');
       try {
-        return await readingQueueApi.reorder(updates);
+        return await readingQueueService.reorder(updates);
       } finally {
-        endTimer("reorderQueue");
+        endTimer('reorderQueue');
       }
     },
     onMutate: async (updates) => {
@@ -283,95 +276,81 @@ export const useReadingQueue = () => {
       // Use cache manager for optimistic reordering
       safeCacheCall((manager) =>
         manager.updateReadingQueueInCache({
-          type: "reorder",
+          type: 'reorder',
           updates,
           userId: user.id,
-        }),
+        })
       );
 
       return { previousQueue };
     },
     onError: (error, _updates, context) => {
       log.error(
-        "Failed to reorder reading queue",
+        'Failed to reorder reading queue',
         {
-          action: "reorder_queue",
+          action: 'reorder_queue',
           metadata: {
             userId: user?.id,
             updatesCount: _updates?.length || 0,
             hasContext: !!context?.previousQueue,
           },
         },
-        error,
+        error
       );
 
       // Revert optimistic update using cache manager
       if (context?.previousQueue && user?.id) {
         safeCacheCall((manager) =>
           manager.updateReadingQueueInCache({
-            type: "revert",
+            type: 'revert',
             queueItems: context.previousQueue,
             userId: user.id,
-          }),
+          })
         );
       }
     },
     onSettled: () => {
       if (!user?.id) return;
       // Use cache manager for smart invalidation
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-reorder"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-reorder'));
     },
   });
 
   // Clear entire reading queue
   const clearQueue = useMutation({
     mutationFn: async () => {
-      if (!user?.id) throw new Error("User not authenticated");
-      return readingQueueApi.clear();
+      if (!user?.id) throw new Error('User not authenticated');
+      return readingQueueService.clear();
     },
     onSuccess: () => {
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-clear"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-clear'));
     },
   });
 
   // Mark newsletter as read
   const markAsRead = useMutation({
     mutationFn: async (newsletterId: string) => {
-      return newsletterApi.markAsRead(newsletterId);
+      return newsletterService.markAsRead(newsletterId);
     },
     onSuccess: () => {
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-mark-read"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-mark-read'));
     },
   });
 
   // Mark newsletter as unread
   const markAsUnread = useMutation({
     mutationFn: async (newsletterId: string) => {
-      return newsletterApi.markAsUnread(newsletterId);
+      return newsletterService.markAsUnread(newsletterId);
     },
     onSuccess: () => {
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-mark-unread"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-mark-unread'));
     },
   });
 
   // Update tags
   const updateTags = useMutation({
-    mutationFn: async ({
-      newsletterId,
-      tagIds,
-    }: {
-      newsletterId: string;
-      tagIds: string[];
-    }) => {
-      if (!user?.id) throw new Error("User not authenticated");
+    mutationFn: async ({ newsletterId, tagIds }: { newsletterId: string; tagIds: string[] }) => {
+      if (!user?.id) throw new Error('User not authenticated');
 
       const currentTagIds =
         readingQueue
@@ -387,11 +366,11 @@ export const useReadingQueue = () => {
       // Use cache manager for optimistic tag update
       safeCacheCall((manager) =>
         manager.updateReadingQueueInCache({
-          type: "updateTags",
+          type: 'updateTags',
           newsletterId,
           tagIds,
-          userId: user?.id || "",
-        }),
+          userId: user?.id || '',
+        })
       );
 
       return { previousQueue };
@@ -402,31 +381,29 @@ export const useReadingQueue = () => {
         // Revert using cache manager
         safeCacheCall((manager) =>
           manager.updateReadingQueueInCache({
-            type: "revert",
+            type: 'revert',
             queueItems: context.previousQueue,
-            userId: user?.id || "",
-          }),
+            userId: user?.id || '',
+          })
         );
       }
     },
     onSettled: () => {
       // Use cache manager for smart invalidation
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-update-tags"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-update-tags'));
     },
   });
 
   // Cleanup orphaned items
   const cleanupOrphanedItems = useMutation({
     mutationFn: async () => {
-      if (!user?.id) throw new Error("User not authenticated");
-      return readingQueueApi.cleanupOrphanedItems();
+      if (!user?.id) throw new Error('User not authenticated');
+      return readingQueueService.cleanupOrphanedItems();
     },
     onSuccess: (result) => {
       if (result.removedCount > 0) {
-        log.info("Cleaned up orphaned reading queue items", {
-          action: "cleanup_orphaned_items",
+        log.info('Cleaned up orphaned reading queue items', {
+          action: 'cleanup_orphaned_items',
           metadata: {
             removedCount: result.removedCount,
             userId: user?.id,
@@ -438,18 +415,16 @@ export const useReadingQueue = () => {
     },
     onError: (error) => {
       log.error(
-        "Failed to cleanup orphaned reading queue items",
+        'Failed to cleanup orphaned reading queue items',
         {
-          action: "cleanup_orphaned_items",
+          action: 'cleanup_orphaned_items',
           metadata: { userId: user?.id },
         },
-        error,
+        error
       );
     },
     onSettled: () => {
-      safeCacheCall((manager) =>
-        manager.invalidateRelatedQueries([], "queue-cleanup"),
-      );
+      safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-cleanup'));
     },
   });
 

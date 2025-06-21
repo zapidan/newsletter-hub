@@ -10,7 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useLogger } from '@common/utils/logger/useLogger';
-import { newsletterService, readingQueueService } from '../api/index.ts';
+import { newsletterService, readingQueueService } from '../services';
 import { useAuth } from '../contexts/AuthContext';
 import { NewsletterWithRelations, ReadingQueueItem } from '../types';
 import { PaginatedResponse } from '../types/api';

@@ -1,11 +1,11 @@
-import {
-  supabase,
-  handleSupabaseError,
-  requireAuth,
-  withPerformanceLogging,
-} from './supabaseClient';
 import { generateEmailAliasFromEmail } from '../utils/emailAlias';
 import { logger } from '../utils/logger';
+import {
+  handleSupabaseError,
+  requireAuth,
+  supabase,
+  withPerformanceLogging,
+} from './supabaseClient';
 
 interface UserProfile {
   id: string;
@@ -33,9 +33,25 @@ const log = logger;
 
 // User API Service
 export const userApi = {
+  // Get user by ID
+  async getById(id: string): Promise<UserProfile | null> {
+    return withPerformanceLogging('user.getById', async () => {
+      const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null; // Not found
+        }
+        handleSupabaseError(error);
+      }
+
+      return data;
+    });
+  },
+
   // Get current user profile
-  async getProfile(): Promise<UserProfile | null> {
-    return withPerformanceLogging('user.getProfile', async () => {
+  async getCurrentUser(): Promise<UserProfile | null> {
+    return withPerformanceLogging('user.getCurrentUser', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
@@ -48,6 +64,138 @@ export const userApi = {
       }
 
       return data;
+    });
+  },
+
+  // Get current user profile (alias)
+  async getProfile(): Promise<UserProfile | null> {
+    return this.getCurrentUser();
+  },
+
+  // Create a new user
+  async create(params: {
+    email: string;
+    name: string;
+    avatar_url?: string;
+    preferences?: any;
+  }): Promise<UserProfile> {
+    return withPerformanceLogging('user.create', async () => {
+      // Validate required fields
+      if (!params.email) {
+        throw new Error('Email is required');
+      }
+      if (!params.name) {
+        throw new Error('Name is required');
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(params.email)) {
+        throw new Error('Invalid email format');
+      }
+
+      // Check for duplicate email
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', params.email)
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new Error('User with this email already exists');
+      }
+
+      // Create user with default preferences
+      const defaultPreferences = {
+        theme: 'light',
+        notifications: {
+          email: true,
+          push: false,
+          newsletter_digest: true,
+        },
+        reading: {
+          auto_mark_read: false,
+          reading_speed: 200,
+          preferred_view: 'list',
+        },
+        ...params.preferences,
+      };
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          email: params.email,
+          full_name: params.name,
+          avatar_url: params.avatar_url,
+          preferences: defaultPreferences,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data;
+    });
+  },
+
+  // Update user
+  async update(params: {
+    id: string;
+    name?: string;
+    email?: string;
+    avatar_url?: string;
+    preferences?: any;
+  }): Promise<UserProfile> {
+    return withPerformanceLogging('user.update', async () => {
+      // Validate email format if provided
+      if (params.email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(params.email)) {
+          throw new Error('Invalid email format');
+        }
+
+        // Check for duplicate email
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', params.email)
+          .neq('id', params.id)
+          .maybeSingle();
+
+        if (existingUser) {
+          throw new Error('User with this email already exists');
+        }
+      }
+
+      const updateData: any = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (params.name !== undefined) updateData.full_name = params.name;
+      if (params.email !== undefined) updateData.email = params.email;
+      if (params.avatar_url !== undefined) updateData.avatar_url = params.avatar_url;
+      if (params.preferences !== undefined) updateData.preferences = params.preferences;
+
+      const { data, error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', params.id)
+        .select()
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data;
+    });
+  },
+
+  // Delete user
+  async delete(id: string): Promise<boolean> {
+    return withPerformanceLogging('user.delete', async () => {
+      const { error } = await supabase.from('users').delete().eq('id', id);
+
+      if (error) handleSupabaseError(error);
+      return true;
     });
   },
 
@@ -257,7 +405,7 @@ export const userApi = {
     });
   },
 
-  // Get user statistics
+  // Get user statistics (alias for current user)
   async getStats(): Promise<{
     newslettersCount: number;
     tagsCount: number;
@@ -265,49 +413,42 @@ export const userApi = {
     readingQueueCount: number;
     joinedAt: string;
   }> {
-    return withPerformanceLogging('user.getStats', async () => {
-      const user = await requireAuth();
+    return this.getUserStats();
+  },
 
-      // Get newsletters count
-      const { count: newslettersCount } = await supabase
-        .from('newsletters')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+  // Update user preferences (new signature for tests)
+  async updatePreferences(userId: string, preferences: Record<string, unknown>): Promise<any> {
+    return withPerformanceLogging('user.updatePreferences', async () => {
+      // Get existing user to merge preferences
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('preferences')
+        .eq('id', userId)
+        .single();
 
-      // Get tags count
-      const { count: tagsCount } = await supabase
-        .from('tags')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      // Get sources count
-      const { count: sourcesCount } = await supabase
-        .from('newsletter_sources')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      // Get reading queue count
-      const { count: readingQueueCount } = await supabase
-        .from('reading_queue')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      // Get user profile for join date
-      const profile = await this.getProfile();
-
-      return {
-        newslettersCount: newslettersCount || 0,
-        tagsCount: tagsCount || 0,
-        sourcesCount: sourcesCount || 0,
-        readingQueueCount: readingQueueCount || 0,
-        joinedAt: profile?.created_at || new Date().toISOString(),
+      const mergedPreferences = {
+        ...existingUser?.preferences,
+        ...preferences,
       };
+
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          preferences: mergedPreferences,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data;
     });
   },
 
-  // Update user preferences
-  async updatePreferences(preferences: Record<string, unknown>): Promise<boolean> {
-    return withPerformanceLogging('user.updatePreferences', async () => {
+  // Update user preferences (original method)
+  async updateUserPreferences(preferences: Record<string, unknown>): Promise<boolean> {
+    return withPerformanceLogging('user.updateUserPreferences', async () => {
       const user = await requireAuth();
 
       const { error } = await supabase.from('user_preferences').upsert(
@@ -323,6 +464,217 @@ export const userApi = {
 
       if (error) handleSupabaseError(error);
       return true;
+    });
+  },
+
+  // Update user subscription
+  async updateSubscription(
+    userId: string,
+    subscription: { plan: string; status: string }
+  ): Promise<any> {
+    return withPerformanceLogging('user.updateSubscription', async () => {
+      // Validate subscription plan
+      const validPlans = ['free', 'premium', 'enterprise'];
+      if (!validPlans.includes(subscription.plan)) {
+        throw new Error('Invalid subscription plan');
+      }
+
+      // Validate subscription status
+      const validStatuses = ['active', 'inactive', 'cancelled', 'expired'];
+      if (!validStatuses.includes(subscription.status)) {
+        throw new Error('Invalid subscription status');
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          subscription,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data;
+    });
+  },
+
+  // Update last login timestamp
+  async updateLastLogin(userId?: string): Promise<any> {
+    return withPerformanceLogging('user.updateLastLogin', async () => {
+      let targetUserId = userId;
+
+      if (!targetUserId) {
+        const user = await requireAuth();
+        targetUserId = user.id;
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          last_login_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', targetUserId)
+        .select()
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data;
+    });
+  },
+
+  // Get user statistics
+  async getUserStats(userId?: string): Promise<{
+    newslettersCount: number;
+    tagsCount: number;
+    sourcesCount: number;
+    readingQueueCount: number;
+    joinedAt: string;
+  }> {
+    return withPerformanceLogging('user.getUserStats', async () => {
+      let targetUserId = userId;
+
+      if (!targetUserId) {
+        const user = await requireAuth();
+        targetUserId = user.id;
+      }
+
+      // Get newsletters count
+      const { count: newslettersCount } = await supabase
+        .from('newsletters')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', targetUserId);
+
+      // Get tags count
+      const { count: tagsCount } = await supabase
+        .from('tags')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', targetUserId);
+
+      // Get sources count
+      const { count: sourcesCount } = await supabase
+        .from('newsletter_sources')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', targetUserId);
+
+      // Get reading queue count
+      const { count: readingQueueCount } = await supabase
+        .from('reading_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', targetUserId);
+
+      // Get user profile for join date
+      const userProfile = await this.getById(targetUserId);
+
+      return {
+        newslettersCount: newslettersCount || 0,
+        tagsCount: tagsCount || 0,
+        sourcesCount: sourcesCount || 0,
+        readingQueueCount: readingQueueCount || 0,
+        joinedAt: userProfile?.created_at || new Date().toISOString(),
+      };
+    });
+  },
+
+  // Search users
+  async searchUsers(
+    query: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<UserProfile[]> {
+    return withPerformanceLogging('user.searchUsers', async () => {
+      // Validate search query length
+      if (query.length < 2) {
+        throw new Error('Search query must be at least 2 characters long');
+      }
+
+      let searchQuery = supabase
+        .from('users')
+        .select('*')
+        .or(`full_name.ilike.%${query}%,email.ilike.%${query}%`)
+        .order('full_name');
+
+      if (options?.limit) {
+        searchQuery = searchQuery.limit(options.limit);
+      }
+
+      if (options?.offset) {
+        searchQuery = searchQuery.range(options.offset, options.offset + (options.limit || 10) - 1);
+      }
+
+      const { data, error } = await searchQuery;
+
+      if (error) handleSupabaseError(error);
+      return data || [];
+    });
+  },
+
+  // Bulk update users
+  async bulkUpdate(
+    updates: Array<{ id: string;[key: string]: any }>
+  ): Promise<{ successCount: number; failures: Array<{ id: string; error: string }> }> {
+    return withPerformanceLogging('user.bulkUpdate', async () => {
+      // Validate bulk update input
+      if (!Array.isArray(updates) || updates.length === 0) {
+        throw new Error('Updates array is required and cannot be empty');
+      }
+
+      const results = {
+        successCount: 0,
+        failures: [] as Array<{ id: string; error: string }>,
+      };
+
+      for (const update of updates) {
+        try {
+          await this.update(update);
+          results.successCount++;
+        } catch (error) {
+          results.failures.push({
+            id: update.id,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      return results;
+    });
+  },
+
+  // Export user data
+  async exportUserData(userId: string): Promise<{
+    user: UserProfile;
+    newsletters: any[];
+    tags: any[];
+    sources: any[];
+    readingQueue: any[];
+  }> {
+    return withPerformanceLogging('user.exportUserData', async () => {
+      try {
+        // Get user profile
+        const user = await this.getById(userId);
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        // Get all user data
+        const [newsletters, tags, sources, readingQueue] = await Promise.all([
+          supabase.from('newsletters').select('*').eq('user_id', userId),
+          supabase.from('tags').select('*').eq('user_id', userId),
+          supabase.from('newsletter_sources').select('*').eq('user_id', userId),
+          supabase.from('reading_queue').select('*').eq('user_id', userId),
+        ]);
+
+        return {
+          user,
+          newsletters: newsletters.data || [],
+          tags: tags.data || [],
+          sources: sources.data || [],
+          readingQueue: readingQueue.data || [],
+        };
+      } catch (_) {
+        throw new Error('Failed to export user data');
+      }
     });
   },
 
@@ -351,16 +703,28 @@ export const userApi = {
 
 // Export individual functions for backward compatibility
 export const {
+  getById,
+  getCurrentUser,
   getProfile: getUserProfile,
+  create,
+  update,
+  delete: deleteUser,
   updateProfile: updateUserProfile,
   generateEmailAlias,
   getEmailAlias: getUserEmailAlias,
   updateEmailAlias,
   isEmailAliasAvailable,
   deleteAccount: deleteUserAccount,
-  getStats: getUserStats,
-  updatePreferences: updateUserPreferences,
+  getStats,
+  getUserStats,
+  updatePreferences,
+  updateUserPreferences,
   getPreferences: getUserPreferences,
+  updateSubscription,
+  updateLastLogin,
+  searchUsers,
+  bulkUpdate,
+  exportUserData,
 } = userApi;
 
 export default userApi;

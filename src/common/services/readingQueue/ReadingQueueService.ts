@@ -1,8 +1,8 @@
-import { BaseService } from "../base/BaseService";
-import { readingQueueApi } from "@common/api/readingQueueApi";
-import { newsletterApi } from "@common/api/newsletterApi";
-import { ReadingQueueItem, NewsletterWithRelations } from "@common/types";
-import { logger } from "@common/utils/logger";
+import { newsletterApi } from '@common/api/newsletterApi';
+import { readingQueueApi } from '@common/api/readingQueueApi';
+import { NewsletterWithRelations, ReadingQueueItem } from '@common/types';
+import { logger } from '@common/utils/logger';
+import { BaseService } from '../base/BaseService';
 
 export interface ReadingQueueOperationResult {
   success: boolean;
@@ -56,14 +56,11 @@ export class ReadingQueueService extends BaseService {
    */
   async getReadingQueue(): Promise<ReadingQueueItem[]> {
     return this.executeWithLogging(async () => {
-      const items = await this.withRetry(
-        () => readingQueueApi.getAll(),
-        "getReadingQueue",
-      );
+      const items = await this.withRetry(() => readingQueueApi.getAll(), 'getReadingQueue');
 
       // Apply business logic for ordering
       return this.applyQueueOrdering(items);
-    }, "getReadingQueue");
+    }, 'getReadingQueue');
   }
 
   /**
@@ -83,26 +80,26 @@ export class ReadingQueueService extends BaseService {
           }
         } catch (error) {
           logger.warn(
-            "Failed to fetch newsletter details for queue item",
+            'Failed to fetch newsletter details for queue item',
             {
-              component: "ReadingQueueService",
-              action: "get_queue_with_details",
+              component: 'ReadingQueueService',
+              action: 'get_queue_with_details',
               metadata: { newsletterId: item.newsletter_id },
             },
-            error instanceof Error ? error : new Error(String(error)),
+            error instanceof Error ? error : new Error(String(error))
           );
         }
       }
 
       return newsletters;
-    }, "getReadingQueueWithDetails");
+    }, 'getReadingQueueWithDetails');
   }
 
   /**
    * Add newsletter to reading queue
    */
   async addToQueue(newsletterId: string): Promise<ReadingQueueOperationResult> {
-    this.validateString(newsletterId, "newsletter ID");
+    this.validateString(newsletterId, 'newsletter ID', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
@@ -112,27 +109,25 @@ export class ReadingQueueService extends BaseService {
           if (!newsletter) {
             return {
               success: false,
-              error: "Newsletter not found",
+              error: 'Newsletter not found',
             };
           }
 
           if (newsletter.is_archived) {
             return {
               success: false,
-              error: "Cannot add archived newsletter to reading queue",
+              error: 'Cannot add archived newsletter to reading queue',
             };
           }
 
           // Check if already in queue
           const existingItems = await readingQueueApi.getAll();
-          const alreadyInQueue = existingItems.find(
-            (item) => item.newsletter_id === newsletterId,
-          );
+          const alreadyInQueue = existingItems.find((item) => item.newsletter_id === newsletterId);
 
           if (alreadyInQueue) {
             return {
               success: false,
-              error: "Newsletter is already in reading queue",
+              error: 'Newsletter is already in reading queue',
             };
           }
 
@@ -144,22 +139,9 @@ export class ReadingQueueService extends BaseService {
             };
           }
 
-          const success = await this.withRetry(
+          const newItem = await this.withRetry(
             () => readingQueueApi.add(newsletterId),
-            "addToQueue",
-          );
-
-          if (!success) {
-            return {
-              success: false,
-              error: "Failed to add newsletter to reading queue",
-            };
-          }
-
-          // Get the newly created queue item
-          const updatedItems = await readingQueueApi.getAll();
-          const newItem = updatedItems.find(
-            (item) => item.newsletter_id === newsletterId,
+            'addToQueue'
           );
 
           return {
@@ -170,48 +152,44 @@ export class ReadingQueueService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "addToQueue",
-      { newsletterId },
+      'addToQueue',
+      { newsletterId }
     );
   }
 
   /**
    * Remove newsletter from reading queue
    */
-  async removeFromQueue(
-    newsletterId: string,
-  ): Promise<ReadingQueueOperationResult> {
-    this.validateString(newsletterId, "newsletter ID");
+  async removeFromQueue(newsletterId: string): Promise<ReadingQueueOperationResult> {
+    this.validateString(newsletterId, 'newsletter ID', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
         try {
           // Check if item exists in queue
           const existingItems = await readingQueueApi.getAll();
-          const queueItem = existingItems.find(
-            (item) => item.newsletter_id === newsletterId,
-          );
+          const queueItem = existingItems.find((item) => item.newsletter_id === newsletterId);
 
           if (!queueItem) {
             return {
               success: false,
-              error: "Newsletter is not in reading queue",
+              error: 'Newsletter is not in reading queue',
             };
           }
 
           const success = await this.withRetry(
-            () => readingQueueApi.remove(newsletterId),
-            "removeFromQueue",
+            () => readingQueueApi.remove(queueItem.id),
+            'removeFromQueue'
           );
 
           if (!success) {
             return {
               success: false,
-              error: "Failed to remove newsletter from reading queue",
+              error: 'Failed to remove newsletter from reading queue',
             };
           }
 
@@ -222,27 +200,24 @@ export class ReadingQueueService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "removeFromQueue",
-      { newsletterId },
+      'removeFromQueue',
+      { newsletterId }
     );
   }
 
   /**
    * Bulk add newsletters to reading queue
    */
-  async bulkAddToQueue(
-    newsletterIds: string[],
-  ): Promise<BulkReadingQueueOperationResult> {
-    this.validateArray(newsletterIds, "newsletter IDs", { minLength: 1 });
+  async bulkAddToQueue(newsletterIds: string[]): Promise<BulkReadingQueueOperationResult> {
+    this.validateArray(newsletterIds, 'newsletter IDs', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
-        const results: Array<{ id: string; success: boolean; error?: string }> =
-          [];
+        const results: Array<{ id: string; success: boolean; error?: string }> = [];
 
         for (const newsletterId of newsletterIds) {
           try {
@@ -256,7 +231,7 @@ export class ReadingQueueService extends BaseService {
             results.push({
               id: newsletterId,
               success: false,
-              error: error instanceof Error ? error.message : "Unknown error",
+              error: error instanceof Error ? error.message : 'Unknown error',
             });
           }
         }
@@ -265,7 +240,7 @@ export class ReadingQueueService extends BaseService {
         const failedCount = results.length - processedCount;
         const errors = results
           .filter((r) => !r.success)
-          .map((r) => ({ id: r.id, error: r.error || "Unknown error" }));
+          .map((r) => ({ id: r.id, error: r.error || 'Unknown error' }));
 
         return {
           success: failedCount === 0,
@@ -274,23 +249,20 @@ export class ReadingQueueService extends BaseService {
           errors,
         };
       },
-      "bulkAddToQueue",
-      { count: newsletterIds.length },
+      'bulkAddToQueue',
+      { count: newsletterIds.length }
     );
   }
 
   /**
    * Bulk remove newsletters from reading queue
    */
-  async bulkRemoveFromQueue(
-    newsletterIds: string[],
-  ): Promise<BulkReadingQueueOperationResult> {
-    this.validateArray(newsletterIds, "newsletter IDs", { minLength: 1 });
+  async bulkRemoveFromQueue(newsletterIds: string[]): Promise<BulkReadingQueueOperationResult> {
+    this.validateArray(newsletterIds, 'newsletter IDs', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
-        const results: Array<{ id: string; success: boolean; error?: string }> =
-          [];
+        const results: Array<{ id: string; success: boolean; error?: string }> = [];
 
         for (const newsletterId of newsletterIds) {
           try {
@@ -304,7 +276,7 @@ export class ReadingQueueService extends BaseService {
             results.push({
               id: newsletterId,
               success: false,
-              error: error instanceof Error ? error.message : "Unknown error",
+              error: error instanceof Error ? error.message : 'Unknown error',
             });
           }
         }
@@ -313,7 +285,7 @@ export class ReadingQueueService extends BaseService {
         const failedCount = results.length - processedCount;
         const errors = results
           .filter((r) => !r.success)
-          .map((r) => ({ id: r.id, error: r.error || "Unknown error" }));
+          .map((r) => ({ id: r.id, error: r.error || 'Unknown error' }));
 
         return {
           success: failedCount === 0,
@@ -322,8 +294,8 @@ export class ReadingQueueService extends BaseService {
           errors,
         };
       },
-      "bulkRemoveFromQueue",
-      { count: newsletterIds.length },
+      'bulkRemoveFromQueue',
+      { count: newsletterIds.length }
     );
   }
 
@@ -338,19 +310,16 @@ export class ReadingQueueService extends BaseService {
         if (existingItems.length === 0) {
           return {
             success: true,
-            error: "Reading queue is already empty",
+            error: 'Reading queue is already empty',
           };
         }
 
-        const success = await this.withRetry(
-          () => readingQueueApi.clear(),
-          "clearQueue",
-        );
+        const success = await this.withRetry(() => readingQueueApi.clear(), 'clearQueue');
 
         if (!success) {
           return {
             success: false,
-            error: "Failed to clear reading queue",
+            error: 'Failed to clear reading queue',
           };
         }
 
@@ -358,19 +327,17 @@ export class ReadingQueueService extends BaseService {
       } catch (error) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: error instanceof Error ? error.message : 'Unknown error',
         };
       }
-    }, "clearQueue");
+    }, 'clearQueue');
   }
 
   /**
    * Reorder reading queue items
    */
-  async reorderQueue(
-    orderedNewsletterIds: string[],
-  ): Promise<ReadingQueueOperationResult> {
-    this.validateArray(orderedNewsletterIds, "ordered newsletter IDs", {
+  async reorderQueue(orderedNewsletterIds: string[]): Promise<ReadingQueueOperationResult> {
+    this.validateArray(orderedNewsletterIds, 'ordered newsletter IDs', {
       minLength: 1,
     });
 
@@ -379,41 +346,35 @@ export class ReadingQueueService extends BaseService {
         try {
           // Validate all newsletters are in the queue
           const existingItems = await readingQueueApi.getAll();
-          const existingIds = new Set(
-            existingItems.map((item) => item.newsletter_id),
-          );
+          const existingIds = new Set(existingItems.map((item) => item.newsletter_id));
 
           for (const newsletterId of orderedNewsletterIds) {
             if (!existingIds.has(newsletterId)) {
               return {
                 success: false,
-                error: `Newsletter ${newsletterId} is not in reading queue`,
+                error: `Newsletter ${newsletterId} not found in reading queue`,
               };
             }
           }
 
           // Create the reorder updates with positions
-          const reorderUpdates = orderedNewsletterIds.map(
-            (newsletterId, index) => {
-              const item = existingItems.find(
-                (item) => item.newsletter_id === newsletterId,
-              );
-              return {
-                id: item!.id,
-                position: index + 1,
-              };
-            },
-          );
+          const reorderUpdates = orderedNewsletterIds.map((newsletterId, index) => {
+            const item = existingItems.find((item) => item.newsletter_id === newsletterId);
+            return {
+              id: item!.id,
+              position: index + 1,
+            };
+          });
 
           const success = await this.withRetry(
             () => readingQueueApi.reorder(reorderUpdates),
-            "reorderQueue",
+            'reorderQueue'
           );
 
           if (!success) {
             return {
               success: false,
-              error: "Failed to reorder reading queue",
+              error: 'Failed to reorder reading queue',
             };
           }
 
@@ -421,12 +382,12 @@ export class ReadingQueueService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "reorderQueue",
-      { count: orderedNewsletterIds.length },
+      'reorderQueue',
+      { count: orderedNewsletterIds.length }
     );
   }
 
@@ -441,20 +402,15 @@ export class ReadingQueueService extends BaseService {
       const unreadItems = newsletters.filter((n) => !n.is_read).length;
       const totalEstimatedTime = newsletters.reduce(
         (sum, n) => sum + (n.estimated_read_time || 5),
-        0,
+        0
       );
 
       const averageReadTime =
-        newsletters.length > 0
-          ? Math.round(totalEstimatedTime / newsletters.length)
-          : 0;
+        newsletters.length > 0 ? Math.round(totalEstimatedTime / newsletters.length) : 0;
 
       const oldestItem =
         items.length > 0
-          ? items.sort(
-              (a, b) =>
-                new Date(a.added_at).getTime() - new Date(b.added_at).getTime(),
-            )[0]
+          ? items.sort((a, b) => new Date(a.added_at).getTime() - new Date(b.added_at).getTime())[0]
           : undefined;
 
       return {
@@ -464,7 +420,7 @@ export class ReadingQueueService extends BaseService {
         oldestItem,
         estimatedReadTime: totalEstimatedTime,
       };
-    }, "getQueueStats");
+    }, 'getQueueStats');
   }
 
   /**
@@ -482,9 +438,7 @@ export class ReadingQueueService extends BaseService {
 
     return this.executeWithLogging(async () => {
       const newsletters = await this.getReadingQueueWithDetails();
-      const readNewsletterIds = newsletters
-        .filter((n) => n.is_read)
-        .map((n) => n.id);
+      const readNewsletterIds = newsletters.filter((n) => n.is_read).map((n) => n.id);
 
       if (readNewsletterIds.length === 0) {
         return {
@@ -496,22 +450,22 @@ export class ReadingQueueService extends BaseService {
       }
 
       return await this.bulkRemoveFromQueue(readNewsletterIds);
-    }, "autoCleanup");
+    }, 'autoCleanup');
   }
 
   /**
    * Check if newsletter is in reading queue
    */
   async isInQueue(newsletterId: string): Promise<boolean> {
-    this.validateString(newsletterId, "newsletter ID");
+    this.validateString(newsletterId, 'newsletter ID', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
         const items = await readingQueueApi.getAll();
         return items.some((item) => item.newsletter_id === newsletterId);
       },
-      "isInQueue",
-      { newsletterId },
+      'isInQueue',
+      { newsletterId }
     );
   }
 
@@ -528,8 +482,7 @@ export class ReadingQueueService extends BaseService {
     // Priority: creation date (older items first), then priority if available
     return items.sort((a, b) => {
       // First sort by creation date (oldest first)
-      const dateComparison =
-        new Date(a.added_at).getTime() - new Date(b.added_at).getTime();
+      const dateComparison = new Date(a.added_at).getTime() - new Date(b.added_at).getTime();
 
       // Future: Add priority field to ReadingQueueItem and sort by priority
       // if (a.priority !== b.priority) {
@@ -538,6 +491,61 @@ export class ReadingQueueService extends BaseService {
 
       return dateComparison;
     });
+  }
+
+  /**
+   * Alias methods for backward compatibility
+   */
+
+  // Alias for getReadingQueue
+  async getAll(): Promise<ReadingQueueItem[]> {
+    return this.getReadingQueue();
+  }
+
+  // Alias for addToQueue
+  async add(newsletterId: string): Promise<boolean> {
+    const result = await this.addToQueue(newsletterId);
+    return result.success;
+  }
+
+  // Alias for removeFromQueue
+  async remove(queueItemId: string): Promise<boolean> {
+    // Find the newsletter ID from the queue item ID
+    const existingItems = await readingQueueApi.getAll();
+    const item = existingItems.find((item) => item.id === queueItemId);
+    if (!item) {
+      return false;
+    }
+    const result = await this.removeFromQueue(item.newsletter_id);
+    return result.success;
+  }
+
+  // Alias for clearQueue
+  async clear(): Promise<boolean> {
+    const result = await this.clearQueue();
+    return result.success;
+  }
+
+  // Alias for reorderQueue
+  async reorder(updates: { id: string; position: number }[]): Promise<boolean> {
+    // Find the queue items and get their newsletter IDs
+    const existingItems = await readingQueueApi.getAll();
+    const orderedNewsletterIds = updates
+      .sort((a, b) => a.position - b.position)
+      .map((update) => {
+        const item = existingItems.find((item) => item.id === update.id);
+        return item?.newsletter_id;
+      })
+      .filter(Boolean) as string[];
+
+    const result = await this.reorderQueue(orderedNewsletterIds);
+    return result.success;
+  }
+
+  // Method for cleaning up orphaned items
+  async cleanupOrphanedItems(): Promise<{ removedCount: number }> {
+    const result = await this.autoCleanup();
+    return { removedCount: result.processedCount };
   }
 }
 

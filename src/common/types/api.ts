@@ -55,18 +55,13 @@ export interface FilterParams {
   groupIds?: string[];
 }
 
-export interface NewsletterQueryParams
-  extends BaseQueryParams,
-    FilterParams,
-    PaginationParams {
+export interface NewsletterQueryParams extends BaseQueryParams, FilterParams, PaginationParams {
   includeRelations?: boolean;
   includeTags?: boolean;
   includeSource?: boolean;
 }
 
-export interface NewsletterSourceQueryParams
-  extends BaseQueryParams,
-    PaginationParams {
+export interface NewsletterSourceQueryParams extends BaseQueryParams, PaginationParams {
   includeCount?: boolean;
   excludeArchived?: boolean;
   search?: string;
@@ -120,6 +115,10 @@ export interface UpdateNewsletterSourceParams {
   is_archived?: boolean;
 }
 
+export interface BulkUpdateNewsletterSourceParams {
+  updates: Array<{ id: string; updates: Omit<UpdateNewsletterSourceParams, 'id'> }>;
+}
+
 export interface CreateTagParams {
   name: string;
   color: string;
@@ -129,6 +128,18 @@ export interface UpdateTagParams {
   id: string;
   name?: string;
   color?: string;
+}
+
+export interface CreateReadingQueueItemParams {
+  newsletter_id: string;
+  priority?: string;
+  notes?: string;
+}
+
+export interface UpdateReadingQueueItemParams {
+  id: string;
+  priority?: string;
+  notes?: string;
 }
 
 export interface CreateNewsletterSourceGroupParams {
@@ -145,7 +156,7 @@ export interface UpdateNewsletterSourceGroupParams {
 // Database Operation Types
 export interface DatabaseOperation {
   table: string;
-  operation: "SELECT" | "INSERT" | "UPDATE" | "DELETE";
+  operation: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE';
   filters?: Record<string, any>;
   data?: Record<string, any>;
 }
@@ -166,7 +177,7 @@ export interface AuthenticatedOperation {
 // Real-time subscription types
 export interface RealtimeSubscriptionParams {
   table: string;
-  event?: "INSERT" | "UPDATE" | "DELETE" | "*";
+  event?: 'INSERT' | 'UPDATE' | 'DELETE' | '*';
   filter?: string;
   schema?: string;
 }
@@ -250,21 +261,15 @@ export interface SearchResult<T> {
 }
 
 // Export utility type helpers
-export type WithoutId<T> = Omit<T, "id">;
-export type WithOptionalId<T> = Omit<T, "id"> & { id?: string };
+export type WithoutId<T> = Omit<T, 'id'>;
+export type WithOptionalId<T> = Omit<T, 'id'> & { id?: string };
 export type UpdateParams<T> = Partial<WithoutId<T>> & { id: string };
 export type CreateParams<T> = WithoutId<T>;
 
 // Generic CRUD operation types
-export interface CrudOperations<
-  T,
-  TCreate = CreateParams<T>,
-  TUpdate = UpdateParams<T>,
-> {
+export interface CrudOperations<T, TCreate = CreateParams<T>, TUpdate = UpdateParams<T>> {
   getById(id: string, params?: BaseQueryParams): Promise<T | null>;
-  getAll(
-    params?: BaseQueryParams & PaginationParams,
-  ): Promise<PaginatedResponse<T>>;
+  getAll(params?: BaseQueryParams & PaginationParams): Promise<PaginatedResponse<T>>;
   create(data: TCreate): Promise<T>;
   update(data: TUpdate): Promise<T>;
   delete(id: string): Promise<boolean>;

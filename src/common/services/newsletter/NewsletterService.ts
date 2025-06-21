@@ -1,15 +1,15 @@
-import { BaseService, NotFoundError } from "../base/BaseService";
-import { newsletterApi } from "@common/api/newsletterApi";
-import { readingQueueApi } from "@common/api/readingQueueApi";
-import { tagApi } from "@common/api/tagApi";
+import { BaseService, NotFoundError } from '../base/BaseService';
+import { newsletterApi } from '@common/api/newsletterApi';
+import { readingQueueApi } from '@common/api/readingQueueApi';
+import { tagApi } from '@common/api/tagApi';
 import {
   NewsletterWithRelations,
   Tag,
   NewsletterQueryParams,
   NewsletterFilter,
   PaginatedResponse,
-} from "@common/types";
-import { logger } from "@common/utils/logger";
+} from '@common/types';
+import { logger } from '@common/utils/logger';
 
 export interface NewsletterOperationResult {
   success: boolean;
@@ -51,7 +51,7 @@ export class NewsletterService extends BaseService {
    * Get a single newsletter by ID
    */
   async getNewsletter(id: string): Promise<NewsletterWithRelations | null> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
     return this.withRetry(async () => {
       const newsletter = await newsletterApi.getById(id);
@@ -59,35 +59,48 @@ export class NewsletterService extends BaseService {
         throw new NotFoundError(`Newsletter with ID ${id} not found`);
       }
       return newsletter;
-    }, "getNewsletter");
+    }, 'getNewsletter');
   }
 
   /**
    * Get newsletters with filtering and pagination
    */
   async getNewsletters(
-    params: NewsletterQueryParams = {},
+    params: NewsletterQueryParams = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.withRetry(async () => {
       // Apply business logic for default parameters
       const processedParams = this.processNewsletterParams(params);
       return await newsletterApi.getAll(processedParams);
-    }, "getNewsletters");
+    }, 'getNewsletters');
+  }
+
+  /**
+   * Alias for getNewsletters for backward compatibility
+   */
+  async getAll(
+    params: NewsletterQueryParams = {}
+  ): Promise<PaginatedResponse<NewsletterWithRelations>> {
+    return this.getNewsletters(params);
+  }
+
+  /**
+   * Alias for getNewsletter for backward compatibility
+   */
+  async getById(id: string): Promise<NewsletterWithRelations | null> {
+    return this.getNewsletter(id);
   }
 
   /**
    * Mark newsletter as read
    */
   async markAsRead(id: string): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
     return this.executeWithLogging(
       async () => {
         try {
-          const newsletter = await this.withRetry(
-            () => newsletterApi.markAsRead(id),
-            "markAsRead",
-          );
+          const newsletter = await this.withRetry(() => newsletterApi.markAsRead(id), 'markAsRead');
 
           // Apply business logic - update related data if needed
           await this.handleReadStatusChange(id, true);
@@ -99,12 +112,12 @@ export class NewsletterService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "markAsRead",
-      { id },
+      'markAsRead',
+      { id }
     );
   }
 
@@ -112,14 +125,14 @@ export class NewsletterService extends BaseService {
    * Mark newsletter as unread
    */
   async markAsUnread(id: string): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
     return this.executeWithLogging(
       async () => {
         try {
           const newsletter = await this.withRetry(
             () => newsletterApi.markAsUnread(id),
-            "markAsUnread",
+            'markAsUnread'
           );
 
           // Apply business logic - update related data if needed
@@ -132,12 +145,12 @@ export class NewsletterService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "markAsUnread",
-      { id },
+      'markAsUnread',
+      { id }
     );
   }
 
@@ -145,7 +158,7 @@ export class NewsletterService extends BaseService {
    * Bulk mark newsletters as read
    */
   async bulkMarkAsRead(ids: string[]): Promise<BulkNewsletterOperationResult> {
-    this.validateArray(ids, "newsletter IDs", { minLength: 1 });
+    this.validateArray(ids, 'newsletter IDs', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
@@ -153,17 +166,14 @@ export class NewsletterService extends BaseService {
           this.newsletterOptions.batchSize!,
           async (batch: string[]) => {
             const results = await Promise.allSettled(
-              batch.map((id) => newsletterApi.markAsRead(id)),
+              batch.map((id) => newsletterApi.markAsRead(id))
             );
             return results.map((result, index) => ({
               id: batch[index],
-              success: result.status === "fulfilled" && result.value,
-              error:
-                result.status === "rejected"
-                  ? result.reason?.message
-                  : undefined,
+              success: result.status === 'fulfilled' && result.value,
+              error: result.status === 'rejected' ? result.reason?.message : undefined,
             }));
-          },
+          }
         );
 
         const results = await batchProcessor(ids);
@@ -171,13 +181,11 @@ export class NewsletterService extends BaseService {
         const failedCount = results.length - processedCount;
         const errors = results
           .filter((r) => !r.success)
-          .map((r) => ({ id: r.id, error: r.error || "Unknown error" }));
+          .map((r) => ({ id: r.id, error: r.error || 'Unknown error' }));
 
         // Apply business logic for successful updates
         const successfulIds = results.filter((r) => r.success).map((r) => r.id);
-        await Promise.allSettled(
-          successfulIds.map((id) => this.handleReadStatusChange(id, true)),
-        );
+        await Promise.allSettled(successfulIds.map((id) => this.handleReadStatusChange(id, true)));
 
         return {
           success: failedCount === 0,
@@ -186,18 +194,16 @@ export class NewsletterService extends BaseService {
           errors,
         };
       },
-      "bulkMarkAsRead",
-      { count: ids.length },
+      'bulkMarkAsRead',
+      { count: ids.length }
     );
   }
 
   /**
    * Bulk mark newsletters as unread
    */
-  async bulkMarkAsUnread(
-    ids: string[],
-  ): Promise<BulkNewsletterOperationResult> {
-    this.validateArray(ids, "newsletter IDs", { minLength: 1 });
+  async bulkMarkAsUnread(ids: string[]): Promise<BulkNewsletterOperationResult> {
+    this.validateArray(ids, 'newsletter IDs', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
@@ -205,17 +211,14 @@ export class NewsletterService extends BaseService {
           this.newsletterOptions.batchSize!,
           async (batch: string[]) => {
             const results = await Promise.allSettled(
-              batch.map((id) => newsletterApi.markAsUnread(id)),
+              batch.map((id) => newsletterApi.markAsUnread(id))
             );
             return results.map((result, index) => ({
               id: batch[index],
-              success: result.status === "fulfilled" && result.value,
-              error:
-                result.status === "rejected"
-                  ? result.reason?.message
-                  : undefined,
+              success: result.status === 'fulfilled' && result.value,
+              error: result.status === 'rejected' ? result.reason?.message : undefined,
             }));
-          },
+          }
         );
 
         const results = await batchProcessor(ids);
@@ -223,13 +226,11 @@ export class NewsletterService extends BaseService {
         const failedCount = results.length - processedCount;
         const errors = results
           .filter((r) => !r.success)
-          .map((r) => ({ id: r.id, error: r.error || "Unknown error" }));
+          .map((r) => ({ id: r.id, error: r.error || 'Unknown error' }));
 
         // Apply business logic for successful updates
         const successfulIds = results.filter((r) => r.success).map((r) => r.id);
-        await Promise.allSettled(
-          successfulIds.map((id) => this.handleReadStatusChange(id, false)),
-        );
+        await Promise.allSettled(successfulIds.map((id) => this.handleReadStatusChange(id, false)));
 
         return {
           success: failedCount === 0,
@@ -238,8 +239,8 @@ export class NewsletterService extends BaseService {
           errors,
         };
       },
-      "bulkMarkAsUnread",
-      { count: ids.length },
+      'bulkMarkAsUnread',
+      { count: ids.length }
     );
   }
 
@@ -247,7 +248,7 @@ export class NewsletterService extends BaseService {
    * Toggle like status
    */
   async toggleLike(id: string): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
     return this.executeWithLogging(
       async () => {
@@ -255,20 +256,17 @@ export class NewsletterService extends BaseService {
           // Get current newsletter to determine new like status
           const currentNewsletter = await this.withRetry(
             () => newsletterApi.getById(id),
-            "getNewsletterForToggleLike",
+            'getNewsletterForToggleLike'
           );
 
           if (!currentNewsletter) {
             return {
               success: false,
-              error: "Newsletter not found",
+              error: 'Newsletter not found',
             };
           }
 
-          const newsletter = await this.withRetry(
-            () => newsletterApi.toggleLike(id),
-            "toggleLike",
-          );
+          const newsletter = await this.withRetry(() => newsletterApi.toggleLike(id), 'toggleLike');
 
           // Apply business logic
           await this.handleLikeStatusChange(id, !currentNewsletter.is_liked);
@@ -280,12 +278,12 @@ export class NewsletterService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "toggleLike",
-      { id },
+      'toggleLike',
+      { id }
     );
   }
 
@@ -293,7 +291,7 @@ export class NewsletterService extends BaseService {
    * Toggle archive status
    */
   async toggleArchive(id: string): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
     return this.executeWithLogging(
       async () => {
@@ -303,20 +301,20 @@ export class NewsletterService extends BaseService {
           if (!newsletter) {
             return {
               success: false,
-              error: "Newsletter not found",
+              error: 'Newsletter not found',
             };
           }
 
           const newArchiveStatus = !newsletter.is_archived;
           const success = await this.withRetry(
             () => newsletterApi.toggleArchive(id),
-            "toggleArchive",
+            'toggleArchive'
           );
 
           if (!success) {
             return {
               success: false,
-              error: "Failed to toggle archive status",
+              error: 'Failed to toggle archive status',
             };
           }
 
@@ -332,12 +330,12 @@ export class NewsletterService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "toggleArchive",
-      { newsletterId: id },
+      'toggleArchive',
+      { newsletterId: id }
     );
   }
 
@@ -345,7 +343,7 @@ export class NewsletterService extends BaseService {
    * Add newsletter to reading queue
    */
   async addToReadingQueue(id: string): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
     return this.executeWithLogging(
       async () => {
@@ -355,26 +353,23 @@ export class NewsletterService extends BaseService {
           if (!newsletter) {
             return {
               success: false,
-              error: "Newsletter not found",
+              error: 'Newsletter not found',
             };
           }
 
           if (newsletter.is_archived) {
             return {
               success: false,
-              error: "Cannot add archived newsletter to reading queue",
+              error: 'Cannot add archived newsletter to reading queue',
             };
           }
 
-          const success = await this.withRetry(
-            () => readingQueueApi.add(id),
-            "addToReadingQueue",
-          );
+          const success = await this.withRetry(() => readingQueueApi.add(id), 'addToReadingQueue');
 
           if (!success) {
             return {
               success: false,
-              error: "Failed to add newsletter to reading queue",
+              error: 'Failed to add newsletter to reading queue',
             };
           }
 
@@ -382,12 +377,12 @@ export class NewsletterService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "addToReadingQueue",
-      { newsletterId: id },
+      'addToReadingQueue',
+      { newsletterId: id }
     );
   }
 
@@ -395,7 +390,7 @@ export class NewsletterService extends BaseService {
    * Remove newsletter from reading queue
    */
   async removeFromReadingQueue(id: string): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
     return this.executeWithLogging(
       async () => {
@@ -403,13 +398,10 @@ export class NewsletterService extends BaseService {
           // Get newsletter before removing
           const newsletter = await this.withRetry(
             () => newsletterApi.getById(id),
-            "getNewsletterForReadingQueueRemoval",
+            'getNewsletterForReadingQueueRemoval'
           );
 
-          await this.withRetry(
-            () => readingQueueApi.remove(id),
-            "removeFromReadingQueue",
-          );
+          await this.withRetry(() => readingQueueApi.remove(id), 'removeFromReadingQueue');
 
           // Apply business logic
           // Future: Add any business logic for reading queue changes
@@ -421,49 +413,40 @@ export class NewsletterService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "removeFromReadingQueue",
-      { id },
+      'removeFromReadingQueue',
+      { id }
     );
   }
 
   async deleteNewsletter(id: string): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
+    this.validateString(id, 'newsletter ID');
 
-    return this.executeWithLogging(
-      async () => {
-        try {
-          await this.withRetry(
-            () => newsletterApi.delete(id),
-            "deleteNewsletter",
-          );
+    return this.executeWithLogging(async () => {
+      try {
+        await this.withRetry(() => newsletterApi.delete(id), 'deleteNewsletter');
 
-          return {
-            success: true
-          };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : "Failed to delete newsletter"
-          };
-        }
-      },
-      "deleteNewsletter"
-    );
+        return {
+          success: true,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to delete newsletter',
+        };
+      }
+    }, 'deleteNewsletter');
   }
 
   /**
    * Update newsletter tags
    */
-  async updateTags(
-    id: string,
-    tagIds: string[],
-  ): Promise<NewsletterOperationResult> {
-    this.validateString(id, "newsletter ID");
-    this.validateArray(tagIds, "tag IDs");
+  async updateTags(id: string, tagIds: string[]): Promise<NewsletterOperationResult> {
+    this.validateString(id, 'newsletter ID');
+    this.validateArray(tagIds, 'tag IDs');
 
     return this.executeWithLogging(
       async () => {
@@ -473,7 +456,7 @@ export class NewsletterService extends BaseService {
           if (!newsletter) {
             return {
               success: false,
-              error: "Newsletter not found",
+              error: 'Newsletter not found',
             };
           }
 
@@ -492,13 +475,13 @@ export class NewsletterService extends BaseService {
 
           const success = await this.withRetry(
             () => tagApi.updateNewsletterTags(id, tags),
-            "updateNewsletterTags",
+            'updateNewsletterTags'
           );
 
           if (!success) {
             return {
               success: false,
-              error: "Failed to update newsletter tags",
+              error: 'Failed to update newsletter tags',
             };
           }
 
@@ -509,12 +492,12 @@ export class NewsletterService extends BaseService {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : "Unknown error",
+            error: error instanceof Error ? error.message : 'Unknown error',
           };
         }
       },
-      "updateTags",
-      { newsletterId: id, tagCount: tagIds.length },
+      'updateTags',
+      { newsletterId: id, tagCount: tagIds.length }
     );
   }
 
@@ -523,9 +506,9 @@ export class NewsletterService extends BaseService {
    */
   async searchNewsletters(
     query: string,
-    filters?: NewsletterFilter,
+    filters?: NewsletterFilter
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    this.validateString(query, "search query", { minLength: 1 });
+    this.validateString(query, 'search query', { minLength: 1 });
 
     return this.executeWithLogging(
       async () => {
@@ -542,28 +525,137 @@ export class NewsletterService extends BaseService {
 
         const searchParams = this.processNewsletterParams(baseParams);
 
-        return await this.withRetry(
-          () => newsletterApi.getAll(searchParams),
-          "searchNewsletters",
-        );
+        return await this.withRetry(() => newsletterApi.getAll(searchParams), 'searchNewsletters');
       },
-      "searchNewsletters",
-      { query, filters },
+      'searchNewsletters',
+      { query, filters }
     );
+  }
+
+  /**
+   * Get unread count for all newsletters or specific source
+   */
+  async getUnreadCount(sourceId?: string | null): Promise<number> {
+    return this.withRetry(async () => {
+      return await newsletterApi.getUnreadCount(sourceId);
+    }, 'getUnreadCount');
+  }
+
+  /**
+   * Get unread counts grouped by source
+   */
+  async getUnreadCountBySource(): Promise<Record<string, number>> {
+    return this.withRetry(async () => {
+      return await newsletterApi.getUnreadCountBySource();
+    }, 'getUnreadCountBySource');
+  }
+
+  /**
+   * Bulk update newsletters
+   */
+  async bulkUpdate(params: {
+    ids: string[];
+    updates: any;
+  }): Promise<{ successCount: number; failedCount: number }> {
+    this.validateArray(params.ids, 'newsletter IDs', { minLength: 1 });
+
+    return this.executeWithLogging(
+      async () => {
+        const results = await Promise.allSettled(
+          params.ids.map(async (id) => {
+            if (params.updates.is_read !== undefined) {
+              return params.updates.is_read ? this.markAsRead(id) : this.markAsUnread(id);
+            }
+            // Add other update types as needed
+            throw new Error('Unsupported bulk update type');
+          })
+        );
+
+        const successCount = results.filter((r) => r.status === 'fulfilled').length;
+        return {
+          successCount,
+          failedCount: results.length - successCount,
+        };
+      },
+      'bulkUpdate',
+      { count: params.ids.length }
+    );
+  }
+
+  /**
+   * Bulk archive newsletters
+   */
+  async bulkArchive(ids: string[]): Promise<{ successCount: number; failedCount: number }> {
+    this.validateArray(ids, 'newsletter IDs', { minLength: 1 });
+
+    return this.executeWithLogging(
+      async () => {
+        const results = await Promise.allSettled(ids.map((id) => this.toggleArchive(id)));
+
+        const successCount = results.filter((r) => r.status === 'fulfilled').length;
+        return {
+          successCount,
+          failedCount: results.length - successCount,
+        };
+      },
+      'bulkArchive',
+      { count: ids.length }
+    );
+  }
+
+  /**
+   * Bulk unarchive newsletters
+   */
+  async bulkUnarchive(ids: string[]): Promise<{ successCount: number; failedCount: number }> {
+    this.validateArray(ids, 'newsletter IDs', { minLength: 1 });
+
+    return this.executeWithLogging(
+      async () => {
+        const results = await Promise.allSettled(ids.map((id) => this.toggleArchive(id)));
+
+        const successCount = results.filter((r) => r.status === 'fulfilled').length;
+        return {
+          successCount,
+          failedCount: results.length - successCount,
+        };
+      },
+      'bulkUnarchive',
+      { count: ids.length }
+    );
+  }
+
+  /**
+   * Delete newsletter (alias for deleteNewsletter)
+   */
+  async delete(id: string): Promise<boolean> {
+    const result = await this.deleteNewsletter(id);
+    return result.success;
+  }
+
+  /**
+   * Update newsletter
+   */
+  async update(params: { id: string; is_archived?: boolean }): Promise<boolean> {
+    this.validateString(params.id, 'newsletter ID');
+
+    if (params.is_archived !== undefined) {
+      const result = await this.toggleArchive(params.id);
+      return result.success;
+    }
+
+    throw new Error('Unsupported update parameters');
   }
 
   /**
    * Process newsletter parameters with business logic
    */
-  private processNewsletterParams(
-    params: NewsletterQueryParams,
-  ): NewsletterQueryParams {
+  private processNewsletterParams(params: NewsletterQueryParams): NewsletterQueryParams {
     const processed = { ...params };
 
     // Apply default sorting if not specified
     if (!processed.orderBy) {
-      processed.orderBy = "received_at";
-      processed.orderDirection = "desc";
+      processed.orderBy = 'received_at';
+      processed.orderDirection = 'desc';
     }
 
     // Apply default pagination if not specified
@@ -581,14 +673,11 @@ export class NewsletterService extends BaseService {
   /**
    * Handle business logic when read status changes
    */
-  private async handleReadStatusChange(
-    id: string,
-    isRead: boolean,
-  ): Promise<void> {
+  private async handleReadStatusChange(id: string, isRead: boolean): Promise<void> {
     // Business logic: If marked as read, could trigger analytics, recommendations, etc.
-    logger.debug("Newsletter read status changed", {
-      component: "NewsletterService",
-      action: "read_status_change",
+    logger.debug('Newsletter read status changed', {
+      component: 'NewsletterService',
+      action: 'read_status_change',
       metadata: { newsletterId: id, isRead },
     });
 
@@ -598,14 +687,11 @@ export class NewsletterService extends BaseService {
   /**
    * Handle business logic when like status changes
    */
-  private async handleLikeStatusChange(
-    id: string,
-    isLiked: boolean,
-  ): Promise<void> {
+  private async handleLikeStatusChange(id: string, isLiked: boolean): Promise<void> {
     // Business logic: Update recommendation algorithms, user preferences, etc.
-    logger.debug("Newsletter like status changed", {
-      component: "NewsletterService",
-      action: "like_status_change",
+    logger.debug('Newsletter like status changed', {
+      component: 'NewsletterService',
+      action: 'like_status_change',
       metadata: { newsletterId: id, isLiked },
     });
 
@@ -620,9 +706,9 @@ export class NewsletterService extends BaseService {
       await readingQueueApi.remove(id);
     } catch {
       // Ignore errors - newsletter might not be in queue
-      logger.debug("Newsletter not in reading queue or removal failed", {
-        component: "NewsletterService",
-        action: "remove_from_queue_cleanup",
+      logger.debug('Newsletter not in reading queue or removal failed', {
+        component: 'NewsletterService',
+        action: 'remove_from_queue_cleanup',
         metadata: { newsletterId: id },
       });
     }

@@ -5,7 +5,7 @@ import { AuthContext } from '@common/contexts/AuthContext';
 import { Tag, TagCreate, TagUpdate } from '@common/types';
 import { getCacheManagerSafe, invalidateQueries } from '@common/utils/cacheUtils';
 import { queryKeyFactory } from '@common/utils/queryKeyFactory';
-import { tagApi } from '@common/api/tagApi';
+import { tagService } from '@common/services';
 import { useLogger } from '@common/utils/logger/useLogger';
 
 export const useTags = () => {
@@ -40,7 +40,7 @@ export const useTags = () => {
       if (!user) return [];
 
       try {
-        return await tagApi.getAll();
+        return await tagService.getAll();
       } catch (err: unknown) {
         const error = err as Error;
         log.error(
@@ -70,7 +70,7 @@ export const useTags = () => {
   const createTagMutation = useMutation({
     mutationFn: async (tag: TagCreate): Promise<Tag> => {
       if (!user) throw new Error('User not authenticated');
-      return await tagApi.create(tag);
+      return await tagService.create(tag);
     },
     onSuccess: (data) => {
       // Update cache
@@ -122,7 +122,7 @@ export const useTags = () => {
   const updateTagMutation = useMutation({
     mutationFn: async (tag: TagUpdate): Promise<Tag> => {
       if (!user) throw new Error('User not authenticated');
-      return await tagApi.update(tag);
+      return await tagService.update(tag);
     },
     onSuccess: (data) => {
       // Update cache
@@ -173,7 +173,7 @@ export const useTags = () => {
   const deleteTagMutation = useMutation({
     mutationFn: async (tagId: string): Promise<void> => {
       if (!user) throw new Error('User not authenticated');
-      await tagApi.delete(tagId);
+      await tagService.delete(tagId);
     },
     onSuccess: (_, tagId) => {
       // Update cache
@@ -239,7 +239,7 @@ export const useTags = () => {
       if (!user) return [];
 
       try {
-        return await tagApi.getTagsForNewsletter(newsletterId);
+        return await tagService.getTagsForNewsletter(newsletterId);
       } catch (err: unknown) {
         const error = err as Error;
         log.error(
@@ -269,7 +269,7 @@ export const useTags = () => {
       tags: Tag[];
     }): Promise<void> => {
       if (!user) throw new Error('User not authenticated');
-      await tagApi.updateNewsletterTags(newsletterId, tags);
+      await tagService.updateNewsletterTags(newsletterId, tags);
     },
     onSuccess: (_, { newsletterId, tags }) => {
       // Use cache manager for newsletter-tag relationship updates
