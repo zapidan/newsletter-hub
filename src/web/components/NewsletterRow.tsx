@@ -1,9 +1,9 @@
-import React, { useCallback } from "react";
-import { Tag as TagIcon, Loader2 } from "lucide-react";
 import { NewsletterWithRelations, Tag } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
-import TagSelector from "./TagSelector";
+import { Loader2, Tag as TagIcon } from "lucide-react";
+import React, { useCallback } from "react";
 import NewsletterActions from "./NewsletterActions";
+import TagSelector from "./TagSelector";
 
 interface NewsletterRowProps {
   newsletter: NewsletterWithRelations;
@@ -101,24 +101,28 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     <div
       onClick={handleRowClick}
       onMouseEnter={handleMouseEnter}
-      className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${
-        !newsletter.is_read
+      className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${!newsletter.is_read
           ? "bg-blue-50/60 border-l-3 border-blue-500 hover:bg-blue-100/50"
           : "bg-white hover:bg-neutral-50"
-      } ${isSelected ? "ring-2 ring-primary-400" : ""} border border-neutral-200`}
+        } ${isSelected ? "ring-2 ring-primary-400" : ""} border border-neutral-200`}
     >
       {showCheckbox && onToggleSelect && (
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={(e) => {
-            e.stopPropagation();
-            onToggleSelect(newsletter.id);
-          }}
-          className="mr-4 mt-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-          onClick={(e) => e.stopPropagation()}
-          title="Select newsletter"
-        />
+        <div className="flex items-center h-5 mr-4 mt-1">
+          <div
+            className={`flex items-center justify-center h-5 w-5 rounded border ${isSelected ? 'bg-blue-50 border-blue-400' : 'border-gray-300 bg-white'} transition-colors`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(newsletter.id);
+            }}
+            title="Select newsletter"
+          >
+            {isSelected && (
+              <svg className="h-3.5 w-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            )}
+          </div>
+        </div>
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-3 mb-1">
@@ -147,9 +151,8 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                 {/* Tag visibility toggle */}
                 <button
                   type="button"
-                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${
-                    isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
+                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
                   onClick={(e) => {
                     log.debug("Tag icon clicked", {
                       action: "toggle_tag_visibility",
@@ -181,11 +184,10 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
                   ) : (
                     <TagIcon
                       size={14}
-                      className={`${
-                        visibleTags.has(newsletter.id)
+                      className={`${visibleTags.has(newsletter.id)
                           ? "text-primary-600"
                           : "text-gray-500"
-                      } hover:text-primary-600`}
+                        } hover:text-primary-600`}
                     />
                   )}
                   {visibleTags.has(newsletter.id) && !isUpdatingTags && (
