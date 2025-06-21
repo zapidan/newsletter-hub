@@ -1,13 +1,13 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useDebouncedNewsletterNavigation,
   useKeyboardNavigation,
-  useSwipeNavigation,
   useOptimizedNewsletterNavigation,
+  useSwipeNavigation,
 } from '../useDebouncedNewsletterNavigation';
-import type { ReactNode } from 'react';
 
 // Mock React Router
 vi.mock('react-router-dom', () => ({
@@ -43,9 +43,6 @@ const mockNavigationState = {
 vi.mock('../../useNewsletterNavigation', () => ({
   useNewsletterNavigation: vi.fn(() => mockNavigationState),
 }));
-
-// Import the mocked function for type checking
-import { useNewsletterNavigation } from '../../useNewsletterNavigation';
 
 // Mock cache hook
 const mockCache = {

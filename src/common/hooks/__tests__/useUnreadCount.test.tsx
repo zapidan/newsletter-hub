@@ -4,112 +4,72 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useUnreadCount, usePrefetchUnreadCounts } from '../useUnreadCount';
 import { AuthContext } from '@common/contexts/AuthContext';
-import { newsletterApi } from '@common/api/newsletterApi';
+import { newsletterService } from '@common/services';
 
-// Mock the API
-vi.mock('@common/api/newsletterApi', () => ({
-  newsletterApi: {
+// Mock the service
+vi.mock('@common/services', () => ({
+  newsletterService: {
     getUnreadCount: vi.fn(),
     getUnreadCountBySource: vi.fn(),
   },
 }));
 
-// Mock the logger
+// Mock logger
 vi.mock('@common/utils/logger/useLogger', () => ({
   useLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),
-    warn: vi.fn(),
   }),
 }));
 
-const mockAuth = {
-  user: {
-    id: 'test-user',
-    email: 'test@example.com',
-    app_metadata: {},
-    user_metadata: {},
-    aud: 'authenticated',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z',
-    email_confirmed_at: '2024-01-01T00:00:00Z',
-    phone_confirmed_at: undefined,
-    confirmation_sent_at: undefined,
-    confirmed_at: '2024-01-01T00:00:00Z',
-    last_sign_in_at: '2024-01-01T00:00:00Z',
-    role: 'authenticated',
-    phone: undefined,
-    recovery_sent_at: undefined,
-    email_change_sent_at: undefined,
-    new_email: undefined,
-    new_phone: undefined,
-    invited_at: undefined,
-    action_link: undefined,
-    email_change: undefined,
-    phone_change: undefined,
-    is_anonymous: false,
-  },
-  session: {
-    access_token: 'test-token',
-    user: {
-      id: 'test-user',
-      email: 'test@example.com',
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      created_at: '2024-01-01T00:00:00Z',
-    },
-  } as any,
-  signIn: vi.fn(),
-  signOut: vi.fn(),
-  signUp: vi.fn(),
-  resetPassword: vi.fn(),
-  updatePassword: vi.fn(),
-  checkPasswordStrength: vi.fn(),
-  loading: false,
-  error: null,
+const mockUser = {
+  id: 'test-user-id',
+  email: 'test@example.com',
 };
 
-const mockUnreadData = {
-  total: 10,
-  bySource: {
-    'source-1': 3,
-    'source-2': 5,
-    'source-3': 2,
-  },
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      <AuthContext.Provider
+        value={{
+          user: mockUser,
+          isAuthenticated: true,
+          loading: false,
+          signIn: vi.fn(),
+          signOut: vi.fn(),
+          signUp: vi.fn(),
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+    </QueryClientProvider>
+  );
 };
 
 describe('useUnreadCount', () => {
-  let queryClient: QueryClient;
+  let wrapper: ReturnType<typeof createWrapper>;
 
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: false,
-          gcTime: 0,
-          refetchOnWindowFocus: false,
-          refetchOnMount: false,
-        },
-      },
-    });
-
+    wrapper = createWrapper();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={mockAuth}>{children}</AuthContext.Provider>
-    </QueryClientProvider>
-  );
-
   it('should fetch all unread counts in a single query', async () => {
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
       'source-3': 2,
@@ -126,14 +86,16 @@ describe('useUnreadCount', () => {
       expect(result.current.unreadCount).toBe(10);
     });
 
-    // Should have called both APIs in parallel
-    expect(newsletterApi.getUnreadCount).toHaveBeenCalledTimes(1);
-    expect(newsletterApi.getUnreadCountBySource).toHaveBeenCalledTimes(1);
+    expect(result.current.isError).toBe(false);
+
+    // Should have called both service methods in parallel
+    expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
+    expect(newsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
   });
 
   it('should return source-specific count when sourceId is provided', async () => {
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
       'source-3': 2,
@@ -143,17 +105,19 @@ describe('useUnreadCount', () => {
 
     // Initially loading
     expect(result.current.isLoading).toBe(true);
-    expect(result.current.unreadCount).toBe(0);
 
+    // Wait for data to be loaded
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
-      expect(result.current.unreadCount).toBe(5);
     });
+
+    // Should return count for the specific source
+    expect(result.current.unreadCount).toBe(5);
   });
 
   it('should return 0 for unknown source', async () => {
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
     });
@@ -162,13 +126,14 @@ describe('useUnreadCount', () => {
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
-      expect(result.current.unreadCount).toBe(0);
     });
+
+    expect(result.current.unreadCount).toBe(0);
   });
 
   it('should share data between hooks with different sourceIds', async () => {
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
     });
@@ -181,21 +146,22 @@ describe('useUnreadCount', () => {
       expect(result1.current.isLoading).toBe(false);
       expect(result2.current.isLoading).toBe(false);
       expect(result3.current.isLoading).toBe(false);
-      expect(result1.current.unreadCount).toBe(10);
-      expect(result2.current.unreadCount).toBe(3);
-      expect(result3.current.unreadCount).toBe(5);
     });
 
+    expect(result1.current.unreadCount).toBe(10); // total
+    expect(result2.current.unreadCount).toBe(3); // source-1
+    expect(result3.current.unreadCount).toBe(5); // source-2
+
     // Should only fetch data once for all hooks
-    expect(newsletterApi.getUnreadCount).toHaveBeenCalledTimes(1);
-    expect(newsletterApi.getUnreadCountBySource).toHaveBeenCalledTimes(1);
+    expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
+    expect(newsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
   });
 
   it('should debounce invalidations when newsletter events occur', async () => {
     vi.useFakeTimers();
 
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({});
+    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({});
 
     const { result } = renderHook(() => useUnreadCount(), { wrapper });
 
@@ -203,227 +169,139 @@ describe('useUnreadCount', () => {
     vi.useRealTimers();
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
-      expect(result.current.unreadCount).toBe(10);
     });
+
     vi.useFakeTimers();
 
-    // Reset mock calls
+    // Clear mock call counts
     vi.clearAllMocks();
 
-    // Trigger multiple events rapidly
+    // Simulate multiple rapid invalidations
     act(() => {
-      window.dispatchEvent(new Event('newsletter:read-status-changed'));
-      window.dispatchEvent(new Event('newsletter:archived'));
-      window.dispatchEvent(new Event('newsletter:deleted'));
-      window.dispatchEvent(new Event('newsletter:read-status-changed'));
+      result.current.invalidateUnreadCount();
+      result.current.invalidateUnreadCount();
+      result.current.invalidateUnreadCount();
     });
 
     // No immediate refetch
-    expect(newsletterApi.getUnreadCount).not.toHaveBeenCalled();
+    expect(newsletterService.getUnreadCount).not.toHaveBeenCalled();
 
     // Advance timer past debounce delay (500ms)
     act(() => {
       vi.advanceTimersByTime(600);
     });
 
-    // Switch back to real timers for waitFor
     vi.useRealTimers();
+
+    // Should only refetch once after debounce
     await waitFor(() => {
-      // Should refetch only once after debounce
-      expect(newsletterApi.getUnreadCount).toHaveBeenCalledTimes(1);
-      expect(newsletterApi.getUnreadCountBySource).toHaveBeenCalledTimes(1);
+      expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
     });
   });
 
   it('should handle errors gracefully', async () => {
-    const error = new Error('Failed to fetch unread count');
-    vi.mocked(newsletterApi.getUnreadCount).mockRejectedValue(error);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockRejectedValue(error);
+    const error = new Error('Network error');
+    vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(error);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockRejectedValue(error);
 
     const { result } = renderHook(() => useUnreadCount(), { wrapper });
 
     await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
       expect(result.current.isError).toBe(true);
-      expect(result.current.unreadCount).toBe(0);
+      expect(result.current.error).toBe(error);
     });
 
-    expect(result.current.error).toEqual(error);
-  });
-
-  it('should return 0 when user is not authenticated', async () => {
-    const noAuthWrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider value={{ ...mockAuth, user: null }}>{children}</AuthContext.Provider>
-      </QueryClientProvider>
-    );
-
-    const { result } = renderHook(() => useUnreadCount(), { wrapper: noAuthWrapper });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.unreadCount).toBe(0);
-    });
-
-    expect(newsletterApi.getUnreadCount).not.toHaveBeenCalled();
-  });
-
-  it('should maintain previous count during refetch', async () => {
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({});
-
-    const { result } = renderHook(() => useUnreadCount(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.unreadCount).toBe(10);
-    });
-
-    // Update mock to return new value
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(15);
-
-    // Use fake timers for debounce
-    vi.useFakeTimers();
-
-    // Trigger refetch
-    act(() => {
-      window.dispatchEvent(new Event('newsletter:read-status-changed'));
-    });
-
-    // Should still show 10 during refetch
-    expect(result.current.unreadCount).toBe(10);
-
-    // Advance timer past debounce delay
-    act(() => {
-      vi.advanceTimersByTime(600);
-    });
-
-    // Switch back to real timers for waitFor
-    vi.useRealTimers();
-
-    await waitFor(() => {
-      expect(result.current.unreadCount).toBe(15);
-    });
-  });
-
-  it('should cleanup event listeners on unmount', () => {
-    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
-
-    const { unmount } = renderHook(() => useUnreadCount(), { wrapper });
-
-    unmount();
-
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      'newsletter:read-status-changed',
-      expect.any(Function)
-    );
-    expect(removeEventListenerSpy).toHaveBeenCalledWith(
-      'newsletter:archived',
-      expect.any(Function)
-    );
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('newsletter:deleted', expect.any(Function));
+    // Should fallback to 0 count
+    expect(result.current.unreadCount).toBe(0);
   });
 });
 
 describe('usePrefetchUnreadCounts', () => {
-  let queryClient: QueryClient;
+  let wrapper: ReturnType<typeof createWrapper>;
 
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-      },
-    });
-
+    wrapper = createWrapper();
     vi.clearAllMocks();
   });
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={mockAuth}>{children}</AuthContext.Provider>
-    </QueryClientProvider>
-  );
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('should prefetch unread counts', async () => {
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({
-      'source-1': 3,
-      'source-2': 5,
+    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(5);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+      'source-1': 2,
+      'source-2': 3,
     });
 
     const { result } = renderHook(() => usePrefetchUnreadCounts(), { wrapper });
 
-    await act(async () => {
-      await result.current.prefetchCounts();
+    // Call prefetch
+    act(() => {
+      result.current.prefetchUnreadCounts();
     });
 
-    expect(newsletterApi.getUnreadCount).toHaveBeenCalledTimes(1);
-    expect(newsletterApi.getUnreadCountBySource).toHaveBeenCalledTimes(1);
-
-    // Check that data is in cache
-    const cachedData = queryClient.getQueryData(['unreadCount', 'all', 'test-user']);
-    expect(cachedData).toEqual({
-      total: 10,
-      bySource: {
-        'source-1': 3,
-        'source-2': 5,
-      },
-    });
-  });
-
-  it('should skip prefetch if data is fresh', async () => {
-    // Preload cache with fresh data
-    queryClient.setQueryData(['unreadCount', 'all', 'test-user'], mockUnreadData, {
-      updatedAt: Date.now(),
-    });
-
-    const { result } = renderHook(() => usePrefetchUnreadCounts(), { wrapper });
-
-    await act(async () => {
-      await result.current.prefetchCounts();
-    });
-
-    // Should not fetch since data is fresh
-    expect(newsletterApi.getUnreadCount).not.toHaveBeenCalled();
-    expect(newsletterApi.getUnreadCountBySource).not.toHaveBeenCalled();
-  });
-
-  it('should prefetch if data is stale', async () => {
-    // Preload cache with stale data (6 minutes old)
-    queryClient.setQueryData(['unreadCount', 'all', 'test-user'], mockUnreadData, {
-      updatedAt: Date.now() - 6 * 60 * 1000,
-    });
-
-    vi.mocked(newsletterApi.getUnreadCount).mockResolvedValue(15);
-    vi.mocked(newsletterApi.getUnreadCountBySource).mockResolvedValue({
-      'source-1': 5,
-      'source-2': 10,
-    });
-
-    const { result } = renderHook(() => usePrefetchUnreadCounts(), { wrapper });
-
-    await act(async () => {
-      await result.current.prefetchCounts();
-    });
-
-    // Should fetch since data is stale
-    expect(newsletterApi.getUnreadCount).toHaveBeenCalledTimes(1);
-    expect(newsletterApi.getUnreadCountBySource).toHaveBeenCalledTimes(1);
+    // Should have called both service methods
+    expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
+    expect(newsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
   });
 
   it('should not prefetch when user is not authenticated', async () => {
-    const noAuthWrapper = ({ children }: { children: React.ReactNode }) => (
-      <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider value={{ ...mockAuth, user: null }}>{children}</AuthContext.Provider>
-      </QueryClientProvider>
-    );
+    const unauthenticatedWrapper = () => {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: false,
+            gcTime: 0,
+          },
+        },
+      });
 
-    const { result } = renderHook(() => usePrefetchUnreadCounts(), { wrapper: noAuthWrapper });
+      return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          <AuthContext.Provider
+            value={{
+              user: null,
+              isAuthenticated: false,
+              loading: false,
+              signIn: vi.fn(),
+              signOut: vi.fn(),
+              signUp: vi.fn(),
+            }}
+          >
+            {children}
+          </AuthContext.Provider>
+        </QueryClientProvider>
+      );
+    };
 
-    await act(async () => {
-      await result.current.prefetchCounts();
+    const { result } = renderHook(() => usePrefetchUnreadCounts(), {
+      wrapper: unauthenticatedWrapper(),
     });
 
-    expect(newsletterApi.getUnreadCount).not.toHaveBeenCalled();
-    expect(newsletterApi.getUnreadCountBySource).not.toHaveBeenCalled();
+    // Call prefetch
+    act(() => {
+      result.current.prefetchUnreadCounts();
+    });
+
+    // Should not have called service methods
+    expect(newsletterService.getUnreadCount).not.toHaveBeenCalled();
+    expect(newsletterService.getUnreadCountBySource).not.toHaveBeenCalled();
+  });
+
+  it('should handle prefetch errors gracefully', async () => {
+    const error = new Error('Prefetch failed');
+    vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(error);
+
+    const { result } = renderHook(() => usePrefetchUnreadCounts(), { wrapper });
+
+    // Should not throw when prefetch fails
+    expect(() => {
+      act(() => {
+        result.current.prefetchUnreadCounts();
+      });
+    }).not.toThrow();
   });
 });

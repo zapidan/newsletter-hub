@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
-import { toast } from "react-hot-toast";
-import { tagService } from "@common/services";
-import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { useLogger } from "@common/utils/logger";
-import { Tag, TagCreate, TagUpdate } from "@common/types";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { toast } from 'react-hot-toast';
+import { tagService } from '@common/services';
+import { queryKeyFactory } from '@common/utils/queryKeyFactory';
+import { useLogger } from '@common/utils/logger';
+import { Tag, TagCreate, TagUpdate } from '@common/types';
 
 interface UseTagOperationsOptions {
   onSuccess?: (operation: string, tag?: Tag) => void;
@@ -33,12 +33,10 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
       }
 
       return Promise.all(
-        queriesToInvalidate.map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey }),
-        ),
+        queriesToInvalidate.map((queryKey) => queryClient.invalidateQueries({ queryKey }))
       );
     },
-    [queryClient],
+    [queryClient]
   );
 
   // Get all tags query
@@ -50,33 +48,31 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
 
   // Create tag mutation
   const createTagMutation = useMutation({
-    mutationFn: (tagData: Omit<TagCreate, "user_id">) =>
-      tagService.createTag(tagData),
+    mutationFn: (tagData: Omit<TagCreate, 'user_id'>) => tagService.createTag(tagData),
     onSuccess: async (result) => {
       if (result.success) {
         await invalidateRelatedQueries();
-        onSuccess?.("createTag", result.tag);
+        onSuccess?.('createTag', result.tag);
         if (showToasts) {
           toast.success(`Tag "${result.tag?.name}" created`);
         }
       } else {
-        onError?.("createTag", result.error || "Failed to create tag");
+        onError?.('createTag', result.error || 'Failed to create tag');
         if (showToasts) {
-          toast.error(result.error || "Failed to create tag");
+          toast.error(result.error || 'Failed to create tag');
         }
       }
     },
     onError: (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to create tag", {
-        component: "useTagOperations",
-        action: "createTag",
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error('Failed to create tag', {
+        component: 'useTagOperations',
+        action: 'createTag',
         error,
       });
-      onError?.("createTag", errorMessage);
+      onError?.('createTag', errorMessage);
       if (showToasts) {
-        toast.error("Failed to create tag");
+        toast.error('Failed to create tag');
       }
     },
   });
@@ -87,28 +83,27 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
     onSuccess: async (result, tagData) => {
       if (result.success) {
         await invalidateRelatedQueries([tagData.id]);
-        onSuccess?.("updateTag", result.tag);
+        onSuccess?.('updateTag', result.tag);
         if (showToasts) {
           toast.success(`Tag "${result.tag?.name}" updated`);
         }
       } else {
-        onError?.("updateTag", result.error || "Failed to update tag");
+        onError?.('updateTag', result.error || 'Failed to update tag');
         if (showToasts) {
-          toast.error(result.error || "Failed to update tag");
+          toast.error(result.error || 'Failed to update tag');
         }
       }
     },
     onError: (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to update tag", {
-        component: "useTagOperations",
-        action: "updateTag",
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error('Failed to update tag', {
+        component: 'useTagOperations',
+        action: 'updateTag',
         error,
       });
-      onError?.("updateTag", errorMessage);
+      onError?.('updateTag', errorMessage);
       if (showToasts) {
-        toast.error("Failed to update tag");
+        toast.error('Failed to update tag');
       }
     },
   });
@@ -119,28 +114,27 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
     onSuccess: async (result, tagId) => {
       if (result.success) {
         await invalidateRelatedQueries([tagId]);
-        onSuccess?.("deleteTag", result.tag);
+        onSuccess?.('deleteTag', result.tag);
         if (showToasts) {
           toast.success(`Tag "${result.tag?.name}" deleted`);
         }
       } else {
-        onError?.("deleteTag", result.error || "Failed to delete tag");
+        onError?.('deleteTag', result.error || 'Failed to delete tag');
         if (showToasts) {
-          toast.error(result.error || "Failed to delete tag");
+          toast.error(result.error || 'Failed to delete tag');
         }
       }
     },
     onError: (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to delete tag", {
-        component: "useTagOperations",
-        action: "deleteTag",
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error('Failed to delete tag', {
+        component: 'useTagOperations',
+        action: 'deleteTag',
         error,
       });
-      onError?.("deleteTag", errorMessage);
+      onError?.('deleteTag', errorMessage);
       if (showToasts) {
-        toast.error("Failed to delete tag");
+        toast.error('Failed to delete tag');
       }
     },
   });
@@ -152,44 +146,35 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
     onSuccess: async (result) => {
       if (result.success) {
         await invalidateRelatedQueries();
-        onSuccess?.("getOrCreateTag", result.tag);
+        onSuccess?.('getOrCreateTag', result.tag);
         if (showToasts) {
           toast.success(`Tag "${result.tag?.name}" ready`);
         }
       } else {
-        onError?.(
-          "getOrCreateTag",
-          result.error || "Failed to get or create tag",
-        );
+        onError?.('getOrCreateTag', result.error || 'Failed to get or create tag');
         if (showToasts) {
-          toast.error(result.error || "Failed to get or create tag");
+          toast.error(result.error || 'Failed to get or create tag');
         }
       }
     },
     onError: (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to get or create tag", {
-        component: "useTagOperations",
-        action: "getOrCreateTag",
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error('Failed to get or create tag', {
+        component: 'useTagOperations',
+        action: 'getOrCreateTag',
         error,
       });
-      onError?.("getOrCreateTag", errorMessage);
+      onError?.('getOrCreateTag', errorMessage);
       if (showToasts) {
-        toast.error("Failed to get or create tag");
+        toast.error('Failed to get or create tag');
       }
     },
   });
 
   // Update newsletter tags mutation
   const updateNewsletterTagsMutation = useMutation({
-    mutationFn: ({
-      newsletterId,
-      tagIds,
-    }: {
-      newsletterId: string;
-      tagIds: string[];
-    }) => tagService.updateNewsletterTags(newsletterId, tagIds),
+    mutationFn: ({ newsletterId, tagIds }: { newsletterId: string; tagIds: string[] }) =>
+      tagService.updateNewsletterTagsWithIds(newsletterId, tagIds),
     onSuccess: async (result, { newsletterId }) => {
       if (result.success) {
         await invalidateRelatedQueries();
@@ -197,31 +182,27 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
         await queryClient.invalidateQueries({
           queryKey: queryKeyFactory.newsletters.detail(newsletterId),
         });
-        onSuccess?.("updateNewsletterTags");
+        onSuccess?.('updateNewsletterTags');
         if (showToasts) {
-          toast.success("Newsletter tags updated");
+          toast.success('Newsletter tags updated');
         }
       } else {
-        onError?.(
-          "updateNewsletterTags",
-          result.error || "Failed to update newsletter tags",
-        );
+        onError?.('updateNewsletterTags', result.error || 'Failed to update newsletter tags');
         if (showToasts) {
-          toast.error(result.error || "Failed to update newsletter tags");
+          toast.error(result.error || 'Failed to update newsletter tags');
         }
       }
     },
     onError: (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to update newsletter tags", {
-        component: "useTagOperations",
-        action: "updateNewsletterTags",
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error('Failed to update newsletter tags', {
+        component: 'useTagOperations',
+        action: 'updateNewsletterTags',
         error,
       });
-      onError?.("updateNewsletterTags", errorMessage);
+      onError?.('updateNewsletterTags', errorMessage);
       if (showToasts) {
-        toast.error("Failed to update newsletter tags");
+        toast.error('Failed to update newsletter tags');
       }
     },
   });
@@ -234,21 +215,17 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
       enabled: query.trim().length > 0,
       staleTime: 2 * 60 * 1000, // 2 minutes
     }),
-    [],
+    []
   );
 
   const createTagSuggestionsQuery = useCallback(
-    (context?: {
-      newsletterContent?: string;
-      existingTags?: Tag[];
-      sourceId?: string;
-    }) => ({
+    (context?: { newsletterContent?: string; existingTags?: Tag[]; sourceId?: string }) => ({
       queryKey: queryKeyFactory.tags.suggestions(context),
       queryFn: () => tagService.getTagSuggestions(context),
       staleTime: 10 * 60 * 1000, // 10 minutes
       enabled: !!context,
     }),
-    [],
+    []
   );
 
   const createTagUsageStatsQuery = useCallback(
@@ -258,40 +235,39 @@ export function useTagOperations(options: UseTagOperationsOptions = {}) {
       enabled: !!tagId,
       staleTime: 5 * 60 * 1000, // 5 minutes
     }),
-    [],
+    []
   );
 
   // Bulk create tags mutation
   const bulkCreateTagsMutation = useMutation({
-    mutationFn: (tagDataArray: Array<Omit<TagCreate, "user_id">>) =>
+    mutationFn: (tagDataArray: Array<Omit<TagCreate, 'user_id'>>) =>
       tagService.bulkCreateTags(tagDataArray),
     onSuccess: async (result) => {
       await invalidateRelatedQueries();
 
       if (result.success) {
-        onSuccess?.("bulkCreateTags");
+        onSuccess?.('bulkCreateTags');
         if (showToasts) {
           toast.success(`Created ${result.processedCount} tags`);
         }
       } else {
         const message = `Created ${result.processedCount} tags, ${result.failedCount} failed`;
-        onError?.("bulkCreateTags", message);
+        onError?.('bulkCreateTags', message);
         if (showToasts) {
           toast.error(message);
         }
       }
     },
     onError: (error) => {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to bulk create tags", {
-        component: "useTagOperations",
-        action: "bulkCreateTags",
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log.error('Failed to bulk create tags', {
+        component: 'useTagOperations',
+        action: 'bulkCreateTags',
         error,
       });
-      onError?.("bulkCreateTags", errorMessage);
+      onError?.('bulkCreateTags', errorMessage);
       if (showToasts) {
-        toast.error("Failed to create tags");
+        toast.error('Failed to create tags');
       }
     },
   });

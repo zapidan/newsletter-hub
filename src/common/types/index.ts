@@ -86,8 +86,7 @@ export interface NewsletterSourceGroupMember {
   source?: NewsletterSource;
 }
 
-export interface NewsletterWithRelations
-  extends Omit<Newsletter, "source" | "tags"> {
+export interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {
   newsletter_source_id: string | null;
   source: NewsletterSource | null;
   tags: Tag[];
@@ -100,6 +99,8 @@ export interface ReadingQueueItem {
   newsletter_id: string;
   position: number;
   added_at: string;
+  priority?: string;
+  notes?: string;
   newsletter: NewsletterWithRelations;
 }
 
@@ -147,9 +148,9 @@ export interface NewsletterQueryParams {
   includeSource?: boolean;
   includeTags?: boolean;
   orderBy?: string;
-  orderDirection?: "asc" | "desc";
+  orderDirection?: 'asc' | 'desc';
   sortBy?: string;
-  sortOrder?: "asc" | "desc";
+  sortOrder?: 'asc' | 'desc';
   filter?: any;
 }
 

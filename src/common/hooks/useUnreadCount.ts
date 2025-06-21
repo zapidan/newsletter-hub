@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { newsletterApi } from '@common/api/newsletterApi';
+import { newsletterService } from '@common/services';
 import { AuthContext } from '@common/contexts/AuthContext';
 import { useContext, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLogger } from '@common/utils/logger/useLogger';
@@ -71,10 +71,13 @@ export const useUnreadCount = (sourceId?: string | null) => {
 
       try {
         // Fetch both total and per-source counts in parallel
-        const [total, bySource] = await Promise.all([
-          newsletterApi.getUnreadCount(),
-          newsletterApi.getUnreadCountBySource(),
+        const [totalResult, bySourceResult] = await Promise.all([
+          newsletterService.getUnreadCount(),
+          newsletterService.getUnreadCountBySource(),
         ]);
+
+        const total = totalResult || 0;
+        const bySource = bySourceResult || {};
 
         const result = { total, bySource };
 
@@ -192,6 +195,7 @@ export const useUnreadCount = (sourceId?: string | null) => {
     isLoading: !initialLoadComplete.current && isLoading,
     isError,
     error,
+    invalidateUnreadCount: debouncedInvalidate,
   };
 };
 
@@ -231,8 +235,8 @@ export const usePrefetchUnreadCounts = () => {
       queryKey,
       queryFn: async () => {
         const [total, bySource] = await Promise.all([
-          newsletterApi.getUnreadCount(),
-          newsletterApi.getUnreadCountBySource(),
+          newsletterService.getUnreadCount(),
+          newsletterService.getUnreadCountBySource(),
         ]);
 
         return { total, bySource };
@@ -241,5 +245,5 @@ export const usePrefetchUnreadCounts = () => {
     });
   }, [user, queryClient, log]);
 
-  return { prefetchCounts };
+  return { prefetchUnreadCounts: prefetchCounts };
 };

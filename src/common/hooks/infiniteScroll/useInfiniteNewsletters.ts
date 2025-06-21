@@ -1,11 +1,11 @@
-import { useLogger } from "@common/utils/logger/useLogger";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
-import { newsletterApi } from "../../api/newsletterApi";
-import { useAuth } from "../../contexts/AuthContext";
-import { NewsletterWithRelations } from "../../types";
-import { NewsletterFilter } from "../../types/cache";
-import { queryKeyFactory } from "../../utils/queryKeyFactory";
+import { useLogger } from '@common/utils/logger/useLogger';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { newsletterService } from '../../services';
+import { useAuth } from '../../contexts/AuthContext';
+import { NewsletterWithRelations } from '../../types';
+import { NewsletterFilter } from '../../types/cache';
+import { queryKeyFactory } from '../../utils/queryKeyFactory';
 
 export interface UseInfiniteNewslettersOptions {
   enabled?: boolean;
@@ -35,10 +35,10 @@ export interface UseInfiniteNewslettersReturn {
  */
 export const useInfiniteNewsletters = (
   filters: NewsletterFilter = {},
-  options: UseInfiniteNewslettersOptions = {},
+  options: UseInfiniteNewslettersOptions = {}
 ): UseInfiniteNewslettersReturn => {
   const { user } = useAuth();
-  const log = useLogger("useInfiniteNewsletters");
+  const log = useLogger('useInfiniteNewsletters');
   const {
     enabled = true,
     refetchOnWindowFocus = false,
@@ -51,10 +51,7 @@ export const useInfiniteNewsletters = (
   const [currentPage, setCurrentPage] = useState(1);
 
   // Generate query key with filters
-  const queryKey = useMemo(
-    () => queryKeyFactory.newsletters.infinite(filters),
-    [filters],
-  );
+  const queryKey = useMemo(() => queryKeyFactory.newsletters.infinite(filters), [filters]);
 
   // Build API query parameters from filters
   const baseQueryParams = useMemo(() => {
@@ -68,7 +65,7 @@ export const useInfiniteNewsletters = (
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
       limit: pageSize,
-      orderBy: filters.orderBy || "received_at",
+      orderBy: filters.orderBy || 'received_at',
       ascending: filters.ascending ?? false,
       includeRelations: true,
       includeTags: true,
@@ -77,83 +74,70 @@ export const useInfiniteNewsletters = (
   }, [filters, pageSize]);
 
   // Infinite query for newsletters
-  const {
-    data,
-    isLoading,
-    error,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    refetch,
-  } = useInfiniteQuery({
-    queryKey,
-    queryFn: async ({ pageParam = 0 }) => {
-      if (debug) {
-        log.debug("Fetching newsletters page", {
-          action: "fetch_page",
-          metadata: {
-            page: pageParam / pageSize + 1,
-            offset: pageParam,
-            filters,
-          },
-        });
-      }
-
-      const queryParams = {
-        ...baseQueryParams,
-        offset: pageParam,
-      };
-
-      try {
-        const result = await newsletterApi.getAll(queryParams);
-
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+    useInfiniteQuery({
+      queryKey,
+      queryFn: async ({ pageParam = 0 }) => {
         if (debug) {
-          log.debug("Newsletters fetched successfully", {
-            action: "fetch_page_success",
+          log.debug('Fetching newsletters page', {
+            action: 'fetch_page',
             metadata: {
-              count: result.data.length,
-              total: result.count,
-              hasMore: result.hasMore,
               page: pageParam / pageSize + 1,
+              offset: pageParam,
+              filters,
             },
           });
         }
 
-        return result;
-      } catch (err) {
-        if (debug) {
-          log.error(
-            "Failed to fetch newsletters",
-            {
-              action: "fetch_page_error",
-              metadata: { pageParam, pageSize, filters },
-            },
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        }
-        throw err;
-      }
-    },
-    enabled: enabled && !!user,
-    getNextPageParam: (lastPage, allPages) => {
-      // Calculate next offset based on current data
-      const totalFetched = allPages.reduce(
-        (sum, page) => sum + page.data.length,
-        0,
-      );
+        const queryParams = {
+          ...baseQueryParams,
+          offset: pageParam,
+        };
 
-      // Return next offset if there's more data, otherwise undefined
-      return lastPage.hasMore && totalFetched < lastPage.count
-        ? totalFetched
-        : undefined;
-    },
-    initialPageParam: 0,
-    staleTime,
-    refetchOnWindowFocus,
-    retry: 3,
-    retryDelay: (attemptIndex) =>
-      Math.min(1000 * Math.pow(2, attemptIndex), 10000),
-  });
+        try {
+          const result = await newsletterService.getAll(queryParams);
+
+          if (debug) {
+            log.debug('Newsletters fetched successfully', {
+              action: 'fetch_page_success',
+              metadata: {
+                count: result.data.length,
+                total: result.count,
+                hasMore: result.hasMore,
+                page: pageParam / pageSize + 1,
+              },
+            });
+          }
+
+          return result;
+        } catch (err) {
+          if (debug) {
+            log.error(
+              'Failed to fetch newsletters',
+              {
+                action: 'fetch_page_error',
+                metadata: { pageParam, pageSize, filters },
+              },
+              err instanceof Error ? err : new Error(String(err))
+            );
+          }
+          throw err;
+        }
+      },
+      enabled: enabled && !!user,
+      getNextPageParam: (lastPage, allPages) => {
+        // Calculate next offset based on current data
+        const totalFetched = allPages.reduce((sum, page) => sum + page.data.length, 0);
+
+        // Return next offset if there's more data, otherwise undefined
+        return lastPage.hasMore && totalFetched < lastPage.count ? totalFetched : undefined;
+      },
+      initialPageParam: 0,
+      staleTime,
+      refetchOnWindowFocus,
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+    });
 
   // Flatten all pages into a single array of newsletters
   const newsletters = useMemo(() => {
@@ -162,8 +146,8 @@ export const useInfiniteNewsletters = (
     const allNewsletters = data.pages.flatMap((page) => page.data);
 
     if (debug) {
-      log.debug("Total newsletters loaded", {
-        action: "calculate_total_newsletters",
+      log.debug('Total newsletters loaded', {
+        action: 'calculate_total_newsletters',
         metadata: {
           count: allNewsletters.length,
           pages: data.pages.length,
@@ -193,8 +177,8 @@ export const useInfiniteNewsletters = (
   const handleFetchNextPage = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       if (debug) {
-        log.debug("Loading next page", {
-          action: "load_next_page",
+        log.debug('Loading next page', {
+          action: 'load_next_page',
           metadata: {
             currentNewsletters: newsletters.length,
             totalCount,
@@ -204,21 +188,13 @@ export const useInfiniteNewsletters = (
       }
       fetchNextPage();
     }
-  }, [
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-    debug,
-    newsletters.length,
-    totalCount,
-    log,
-  ]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, debug, newsletters.length, totalCount, log]);
 
   // Enhanced refetch with debug logging
   const handleRefetch = useCallback(() => {
     if (debug) {
-      log.debug("Refetching newsletters", {
-        action: "refetch_newsletters",
+      log.debug('Refetching newsletters', {
+        action: 'refetch_newsletters',
         metadata: {
           filters,
           currentCount: newsletters.length,
