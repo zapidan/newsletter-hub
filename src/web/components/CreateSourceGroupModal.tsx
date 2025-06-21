@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import { X, Plus } from "lucide-react";
-import { NewsletterSource } from "@common/types";
 import { useNewsletterSourceGroups } from "@common/hooks/useNewsletterSourceGroups";
+import { NewsletterSource } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
+import { Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface CreateSourceGroupModalProps {
   isOpen: boolean;
@@ -168,7 +168,7 @@ export const CreateSourceGroupModal = ({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full p-3 border rounded-md text-base"
+                className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-300 focus:ring-1 focus:ring-blue-300 transition-colors text-base"
                 placeholder="e.g., Tech News, Personal, etc."
                 required
                 autoFocus
@@ -185,50 +185,60 @@ export const CreateSourceGroupModal = ({
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="text-sm p-2 border rounded-md w-56"
+                    className="text-sm p-2 pl-3 pr-8 border border-gray-200 rounded-lg w-56 bg-gray-50 focus:bg-white focus:border-blue-300 focus:ring-1 focus:ring-blue-300 transition-colors"
                     placeholder="Search sources..."
                   />
-                  {searchTerm && (
+                  {searchTerm ? (
                     <button
                       type="button"
                       onClick={() => setSearchTerm("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                     >
                       <X size={16} />
                     </button>
+                  ) : (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="border rounded-md max-h-72 overflow-y-auto">
+              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                 {filteredSources.length > 0 ? (
-                  <ul className="divide-y">
+                  <ul className="divide-y divide-gray-100">
                     {filteredSources.map((source) => (
-                      <li key={source.id} className="hover:bg-gray-50">
-                        <label className="flex items-start px-8 py-4 cursor-pointer">
-                          <div className="mt-1">
-                            <input
-                              type="checkbox"
-                              checked={selectedSourceIds.has(source.id)}
-                              onChange={() => toggleSource(source.id)}
-                              className="h-6 w-6 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                            />
+                      <li
+                        key={source.id}
+                        className="hover:bg-gray-50 transition-colors"
+                        onClick={() => toggleSource(source.id)}
+                      >
+                        <div className="relative flex items-center px-4 py-3 cursor-pointer">
+                          <div className="flex items-center h-5">
+                            <div className={`flex items-center justify-center h-5 w-5 rounded border ${selectedSourceIds.has(source.id) ? 'bg-blue-50 border-blue-400' : 'border-gray-300'}`}>
+                              {selectedSourceIds.has(source.id) && (
+                                <svg className="h-3.5 w-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </div>
                           </div>
-                          <div className="ml-14 space-y-2">
-                            {/* Increased ml-8 to ml-14 for more padding between checkbox and text */}
-                            <div className="text-base font-medium text-gray-900">
+                          <div className="ml-3">
+                            <div className="text-sm font-medium text-gray-900">
                               {source.name}
                             </div>
-                            <div className="text-sm text-gray-500 mt-1">
+                            <div className="text-xs text-gray-500">
                               {source.from}
                             </div>
                           </div>
-                        </label>
+                        </div>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <div className="p-6 text-center text-sm text-gray-500">
+                  <div className="p-6 text-center text-sm text-gray-500 bg-gray-50">
                     {sources.length === 0
                       ? "No sources available. Add some sources first."
                       : "No sources match your search."}
@@ -250,11 +260,10 @@ export const CreateSourceGroupModal = ({
             <button
               type="submit"
               disabled={isSubmitDisabled}
-              className={`px-5 py-2 text-sm font-medium text-white border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                isSubmitDisabled
-                  ? "bg-blue-400 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700"
-              }`}
+              className={`px-5 py-2 text-sm font-medium text-white border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isSubmitDisabled
+                ? "bg-blue-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
+                }`}
               title={
                 isSubmitDisabled
                   ? !name.trim()
