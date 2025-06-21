@@ -3,7 +3,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
-import { readingQueueApi } from '@common/api/readingQueueApi';
+import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useLogger } from '@common/utils/logger/useLogger';
 import type { NewsletterWithRelations } from '@common/types';
 
@@ -19,6 +19,9 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   isFromReadingQueue = false,
 }) => {
   const log = useLogger();
+
+  // Use reading queue hook for queue operations
+  const { isInQueue: checkIsInQueue } = useReadingQueue();
 
   // Use shared newsletter actions for consistent cache management
   const {
@@ -76,7 +79,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
 
       setIsCheckingQueue(true);
       try {
-        const inQueue = await readingQueueApi.isInQueue(newsletter.id);
+        const inQueue = await checkIsInQueue(newsletter.id);
         setIsInQueue(inQueue);
       } catch (error) {
         log.error(
@@ -95,7 +98,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     };
 
     checkQueueStatus();
-  }, [newsletter?.id, isFromReadingQueue]);
+  }, [newsletter?.id, isFromReadingQueue, checkIsInQueue]);
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingReadStatus) return;

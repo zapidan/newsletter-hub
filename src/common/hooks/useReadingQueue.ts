@@ -20,7 +20,7 @@ export const useReadingQueue = () => {
 
   // Safe cache manager helper
   const safeCacheCall = useCallback(
-    (fn: (manager: any) => void) => {
+    (fn: (manager: NonNullable<ReturnType<typeof getCacheManagerSafe>>) => void) => {
       if (cacheManager) {
         fn(cacheManager);
       }
@@ -428,6 +428,28 @@ export const useReadingQueue = () => {
     },
   });
 
+  // Check if newsletter is in queue
+  const isInQueue = useCallback(
+    async (newsletterId: string): Promise<boolean> => {
+      if (!user) return false;
+
+      try {
+        return await readingQueueService.isInQueue(newsletterId);
+      } catch (error) {
+        log.error(
+          'Failed to check if newsletter is in queue',
+          {
+            action: 'check_is_in_queue',
+            metadata: { newsletterId, userId: user.id },
+          },
+          error instanceof Error ? error : new Error(String(error))
+        );
+        return false;
+      }
+    },
+    [user, log]
+  );
+
   return {
     // Data
     readingQueue,
@@ -445,6 +467,7 @@ export const useReadingQueue = () => {
     markAsUnread: markAsUnread.mutateAsync,
     updateTags: updateTags.mutateAsync,
     cleanupOrphanedItems: cleanupOrphanedItems.mutateAsync,
+    isInQueue,
 
     // Loading states
     isAdding: addToQueue.isPending,

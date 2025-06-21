@@ -4,7 +4,23 @@ import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import { InfiniteNewsletterList } from '../InfiniteScroll/InfiniteNewsletterList';
 
+// Mock the date formatting function to ensure consistent snapshots
+vi.mock('@/common/utils/date', () => ({
+  formatDate: vi.fn().mockImplementation((date) => `Formatted: ${new Date(date).toISOString()}`),
+  formatRelativeTime: vi.fn().mockReturnValue('2 days ago'),
+}));
+
 describe('InfiniteNewsletterList', () => {
+  // Mock system time to a fixed date for consistent snapshots
+  beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2023-01-03T00:00:00Z'));
+  });
+
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
   const mockNewsletters: NewsletterWithRelations[] = [
     {
       id: '1',

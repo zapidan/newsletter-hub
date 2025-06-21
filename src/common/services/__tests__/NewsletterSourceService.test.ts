@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NewsletterSourceService } from '../newsletterSource/NewsletterSourceService';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NotFoundError, ValidationError } from '../../api/errorHandling';
 import { newsletterSourceApi } from '../../api/newsletterSourceApi';
 import { NewsletterSource } from '../../types';
 import {
-  NewsletterSourceQueryParams,
   CreateNewsletterSourceParams,
+  NewsletterSourceQueryParams,
   UpdateNewsletterSourceParams,
 } from '../../types/api';
-import { NotFoundError, ValidationError } from '../../api/errorHandling';
+import { NewsletterSourceService } from '../newsletterSource/NewsletterSourceService';
 
 // Mock dependencies
 vi.mock('../../api/newsletterSourceApi');
@@ -49,7 +49,7 @@ describe('NewsletterSourceService', () => {
       expect(mockNewsletterSourceApi.getById).toHaveBeenCalledWith('source-1');
     });
 
-    it.skip('should throw NotFoundError when source not found', async () => {
+    it('should throw NotFoundError when source not found', async () => {
       mockNewsletterSourceApi.getById.mockResolvedValue(null);
 
       await expect(service.getSource('nonexistent')).rejects.toThrow(NotFoundError);
@@ -63,7 +63,7 @@ describe('NewsletterSourceService', () => {
       await expect(service.getSource('   ')).rejects.toThrow(ValidationError);
     });
 
-    it.skip('should retry on failure and succeed on retry', async () => {
+    it('should retry on failure and succeed on retry', async () => {
       mockNewsletterSourceApi.getById
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce(mockNewsletterSource);
@@ -202,7 +202,7 @@ describe('NewsletterSourceService', () => {
       expect(result.error).toBe('Create failed');
     });
 
-    it.skip('should retry on transient failures', async () => {
+    it('should retry on transient failures', async () => {
       mockNewsletterSourceApi.create
         .mockRejectedValueOnce(new Error('Network timeout'))
         .mockResolvedValueOnce(mockNewsletterSource);
@@ -488,7 +488,7 @@ describe('NewsletterSourceService', () => {
   });
 
   describe('error handling and resilience', () => {
-    it.skip('should handle network timeouts with retry', async () => {
+    it('should handle network timeouts with retry', async () => {
       const timeoutError = new Error('Network timeout');
       timeoutError.name = 'TimeoutError';
 
@@ -503,7 +503,7 @@ describe('NewsletterSourceService', () => {
       expect(mockNewsletterSourceApi.getById).toHaveBeenCalledTimes(3);
     });
 
-    it.skip('should fail after max retries', async () => {
+    it('should fail after max retries', async () => {
       const error = new Error('Persistent error');
       mockNewsletterSourceApi.getById.mockRejectedValue(error);
 

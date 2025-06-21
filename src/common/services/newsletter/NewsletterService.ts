@@ -5,6 +5,7 @@ import { tagApi } from '@common/api/tagApi';
 import {
   NewsletterWithRelations,
   Tag,
+  TagWithCount,
   NewsletterQueryParams,
   NewsletterFilter,
   PaginatedResponse,
@@ -696,6 +697,63 @@ export class NewsletterService extends BaseService {
     });
 
     // Future: Add recommendation algorithm updates, preference learning, etc.
+  }
+
+  /**
+   * Get tag usage statistics for all tags
+   */
+  async getTagUsageStats(): Promise<TagWithCount[]> {
+    return this.executeWithLogging(async () => {
+      try {
+        // Get all tags
+        const tags = await this.withRetry(() => tagApi.getAll(), 'getAllTags');
+
+        // Get all newsletters with tags
+        const newsletters = await this.withRetry(
+          () =>
+            newsletterApi.getAll({
+              includeTags: true,
+              includeSource: false,
+              limit: 10000, // Get all newsletters for accurate count
+            }),
+          'getAllNewslettersForTagStats'
+        );
+
+        // Count tag usage (excluding archived newsletters)
+        const tagUsageMap = new Map<string, number>();
+
+        if (newsletters.data && Array.isArray(newsletters.data)) {
+          newsletters.data.forEach((newsletter: NewsletterWithRelations) => {
+            // Skip archived newsletters
+            if (newsletter.is_archived) return;
+
+            if (newsletter.tags && Array.isArray(newsletter.tags)) {
+              newsletter.tags.forEach((tag: Tag) => {
+                const currentCount = tagUsageMap.get(tag.id) || 0;
+                tagUsageMap.set(tag.id, currentCount + 1);
+              });
+            }
+          });
+        }
+
+        // Map tags to include usage count
+        return tags.map(
+          (tag: Tag): TagWithCount => ({
+            ...tag,
+            newsletter_count: tagUsageMap.get(tag.id) || 0,
+          })
+        );
+      } catch (error) {
+        logger.error('Failed to get tag usage stats', {
+          component: 'NewsletterService',
+          action: 'getTagUsageStats',
+          error,
+        });
+
+        // Return empty array on error
+        return [];
+      }
+    }, 'getTagUsageStats');
   }
 
   /**

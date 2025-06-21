@@ -60,6 +60,10 @@ export abstract class BaseService {
     maxDelay: 30000,
     backoffMultiplier: 2,
     retryCondition: (error: Error) => {
+      if (error instanceof NotFoundError || error instanceof ValidationError) {
+        return false;
+      }
+
       // Retry on network errors, timeout errors, or server errors (5xx)
       return !!(
         error instanceof NetworkError ||

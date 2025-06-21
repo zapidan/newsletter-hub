@@ -1,239 +1,45 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { toast } from "react-hot-toast";
-import {
-  Plus,
-  Tag as TagIcon,
-  X,
-  Edit2,
-  Trash2,
-  Check,
-  ArrowLeft,
-} from "lucide-react";
-import { handleTagClickWithNavigation } from "@common/utils/tagUtils";
-import { useTags } from "@common/hooks/useTags";
-import { useCache } from "@common/hooks/useCache";
-import type { Tag, TagCreate, TagWithCount, Newsletter } from "@common/types";
-import LoadingScreen from "@common/components/common/LoadingScreen";
-import { tagApi } from "@common/api/tagApi";
-import { newsletterApi } from "@common/api/newsletterApi";
+import { useNavigate } from 'react-router-dom';
+import { Plus, Tag as TagIcon, X, Edit2, Trash2, Check, ArrowLeft } from 'lucide-react';
+import { handleTagClickWithNavigation } from '@common/utils/tagUtils';
+import { useTagsPage } from '@common/hooks/ui/useTagsPage';
+import type { Tag } from '@common/types';
+import LoadingScreen from '@common/components/common/LoadingScreen';
 
 const TagsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { getTags, createTag, updateTag, deleteTag } = useTags();
-  const { batchInvalidate } = useCache();
-  const [tags, setTags] = useState<TagWithCount[]>([]);
-  const [tagNewsletters, setTagNewsletters] = useState<
-    Record<string, Newsletter[]>
-  >({});
-
-  // Fetch all tags with cache invalidation on mount
   const {
-    data: tagsData = [],
-    isLoading: loadingTags,
-    error: errorTags,
-    refetch: refetchTags,
-  } = useQuery({
-    queryKey: ["tags"],
-    queryFn: getTags,
-    staleTime: 5 * 60 * 1000,
+    // Data
+    tags,
+    tagNewsletters,
+
+    // Loading states
+    isLoading,
+    error,
+
+    // Form state
+    isCreating,
+    newTag,
+    editingTagId,
+    editTagData,
+
+    // Actions
+    setIsCreating,
+    setNewTag,
+    setEditingTagId,
+    setEditTagData,
+    handleCreateTag,
+    handleUpdateTag,
+    handleDeleteTag,
+  } = useTagsPage({
+    showToasts: true,
   });
 
-  // Invalidate and refetch all queries on component mount to ensure fresh data
-  useEffect(() => {
-    const refreshData = async () => {
-      await batchInvalidate([
-        { queryKey: ["tags"] },
-        { queryKey: ["newsletter_tags"] },
-        { queryKey: ["newsletters"] },
-      ]);
-      await refetchTags();
-    };
-
-    refreshData();
-  }, [batchInvalidate, refetchTags]);
-
-  // Fetch all tags with usage statistics
-  const {
-    data: tagsWithUsageData = [],
-    isLoading: loadingTagsUsage,
-    error: errorTagsUsage,
-  } = useQuery({
-    queryKey: ["tags_usage_stats"],
-    queryFn: async () => {
-      return await tagApi.getTagUsageStats();
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Fetch all newsletters with relations (for tag navigation/filtering)
-  const {
-    data: newslettersResponse,
-    isLoading: loadingNewsletters,
-    error: errorNewsletters,
-  } = useQuery({
-    queryKey: ["newsletters"],
-    queryFn: async () => {
-      return await newsletterApi.getAll({
-        includeSource: true,
-        includeTags: true,
-        limit: 1000, // Get a large number for the tags page
-      });
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const newslettersData = newslettersResponse?.data || [];
-
-  // Compute newsletters-by-tag mapping and use tags with usage stats
-  const { tagsWithCount, newslettersByTag } = useMemo(() => {
-    // Map tag_id to array of newsletters (excluding archived ones)
-    const newslettersMap: Record<string, Newsletter[]> = {};
-
-    if (Array.isArray(newslettersData)) {
-      // Build newsletters-by-tag mapping from the newsletters data, excluding archived newsletters
-      newslettersData.forEach((newsletter: Newsletter) => {
-        // Skip archived newsletters
-        if (newsletter.is_archived) {
-          return;
-        }
-
-        if (newsletter.tags && Array.isArray(newsletter.tags)) {
-          newsletter.tags.forEach((tag: Tag) => {
-            if (!newslettersMap[tag.id]) {
-              newslettersMap[tag.id] = [];
-            }
-            newslettersMap[tag.id].push(newsletter);
-          });
-        }
-      });
-    }
-
-    // Use the tags with usage stats from the API, or fall back to regular tags
-    const tagsWithCount =
-      Array.isArray(tagsWithUsageData) && tagsWithUsageData.length > 0
-        ? tagsWithUsageData
-        : (tagsData || []).map((tag: Tag) => ({
-            ...tag,
-            newsletter_count: newslettersMap[tag.id]?.length || 0,
-          }));
-
-    return { tagsWithCount, newslettersByTag: newslettersMap };
-  }, [tagsData, tagsWithUsageData, newslettersData]);
-
-  // Update tags and tagNewsletters only when they actually change
-  useEffect(() => {
-    if (JSON.stringify(tags) !== JSON.stringify(tagsWithCount)) {
-      setTags(tagsWithCount);
-    }
-    if (JSON.stringify(tagNewsletters) !== JSON.stringify(newslettersByTag)) {
-      setTagNewsletters(newslettersByTag);
-    }
-  }, [tagsWithCount, newslettersByTag, tags, tagNewsletters]);
-
-  // Loading and error states
-  const loading = loadingTags || loadingTagsUsage || loadingNewsletters;
-  const error = errorTags || errorTagsUsage || errorNewsletters;
-
-  const [isCreating, setIsCreating] = useState(false);
-  const [newTag, setNewTag] = useState<Omit<TagCreate, "user_id">>({
-    name: "",
-    color: "#3b82f6",
-  });
-  const [editingTagId, setEditingTagId] = useState<string | null>(null);
-  const [editTagData, setEditTagData] = useState<Partial<Tag>>({});
-
-  const handleCreateTag = async () => {
-    if (!newTag.name.trim()) return;
-
-    try {
-      await createTag({
-        ...newTag,
-        name: newTag.name.trim(),
-      });
-      setNewTag({ name: "", color: "#3b82f6" });
-      setIsCreating(false);
-
-      // Invalidate all relevant queries to ensure UI consistency
-      await batchInvalidate([
-        { queryKey: ["tags"] },
-        { queryKey: ["newsletter_tags"] },
-        { queryKey: ["newsletters"] },
-        { queryKey: ["inbox"] },
-        { queryKey: ["readingQueue"] },
-      ]);
-
-      toast.success("Tag created successfully");
-    } catch (err) {
-      console.error("Error creating tag:", err);
-      toast.error("Failed to create tag");
-    }
-  };
-
-  const handleUpdateTag = async () => {
-    if (!editingTagId || !editTagData.name?.trim()) {
-      setEditingTagId(null);
-      return;
-    }
-
-    try {
-      await updateTag({
-        id: editingTagId,
-        ...editTagData,
-        name: editTagData.name.trim(),
-      });
-      setEditingTagId(null);
-      setEditTagData({});
-
-      // Invalidate all relevant queries to ensure UI consistency
-      await batchInvalidate([
-        { queryKey: ["tags"] },
-        { queryKey: ["newsletter_tags"] },
-        { queryKey: ["newsletters"] },
-        { queryKey: ["inbox"] },
-        { queryKey: ["readingQueue"] },
-      ]);
-
-      toast.success("Tag updated successfully");
-    } catch (err) {
-      console.error("Error updating tag:", err);
-      toast.error("Failed to update tag");
-    }
-  };
-
-  const handleDeleteTag = async (tagId: string) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this tag? This will remove it from all newsletters.",
-      )
-    ) {
-      try {
-        await deleteTag(tagId);
-
-        // Invalidate all relevant queries to ensure UI consistency
-        await batchInvalidate([
-          { queryKey: ["tags"] },
-          { queryKey: ["newsletter_tags"] },
-          { queryKey: ["newsletters"] },
-          { queryKey: ["inbox"] },
-          { queryKey: ["readingQueue"] },
-        ]);
-
-        toast.success("Tag deleted successfully");
-      } catch (err) {
-        console.error("Error deleting tag:", err);
-        toast.error("Failed to delete tag");
-      }
-    }
-  };
-
-  if (loading) return <LoadingScreen />;
+  if (isLoading) return <LoadingScreen />;
   if (error)
     return (
       <div>
-        Error loading tags:{" "}
-        {typeof error === "object" && error !== null && "message" in error
+        Error loading tags:{' '}
+        {typeof error === 'object' && error !== null && 'message' in error
           ? (error as Error).message
           : String(error)}
       </div>
@@ -247,7 +53,7 @@ const TagsPage: React.FC = () => {
           <p className="text-neutral-500">Manage your newsletter tags</p>
         </div>
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate('/')}
           className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -274,9 +80,7 @@ const TagsPage: React.FC = () => {
               <input
                 type="color"
                 value={newTag.color}
-                onChange={(e) =>
-                  setNewTag({ ...newTag, color: e.target.value })
-                }
+                onChange={(e) => setNewTag({ ...newTag, color: e.target.value })}
                 className="w-10 h-10 p-1 border border-neutral-300 rounded-md cursor-pointer"
               />
               <button
@@ -327,12 +131,7 @@ const TagsPage: React.FC = () => {
                       className="flex items-center gap-2 w-full"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleTagClickWithNavigation(
-                          tag,
-                          navigate,
-                          "/inbox",
-                          e,
-                        );
+                        handleTagClickWithNavigation(tag, navigate, '/inbox', e);
                       }}
                     >
                       <div className="flex-1 flex items-center gap-2">
@@ -404,27 +203,23 @@ const TagsPage: React.FC = () => {
                           className="font-medium cursor-pointer text-primary-700 hover:underline"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleTagClickWithNavigation(
-                              tag,
-                              navigate,
-                              "/inbox",
-                              e,
-                            );
+                            handleTagClickWithNavigation(tag, navigate, '/inbox', e);
                           }}
                         >
                           {tag.name}
                         </span>
                         <span className="text-sm text-neutral-500">
-                          Used in {(tagNewsletters[tag.id] || []).length}{" "}
+                          Used in {(tagNewsletters[tag.id] || []).length}{' '}
                           {(tagNewsletters[tag.id] || []).length === 1
-                            ? "newsletter"
-                            : "newsletters"}
+                            ? 'newsletter'
+                            : 'newsletters'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => {
                             setEditingTagId(tag.id);
+                            setEditTagData({ name: tag.name, color: tag.color });
                           }}
                           className="p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-md"
                           title="Edit tag"

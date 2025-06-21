@@ -1,13 +1,13 @@
-import { BaseService } from '../base/BaseService';
+import { NotFoundError, ValidationError } from '../../api/errorHandling';
 import { newsletterSourceApi } from '../../api/newsletterSourceApi';
 import { NewsletterSource } from '../../types';
 import {
-  NewsletterSourceQueryParams,
   CreateNewsletterSourceParams,
-  UpdateNewsletterSourceParams,
+  NewsletterSourceQueryParams,
   PaginatedResponse,
+  UpdateNewsletterSourceParams,
 } from '../../types/api';
-import { NotFoundError, ValidationError } from '../../api/errorHandling';
+import { BaseService } from '../base/BaseService';
 
 interface NewsletterSourceOperationResult {
   success: boolean;
@@ -48,18 +48,33 @@ export class NewsletterSourceService extends BaseService {
   /**
    * Get a single newsletter source by ID
    */
-  async getSource(id: string): Promise<NewsletterSource | null> {
+  async getSource(id: string): Promise<NewsletterSource> {
     if (!id || typeof id !== 'string' || id.trim() === '') {
       throw new ValidationError('Source ID is required');
     }
 
-    return this.withRetry(async () => {
-      const source = await newsletterSourceApi.getById(id);
+    try {
+      const source = await this.withRetry(
+        () => newsletterSourceApi.getById(id),
+        'getSource',
+        {
+          // Don't retry on NotFoundError
+          retryCondition: (error) => !(error instanceof NotFoundError)
+        }
+      );
+
       if (!source) {
         throw new NotFoundError(`Newsletter source with ID ${id} not found`);
       }
+
       return source;
-    }, 'getSource');
+    } catch (error) {
+      // Re-throw the error to preserve its type
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -84,7 +99,16 @@ export class NewsletterSourceService extends BaseService {
     this.validateCreateParams(params);
 
     try {
-      const source = await this.withRetry(() => newsletterSourceApi.create(params), 'createSource');
+      const source = await this.withRetry(
+        () => newsletterSourceApi.create(params),
+        'createSource',
+        {
+          // Retry on network errors and timeouts
+          retryCondition: (error) => {
+            return !(error instanceof ValidationError);
+          }
+        }
+      );
 
       return {
         success: true,

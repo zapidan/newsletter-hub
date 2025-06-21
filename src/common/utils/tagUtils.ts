@@ -1,8 +1,8 @@
-import { tagApi } from "@common/api/tagApi";
-import { Tag } from "@common/types";
+import { tagService } from '@common/services';
+import { Tag } from '@common/types';
 
 /**
- * Updates tags for a newsletter
+ * Updates tags for a newsletter using TagService
  * @param newsletterId - The ID of the newsletter to update
  * @param tagIds - Array of tag IDs to set for the newsletter
  * @param currentTagIds - Current tag IDs for the newsletter
@@ -13,57 +13,62 @@ export const updateNewsletterTags = async (
   newsletterId: string,
   tagIds: string[],
   currentTagIds: string[],
-  userId: string,
+  userId: string
 ) => {
   // Validate inputs
   if (!newsletterId) {
-    throw new Error("Newsletter ID is required");
+    throw new Error('Newsletter ID is required');
   }
   if (!userId) {
-    throw new Error("User ID is required");
+    throw new Error('User ID is required');
   }
   if (!Array.isArray(tagIds)) {
-    throw new Error("tagIds must be an array");
+    throw new Error('tagIds must be an array');
   }
   if (!Array.isArray(currentTagIds)) {
-    throw new Error("currentTagIds must be an array");
+    throw new Error('currentTagIds must be an array');
   }
 
-  // Create tag objects from IDs for the API call
-  const tags: Tag[] = [];
+  // Process tag IDs or names through the service
+  const processedTagIds: string[] = [];
 
   for (const tagIdOrName of tagIds) {
     // Check if it's a UUID (existing tag)
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        tagIdOrName,
+        tagIdOrName
       );
 
     if (isUuid) {
-      // It's a UUID, get the tag
-      const existingTag = await tagApi.getById(tagIdOrName);
+      // It's a UUID, verify it exists
+      const existingTag = await tagService.getTag(tagIdOrName);
       if (existingTag) {
-        tags.push(existingTag);
+        processedTagIds.push(tagIdOrName);
       }
     } else {
-      // It's a tag name, get or create
-      const tag = await tagApi.getOrCreate(tagIdOrName.trim());
-      tags.push(tag);
+      // It's a tag name, get or create through service
+      const result = await tagService.getOrCreateTag(tagIdOrName.trim());
+      if (result.success && result.tag) {
+        processedTagIds.push(result.tag.id);
+      }
     }
   }
 
-  // Use the API to update newsletter tags
-  await tagApi.updateNewsletterTags(newsletterId, tags);
+  // Update newsletter tags using the service
+  const updateResult = await tagService.updateNewsletterTagsWithIds(newsletterId, processedTagIds);
+
+  if (!updateResult.success) {
+    throw new Error(updateResult.error || 'Failed to update newsletter tags');
+  }
 
   // Get updated tags for the newsletter
-  const updatedTags = await tagApi.getTagsForNewsletter(newsletterId);
+  const updatedTags = await tagService.getTagsForNewsletter(newsletterId);
 
   return {
     newsletterId,
     tagIds: updatedTags.map((tag) => tag.id),
-    added: tags.filter((tag) => !currentTagIds.includes(tag.id)).length,
-    removed: currentTagIds.filter((id) => !tags.some((tag) => tag.id === id))
-      .length,
+    added: processedTagIds.filter((id) => !currentTagIds.includes(id)).length,
+    removed: currentTagIds.filter((id) => !processedTagIds.includes(id)).length,
     tags: updatedTags,
   };
 };
@@ -76,9 +81,9 @@ export const updateNewsletterTags = async (
  */
 export const toggleTagFilter = <T extends { id: string }>(
   tag: string | T,
-  currentTagIds: string[] | null,
+  currentTagIds: string[] | null
 ): string[] => {
-  const tagId = typeof tag === "string" ? tag : tag.id;
+  const tagId = typeof tag === 'string' ? tag : tag.id;
 
   const currentTags = currentTagIds || [];
   const updatedTagIds = currentTags.includes(tagId)
@@ -99,7 +104,7 @@ export const handleTagClick = <T extends { id: string }>(
   tag: string | T,
   currentTagIds: string[] | null,
   setTagIds: (ids: string[]) => void,
-  event?: React.MouseEvent,
+  event?: React.MouseEvent
 ): void => {
   event?.stopPropagation();
   const newTagIds = toggleTagFilter(tag, currentTagIds);
@@ -116,19 +121,22 @@ export const handleTagClick = <T extends { id: string }>(
 export const handleTagClickWithNavigation = <T extends { id: string }>(
   tag: string | T,
   navigate: (to: string) => void,
-  basePath: string = "/inbox",
-  event?: React.MouseEvent,
+  basePath: string = '/inbox',
+  event?: React.MouseEvent
 ): void => {
   event?.stopPropagation();
-  const tagId = typeof tag === "string" ? tag : tag.id;
+  const tagId = typeof tag === 'string' ? tag : tag.id;
   navigate(`${basePath}?tags=${tagId}`);
 };
 
-export const getOptimisticTags = (
-  tagIds: string[],
-  userId: string,
-  allTags: Tag[],
-) => {
+/**
+ * Gets optimistic tags for immediate UI updates
+ * @param tagIds - Array of tag IDs
+ * @param userId - The ID of the current user
+ * @param allTags - Array of all available tags for fallback
+ * @returns Array of Tag objects with optimistic data
+ */
+export const getOptimisticTags = (tagIds: string[], userId: string, allTags: Tag[]): Tag[] => {
   return tagIds.map((tagId) => {
     const existingTag = allTags.find((t) => t.id === tagId);
     if (existingTag) return existingTag;
@@ -136,8 +144,8 @@ export const getOptimisticTags = (
     // Fallback with minimal tag data if not found in allTags
     return {
       id: tagId,
-      name: "",
-      color: "#808080", // Default gray color
+      name: '',
+      color: '#808080', // Default gray color
       user_id: userId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
