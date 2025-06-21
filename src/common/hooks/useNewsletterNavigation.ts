@@ -1,8 +1,10 @@
-import { useCallback, useMemo } from "react";
-import { useInfiniteNewsletters } from "./infiniteScroll";
-import { useInboxFilters } from "./useInboxFilters";
-import { useLogger } from "@common/utils/logger/useLogger";
-import type { NewsletterWithRelations, NewsletterFilter } from "../types";
+import { useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useInfiniteNewsletters } from './infiniteScroll';
+import { useInboxFilters } from './useInboxFilters';
+import { useReadingQueue } from './useReadingQueue';
+import { useLogger } from '@common/utils/logger/useLogger';
+import type { NewsletterWithRelations, NewsletterFilter } from '../types';
 
 export interface NewsletterNavigationState {
   currentNewsletter: NewsletterWithRelations | null;
@@ -25,6 +27,12 @@ export interface UseNewsletterNavigationOptions {
   enabled?: boolean;
   preloadAdjacent?: boolean;
   debug?: boolean;
+  /** Override context detection and use specific filter */
+  overrideFilter?: NewsletterFilter;
+  /** Force use of reading queue context */
+  forceReadingQueue?: boolean;
+  /** Force use of specific source filter */
+  forceSourceFilter?: string;
 }
 
 export interface UseNewsletterNavigationReturn
@@ -33,43 +41,124 @@ export interface UseNewsletterNavigationReturn
 
 /**
  * Custom hook for newsletter navigation functionality
- * Provides next/previous navigation within the inbox context
- * Respects current inbox filters and maintains navigation state
+ * Provides next/previous navigation within the current context
+ * Respects current view (inbox, reading queue, source) filters and maintains navigation state
  */
 export const useNewsletterNavigation = (
   currentNewsletterId: string | null,
-  options: UseNewsletterNavigationOptions = {},
+  options: UseNewsletterNavigationOptions = {}
 ): UseNewsletterNavigationReturn => {
-  const log = useLogger("useNewsletterNavigation");
-  const { enabled = true, preloadAdjacent = true, debug = false } = options;
-
-  // Get current inbox filters to respect user's filtering context
-  const { newsletterFilter } = useInboxFilters();
-
-  // Build the same filter that would be used in the inbox
-  const inboxFilters: NewsletterFilter = useMemo(
-    () => ({
-      ...newsletterFilter,
-      // Ensure we're fetching in the same order as the inbox
-      orderBy: "received_at",
-      ascending: false, // Most recent first
-    }),
-    [newsletterFilter],
-  );
-
-  // Fetch newsletters using the same filters as the inbox
+  const log = useLogger('useNewsletterNavigation');
+  const location = useLocation();
   const {
-    newsletters,
+    enabled = true,
+    preloadAdjacent = true,
+    debug = false,
+    overrideFilter,
+    forceReadingQueue = false,
+    forceSourceFilter,
+  } = options;
+
+  // Get current inbox filters and reading queue
+  const { newsletterFilter } = useInboxFilters();
+  const { readingQueue = [] } = useReadingQueue() || {};
+
+  // Determine the context and build appropriate filter
+  const contextualFilter: NewsletterFilter = useMemo(() => {
+    // Use override filter if provided
+    if (overrideFilter) {
+      return {
+        ...overrideFilter,
+        orderBy: 'received_at',
+        ascending: false,
+      };
+    }
+
+    // Detect context from URL and options
+    const isReadingQueueContext =
+      forceReadingQueue ||
+      location.pathname.includes('/reading-queue') ||
+      location.pathname.includes('/queue');
+
+    const isNewsletterSourceContext =
+      forceSourceFilter ||
+      location.pathname.includes('/sources/') ||
+      location.search.includes('source=');
+
+    if (isReadingQueueContext) {
+      // For reading queue, we don't use the regular filter system
+      // Instead we'll use the reading queue data directly
+      return {
+        is_read: undefined,
+        search: 'reading_queue',
+        order_by: 'received_at',
+        ascending: false,
+      } as NewsletterFilter;
+    }
+
+    if (isNewsletterSourceContext) {
+      // Extract source from URL or use forced source
+      const sourceId =
+        forceSourceFilter ||
+        new URLSearchParams(location.search).get('source') ||
+        location.pathname.split('/sources/')[1]?.split('/')[0];
+
+      if (sourceId) {
+        return {
+          ...newsletterFilter,
+          source_id: sourceId,
+          order_by: 'received_at',
+          ascending: false,
+        };
+      }
+    }
+
+    // Default to current inbox filters
+    return {
+      ...newsletterFilter,
+      order_by: 'received_at',
+      ascending: false,
+    };
+  }, [
+    overrideFilter,
+    forceReadingQueue,
+    forceSourceFilter,
+    location.pathname,
+    location.search,
+    newsletterFilter,
+  ]);
+
+  // Handle reading queue context separately
+  const isUsingReadingQueue = contextualFilter.search === 'reading_queue';
+
+  // For reading queue, use the queue data directly
+  const readingQueueNewsletters = useMemo(() => {
+    if (!isUsingReadingQueue) return [];
+    return readingQueue.map((item) => item.newsletter).filter(Boolean);
+  }, [isUsingReadingQueue, readingQueue]);
+
+  // Fetch newsletters using contextual filters (skip if using reading queue)
+  const {
+    newsletters: fetchedNewsletters,
     isLoading,
     totalCount,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useInfiniteNewsletters(inboxFilters, {
-    enabled: enabled && !!currentNewsletterId,
+  } = useInfiniteNewsletters(contextualFilter, {
+    enabled: enabled && !!currentNewsletterId && !isUsingReadingQueue,
     pageSize: 50, // Larger page size for better navigation experience
     debug,
   });
+
+  // Use appropriate newsletter list based on context
+  const newsletters = useMemo(() => {
+    return isUsingReadingQueue ? readingQueueNewsletters : fetchedNewsletters;
+  }, [isUsingReadingQueue, readingQueueNewsletters, fetchedNewsletters]);
+
+  const contextTotalCount = useMemo(() => {
+    return isUsingReadingQueue ? readingQueue.length : totalCount;
+  }, [isUsingReadingQueue, readingQueue.length, totalCount]);
 
   // Find current newsletter and its position
   const navigationState = useMemo(() => {
@@ -82,14 +171,12 @@ export const useNewsletterNavigation = (
       };
     }
 
-    const currentIndex = newsletters.findIndex(
-      (n) => n.id === currentNewsletterId,
-    );
+    const currentIndex = newsletters.findIndex((n) => n.id === currentNewsletterId);
 
     if (currentIndex === -1) {
       if (debug) {
-        log.debug("Current newsletter not found in list", {
-          action: "find_current_newsletter",
+        log.debug('Current newsletter not found in list', {
+          action: 'find_current_newsletter',
           metadata: {
             currentNewsletterId,
             newslettersCount: newsletters.length,
@@ -107,16 +194,13 @@ export const useNewsletterNavigation = (
     }
 
     const currentNewsletter = newsletters[currentIndex];
-    const previousNewsletter =
-      currentIndex > 0 ? newsletters[currentIndex - 1] : null;
+    const previousNewsletter = currentIndex > 0 ? newsletters[currentIndex - 1] : null;
     const nextNewsletter =
-      currentIndex < newsletters.length - 1
-        ? newsletters[currentIndex + 1]
-        : null;
+      currentIndex < newsletters.length - 1 ? newsletters[currentIndex + 1] : null;
 
     if (debug) {
-      log.debug("Navigation state calculated", {
-        action: "calculate_navigation_state",
+      log.debug('Navigation state calculated', {
+        action: 'calculate_navigation_state',
         metadata: {
           currentIndex,
           totalNewsletters: newsletters.length,
@@ -124,6 +208,8 @@ export const useNewsletterNavigation = (
           hasNext: !!nextNewsletter,
           previousId: previousNewsletter?.id,
           nextId: nextNewsletter?.id,
+          context: isUsingReadingQueue ? 'reading_queue' : 'filtered_inbox',
+          contextFilter: contextualFilter,
         },
       });
     }
@@ -136,27 +222,29 @@ export const useNewsletterNavigation = (
     };
   }, [currentNewsletterId, newsletters, debug, log]);
 
-  // Check if we need to fetch more pages for navigation
+  // Check if we need to fetch more pages for navigation (only for non-reading-queue contexts)
   const needsMoreData = useMemo(() => {
-    const { currentIndex } = navigationState;
+    if (isUsingReadingQueue) return false; // Reading queue is already fully loaded
 
+    const { currentIndex } = navigationState;
     if (currentIndex === -1) return false;
 
     // If we're near the end and there are more pages, we should fetch
     const isNearEnd = currentIndex >= newsletters.length - 5;
     return isNearEnd && hasNextPage && !isFetchingNextPage;
-  }, [navigationState, newsletters.length, hasNextPage, isFetchingNextPage]);
+  }, [isUsingReadingQueue, navigationState, newsletters.length, hasNextPage, isFetchingNextPage]);
 
-  // Auto-fetch more data when needed
+  // Auto-fetch more data when needed (only for non-reading-queue contexts)
   const preloadAdjacentNewsletters = useCallback(() => {
-    if (needsMoreData && preloadAdjacent) {
+    if (needsMoreData && preloadAdjacent && !isUsingReadingQueue) {
       if (debug) {
-        log.debug("Preloading adjacent newsletters", {
-          action: "preload_adjacent",
+        log.debug('Preloading adjacent newsletters', {
+          action: 'preload_adjacent',
           metadata: {
             currentIndex: navigationState.currentIndex,
             totalLoaded: newsletters.length,
             hasNextPage,
+            context: 'filtered_inbox',
           },
         });
       }
@@ -165,6 +253,7 @@ export const useNewsletterNavigation = (
   }, [
     needsMoreData,
     preloadAdjacent,
+    isUsingReadingQueue,
     fetchNextPage,
     debug,
     log,
@@ -179,8 +268,8 @@ export const useNewsletterNavigation = (
 
     if (!previousNewsletter) {
       if (debug) {
-        log.debug("No previous newsletter available", {
-          action: "navigate_previous",
+        log.debug('No previous newsletter available', {
+          action: 'navigate_previous',
           metadata: { currentIndex: navigationState.currentIndex },
         });
       }
@@ -188,8 +277,8 @@ export const useNewsletterNavigation = (
     }
 
     if (debug) {
-      log.debug("Navigating to previous newsletter", {
-        action: "navigate_previous",
+      log.debug('Navigating to previous newsletter', {
+        action: 'navigate_previous',
         metadata: {
           fromId: currentNewsletterId,
           toId: previousNewsletter.id,
@@ -204,12 +293,40 @@ export const useNewsletterNavigation = (
   const navigateToNext = useCallback((): string | null => {
     const { nextNewsletter, currentIndex } = navigationState;
 
-    // If no next newsletter is immediately available but we have more pages,
-    // try to fetch next page first
+    // For reading queue, no need to fetch more pages
+    if (isUsingReadingQueue) {
+      if (!nextNewsletter) {
+        if (debug) {
+          log.debug('No next newsletter available in reading queue', {
+            action: 'navigate_next',
+            metadata: {
+              currentIndex: navigationState.currentIndex,
+              totalInQueue: readingQueue.length,
+            },
+          });
+        }
+        return null;
+      }
+
+      if (debug) {
+        log.debug('Navigating to next newsletter in reading queue', {
+          action: 'navigate_next',
+          metadata: {
+            fromId: currentNewsletterId,
+            toId: nextNewsletter.id,
+            currentIndex: navigationState.currentIndex,
+          },
+        });
+      }
+
+      return nextNewsletter.id;
+    }
+
+    // For filtered inbox, try to fetch more if needed
     if (!nextNewsletter && hasNextPage && !isFetchingNextPage) {
       if (debug) {
-        log.debug("Fetching next page for navigation", {
-          action: "navigate_next_fetch",
+        log.debug('Fetching next page for navigation', {
+          action: 'navigate_next_fetch',
           metadata: { currentIndex, totalLoaded: newsletters.length },
         });
       }
@@ -219,8 +336,8 @@ export const useNewsletterNavigation = (
 
     if (!nextNewsletter) {
       if (debug) {
-        log.debug("No next newsletter available", {
-          action: "navigate_next",
+        log.debug('No next newsletter available', {
+          action: 'navigate_next',
           metadata: {
             currentIndex: navigationState.currentIndex,
             hasNextPage,
@@ -232,8 +349,8 @@ export const useNewsletterNavigation = (
     }
 
     if (debug) {
-      log.debug("Navigating to next newsletter", {
-        action: "navigate_next",
+      log.debug('Navigating to next newsletter', {
+        action: 'navigate_next',
         metadata: {
           fromId: currentNewsletterId,
           toId: nextNewsletter.id,
@@ -246,6 +363,8 @@ export const useNewsletterNavigation = (
   }, [
     navigationState,
     currentNewsletterId,
+    isUsingReadingQueue,
+    readingQueue.length,
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
@@ -260,9 +379,14 @@ export const useNewsletterNavigation = (
     const { currentIndex } = navigationState;
     if (currentIndex === -1) return false;
 
-    // Has next if there's a next newsletter in current data OR more pages to fetch
+    // For reading queue, only check current data
+    if (isUsingReadingQueue) {
+      return currentIndex < newsletters.length - 1;
+    }
+
+    // For filtered inbox, has next if there's a next newsletter in current data OR more pages to fetch
     return currentIndex < newsletters.length - 1 || hasNextPage;
-  }, [navigationState, newsletters.length, hasNextPage]);
+  }, [navigationState, newsletters.length, hasNextPage, isUsingReadingQueue]);
 
   // Auto-preload when position changes
   if (enabled && preloadAdjacent) {
@@ -275,10 +399,10 @@ export const useNewsletterNavigation = (
     previousNewsletter: navigationState.previousNewsletter,
     nextNewsletter: navigationState.nextNewsletter,
     currentIndex: navigationState.currentIndex,
-    totalCount,
+    totalCount: contextTotalCount,
     hasPrevious,
     hasNext,
-    isLoading: isLoading || isFetchingNextPage,
+    isLoading: isUsingReadingQueue ? false : isLoading || isFetchingNextPage,
 
     // Actions
     navigateToPrevious,
@@ -293,7 +417,7 @@ export const useNewsletterNavigation = (
  */
 export const useNewsletterNavigationState = (
   currentNewsletterId: string | null,
-  options: UseNewsletterNavigationOptions = {},
+  options: UseNewsletterNavigationOptions = {}
 ): NewsletterNavigationState => {
   const navigation = useNewsletterNavigation(currentNewsletterId, options);
 
@@ -315,7 +439,7 @@ export const useNewsletterNavigationState = (
  */
 export const useNewsletterNavigationActions = (
   currentNewsletterId: string | null,
-  options: UseNewsletterNavigationOptions = {},
+  options: UseNewsletterNavigationOptions = {}
 ): NewsletterNavigationActions => {
   const navigation = useNewsletterNavigation(currentNewsletterId, options);
 

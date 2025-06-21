@@ -295,7 +295,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       );
       toast.error('Failed to delete newsletter');
     }
-  }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue]);
+  }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue, log, newsletter.id]);
 
   return (
     <div className="flex items-center gap-2">

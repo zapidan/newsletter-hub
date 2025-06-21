@@ -1,15 +1,17 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useNewsletterNavigation } from "@common/hooks/useNewsletterNavigation";
-import { useSharedNewsletterActions } from "@common/hooks/useSharedNewsletterActions";
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 
 // Mock the dependencies
-vi.mock("@common/hooks/infiniteScroll", () => ({
+vi.mock('@common/hooks/infiniteScroll', () => ({
   useInfiniteNewsletters: vi.fn(() => ({
     newsletters: [
-      { id: "1", title: "Newsletter 1", is_read: false, is_archived: false },
-      { id: "2", title: "Newsletter 2", is_read: false, is_archived: false },
-      { id: "3", title: "Newsletter 3", is_read: false, is_archived: false },
+      { id: '1', title: 'Newsletter 1', is_read: false, is_archived: false },
+      { id: '2', title: 'Newsletter 2', is_read: false, is_archived: false },
+      { id: '3', title: 'Newsletter 3', is_read: false, is_archived: false },
     ],
     isLoading: false,
     totalCount: 3,
@@ -19,13 +21,13 @@ vi.mock("@common/hooks/infiniteScroll", () => ({
   })),
 }));
 
-vi.mock("@common/hooks/useInboxFilters", () => ({
+vi.mock('@common/hooks/useInboxFilters', () => ({
   useInboxFilters: vi.fn(() => ({
     newsletterFilter: {},
   })),
 }));
 
-vi.mock("@common/utils/logger", () => {
+vi.mock('@common/utils/logger', () => {
   const mockFn = vi.fn();
   const loggerMock = {
     debug: mockFn,
@@ -74,31 +76,36 @@ vi.mock("@common/utils/logger", () => {
       clearContext: mockFn,
     }),
     LogLevel: {
-      DEBUG: "DEBUG",
-      INFO: "INFO",
-      WARN: "WARN",
-      ERROR: "ERROR",
+      DEBUG: 'DEBUG',
+      INFO: 'INFO',
+      WARN: 'WARN',
+      ERROR: 'ERROR',
     },
     ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-    withErrorBoundary: <P extends object>(
-      component: React.ComponentType<P>
-    ) => component,
+    withErrorBoundary: <P extends object>(component: React.ComponentType<P>) => component,
     default: loggerMock,
   };
 });
 
-vi.mock("@common/hooks/useSharedNewsletterActions", () => ({
+vi.mock('@common/hooks/useSharedNewsletterActions', () => ({
   useSharedNewsletterActions: vi.fn(),
 }));
 
-vi.mock("react-router-dom", () => ({
+vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => vi.fn()),
+  useLocation: vi.fn(() => ({
+    pathname: '/newsletters/1',
+    search: '',
+    hash: '',
+    state: null,
+    key: 'default',
+  })),
 }));
 
-vi.mock("@common/contexts/AuthContext", () => ({
+vi.mock('@common/contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    user: { id: "test-user-id" },
-    session: { access_token: "test-token" },
+    user: { id: 'test-user-id' },
+    session: { access_token: 'test-token' },
     isLoading: false,
     isAuthenticated: true,
   })),
@@ -107,41 +114,51 @@ vi.mock("@common/contexts/AuthContext", () => ({
   },
 }));
 
-describe("Newsletter Navigation Fixes Smoke Tests", () => {
+describe('Newsletter Navigation Fixes Smoke Tests', () => {
   const mockHandleMarkAsRead = vi.fn();
   const mockHandleToggleArchive = vi.fn();
+  let queryClient: QueryClient;
 
   beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
     vi.clearAllMocks();
 
     // Setup mock for useSharedNewsletterActions
     vi.mocked(useSharedNewsletterActions).mockReturnValue({
       handleMarkAsRead: mockHandleMarkAsRead,
       handleToggleArchive: mockHandleToggleArchive,
-    });
+    } as any);
   });
 
-  test("should be able to import navigation hook", () => {
+  const wrapper = ({ children }: { children: React.ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
+
+  test('should be able to import navigation hook', () => {
     expect(useNewsletterNavigation).toBeDefined();
-    expect(typeof useNewsletterNavigation).toBe("function");
+    expect(typeof useNewsletterNavigation).toBe('function');
   });
 
-  test("should provide navigation state correctly", () => {
-    const { result } = renderHook(() =>
-      useNewsletterNavigation("2", { enabled: true }),
-    );
+  test('should provide navigation state correctly', () => {
+    const { result } = renderHook(() => useNewsletterNavigation('2', { enabled: true }), {
+      wrapper,
+    });
 
-    expect(result.current).toHaveProperty("currentNewsletter");
-    expect(result.current).toHaveProperty("hasPrevious");
-    expect(result.current).toHaveProperty("hasNext");
-    expect(result.current).toHaveProperty("navigateToPrevious");
-    expect(result.current).toHaveProperty("navigateToNext");
+    expect(result.current).toHaveProperty('currentNewsletter');
+    expect(result.current).toHaveProperty('hasPrevious');
+    expect(result.current).toHaveProperty('hasNext');
+    expect(result.current).toHaveProperty('navigateToPrevious');
+    expect(result.current).toHaveProperty('navigateToNext');
   });
 
-  test("should identify navigation availability correctly", () => {
-    const { result } = renderHook(() =>
-      useNewsletterNavigation("2", { enabled: true }),
-    );
+  test('should identify navigation availability correctly', () => {
+    const { result } = renderHook(() => useNewsletterNavigation('2', { enabled: true }), {
+      wrapper,
+    });
 
     // Newsletter "2" is in the middle, so should have both previous and next
     expect(result.current.hasPrevious).toBe(true);
@@ -149,10 +166,13 @@ describe("Newsletter Navigation Fixes Smoke Tests", () => {
     expect(result.current.currentIndex).toBe(1); // 0-based index
   });
 
-  test("should handle edge cases for first and last newsletters", () => {
+  test('should handle edge cases for first and last newsletters', () => {
     // Test first newsletter
-    const { result: firstResult } = renderHook(() =>
-      useNewsletterNavigation("1", { enabled: true }),
+    const { result: firstResult } = renderHook(
+      () => useNewsletterNavigation('1', { enabled: true }),
+      {
+        wrapper,
+      }
     );
 
     expect(firstResult.current.hasPrevious).toBe(false);
@@ -160,8 +180,11 @@ describe("Newsletter Navigation Fixes Smoke Tests", () => {
     expect(firstResult.current.currentIndex).toBe(0);
 
     // Test last newsletter
-    const { result: lastResult } = renderHook(() =>
-      useNewsletterNavigation("3", { enabled: true }),
+    const { result: lastResult } = renderHook(
+      () => useNewsletterNavigation('3', { enabled: true }),
+      {
+        wrapper,
+      }
     );
 
     expect(lastResult.current.hasPrevious).toBe(true);
@@ -169,37 +192,37 @@ describe("Newsletter Navigation Fixes Smoke Tests", () => {
     expect(lastResult.current.currentIndex).toBe(2);
   });
 
-  test("should return correct newsletter IDs for navigation", () => {
-    const { result } = renderHook(() =>
-      useNewsletterNavigation("2", { enabled: true }),
-    );
+  test('should return correct newsletter IDs for navigation', () => {
+    const { result } = renderHook(() => useNewsletterNavigation('2', { enabled: true }), {
+      wrapper,
+    });
 
     act(() => {
       const previousId = result.current.navigateToPrevious();
-      expect(previousId).toBe("1");
+      expect(previousId).toBe('1');
     });
 
     act(() => {
       const nextId = result.current.navigateToNext();
-      expect(nextId).toBe("3");
+      expect(nextId).toBe('3');
     });
   });
 
-  test("should handle disabled state", () => {
-    const { result } = renderHook(() =>
-      useNewsletterNavigation("2", { enabled: false }),
-    );
+  test('should handle disabled state', () => {
+    const { result } = renderHook(() => useNewsletterNavigation('2', { enabled: false }), {
+      wrapper,
+    });
 
     // When disabled, should still provide state but actions might be limited
     expect(result.current.currentNewsletter).toBeDefined();
-    expect(typeof result.current.navigateToPrevious).toBe("function");
-    expect(typeof result.current.navigateToNext).toBe("function");
+    expect(typeof result.current.navigateToPrevious).toBe('function');
+    expect(typeof result.current.navigateToNext).toBe('function');
   });
 
-  test("should handle missing newsletter ID gracefully", () => {
-    const { result } = renderHook(() =>
-      useNewsletterNavigation(null, { enabled: true }),
-    );
+  test('should handle missing newsletter ID gracefully', () => {
+    const { result } = renderHook(() => useNewsletterNavigation(null, { enabled: true }), {
+      wrapper,
+    });
 
     expect(result.current.currentNewsletter).toBeNull();
     expect(result.current.currentIndex).toBe(-1);
@@ -207,21 +230,21 @@ describe("Newsletter Navigation Fixes Smoke Tests", () => {
     expect(result.current.hasNext).toBe(false);
   });
 
-  test("should verify navigation bar renders even with missing currentIndex", () => {
+  test('should verify navigation bar renders even with missing currentIndex', () => {
     // Test that navigation bar doesn't disappear when currentIndex is -1
-    const { result } = renderHook(() =>
-      useNewsletterNavigation("unknown-id", { enabled: true }),
-    );
+    const { result } = renderHook(() => useNewsletterNavigation('unknown-id', { enabled: true }), {
+      wrapper,
+    });
 
     // Even if currentIndex is -1, the hook should still provide navigation state
-    expect(result.current).toHaveProperty("currentIndex");
-    expect(result.current).toHaveProperty("hasPrevious");
-    expect(result.current).toHaveProperty("hasNext");
-    expect(typeof result.current.navigateToPrevious).toBe("function");
-    expect(typeof result.current.navigateToNext).toBe("function");
+    expect(result.current).toHaveProperty('currentIndex');
+    expect(result.current).toHaveProperty('hasPrevious');
+    expect(result.current).toHaveProperty('hasNext');
+    expect(typeof result.current.navigateToPrevious).toBe('function');
+    expect(typeof result.current.navigateToNext).toBe('function');
   });
 
-  test("should verify mark-as-read functionality is accessible", () => {
+  test('should verify mark-as-read functionality is accessible', () => {
     // Verify that the shared newsletter actions are properly imported and configured
     const mockOptions = {
       showToasts: false,
@@ -233,17 +256,17 @@ describe("Newsletter Navigation Fixes Smoke Tests", () => {
     expect(useSharedNewsletterActions).toHaveBeenCalledWith(mockOptions);
   });
 
-  test("should handle loading states without breaking navigation", () => {
-    const { result } = renderHook(() =>
-      useNewsletterNavigation("2", { enabled: true }),
-    );
+  test('should handle loading states without breaking navigation', () => {
+    const { result } = renderHook(() => useNewsletterNavigation('2', { enabled: true }), {
+      wrapper,
+    });
 
     // Navigation should work even during loading states
     expect(result.current.isLoading).toBeDefined();
-    expect(typeof result.current.isLoading).toBe("boolean");
+    expect(typeof result.current.isLoading).toBe('boolean');
 
     // Actions should still be available
-    expect(typeof result.current.navigateToPrevious).toBe("function");
-    expect(typeof result.current.navigateToNext).toBe("function");
+    expect(typeof result.current.navigateToPrevious).toBe('function');
+    expect(typeof result.current.navigateToNext).toBe('function');
   });
 });

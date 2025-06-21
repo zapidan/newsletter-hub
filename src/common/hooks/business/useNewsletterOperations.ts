@@ -1,15 +1,21 @@
+import { newsletterService } from "@common/services";
+import { NewsletterWithRelations } from "@common/types";
+import { useLogger } from "@common/utils/logger";
+import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "react-hot-toast";
-import { newsletterService } from "@common/services";
-import { queryKeyFactory } from "@common/utils/queryKeyFactory";
-import { useLogger } from "@common/utils/logger";
-import { NewsletterWithRelations } from "@common/types";
 
 interface UseNewsletterOperationsOptions {
   onSuccess?: (operation: string, newsletter?: NewsletterWithRelations) => void;
   onError?: (operation: string, error: string) => void;
   showToasts?: boolean;
+}
+
+interface NewsletterOperationResult {
+  success: boolean;
+  error?: string;
+  newsletter?: NewsletterWithRelations;
 }
 
 export function useNewsletterOperations(options: UseNewsletterOperationsOptions = {}) {
@@ -105,7 +111,18 @@ export function useNewsletterOperations(options: UseNewsletterOperationsOptions 
 
   // Bulk mark as read mutation
   const bulkMarkAsReadMutation = useMutation({
-    mutationFn: (ids: string[]) => newsletterService.bulkMarkAsRead(ids),
+    mutationFn: async (ids: string[]) => {
+      // Early return for empty array
+      if (ids.length === 0) {
+        return {
+          success: true,
+          processedCount: 0,
+          failedCount: 0,
+          errors: [],
+        };
+      }
+      return newsletterService.bulkMarkAsRead(ids);
+    },
     onSuccess: async (result, ids) => {
       await invalidateRelatedQueries(ids);
 
@@ -295,6 +312,53 @@ export function useNewsletterOperations(options: UseNewsletterOperationsOptions 
     },
   });
 
+  const deleteNewsletterMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.deleteNewsletter(id),
+    onSuccess: async (result, id) => {
+      if (result.success) {
+        await invalidateRelatedQueries([id]);
+        onSuccess?.("deleteNewsletter");
+        if (showToasts) {
+          toast.success("Newsletter deleted successfully");
+        }
+      } else {
+        onError?.("deleteNewsletter", result.error || "Failed to delete newsletter");
+        if (showToasts) {
+          toast.error(result.error || "Failed to delete newsletter");
+        }
+      }
+    },
+    onError: (error) => {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      log.error("Failed to delete newsletter", {
+        component: "useNewsletterOperations",
+        action: "deleteNewsletter",
+        error,
+      });
+      onError?.("deleteNewsletter", errorMessage);
+      if (showToasts) {
+        toast.error("Failed to delete newsletter");
+      }
+    },
+  });
+
+  const deleteNewsletter = useCallback(
+    async (id: string): Promise<NewsletterOperationResult> => {
+      if (!window.confirm("Are you sure you want to delete this newsletter?")) {
+        return { success: false, error: "Deletion cancelled" };
+      }
+
+      try {
+        const result = await deleteNewsletterMutation.mutateAsync(id);
+        return result;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Failed to delete newsletter";
+        return { success: false, error: errorMessage };
+      }
+    },
+    [deleteNewsletterMutation],
+  );
+
   // Update tags mutation
   const updateTagsMutation = useMutation({
     mutationFn: ({ id, tagIds }: { id: string; tagIds: string[] }) =>
@@ -337,6 +401,10 @@ export function useNewsletterOperations(options: UseNewsletterOperationsOptions 
     isMarkingAsRead: markAsReadMutation.isPending,
     markAsUnread: markAsUnreadMutation.mutateAsync,
     isMarkingAsUnread: markAsUnreadMutation.isPending,
+    deleteNewsletter,
+    isDeleting: deleteNewsletterMutation.isPending,
+    deleteError: deleteNewsletterMutation.error,
+    resetDeleteError: deleteNewsletterMutation.reset,
 
     // Bulk operations
     bulkMarkAsRead: bulkMarkAsReadMutation.mutateAsync,

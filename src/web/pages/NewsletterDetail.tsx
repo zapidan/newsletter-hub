@@ -43,6 +43,16 @@ const NewsletterDetail = memo(() => {
     );
   }, [location.state]);
 
+  // Extract source ID from location if we're in a source context
+  const sourceId = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const sourceFromQuery = searchParams.get('source');
+    const sourceFromPath = location.pathname.split('/sources/')[1]?.split('/')[0];
+    const sourceFromState = location.state?.sourceId;
+
+    return sourceFromQuery || sourceFromPath || sourceFromState || undefined;
+  }, [location.search, location.pathname, location.state]);
+
   // Helper function to get the correct back button text
   const getBackButtonText = useCallback(() => {
     if (isFromReadingQueue) {
@@ -317,6 +327,8 @@ const NewsletterDetail = memo(() => {
             showLabels={true}
             showCounter={true}
             autoMarkAsRead={false} // Let the detail page handle auto-marking
+            isFromReadingQueue={isFromReadingQueue}
+            sourceId={sourceId}
           />
         </div>
       )}

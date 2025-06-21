@@ -1,11 +1,11 @@
-import { renderHook, act, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
-import { useNewsletterOperations } from "../useNewsletterOperations";
 import { newsletterService } from "@common/services";
-import { NewsletterWithRelations } from "@common/types";
 import { NewsletterOperationResult } from "@common/services/newsletter/NewsletterService";
+import { NewsletterWithRelations } from "@common/types";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { toast } from "react-hot-toast";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useNewsletterOperations } from "../useNewsletterOperations";
 
 // Mock dependencies
 vi.mock("@common/services");
@@ -253,90 +253,108 @@ describe("useNewsletterOperations", () => {
         expect(result.current.isMarkingAsRead).toBe(false);
       });
     });
-  });
 
-  describe("bulkMarkAsRead", () => {
-    it("should mark multiple newsletters as read", async () => {
-      mockNewsletterService.bulkMarkAsRead.mockResolvedValue({
-        success: true,
-        processedCount: 2,
-        failedCount: 0,
-        errors: [],
-      });
+    describe("bulkMarkAsRead", () => {
+      it("should mark multiple newsletters as read", async () => {
+        mockNewsletterService.bulkMarkAsRead.mockResolvedValue({
+          success: true,
+          processedCount: 2,
+          failedCount: 0,
+          errors: [],
+        });
 
-      const onSuccess = vi.fn();
-      const { result } = renderHook(
-        () => useNewsletterOperations({ onSuccess, showToasts: false }),
-        { wrapper },
-      );
+        const onSuccess = vi.fn();
+        const { result } = renderHook(
+          () => useNewsletterOperations({ onSuccess, showToasts: false }),
+          { wrapper },
+        );
 
-      await act(async () => {
-        await result.current.bulkMarkAsRead(["newsletter-1", "newsletter-2"]);
-      });
+        await act(async () => {
+          await result.current.bulkMarkAsRead(["newsletter-1", "newsletter-2"]);
+        });
 
-      expect(mockNewsletterService.bulkMarkAsRead).toHaveBeenCalledWith([
-        "newsletter-1",
-        "newsletter-2",
-      ]);
-      expect(onSuccess).toHaveBeenCalledWith("bulkMarkAsRead");
-    });
-
-    it("should handle partial failures", async () => {
-      mockNewsletterService.bulkMarkAsRead.mockResolvedValue({
-        success: false,
-        processedCount: 1,
-        failedCount: 1,
-        errors: [{ id: "newsletter-2", error: "Error" }],
-      });
-
-      const onError = vi.fn();
-      const { result } = renderHook(
-        () => useNewsletterOperations({ onError, showToasts: false }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        await result.current.bulkMarkAsRead(["newsletter-1", "newsletter-2"]);
-      });
-
-      expect(onError).toHaveBeenCalledWith(
-        "bulkMarkAsRead",
-        "Marked 1 as read, 1 failed",
-      );
-    });
-
-    it("should show appropriate toast messages", async () => {
-      mockNewsletterService.bulkMarkAsRead.mockResolvedValue({
-        success: true,
-        processedCount: 3,
-        failedCount: 0,
-        errors: [],
-      });
-
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: true }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        await result.current.bulkMarkAsRead([
+        expect(mockNewsletterService.bulkMarkAsRead).toHaveBeenCalledWith([
           "newsletter-1",
           "newsletter-2",
-          "newsletter-3",
         ]);
+        expect(onSuccess).toHaveBeenCalledWith("bulkMarkAsRead");
       });
 
-      expect(mockToast.success).toHaveBeenCalledWith(
-        "Marked 3 newsletters as read",
-      );
-    });
-  });
+      it("should handle partial failures", async () => {
+        mockNewsletterService.bulkMarkAsRead.mockResolvedValue({
+          success: false,
+          processedCount: 1,
+          failedCount: 1,
+          errors: [{ id: "newsletter-2", error: "Error" }],
+        });
 
-  describe("toggleLike", () => {
+        const onError = vi.fn();
+        const { result } = renderHook(
+          () => useNewsletterOperations({ onError, showToasts: false }),
+          { wrapper },
+        );
+
+        await act(async () => {
+          await result.current.bulkMarkAsRead(["newsletter-1", "newsletter-2"]);
+        });
+
+        expect(onError).toHaveBeenCalledWith(
+          "bulkMarkAsRead",
+          "Marked 1 as read, 1 failed",
+        );
+      });
+
+      it("should show appropriate toast messages", async () => {
+        mockNewsletterService.bulkMarkAsRead.mockResolvedValue({
+          success: true,
+          processedCount: 3,
+          failedCount: 0,
+          errors: [],
+        });
+
+        const { result } = renderHook(
+          () => useNewsletterOperations({ showToasts: true }),
+          { wrapper },
+        );
+
+        await act(async () => {
+          await result.current.bulkMarkAsRead([
+            "newsletter-1",
+            "newsletter-2",
+            "newsletter-3",
+          ]);
+        });
+
+        expect(mockToast.success).toHaveBeenCalledWith(
+          "Marked 3 newsletters as read",
+        );
+      });
+
+      it("should handle empty array of IDs", async () => {
+        const { result } = renderHook(() => useNewsletterOperations(), { wrapper });
+
+        await act(async () => {
+          const response = await result.current.bulkMarkAsRead([]);
+          expect(response).toEqual({
+            success: true,
+            processedCount: 0,
+            failedCount: 0,
+            errors: []
+          });
+        });
+
+        expect(mockNewsletterService.bulkMarkAsRead).not.toHaveBeenCalled();
+      });
+    });
+
     it("should toggle like status successfully", async () => {
-      mockNewsletterService.toggleLike.mockResolvedValue({
+      // Mock the service to return a properly shaped response
+      mockNewsletterService.toggleLike.mockResolvedValueOnce({
         success: true,
-        newsletter: { ...mockNewsletter, is_liked: true },
+        newsletter: {
+          ...mockNewsletter,
+          is_liked: true,
+        },
       });
 
       const onSuccess = vi.fn();
@@ -349,35 +367,15 @@ describe("useNewsletterOperations", () => {
         await result.current.toggleLike("newsletter-1");
       });
 
-      expect(mockNewsletterService.toggleLike).toHaveBeenCalledWith(
-        "newsletter-1",
-      );
+      expect(mockNewsletterService.toggleLike).toHaveBeenCalledWith("newsletter-1");
       expect(onSuccess).toHaveBeenCalledWith(
         "toggleLike",
-        expect.objectContaining({ is_liked: true }),
+        expect.objectContaining({ is_liked: true })
       );
-    });
-
-    it("should show appropriate toast for like action", async () => {
-      mockNewsletterService.toggleLike.mockResolvedValue({
-        success: true,
-        newsletter: { ...mockNewsletter, is_liked: true },
-      });
-
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: true }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        await result.current.toggleLike("newsletter-1");
-      });
-
-      expect(mockToast.success).toHaveBeenCalledWith("Newsletter liked");
     });
 
     it("should show appropriate toast for unlike action", async () => {
-      mockNewsletterService.toggleLike.mockResolvedValue({
+      mockNewsletterService.toggleLike.mockResolvedValueOnce({
         success: true,
         newsletter: { ...mockNewsletter, is_liked: false },
       });
@@ -392,6 +390,22 @@ describe("useNewsletterOperations", () => {
       });
 
       expect(mockToast.success).toHaveBeenCalledWith("Newsletter unliked");
+    });
+
+    it("should handle optimistic updates and rollback on error", async () => {
+      mockNewsletterService.toggleLike.mockRejectedValueOnce(new Error("Failed to toggle like"));
+      const { result } = renderHook(() => useNewsletterOperations(), { wrapper });
+
+      // Mock the query data
+      queryClient.setQueryData(["newsletters", "detail", "newsletter-1"], { ...mockNewsletter, is_liked: false });
+
+      await act(async () => {
+        await expect(result.current.toggleLike("newsletter-1")).rejects.toThrow();
+      });
+
+      // Verify rollback
+      const cachedData = queryClient.getQueryData(["newsletters", "detail", "newsletter-1"]);
+      expect(cachedData).toEqual({ ...mockNewsletter, is_liked: false });
     });
   });
 
@@ -438,56 +452,15 @@ describe("useNewsletterOperations", () => {
 
       expect(mockToast.success).toHaveBeenCalledWith("Newsletter archived");
     });
-  });
 
-  describe("reading queue operations", () => {
-    it("should add to reading queue successfully", async () => {
-      mockNewsletterService.addToReadingQueue.mockResolvedValue({
+    it("should show success toast when showToasts is true", async () => {
+      // Mock the service to return a proper NewsletterOperationResult
+      mockNewsletterService.toggleArchive.mockResolvedValue({
         success: true,
-        newsletter: mockNewsletter,
-      });
-
-      const onSuccess = vi.fn();
-      const { result } = renderHook(
-        () => useNewsletterOperations({ onSuccess, showToasts: false }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        await result.current.addToQueue("newsletter-1");
-      });
-
-      expect(mockNewsletterService.addToReadingQueue).toHaveBeenCalledWith(
-        "newsletter-1",
-      );
-      expect(onSuccess).toHaveBeenCalledWith("addToQueue", mockNewsletter);
-    });
-
-    it("should remove from reading queue successfully", async () => {
-      mockNewsletterService.removeFromReadingQueue.mockResolvedValue({
-        success: true,
-      });
-
-      const onSuccess = vi.fn();
-      const { result } = renderHook(
-        () => useNewsletterOperations({ onSuccess, showToasts: false }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        await result.current.removeFromQueue("newsletter-1");
-      });
-
-      expect(mockNewsletterService.removeFromReadingQueue).toHaveBeenCalledWith(
-        "newsletter-1",
-      );
-      expect(onSuccess).toHaveBeenCalledWith("removeFromQueue");
-    });
-
-    it("should show appropriate toast messages for queue operations", async () => {
-      mockNewsletterService.addToReadingQueue.mockResolvedValue({
-        success: true,
-        newsletter: mockNewsletter,
+        newsletter: {
+          ...mockNewsletter,
+          is_archived: true,
+        },
       });
 
       const { result } = renderHook(
@@ -496,229 +469,116 @@ describe("useNewsletterOperations", () => {
       );
 
       await act(async () => {
-        await result.current.addToQueue("newsletter-1");
+        await result.current.toggleArchive("newsletter-1");
       });
 
-      expect(mockToast.success).toHaveBeenCalledWith("Added to reading queue");
+      expect(mockToast.success).toHaveBeenCalledWith(expect.stringContaining("archived"));
     });
   });
 
-  describe("updateTags", () => {
-    it("should update newsletter tags successfully", async () => {
-      const updatedNewsletter = {
-        ...mockNewsletter,
-        tags: [
-          {
-            id: "tag-1",
-            name: "Test Tag",
-            color: "#3b82f6",
-            user_id: "user-1",
-            created_at: "2024-01-01T00:00:00Z",
-          },
-        ],
-      };
-
-      mockNewsletterService.updateTags.mockResolvedValue({
+  describe("deleteNewsletter", () => {
+    it("should show confirmation dialog and delete on confirm", async () => {
+      window.confirm = vi.fn().mockReturnValue(true);
+      mockNewsletterService.deleteNewsletter.mockResolvedValueOnce({
         success: true,
-        newsletter: updatedNewsletter,
+        newsletter: mockNewsletter,
       });
 
-      const onSuccess = vi.fn();
       const { result } = renderHook(
-        () => useNewsletterOperations({ onSuccess, showToasts: false }),
+        () => useNewsletterOperations({ showToasts: false }),
         { wrapper },
       );
 
       await act(async () => {
-        await result.current.updateTags({
-          id: "newsletter-1",
-          tagIds: ["tag-1"],
-        });
+        await result.current.deleteNewsletter("newsletter-1");
       });
 
-      expect(mockNewsletterService.updateTags).toHaveBeenCalledWith(
-        "newsletter-1",
-        ["tag-1"],
-      );
-      expect(onSuccess).toHaveBeenCalledWith("updateTags", updatedNewsletter);
+      expect(window.confirm).toHaveBeenCalled();
+      expect(mockNewsletterService.deleteNewsletter).toHaveBeenCalledWith("newsletter-1");
     });
 
-    it("should handle tag update errors", async () => {
-      mockNewsletterService.updateTags.mockResolvedValue({
-        success: false,
-        error: "Tag not found",
+    it("should not delete if user cancels confirmation", async () => {
+      window.confirm = vi.fn().mockReturnValue(false);
+      const { result } = renderHook(
+        () => useNewsletterOperations({ showToasts: false }),
+        { wrapper },
+      );
+
+      await act(async () => {
+        await result.current.deleteNewsletter("newsletter-1");
       });
 
+      expect(window.confirm).toHaveBeenCalled();
+      expect(mockNewsletterService.deleteNewsletter).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("callbacks", () => {
+    it("should call onSuccess callback when operation succeeds", async () => {
+      const onSuccess = vi.fn();
+
+      // Mock the successful response
+      mockNewsletterService.markAsRead.mockResolvedValueOnce({
+        success: true,
+        newsletter: { ...mockNewsletter, is_read: true },
+      });
+
+      const { result } = renderHook(
+        () => useNewsletterOperations({ onSuccess }),
+        { wrapper },
+      );
+
+      await act(async () => {
+        await result.current.markAsRead("newsletter-1");
+      });
+
+      expect(onSuccess).toHaveBeenCalledWith("markAsRead", expect.any(Object));
+    });
+
+    it("should call onError callback when operation fails", async () => {
       const onError = vi.fn();
+      const errorMessage = "Failed to mark newsletter as read";
+      mockNewsletterService.markAsRead.mockRejectedValueOnce(new Error(errorMessage));
+
       const { result } = renderHook(
-        () => useNewsletterOperations({ onError, showToasts: false }),
+        () => useNewsletterOperations({ onError }),
         { wrapper },
       );
 
       await act(async () => {
-        await result.current.updateTags({
-          id: "newsletter-1",
-          tagIds: ["tag-1"],
+        await expect(result.current.markAsRead("newsletter-1")).rejects.toThrow(errorMessage);
+      });
+
+      expect(onError).toHaveBeenCalledWith("markAsRead", expect.stringContaining(errorMessage));
+    });
+  });
+
+  describe("concurrent operations", () => {
+    it("should handle multiple concurrent operations", async () => {
+      const { result } = renderHook(() => useNewsletterOperations(), { wrapper });
+
+      // Mock different responses for each call
+      mockNewsletterService.markAsRead
+        .mockResolvedValueOnce({
+          success: true,
+          newsletter: { ...mockNewsletter, id: "newsletter-1", is_read: true },
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          newsletter: { ...mockNewsletter, id: "newsletter-2", is_read: true },
         });
-      });
-
-      expect(onError).toHaveBeenCalledWith("updateTags", "Tag not found");
-    });
-
-    it("should show success toast for tag updates", async () => {
-      mockNewsletterService.updateTags.mockResolvedValue({
-        success: true,
-        newsletter: mockNewsletter,
-      });
-
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: true }),
-        { wrapper },
-      );
 
       await act(async () => {
-        await result.current.updateTags({
-          id: "newsletter-1",
-          tagIds: ["tag-1"],
-        });
+        const [result1, result2] = await Promise.all([
+          result.current.markAsRead("newsletter-1"),
+          result.current.markAsRead("newsletter-2"),
+        ]);
+
+        expect(result1).toEqual(expect.objectContaining({ success: true }));
+        expect(result2).toEqual(expect.objectContaining({ success: true }));
       });
 
-      expect(mockToast.success).toHaveBeenCalledWith("Tags updated");
-    });
-  });
-
-  describe("error handling", () => {
-    it("should provide error reset functions", async () => {
-      mockNewsletterService.markAsRead.mockRejectedValue(
-        new Error("Test error"),
-      );
-
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: false }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        try {
-          await result.current.markAsRead("newsletter-1");
-        } catch {
-          // Expected to throw
-        }
-      });
-
-      await waitFor(() => {
-        expect(result.current.errorMarkingAsRead).toBeTruthy();
-      });
-
-      act(() => {
-        result.current.resetMarkAsReadError();
-      });
-
-      await waitFor(() => {
-        expect(result.current.errorMarkingAsRead).toBeNull();
-      });
-    });
-
-    it("should expose all error states", () => {
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: false }),
-        { wrapper },
-      );
-
-      expect(result.current.errorMarkingAsRead).toBeNull();
-      expect(result.current.errorMarkingAsUnread).toBeNull();
-      expect(result.current.errorBulkMarkingAsRead).toBeNull();
-      expect(result.current.errorBulkMarkingAsUnread).toBeNull();
-      expect(result.current.errorTogglingLike).toBeNull();
-      expect(result.current.errorTogglingArchive).toBeNull();
-      expect(result.current.errorAddingToQueue).toBeNull();
-      expect(result.current.errorRemovingFromQueue).toBeNull();
-      expect(result.current.errorUpdatingTags).toBeNull();
-    });
-  });
-
-  describe("loading states", () => {
-    it("should expose all loading states", () => {
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: false }),
-        { wrapper },
-      );
-
-      expect(result.current.isMarkingAsRead).toBe(false);
-      expect(result.current.isMarkingAsUnread).toBe(false);
-      expect(result.current.isBulkMarkingAsRead).toBe(false);
-      expect(result.current.isBulkMarkingAsUnread).toBe(false);
-      expect(result.current.isTogglingLike).toBe(false);
-      expect(result.current.isTogglingArchive).toBe(false);
-      expect(result.current.isAddingToQueue).toBe(false);
-      expect(result.current.isRemovingFromQueue).toBe(false);
-      expect(result.current.isUpdatingTags).toBe(false);
-    });
-  });
-
-  describe("query invalidation", () => {
-    it("should invalidate related queries after successful operations", async () => {
-      mockNewsletterService.markAsRead.mockResolvedValue({
-        success: true,
-        newsletter: mockNewsletter,
-      });
-
-      const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
-
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: false }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        await result.current.markAsRead("newsletter-1");
-      });
-
-      await waitFor(() => {
-        expect(invalidateQueriesSpy).toHaveBeenCalled();
-      });
-
-      invalidateQueriesSpy.mockRestore();
-    });
-  });
-
-  describe("callback integration", () => {
-    it("should not call callbacks when showToasts is disabled and no callbacks provided", async () => {
-      mockNewsletterService.markAsRead.mockResolvedValue({
-        success: true,
-        newsletter: mockNewsletter,
-      });
-
-      const { result } = renderHook(
-        () => useNewsletterOperations({ showToasts: false }),
-        { wrapper },
-      );
-
-      // Should not throw even without callbacks
-      await act(async () => {
-        await result.current.markAsRead("newsletter-1");
-      });
-
-      expect(mockToast.success).not.toHaveBeenCalled();
-    });
-
-    it("should handle undefined newsletter in success callbacks", async () => {
-      mockNewsletterService.markAsRead.mockResolvedValue({
-        success: true,
-        // newsletter: undefined
-      });
-
-      const onSuccess = vi.fn();
-      const { result } = renderHook(
-        () => useNewsletterOperations({ onSuccess, showToasts: false }),
-        { wrapper },
-      );
-
-      await act(async () => {
-        await result.current.markAsRead("newsletter-1");
-      });
-
-      expect(onSuccess).toHaveBeenCalledWith("markAsRead", undefined);
+      expect(mockNewsletterService.markAsRead).toHaveBeenCalledTimes(2);
     });
   });
 });

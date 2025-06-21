@@ -27,9 +27,9 @@ vi.mock('@common/utils/logger/useLogger', () => ({
 
 // Mock newsletter navigation hook
 const mockNavigationState = {
-  currentNewsletter: null,
-  previousNewsletter: null,
-  nextNewsletter: null,
+  currentNewsletter: null as any,
+  previousNewsletter: null as any,
+  nextNewsletter: null as any,
   currentIndex: 0,
   totalCount: 10,
   hasPrevious: false,
@@ -43,6 +43,9 @@ const mockNavigationState = {
 vi.mock('../../useNewsletterNavigation', () => ({
   useNewsletterNavigation: vi.fn(() => mockNavigationState),
 }));
+
+// Import the mocked function for type checking
+import { useNewsletterNavigation } from '../../useNewsletterNavigation';
 
 // Mock cache hook
 const mockCache = {
@@ -223,12 +226,8 @@ describe('useDebouncedNewsletterNavigation', () => {
     });
 
     it('should preload adjacent newsletters', () => {
-      mockNavigationState.previousNewsletter = { id: 'prev-123' } as ReturnType<
-        typeof useNewsletterNavigation
-      >['previousNewsletter'];
-      mockNavigationState.nextNewsletter = { id: 'next-123' } as ReturnType<
-        typeof useNewsletterNavigation
-      >['nextNewsletter'];
+      mockNavigationState.previousNewsletter = { id: 'prev-123' } as any;
+      mockNavigationState.nextNewsletter = { id: 'next-123' } as any;
 
       renderHook(() =>
         useDebouncedNewsletterNavigation('newsletter-123', {

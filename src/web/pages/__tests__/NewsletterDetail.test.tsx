@@ -19,6 +19,9 @@ vi.mock('react-router-dom', async () => {
     useLocation: vi.fn(() => ({
       state: {},
       pathname: '/newsletters/test-newsletter-1',
+      search: '',
+      hash: '',
+      key: 'default',
     })),
     useNavigate: vi.fn(() => vi.fn()),
   };
@@ -128,24 +131,42 @@ const mockNewsletter: NewsletterWithRelations = {
 };
 
 const mockAuth = {
-  user: { id: 'test-user', email: 'test@example.com' },
+  user: {
+    id: 'test-user',
+    email: 'test@example.com',
+    app_metadata: {},
+    user_metadata: {},
+    aud: 'authenticated',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+    email_confirmed_at: '2024-01-01T00:00:00Z',
+    phone_confirmed_at: undefined,
+    confirmation_sent_at: undefined,
+    confirmed_at: '2024-01-01T00:00:00Z',
+    last_sign_in_at: '2024-01-01T00:00:00Z',
+    role: 'authenticated',
+    phone: undefined,
+    recovery_sent_at: undefined,
+    email_change_sent_at: undefined,
+    new_email: undefined,
+    new_phone: undefined,
+    invited_at: undefined,
+    action_link: undefined,
+    email_change: undefined,
+    phone_change: undefined,
+    is_anonymous: false,
+  },
   session: {
     access_token: 'test-token',
-    user: { id: 'test-user', email: 'test@example.com' },
+    user: {
+      id: 'test-user',
+      email: 'test@example.com',
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      created_at: '2024-01-01T00:00:00Z',
+    },
   } as any,
-  signIn: vi.fn(),
-  signOut: vi.fn(),
-  signUp: vi.fn(),
-  resetPassword: vi.fn(),
-  updatePassword: vi.fn(),
-  checkPasswordStrength: vi.fn(),
-  loading: false,
-  error: null,
-};
-
-const mockAuthUnauthenticated = {
-  user: null,
-  session: null,
   signIn: vi.fn(),
   signOut: vi.fn(),
   signUp: vi.fn(),
@@ -212,7 +233,7 @@ describe('NewsletterDetail', () => {
 
   it('shows loading screen when loading', async () => {
     vi.mocked(useNewsletterDetail).mockReturnValue({
-      newsletter: null,
+      newsletter: undefined,
       isLoading: true,
       isError: false,
       error: null,
@@ -228,7 +249,7 @@ describe('NewsletterDetail', () => {
 
   it('shows error message when there is an error', async () => {
     vi.mocked(useNewsletterDetail).mockReturnValue({
-      newsletter: null,
+      newsletter: undefined,
       isLoading: false,
       isError: true,
       error: new Error('Failed to load newsletter'),
@@ -358,7 +379,7 @@ describe('NewsletterDetail', () => {
 
   it('handles unauthenticated state', async () => {
     vi.mocked(useNewsletterDetail).mockReturnValue({
-      newsletter: null,
+      newsletter: undefined,
       isLoading: false,
       isError: false,
       error: null,
@@ -367,8 +388,14 @@ describe('NewsletterDetail', () => {
       prefetchRelated: vi.fn(),
     });
 
+    const unauthenticatedAuth = {
+      ...mockAuth,
+      user: null,
+      session: null,
+    } as any;
+
     await renderComponentWithAct(<NewsletterDetail />, {
-      authContext: mockAuthUnauthenticated,
+      authContext: unauthenticatedAuth,
     });
 
     // Component should handle unauthenticated state appropriately
@@ -383,7 +410,7 @@ describe('NewsletterDetail', () => {
 
   it('shows loading screen when newsletter is null', async () => {
     vi.mocked(useNewsletterDetail).mockReturnValue({
-      newsletter: null,
+      newsletter: undefined,
       isLoading: false,
       isError: false,
       error: null,
@@ -399,7 +426,7 @@ describe('NewsletterDetail', () => {
 
   it('shows error state with back button', async () => {
     vi.mocked(useNewsletterDetail).mockReturnValue({
-      newsletter: null,
+      newsletter: undefined,
       isLoading: false,
       isError: true,
       error: new Error('Network error'),

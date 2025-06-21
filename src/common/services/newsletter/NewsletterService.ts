@@ -430,6 +430,31 @@ export class NewsletterService extends BaseService {
     );
   }
 
+  async deleteNewsletter(id: string): Promise<NewsletterOperationResult> {
+    this.validateString(id, "newsletter ID");
+
+    return this.executeWithLogging(
+      async () => {
+        try {
+          await this.withRetry(
+            () => newsletterApi.delete(id),
+            "deleteNewsletter",
+          );
+
+          return {
+            success: true
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : "Failed to delete newsletter"
+          };
+        }
+      },
+      "deleteNewsletter"
+    );
+  }
+
   /**
    * Update newsletter tags
    */

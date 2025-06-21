@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
 import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useLogger } from '@common/utils/logger/useLogger';
 
 interface NewsletterNavigationProps {
@@ -12,6 +13,8 @@ interface NewsletterNavigationProps {
   showCounter?: boolean;
   disabled?: boolean;
   autoMarkAsRead?: boolean;
+  isFromReadingQueue?: boolean;
+  sourceId?: string;
 }
 
 export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
@@ -21,9 +24,64 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
   showCounter = true,
   disabled = false,
   autoMarkAsRead = true,
+  isFromReadingQueue = false,
+  sourceId,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const log = useLogger('NewsletterNavigation');
+  const { newsletterFilter } = useInboxFilters();
+
+  // Detect current context and build appropriate navigation options
+  const navigationOptions = useMemo(() => {
+    // Check if we're in reading queue context
+    const isReadingQueueContext =
+      isFromReadingQueue ||
+      location.pathname.includes('/reading-queue') ||
+      location.pathname.includes('/queue');
+
+    // Check if we're in a specific source context
+    const isSourceContext =
+      sourceId || location.pathname.includes('/sources/') || location.search.includes('source=');
+
+    if (isReadingQueueContext) {
+      return {
+        enabled: !disabled,
+        preloadAdjacent: true,
+        debug: process.env.NODE_ENV === 'development',
+        forceReadingQueue: true,
+      };
+    }
+
+    if (isSourceContext) {
+      const contextSourceId =
+        sourceId ||
+        new URLSearchParams(location.search).get('source') ||
+        location.pathname.split('/sources/')[1]?.split('/')[0];
+
+      return {
+        enabled: !disabled,
+        preloadAdjacent: true,
+        debug: process.env.NODE_ENV === 'development',
+        forceSourceFilter: contextSourceId,
+      };
+    }
+
+    // Default to current inbox filters
+    return {
+      enabled: !disabled,
+      preloadAdjacent: true,
+      debug: process.env.NODE_ENV === 'development',
+      overrideFilter: newsletterFilter,
+    };
+  }, [
+    disabled,
+    isFromReadingQueue,
+    sourceId,
+    location.pathname,
+    location.search,
+    newsletterFilter,
+  ]);
 
   const {
     hasPrevious,
@@ -34,11 +92,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     currentNewsletter,
     navigateToPrevious,
     navigateToNext,
-  } = useNewsletterNavigation(currentNewsletterId, {
-    enabled: !disabled,
-    preloadAdjacent: true,
-    debug: false,
-  });
+  } = useNewsletterNavigation(currentNewsletterId, navigationOptions);
 
   const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
     showToasts: false, // Don't show toasts for auto-mark-as-read and auto-archive
@@ -79,8 +133,8 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
   const handlePrevious = useCallback(async () => {
     if (disabled || !hasPrevious) return;
 
-    // Mark current newsletter as read and archive before navigating
-    if (currentNewsletter && autoMarkAsRead) {
+    // Mark current newsletter as read and archive before navigating (only if not from reading queue)
+    if (currentNewsletter && autoMarkAsRead && !isFromReadingQueue) {
       try {
         if (!currentNewsletter.is_read) {
           await handleMarkAsRead(currentNewsletter.id);
@@ -107,17 +161,37 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         metadata: {
           fromId: currentNewsletterId,
           toId: previousId,
+          context: isFromReadingQueue
+            ? 'reading_queue'
+            : sourceId
+              ? 'source_filter'
+              : 'inbox_filter',
         },
       });
-      navigate(`/newsletters/${previousId}`, {
+
+      // Preserve current context in navigation
+      const currentPath = location.pathname;
+      const currentSearch = location.search;
+      let targetPath = `/newsletters/${previousId}`;
+
+      // Preserve query parameters for context
+      if (currentSearch && !isFromReadingQueue) {
+        targetPath += currentSearch;
+      }
+
+      navigate(targetPath, {
         replace: false,
         state: {
-          from: `/newsletters/${currentNewsletterId}`,
+          from: currentPath + currentSearch,
           fromNavigation: true,
+          context: isFromReadingQueue
+            ? 'reading_queue'
+            : sourceId
+              ? 'source_filter'
+              : 'inbox_filter',
         },
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     disabled,
     hasPrevious,
@@ -126,13 +200,20 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     currentNewsletterId,
     currentNewsletter,
     autoMarkAsRead,
+    isFromReadingQueue,
+    location.pathname,
+    location.search,
+    sourceId,
+    handleMarkAsRead,
+    handleToggleArchive,
+    log,
   ]);
 
   const handleNext = useCallback(async () => {
     if (disabled || !hasNext) return;
 
-    // Mark current newsletter as read and archive before navigating
-    if (currentNewsletter && autoMarkAsRead) {
+    // Mark current newsletter as read and archive before navigating (only if not from reading queue)
+    if (currentNewsletter && autoMarkAsRead && !isFromReadingQueue) {
       try {
         if (!currentNewsletter.is_read) {
           await handleMarkAsRead(currentNewsletter.id);
@@ -159,17 +240,37 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         metadata: {
           fromId: currentNewsletterId,
           toId: nextId,
+          context: isFromReadingQueue
+            ? 'reading_queue'
+            : sourceId
+              ? 'source_filter'
+              : 'inbox_filter',
         },
       });
-      navigate(`/newsletters/${nextId}`, {
+
+      // Preserve current context in navigation
+      const currentPath = location.pathname;
+      const currentSearch = location.search;
+      let targetPath = `/newsletters/${nextId}`;
+
+      // Preserve query parameters for context
+      if (currentSearch && !isFromReadingQueue) {
+        targetPath += currentSearch;
+      }
+
+      navigate(targetPath, {
         replace: false,
         state: {
-          from: `/newsletters/${currentNewsletterId}`,
+          from: currentPath + currentSearch,
           fromNavigation: true,
+          context: isFromReadingQueue
+            ? 'reading_queue'
+            : sourceId
+              ? 'source_filter'
+              : 'inbox_filter',
         },
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     disabled,
     hasNext,
@@ -178,6 +279,13 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     currentNewsletterId,
     currentNewsletter,
     autoMarkAsRead,
+    isFromReadingQueue,
+    location.pathname,
+    location.search,
+    sourceId,
+    handleMarkAsRead,
+    handleToggleArchive,
+    log,
   ]);
 
   // Handle keyboard shortcuts

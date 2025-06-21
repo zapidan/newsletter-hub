@@ -10,8 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useLogger } from '@common/utils/logger/useLogger';
-import { newsletterApi } from '../api/newsletterApi';
-import { readingQueueApi } from '../api/readingQueueApi';
+import { newsletterService, readingQueueService } from '../api/index.ts';
 import { useAuth } from '../contexts/AuthContext';
 import { NewsletterWithRelations, ReadingQueueItem } from '../types';
 import { PaginatedResponse } from '../types/api';
@@ -280,7 +279,7 @@ export const useNewsletters = (
           },
         });
 
-        const result = await newsletterApi.getAll(queryParams);
+        const result = await newsletterService.getAll(queryParams);
 
         // Type guard to ensure result.data exists
         if (!result?.data) {
@@ -360,7 +359,7 @@ export const useNewsletters = (
   // Get single newsletter function - memoized to prevent recreation
   const getNewsletter = useCallback(async (id: string): Promise<NewsletterWithRelations | null> => {
     if (!id) return null;
-    return newsletterApi.getById(id);
+    return newsletterService.getById(id);
   }, []);
 
   // Mark as read mutation with proper typing
@@ -370,7 +369,7 @@ export const useNewsletters = (
         throw new Error('Newsletter ID is required');
       }
       try {
-        await newsletterApi.markAsRead(id);
+        await newsletterService.markAsRead(id);
         return true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error : new Error(String(error));
@@ -441,7 +440,7 @@ export const useNewsletters = (
         throw new Error('Newsletter ID is required');
       }
       try {
-        await newsletterApi.markAsUnread(id);
+        await newsletterService.markAsUnread(id);
         return true;
       } catch (error) {
         const errorMessage = error instanceof Error ? error : new Error(String(error));
@@ -511,7 +510,7 @@ export const useNewsletters = (
       }
 
       try {
-        const result = await newsletterApi.bulkUpdate({
+        const result = await newsletterService.bulkUpdate({
           ids,
           updates: { is_read: true },
         });
@@ -590,7 +589,7 @@ export const useNewsletters = (
       }
 
       try {
-        const result = await newsletterApi.bulkUpdate({
+        const result = await newsletterService.bulkUpdate({
           ids,
           updates: { is_read: false },
         });
@@ -664,7 +663,7 @@ export const useNewsletters = (
   // Toggle like mutation
   const toggleLikeMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
     mutationFn: async (id: string) => {
-      await newsletterApi.toggleLike(id);
+      await newsletterService.toggleLike(id);
       return true;
     },
     onMutate: async (id) => {
@@ -716,7 +715,7 @@ export const useNewsletters = (
   // Toggle archive mutation
   const toggleArchiveMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
     mutationFn: async (id: string) => {
-      await newsletterApi.toggleArchive(id);
+      await newsletterService.toggleArchive(id);
       return true;
     },
     onMutate: async (id) => {
@@ -836,7 +835,7 @@ export const useNewsletters = (
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
         throw new Error('Invalid or empty newsletter IDs provided for bulk archive');
       }
-      const result = await newsletterApi.bulkArchive(ids);
+      const result = await newsletterService.bulkArchive(ids);
       return result.successCount === ids.length;
     },
     onMutate: async (ids) => {
@@ -892,7 +891,7 @@ export const useNewsletters = (
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
         throw new Error('Invalid or empty newsletter IDs provided for bulk unarchive');
       }
-      const result = await newsletterApi.bulkUnarchive(ids);
+      const result = await newsletterService.bulkUnarchive(ids);
       return result.successCount === ids.length;
     },
     onMutate: async (ids) => {
@@ -945,7 +944,7 @@ export const useNewsletters = (
   // Delete newsletter mutation
   const deleteNewsletterMutation = useMutation<boolean, Error, string, unknown>({
     mutationFn: async (id: string) => {
-      return newsletterApi.delete(id);
+      return newsletterService.delete(id);
     },
     onSettled: (_data, _error, id) => {
       invalidateForOperation(queryClient, 'delete', [id]);
@@ -959,7 +958,7 @@ export const useNewsletters = (
       if (!ids || !Array.isArray(ids) || ids.length === 0) {
         throw new Error('Invalid or empty newsletter IDs provided for bulk delete');
       }
-      const promises = ids.map((id) => newsletterApi.delete(id));
+      const promises = ids.map((id) => newsletterService.delete(id));
       await Promise.all(promises);
       return true;
     },
@@ -993,7 +992,7 @@ export const useNewsletters = (
       // If cache is empty or unreliable, check API
       if (queueItems.length === 0) {
         try {
-          isInQueue = await readingQueueApi.isInQueue(id);
+          isInQueue = await readingQueueService.isInQueue(id);
         } catch (error) {
           log.warn(
             'Failed to check queue status, proceeding with cache value',
@@ -1010,10 +1009,10 @@ export const useNewsletters = (
       if (isInQueue) {
         const queueItem = queueItems.find((item) => item.newsletter_id === id);
         if (queueItem) {
-          await readingQueueApi.remove(queueItem.id);
+          await readingQueueService.remove(queueItem.id);
         }
       } else {
-        await readingQueueApi.add(id);
+        await readingQueueService.add(id);
       }
 
       return !isInQueue;
@@ -1156,7 +1155,7 @@ export const useNewsletters = (
       }
 
       // Get current newsletter to get current tags
-      const currentNewsletter = await newsletterApi.getById(id);
+      const currentNewsletter = await newsletterService.getById(id);
       if (!currentNewsletter) {
         throw new Error('Newsletter not found');
       }
@@ -1211,7 +1210,7 @@ export const useNewsletters = (
   // Unarchive mutation (separate from toggle for specific use cases)
   const unarchiveMutation = useMutation<boolean, Error, string, PreviousNewslettersState>({
     mutationFn: async (id: string) => {
-      await newsletterApi.update({ id, is_archived: false });
+      await newsletterService.update({ id, is_archived: false });
       return true;
     },
     onMutate: async (id) => {
