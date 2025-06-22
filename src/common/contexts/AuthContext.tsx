@@ -1,6 +1,7 @@
 import { Session, User } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { verifyAndUpdateEmailAlias } from '../utils/emailAlias';
+import { userApi } from '../api/userApi';
+import { userService } from '../services/user/UserService';
 import { useLoggerStatic } from '../utils/logger';
 import { useSupabase } from './SupabaseContext';
 
@@ -85,46 +86,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
-
-        // Verify email alias if user is authenticated - don't await this and don't block auth
-        if (initialSession?.user && initialSession.access_token) {
-          // Add a small delay to ensure session is fully established
-          setTimeout(() => {
-            // Double-check session is still valid before calling
-            supabase.auth
-              .getSession()
-              .then(({ data: { session: currentSession } }) => {
-                if (currentSession?.user && currentSession.access_token) {
-                  // Use a timeout to ensure this doesn't hang the auth flow
-                  Promise.race([
-                    verifyAndUpdateEmailAlias(),
-                    new Promise<string>((_, reject) =>
-                      setTimeout(() => reject(new Error('Email verification timeout')), 2000)
-                    ),
-                  ])
-                    .then((alias) => {
-                      if (alias) {
-                        log.auth('Email alias verified/updated on initial session', {
-                          metadata: { alias },
-                        });
-                      }
-                    })
-                    .catch((error) => {
-                      log.warn(
-                        'Initial email alias verification failed, continuing with auth',
-                        { component: 'Auth' },
-                        error instanceof Error ? error : new Error(String(error))
-                      );
-                      // Don't block the auth flow on alias verification errors
-                    });
-                }
-              })
-              .catch(() => {
-                // Session check failed, skip alias verification
-                log.debug('Session check failed, skipping initial alias verification');
-              });
-          }, 500); // 500ms delay to ensure session is stable
-        }
       } catch (error) {
         log.error(
           'Error getting initial session',
@@ -142,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       log.auth('Auth state changed', {
         metadata: {
           event,
@@ -152,62 +113,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setSession(newSession);
       setUser(newSession?.user ?? null);
-
-      // Verify email alias on sign in or when session is refreshed - don't await and don't block
-      if (
-        (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') &&
-        newSession?.user &&
-        newSession.access_token
-      ) {
-        // Add a small delay to ensure the session is fully established
-        setTimeout(() => {
-          // Double-check session is still valid and hasn't changed
-          supabase.auth
-            .getSession()
-            .then(({ data: { session: currentSession } }) => {
-              if (
-                currentSession?.user &&
-                currentSession.access_token &&
-                currentSession.user.id === newSession.user.id
-              ) {
-                // Use a shorter timeout to prevent hanging
-                Promise.race([
-                  verifyAndUpdateEmailAlias(),
-                  new Promise<string>((_, reject) =>
-                    setTimeout(() => reject(new Error('Email verification timeout')), 2000)
-                  ),
-                ])
-                  .then((alias) => {
-                    if (alias) {
-                      log.auth('Email alias verified/updated after sign in', {
-                        metadata: { alias, event },
-                      });
-                    }
-                  })
-                  .catch((error) => {
-                    log.warn(
-                      'Post-signin email alias verification failed, continuing',
-                      { component: 'Auth', metadata: { event } },
-                      error instanceof Error ? error : new Error(String(error))
-                    );
-                  });
-              } else {
-                log.debug('Session changed during alias verification delay, skipping', {
-                  metadata: { event, hadSession: !!currentSession },
-                });
-              }
-            })
-            .catch(() => {
-              // Session check failed, skip alias verification
-              log.debug(
-                'Session check failed during auth state change, skipping alias verification',
-                {
-                  metadata: { event },
-                }
-              );
-            });
-        }, 300); // 300ms delay to ensure session is stable
-      }
     });
 
     return () => {
@@ -216,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [supabase]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -247,26 +152,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, log, supabase]);
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = useCallback(async (email: string, password: string) => {
     try {
       setLoading(true);
       setError(null);
       log.auth('Attempting sign up', { metadata: { email } });
 
-      const { error } = await supabase.auth.signUp({
+      // First, sign up the user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
       });
 
-      if (error) {
-        log.error('Sign up failed', { component: 'Auth', metadata: { email } }, error);
-        setError(error.message);
-        return { error };
+      if (signUpError) {
+        log.error('Sign up failed', { component: 'Auth', metadata: { email } }, signUpError);
+        setError(signUpError.message);
+        return { error: signUpError };
       }
 
-      log.auth('Sign up successful', { metadata: { email } });
+      // If user was created successfully, generate and assign an email alias
+      if (authData.user) {
+        try {
+          const result = await userService.generateEmailAlias(email);
+          if (result.success && result.email) {
+            log.auth('Email alias assigned on sign up', {
+              component: 'Auth',
+              metadata: {
+                userId: authData.user.id,
+                emailAlias: result.email
+              }
+            });
+          } else {
+            throw new Error(result.error || 'Failed to generate email alias');
+          }
+        } catch (aliasError) {
+          // Log the error but don't fail the signup process
+          log.warn('Failed to assign email alias on sign up', {
+            component: 'Auth',
+            metadata: { email },
+            error: aliasError instanceof Error ? aliasError : new Error(String(aliasError))
+          });
+        }
+      }
+
+      log.auth('Sign up successful', {
+        component: 'Auth',
+        metadata: {
+          email,
+          userId: authData.user?.id
+        }
+      });
       return { error: null };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign up';
@@ -280,9 +217,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, log, supabase.auth, userApi]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -307,9 +244,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, log, supabase.auth]);
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = useCallback(async (email: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -344,9 +281,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, log, supabase.auth]);
 
-  const updatePassword = async (newPassword: string) => {
+  const updatePassword = useCallback(async (newPassword: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -376,7 +313,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, log, supabase.auth]);
 
   const value = useMemo(
     () => ({

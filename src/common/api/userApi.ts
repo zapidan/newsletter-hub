@@ -223,9 +223,47 @@ export const userApi = {
   async generateEmailAlias(email: string): Promise<EmailAliasResult> {
     return withPerformanceLogging('user.generateEmailAlias', async () => {
       const user = await requireAuth();
+      let emailAlias = generateEmailAliasFromEmail(email);
+      let isUnique = false;
+      let attempts = 0;
+      const maxAttempts = 5;
 
       try {
-        const emailAlias = generateEmailAliasFromEmail(email);
+        // Try to find a unique email alias
+        while (!isUnique && attempts < maxAttempts) {
+          try {
+            // Check if the alias already exists
+            const { data: existingUser } = await supabase
+              .from('user_profiles')
+              .select('id')
+              .eq('email_alias', emailAlias)
+              .single();
+
+            if (!existingUser) {
+              // Alias is available
+              isUnique = true;
+            } else {
+              // Generate a new alias with random numbers
+              attempts++;
+              const randomSuffix = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
+              const baseAlias = emailAlias.split('@')[0];
+              emailAlias = `${baseAlias}${randomSuffix}@${emailAlias.split('@')[1]}`;
+              
+              log.info('Email alias already exists, trying with suffix', {
+                component: 'UserApi',
+                metadata: {
+                  userId: user.id,
+                  originalAlias: generateEmailAliasFromEmail(email),
+                  newAlias: emailAlias,
+                  attempt: attempts
+                }
+              });
+            }
+          } catch (_error) {
+            // If there's an error checking the alias, assume it's available
+            isUnique = true;
+          }
+        }
 
         // Save to the database
         const { error } = await supabase
