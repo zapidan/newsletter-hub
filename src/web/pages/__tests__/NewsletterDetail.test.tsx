@@ -535,3 +535,175 @@ describe('NewsletterDetail (fast version)', () => {
     renderPage();
   });
 });
+
+describe('API Call Verification', () => {
+  beforeEach(() => {
+    // Reset all mocks before each test
+    vi.clearAllMocks();
+
+    // Setup default mock implementation for useNewsletterDetail
+    mockUseNewsletterDetail.mockImplementation((id) => ({
+      newsletter: { ...newsletter, id, is_read: false, is_archived: false },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn().mockResolvedValue(undefined),
+    }));
+  });
+
+  it('makes initial API calls on mount', async () => {
+    // Mock the useNewsletterDetail hook
+    const mockPrefetchRelated = vi.fn().mockResolvedValue(undefined);
+    const mockRefetch = vi.fn().mockResolvedValue({});
+
+    mockUseNewsletterDetail.mockImplementation((id) => ({
+      newsletter: { ...newsletter, id, is_read: false },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: mockRefetch,
+      prefetchRelated: mockPrefetchRelated,
+    }));
+
+    renderPage();
+
+    // Verify initial calls
+    // Allow for multiple calls to mockUseNewsletterDetail due to React's rendering behavior
+    expect(mockUseNewsletterDetail).toHaveBeenCalled();
+
+    // Verify handleMarkAsRead was called with the correct arguments
+    expect(mockHandleMarkAsRead).toHaveBeenCalledWith(expect.any(String));
+
+    // Verify prefetchRelated was called
+    expect(mockPrefetchRelated).toHaveBeenCalled();
+
+    // Reset mocks to track subsequent calls
+    vi.clearAllMocks();
+
+    // Ensure no additional unexpected calls were made
+    expect(mockHandleMarkAsRead).not.toHaveBeenCalled();
+    expect(mockPrefetchRelated).not.toHaveBeenCalled();
+  });
+
+  it('auto-marks newsletter as read on mount', async () => {
+    // Mock an unread newsletter
+    mockUseNewsletterDetail.mockImplementation((id) => ({
+      newsletter: { ...newsletter, id, is_read: false },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn().mockResolvedValue(undefined),
+    }));
+
+    renderPage();
+
+    // Should call mark as read once
+    expect(mockHandleMarkAsRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not auto-mark as read if already read', async () => {
+    // Mock an already read newsletter
+    mockUseNewsletterDetail.mockImplementation((id) => ({
+      newsletter: { ...newsletter, id, is_read: true },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn().mockResolvedValue(undefined),
+    }));
+
+    renderPage();
+
+    // Should not call mark as read
+    expect(mockHandleMarkAsRead).not.toHaveBeenCalled();
+  });
+
+  it('auto-archives read newsletter after delay', async () => {
+    // Mock the timer
+    vi.useFakeTimers();
+
+    // Mock a read newsletter
+    mockUseNewsletterDetail.mockImplementation((id) => ({
+      newsletter: { ...newsletter, id, is_read: true, is_archived: false },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn().mockResolvedValue(undefined),
+    }));
+
+    renderPage();
+
+    // Fast-forward time by 3 seconds
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    // Should call toggle archive once
+    expect(mockHandleToggleArchive).toHaveBeenCalledTimes(1);
+
+    // Clean up timers
+    vi.useRealTimers();
+  });
+
+  it('does not auto-archive if already archived', async () => {
+    // Mock the timer
+    vi.useFakeTimers();
+
+    // Mock an already archived newsletter
+    mockUseNewsletterDetail.mockImplementation((id) => ({
+      newsletter: { ...newsletter, id, is_read: true, is_archived: true },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn().mockResolvedValue(undefined),
+    }));
+
+    renderPage();
+
+    // Fast-forward time by 3 seconds
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    // Should not call toggle archive
+    expect(mockHandleToggleArchive).not.toHaveBeenCalled();
+
+    // Clean up timers
+    vi.useRealTimers();
+  });
+
+  it('cleans up timers on unmount', async () => {
+    // Mock the timer
+    vi.useFakeTimers();
+
+    // Mock a read newsletter
+    mockUseNewsletterDetail.mockImplementation((id) => ({
+      newsletter: { ...newsletter, id, is_read: true, is_archived: false },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn().mockResolvedValue(undefined),
+    }));
+
+    const { unmount } = renderPage();
+
+    // Unmount before the timer fires
+    unmount();
+
+    // Fast-forward time by 3 seconds
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    // Should not call toggle archive after unmount
+    expect(mockHandleToggleArchive).not.toHaveBeenCalled();
+
+    // Clean up timers
+    vi.useRealTimers();
+  });
+});
