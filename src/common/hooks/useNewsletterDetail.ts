@@ -168,6 +168,8 @@ export const useNewsletterDetail = (
     staleTime,
     gcTime: cacheTime,
     refetchOnWindowFocus,
+    refetchOnMount: false, // Prevent cascade refetching
+    refetchOnReconnect: false, // Prevent refetch on reconnect
     // Optimistic updates - try to get data from newsletter lists first
     initialData: () => {
       const listsData = getQueriesData<

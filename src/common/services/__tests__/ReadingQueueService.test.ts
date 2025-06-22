@@ -18,6 +18,7 @@ vi.mock('../../api/readingQueueApi', () => ({
     clear: vi.fn(),
     reorder: vi.fn(),
     cleanupOrphanedItems: vi.fn(),
+    isInQueue: vi.fn(),
   },
 }));
 
@@ -391,20 +392,21 @@ describe('ReadingQueueService', () => {
 
   describe('isInQueue', () => {
     it('should return true if newsletter is in queue', async () => {
-      const mockItems = [mockQueueItem];
-      mockReadingQueueApi.getAll.mockResolvedValue(mockItems);
+      mockReadingQueueApi.isInQueue.mockResolvedValue(true);
 
       const result = await service.isInQueue('newsletter-1');
 
       expect(result).toBe(true);
+      expect(mockReadingQueueApi.isInQueue).toHaveBeenCalledWith('newsletter-1');
     });
 
     it('should return false if newsletter is not in queue', async () => {
-      mockReadingQueueApi.getAll.mockResolvedValue([]);
+      mockReadingQueueApi.isInQueue.mockResolvedValue(false);
 
       const result = await service.isInQueue('newsletter-1');
 
       expect(result).toBe(false);
+      expect(mockReadingQueueApi.isInQueue).toHaveBeenCalledWith('newsletter-1');
     });
 
     it('should validate newsletter ID', async () => {

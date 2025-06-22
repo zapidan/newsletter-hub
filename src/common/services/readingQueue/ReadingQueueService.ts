@@ -461,8 +461,8 @@ export class ReadingQueueService extends BaseService {
 
     return this.executeWithLogging(
       async () => {
-        const items = await readingQueueApi.getAll();
-        return items.some((item) => item.newsletter_id === newsletterId);
+        // Use the efficient API method that only queries for the specific newsletter
+        return await readingQueueApi.isInQueue(newsletterId);
       },
       'isInQueue',
       { newsletterId }

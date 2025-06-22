@@ -425,7 +425,18 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          invalidateForOperation(queryClient, 'mark-read', [id]);
+          // Only invalidate specific queries to prevent cascade
+          queryClient.invalidateQueries({
+            queryKey: queryKeyFactory.newsletters.detail(id),
+            refetchType: 'none', // Don't refetch automatically
+          });
+
+          // Only invalidate unread counts without refetching
+          queryClient.invalidateQueries({
+            queryKey: ['unreadCount'],
+            refetchType: 'none',
+          });
+
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -822,7 +833,18 @@ export const useNewsletters = (
     onSettled: (_data, _error, id) => {
       // Use minimal invalidation to preserve filter state
       setTimeout(() => {
-        invalidateForOperation(queryClient, 'toggle-archive', [id]);
+        // Only invalidate specific queries to prevent cascade
+        queryClient.invalidateQueries({
+          queryKey: queryKeyFactory.newsletters.detail(id),
+          refetchType: 'none', // Don't refetch automatically
+        });
+
+        // Only invalidate unread counts without refetching
+        queryClient.invalidateQueries({
+          queryKey: ['unreadCount'],
+          refetchType: 'none',
+        });
+
         // Dispatch event for unread count updates
         window.dispatchEvent(new CustomEvent('newsletter:archived'));
       }, 100);
@@ -1125,20 +1147,17 @@ export const useNewsletters = (
         });
       }
 
-      // Force refresh of queue data as fallback
-      invalidateForOperation(queryClient, 'toggle-queue-error', [id]);
+      // Don't force refresh on error - let the UI handle retry
     },
     onSuccess: (_result, id) => {
-      // Use smart invalidation for efficient cache updates
-      cacheManager.smartInvalidate({
-        operation: 'toggle-queue',
-        newsletterIds: [id],
-        priority: 'high',
+      // Only invalidate the specific reading queue query
+      queryClient.invalidateQueries({
+        queryKey: queryKeyFactory.queue.list(user?.id || ''),
+        refetchType: 'none', // Don't refetch automatically
       });
     },
     onSettled: (_data, _error, id) => {
-      // Ensure fresh data with minimal invalidation
-      invalidateForOperation(queryClient, 'toggle-queue', [id]);
+      // No additional invalidation needed - handled in onSuccess
     },
   });
 

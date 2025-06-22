@@ -12,10 +12,7 @@ const NavMock = {
     <div data-testid="mock-newsletter-navigation" data-current={currentNewsletterId} />
   )),
 };
-vi.mock(
-  'src/components/NewsletterDetail/NewsletterNavigation',
-  () => NavMock,
-);
+vi.mock('src/components/NewsletterDetail/NewsletterNavigation', () => NavMock);
 
 /* 1️⃣  Stub react-modal so it never touches the real DOM   */
 vi.mock('react-modal', () => ({
@@ -40,11 +37,13 @@ vi.mock('@common/hooks/useNewsletters', () => ({
 // Mock implementations that match the expected function signatures
 const mockHandleMarkAsRead = vi.fn().mockResolvedValue(undefined);
 const mockHandleToggleArchive = vi.fn().mockResolvedValue(undefined);
+const mockHandleToggleInQueue = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('@common/hooks/useSharedNewsletterActions', () => ({
   useSharedNewsletterActions: () => ({
     handleMarkAsRead: mockHandleMarkAsRead,
     handleToggleArchive: mockHandleToggleArchive,
+    handleToggleInQueue: mockHandleToggleInQueue,
   }),
 }));
 
@@ -109,7 +108,7 @@ vi.mock('@common/hooks/useTags', () => ({
     updateTag: mockUpdateTag,
     createTag: mockCreateTag,
     deleteTag: mockDeleteTag,
-  })
+  }),
 }));
 
 /* ────────────  REMAINING LIGHTWEIGHT MOCKS  ──────────── */
@@ -119,15 +118,17 @@ vi.mock('@common/hooks/useNewsletterDetail', () => ({
     // Call the mock function with the arguments for assertions
     mockUseNewsletterDetail(id, options);
     // Return the mock implementation
-    return mockUseNewsletterDetail.mock.results[0]?.value || {
-      newsletter: undefined,
-      isLoading: false,
-      isError: false,
-      error: null,
-      isFetching: false,
-      refetch: vi.fn().mockResolvedValue(undefined),
-      prefetchRelated: vi.fn(),
-    };
+    return (
+      mockUseNewsletterDetail.mock.results[0]?.value || {
+        newsletter: undefined,
+        isLoading: false,
+        isError: false,
+        error: null,
+        isFetching: false,
+        refetch: vi.fn().mockResolvedValue(undefined),
+        prefetchRelated: vi.fn(),
+      }
+    );
   },
 }));
 
@@ -137,18 +138,12 @@ vi.mock('@web/components/TagSelector', () => ({
     <div data-testid="tag-selector">
       <button
         data-testid="add-tag"
-        onClick={() =>
-          onTagsChange([{ id: 'tag1', name: 'New Tag', color: '#000' }])
-        }
+        onClick={() => onTagsChange([{ id: 'tag1', name: 'New Tag', color: '#000' }])}
       >
         add
       </button>
       {selectedTags.map((t) => (
-        <button
-          key={t.id}
-          data-testid={`remove-${t.id}`}
-          onClick={() => onTagsChange([])}
-        >
+        <button key={t.id} data-testid={`remove-${t.id}`} onClick={() => onTagsChange([])}>
           {t.name}
         </button>
       ))}
@@ -179,7 +174,11 @@ import NewsletterDetail from '../NewsletterDetail';
 // Using mocked version of useTags
 
 /* browser-api stubs missing from jsdom */
-global.ResizeObserver = class { observe() { } unobserve() { } disconnect() { } };
+global.ResizeObserver = class {
+  observe() { }
+  unobserve() { }
+  disconnect() { }
+};
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -248,6 +247,7 @@ beforeEach(() => {
   // Reset all mock functions
   mockHandleMarkAsRead.mockClear().mockResolvedValue(undefined);
   mockHandleToggleArchive.mockClear().mockResolvedValue(undefined);
+  mockHandleToggleInQueue.mockClear().mockResolvedValue(undefined);
   mockUpdateNewsletterTags.mockClear().mockResolvedValue(true);
   mockMemoizedGetTags.mockClear().mockResolvedValue([]);
 
@@ -303,7 +303,7 @@ describe('NewsletterDetail (fast version)', () => {
     expect(screen.getByText('C')).toBeInTheDocument();
   });
 
-  it('fires refetch on "mark as read" click', async () => {
+  it('calls handleMarkAsRead on "mark as read" click', async () => {
     const refetch = vi.fn().mockResolvedValue(undefined);
     const prefetchRelated = vi.fn().mockResolvedValue(undefined);
 
@@ -321,6 +321,9 @@ describe('NewsletterDetail (fast version)', () => {
       prefetchRelated,
     });
 
+    // Reset the mock before rendering
+    mockHandleMarkAsRead.mockClear();
+
     renderPage();
     const user = userEvent.setup();
 
@@ -329,16 +332,13 @@ describe('NewsletterDetail (fast version)', () => {
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     });
 
-    // Reset the mock to ignore any previous calls (like from initial render)
-    refetch.mockClear();
-
     // Click the mark as read button
     const markAsReadButton = screen.getByLabelText(/mark as read/i);
     await user.click(markAsReadButton);
 
-    // Check that refetch was called at least once after the button click
+    // Check that handleMarkAsRead was called with the newsletter id
     await waitFor(() => {
-      expect(refetch).toHaveBeenCalled();
+      expect(mockHandleMarkAsRead).toHaveBeenCalledWith(newsletter.id);
     });
   });
 
@@ -360,16 +360,16 @@ describe('NewsletterDetail (fast version)', () => {
     });
   });
 
-  it.skip('automatically archives read newsletter after a delay', async () => {
+  it('automatically archives read newsletter after a delay', async () => {
+    vi.useFakeTimers();
+
     const refetch = vi.fn();
 
-    // Start with UNREAD newsletter
-    const unreadNewsletter = { ...newsletter, is_read: false };
+    // Start with a newsletter that is read but not archived
+    const readNewsletter = { ...newsletter, is_read: true, is_archived: false };
 
-    // Create a spy that we can control
-    const mockReturnValue = vi.fn();
-    mockReturnValue.mockReturnValue({
-      newsletter: unreadNewsletter,
+    mockUseNewsletterDetail.mockReturnValue({
+      newsletter: readNewsletter,
       isLoading: false,
       isError: false,
       error: null,
@@ -378,20 +378,37 @@ describe('NewsletterDetail (fast version)', () => {
       prefetchRelated: vi.fn(),
     });
 
-    mockUseNewsletterDetail.mockImplementation(mockReturnValue);
-    mockHandleMarkAsRead.mockResolvedValue();
+    mockHandleToggleArchive.mockResolvedValue();
 
     renderPage();
 
-    // Wait for mark-as-read to be called
-    await waitFor(() => {
-      expect(mockHandleMarkAsRead).toHaveBeenCalledWith(newsletter.id);
+    // Verify content renders
+    expect(screen.getByText('C')).toBeInTheDocument();
+
+    // Fast-forward time by 3 seconds to trigger auto-archive
+    act(() => {
+      vi.advanceTimersByTime(3000);
     });
 
-    // NOW simulate the state change that would happen after mark-as-read succeeds
-    const readNewsletter = { ...newsletter, is_read: true, is_archived: false };
-    mockReturnValue.mockReturnValue({
-      newsletter: readNewsletter, // Now it's read!
+    // Run pending timers
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Verify auto-archive was called
+    expect(mockHandleToggleArchive).toHaveBeenCalledWith(
+      expect.objectContaining({ id: newsletter.id, is_read: true, is_archived: false })
+    );
+
+    vi.useRealTimers();
+  });
+
+  it('handles newsletter queue toggle correctly', async () => {
+    const refetch = vi.fn();
+    const user = userEvent.setup();
+
+    mockUseNewsletterDetail.mockReturnValue({
+      newsletter: { ...newsletter },
       isLoading: false,
       isError: false,
       error: null,
@@ -400,18 +417,17 @@ describe('NewsletterDetail (fast version)', () => {
       prefetchRelated: vi.fn(),
     });
 
-    // Force a re-render to pick up the new state
-    await act(async () => {
-      // Simulate what React Query would do - call refetch or trigger a re-render
-      await new Promise(resolve => setTimeout(resolve, 0));
-    });
+    renderPage();
 
-    // Now wait for auto-archive (3s delay + buffer)
-    await waitFor(() => {
-      expect(mockHandleToggleArchive).toHaveBeenCalledWith(
-        expect.objectContaining({ id: newsletter.id })
-      );
-    }, { timeout: 4000 });
+    // Find and click the queue toggle button
+    const queueButton = await screen.findByLabelText(/add to queue/i);
+    await user.click(queueButton);
+
+    // Verify handleToggleInQueue was called with correct parameters
+    expect(mockHandleToggleInQueue).toHaveBeenCalledWith(
+      expect.objectContaining({ id: newsletter.id }),
+      false // isInQueue should be false initially
+    );
   });
 
   it('allows adding and removing tags', async () => {
@@ -422,31 +438,33 @@ describe('NewsletterDetail (fast version)', () => {
     const prefetchRelated = vi.fn().mockResolvedValue(undefined);
 
     // Create a mock implementation of the TagSelector component
-    const MockTagSelector = vi.fn().mockImplementation(({ onAddTag, onRemoveTag, selectedTags = [] }) => (
-      <div data-testid="tag-selector">
-        <input
-          data-testid="tag-input"
-          placeholder="Add a tag"
-          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter' && (e.target as HTMLInputElement).value) {
-              onAddTag({ id: 'new-tag', name: (e.target as HTMLInputElement).value, color: '#000000' });
-              (e.target as HTMLInputElement).value = '';
-            }
-          }}
-        />
-        <div data-testid="selected-tags">
-          {selectedTags.map((tag: any) => (
-            <button
-              key={tag.id}
-              data-testid={`tag-${tag.id}`}
-              onClick={() => onRemoveTag(tag)}
-            >
-              {tag.name}
-            </button>
-          ))}
+    const MockTagSelector = vi
+      .fn()
+      .mockImplementation(({ onAddTag, onRemoveTag, selectedTags = [] }) => (
+        <div data-testid="tag-selector">
+          <input
+            data-testid="tag-input"
+            placeholder="Add a tag"
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+              if (e.key === 'Enter' && (e.target as HTMLInputElement).value) {
+                onAddTag({
+                  id: 'new-tag',
+                  name: (e.target as HTMLInputElement).value,
+                  color: '#000000',
+                });
+                (e.target as HTMLInputElement).value = '';
+              }
+            }}
+          />
+          <div data-testid="selected-tags">
+            {selectedTags.map((tag: any) => (
+              <button key={tag.id} data-testid={`tag-${tag.id}`} onClick={() => onRemoveTag(tag)}>
+                {tag.name}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-    ));
+      ));
 
     // Mock the TagSelector component
     vi.doMock('@web/components/TagSelector', () => ({
@@ -489,9 +507,7 @@ describe('NewsletterDetail (fast version)', () => {
     });
 
     // Mock the memoizedGetTags to return some tags
-    mockMemoizedGetTags.mockResolvedValue([
-      { id: 'tag1', name: 'New Tag' },
-    ]);
+    mockMemoizedGetTags.mockResolvedValue([{ id: 'tag1', name: 'New Tag' }]);
 
     renderPage();
 

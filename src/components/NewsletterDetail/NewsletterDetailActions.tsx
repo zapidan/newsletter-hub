@@ -1,5 +1,4 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
@@ -70,35 +69,92 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   // Sync local state with props when newsletter changes
   useEffect(() => {
     setLocalNewsletter(newsletter);
-  }, [newsletter]);
+    // Reset queue check when newsletter changes
+    if (newsletter?.id !== localNewsletter?.id) {
+      // Clear all stored checks except current newsletter
+      const currentId = newsletter?.id;
+      hasCheckedQueue.current = currentId
+        ? { [currentId]: hasCheckedQueue.current[currentId] || false }
+        : {};
+    }
+  }, [newsletter, localNewsletter?.id]);
 
   // Check actual queue status when newsletter changes
-  useEffect(() => {
-    const checkQueueStatus = async () => {
-      if (!newsletter?.id) return;
+  const hasCheckedQueue = useRef<{ [key: string]: boolean }>({});
+  const checkDebounceRef = useRef<NodeJS.Timeout>();
 
+  useEffect(() => {
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+
+    const checkQueueStatus = async () => {
+      // Only check once per newsletter
+      if (!newsletter?.id || !mounted || hasCheckedQueue.current[newsletter.id]) return;
+
+      // Mark as checked immediately to prevent re-runs
+      hasCheckedQueue.current[newsletter.id] = true;
       setIsCheckingQueue(true);
+
+      // Add timeout to prevent infinite waiting
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Queue check timeout')), 5000);
+      });
+
       try {
-        const inQueue = await checkIsInQueue(newsletter.id);
-        setIsInQueue(inQueue);
+        const inQueue = await Promise.race([checkIsInQueue(newsletter.id), timeoutPromise]);
+
+        if (mounted) {
+          setIsInQueue(inQueue);
+        }
       } catch (error) {
-        log.error(
-          'Failed to check queue status',
-          {
-            action: 'check_queue_status',
-            metadata: { newsletterId: newsletter.id },
-          },
-          error instanceof Error ? error : new Error(String(error))
-        );
-        // Fallback to prop value if API fails
-        setIsInQueue(isFromReadingQueue);
+        if (mounted) {
+          log.error(
+            'Failed to check queue status',
+            {
+              action: 'check_queue_status',
+              metadata: { newsletterId: newsletter.id },
+            },
+            error instanceof Error ? error : new Error(String(error))
+          );
+          // Fallback to prop value if API fails
+          setIsInQueue(isFromReadingQueue);
+        }
       } finally {
-        setIsCheckingQueue(false);
+        if (mounted) {
+          setIsCheckingQueue(false);
+        }
+        clearTimeout(timeoutId);
       }
     };
 
-    checkQueueStatus();
-  }, [newsletter?.id, isFromReadingQueue, checkIsInQueue]);
+    // Clear any existing debounce timer
+    if (checkDebounceRef.current) {
+      clearTimeout(checkDebounceRef.current);
+    }
+
+    // Reset check flag when newsletter changes
+    if (newsletter?.id !== localNewsletter?.id) {
+      // Skip queue check if we already know the status
+      if (isFromReadingQueue && newsletter?.id) {
+        setIsInQueue(true);
+        hasCheckedQueue.current[newsletter.id] = true;
+        return;
+      }
+    }
+
+    // Debounce the queue check to prevent rapid checks
+    checkDebounceRef.current = setTimeout(() => {
+      checkQueueStatus();
+    }, 300); // 300ms debounce
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+      if (checkDebounceRef.current) {
+        clearTimeout(checkDebounceRef.current);
+      }
+    };
+  }, [newsletter?.id]); // Only depend on newsletter ID
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingReadStatus) return;
@@ -178,32 +234,56 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   }, [localNewsletter, isLiking, handleToggleLike, newsletter, onNewsletterUpdate, log]);
 
   const handleToggleQueue = useCallback(async () => {
-    if (!localNewsletter?.id || isTogglingQueue || isCheckingQueue) return;
+    if (!localNewsletter?.id || isTogglingQueue) return;
 
     setIsTogglingQueue(true);
+
+    // Store current state for potential rollback
+    const previousQueueStatus = isInQueue;
 
     // Optimistic update for immediate UI feedback
     const newQueueStatus = !isInQueue;
     setIsInQueue(newQueueStatus);
 
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
-      await handleToggleInQueue(localNewsletter, isInQueue);
+      await handleToggleInQueue(localNewsletter, previousQueueStatus);
+
+      // If successful, the new status should stick
+      clearTimeout(timeoutId);
     } catch (error) {
-      log.error(
-        'Failed to toggle reading queue',
-        {
-          action: 'toggle_reading_queue',
-          metadata: { newsletterId: newsletter.id },
-        },
-        error instanceof Error ? error : new Error(String(error))
-      );
+      // Check if it was aborted
+      if (controller.signal.aborted) {
+        log.error(
+          'Toggle queue operation timed out',
+          {
+            action: 'toggle_reading_queue_timeout',
+            metadata: { newsletterId: newsletter.id },
+          },
+          new Error('Operation timed out')
+        );
+        toast.error('Operation timed out. Please try again.');
+      } else {
+        log.error(
+          'Failed to toggle reading queue',
+          {
+            action: 'toggle_reading_queue',
+            metadata: { newsletterId: newsletter.id },
+          },
+          error instanceof Error ? error : new Error(String(error))
+        );
+        toast.error('Failed to update reading queue');
+      }
       // Revert optimistic update on error
-      setIsInQueue(isInQueue);
-      toast.error('Failed to update reading queue');
+      setIsInQueue(previousQueueStatus);
     } finally {
+      clearTimeout(timeoutId);
       setIsTogglingQueue(false);
     }
-  }, [localNewsletter, isTogglingQueue, isCheckingQueue, isInQueue, handleToggleInQueue]);
+  }, [localNewsletter, isTogglingQueue, isInQueue, handleToggleInQueue, newsletter.id, log]);
 
   const handleArchive = useCallback(async () => {
     if (!localNewsletter?.id || isArchiving || localNewsletter.is_archived) return;
@@ -354,11 +434,13 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
         {(isTogglingQueue || isCheckingQueue) && (
           <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
         )}
-        <BookmarkIcon
-          className={`h-4 w-4 ${isInQueue ? 'fill-yellow-500' : 'fill-none'}`}
-          stroke="currentColor"
-        />
-        <span>{isInQueue ? 'Saved' : 'Save for later'}</span>
+        {!isTogglingQueue && !isCheckingQueue && (
+          <BookmarkIcon
+            className={`h-4 w-4 ${isInQueue ? 'fill-yellow-500' : 'fill-none'}`}
+            stroke="currentColor"
+          />
+        )}
+        <span>{isCheckingQueue ? 'Checking...' : isInQueue ? 'Saved' : 'Save for later'}</span>
       </button>
 
       {/* Archive/Unarchive Toggle */}

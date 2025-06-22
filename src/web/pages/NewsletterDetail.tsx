@@ -125,11 +125,15 @@ const NewsletterDetail = memo(() => {
         replace: true,
       });
     }
-  }, [navigate, location.state, id]);
+  }, [navigate, location.state, id, log]);
   const { updateNewsletterTags } = useTags();
   const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
     showToasts: false,
     optimisticUpdates: true,
+    onSuccess: (updatedNewsletter) => {
+      // Don't refetch here - let React Query handle cache updates
+      // This prevents cascading refetches
+    },
   });
 
   const { user } = useAuth();
@@ -155,6 +159,8 @@ const NewsletterDetail = memo(() => {
 
   // Track mount status for cleanup
   const isMounted = useRef(true);
+  // Track if mark as read is in progress to prevent duplicates
+  const markAsReadInProgress = useRef(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -175,111 +181,118 @@ const NewsletterDetail = memo(() => {
     if (!newsletter?.tags) return [];
     return (newsletter.tags as unknown[]).map((t: unknown) => {
       if (typeof t === 'object' && t !== null && 'name' in t && 'color' in t) return t as Tag;
-      if (typeof t === 'object' && t !== null && 'tag' in t && (t as any).tag)
-        return (t as any).tag as Tag;
+      if (typeof t === 'object' && t !== null && 'tag' in t && (t as { tag: Tag }).tag)
+        return (t as { tag: Tag }).tag as Tag;
       return t as Tag;
     });
   }, [newsletter?.tags]);
 
   // Handle newsletter updates from the actions component
-  const handleNewsletterUpdate = useCallback(
-    (_updatedNewsletter: NewsletterWithRelations) => {
-      // Force immediate refetch to ensure UI updates
-      refetch();
-      // Also trigger related queries to update
-      prefetchRelated();
-    },
-    [refetch, prefetchRelated]
-  );
+  const handleNewsletterUpdate = useCallback((_updatedNewsletter: NewsletterWithRelations) => {
+    // Don't refetch here - React Query will update from cache
+    // This prevents infinite loops of refetching
+  }, []);
 
   // Auto-mark newsletter as read when it loads (instantaneous)
   useEffect(() => {
-    if (newsletter && !newsletter.is_read && !hasAutoMarkedAsRead && !loading && !fetchError) {
-      const markAsRead = async () => {
-        try {
-          await handleMarkAsRead(newsletter.id);
-          setHasAutoMarkedAsRead(true);
-          log.debug('Auto-marked newsletter as read on detail view', {
-            action: 'auto_mark_read_detail',
-            metadata: {
-              newsletterId: newsletter.id,
-              title: newsletter.title,
-            },
-          });
-          // Force refetch to update UI
-          await refetch();
-        } catch (error) {
-          log.error(
-            'Failed to auto-mark newsletter as read in detail view',
-            {
-              action: 'auto_mark_read_detail_error',
-              metadata: { newsletterId: newsletter.id },
-            },
-            error instanceof Error ? error : new Error(String(error))
-          );
-        }
-      };
-
-      // Mark as read immediately for instant feedback
-      markAsRead();
+    // Only run when we have a new newsletter that hasn't been marked as read
+    if (!newsletter || newsletter.is_read || loading || fetchError) {
+      return;
     }
-  }, [newsletter?.id, hasAutoMarkedAsRead, loading, fetchError, handleMarkAsRead, refetch, log]);
+
+    // Only run once per newsletter ID
+    if (hasAutoMarkedAsRead) {
+      return;
+    }
+
+    const markAsRead = async () => {
+      // Check if already in progress
+      if (markAsReadInProgress.current) {
+        return;
+      }
+
+      // Set both flags before making the call to prevent duplicate calls
+      setHasAutoMarkedAsRead(true);
+      markAsReadInProgress.current = true;
+
+      try {
+        await handleMarkAsRead(newsletter.id);
+        log.debug('Auto-marked newsletter as read on detail view', {
+          action: 'auto_mark_read_detail',
+          metadata: {
+            newsletterId: newsletter.id,
+            title: newsletter.title,
+          },
+        });
+      } catch (error) {
+        // Reset flag on error so it can be retried
+        setHasAutoMarkedAsRead(false);
+        log.error(
+          'Failed to auto-mark newsletter as read in detail view',
+          {
+            action: 'auto_mark_read_detail_error',
+            metadata: { newsletterId: newsletter.id },
+          },
+          error instanceof Error ? error : new Error(String(error))
+        );
+      } finally {
+        // Always reset the in-progress flag
+        markAsReadInProgress.current = false;
+      }
+    };
+
+    markAsRead();
+  }, [newsletter?.id]); // Only depend on newsletter ID to prevent re-runs
 
   // Auto-archive newsletter after it's been read and viewed for a short time
   useEffect(() => {
-    if (
-      newsletter &&
-      newsletter.is_read &&
-      !newsletter.is_archived &&
-      !hasAutoArchived &&
-      !loading &&
-      !fetchError
-    ) {
-      const archiveNewsletter = async () => {
-        try {
-          await handleToggleArchive(newsletter);
-          setHasAutoArchived(true);
-          log.debug('Auto-archived newsletter after reading', {
-            action: 'auto_archive_detail',
-            metadata: {
-              newsletterId: newsletter.id,
-              title: newsletter.title,
-            },
-          });
-          // Force refetch to update UI
-          await refetch();
-        } catch (error) {
-          log.error(
-            'Failed to auto-archive newsletter in detail view',
-            {
-              action: 'auto_archive_detail_error',
-              metadata: { newsletterId: newsletter.id },
-            },
-            error instanceof Error ? error : new Error(String(error))
-          );
-        }
-      };
-
-      // Archive after 3 seconds of viewing a read newsletter
-      const timeoutId = setTimeout(archiveNewsletter, 3000);
-      return () => clearTimeout(timeoutId);
+    // Skip if conditions aren't met
+    if (!newsletter || !newsletter.is_read || newsletter.is_archived || loading || fetchError) {
+      return;
     }
-  }, [
-    newsletter?.id,
-    newsletter?.is_read,
-    newsletter?.is_archived,
-    hasAutoArchived,
-    loading,
-    fetchError,
-    handleToggleArchive,
-    refetch,
-    log,
-  ]);
+
+    // Skip if already processed
+    if (hasAutoArchived) {
+      return;
+    }
+
+    // Set flag immediately to prevent multiple timers
+    setHasAutoArchived(true);
+
+    const archiveNewsletter = async () => {
+      try {
+        await handleToggleArchive(newsletter);
+        log.debug('Auto-archived newsletter after reading', {
+          action: 'auto_archive_detail',
+          metadata: {
+            newsletterId: newsletter.id,
+            title: newsletter.title,
+          },
+        });
+      } catch (error) {
+        // Reset flag on error so it can be retried
+        setHasAutoArchived(false);
+        log.error(
+          'Failed to auto-archive newsletter in detail view',
+          {
+            action: 'auto_archive_detail_error',
+            metadata: { newsletterId: newsletter.id },
+          },
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+    };
+
+    // Archive after 3 seconds of viewing a read newsletter
+    const timeoutId = setTimeout(archiveNewsletter, 3000);
+    return () => clearTimeout(timeoutId);
+  }, [newsletter?.id, newsletter?.is_read, newsletter?.is_archived]); // Minimal dependencies
 
   // Reset auto-mark and auto-archive state when newsletter ID changes
   useEffect(() => {
     setHasAutoMarkedAsRead(false);
     setHasAutoArchived(false);
+    markAsReadInProgress.current = false;
   }, [id]);
 
   if (loading) {
