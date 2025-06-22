@@ -1149,14 +1149,14 @@ export const useNewsletters = (
 
       // Don't force refresh on error - let the UI handle retry
     },
-    onSuccess: (_result, id) => {
+    onSuccess: (_result, _id) => {
       // Only invalidate the specific reading queue query
       queryClient.invalidateQueries({
         queryKey: queryKeyFactory.queue.list(user?.id || ''),
         refetchType: 'none', // Don't refetch automatically
       });
     },
-    onSettled: (_data, _error, id) => {
+    onSettled: (_data, _error, _id) => {
       // No additional invalidation needed - handled in onSuccess
     },
   });

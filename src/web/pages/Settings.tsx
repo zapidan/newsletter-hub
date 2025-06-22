@@ -1,24 +1,24 @@
-import { useState, FormEvent } from "react";
 import { useAuth } from "@common/contexts/AuthContext";
 import { useEmailAlias } from "@common/hooks/useEmailAlias";
-import { useLogger } from "@common/utils/logger/useLogger";
 import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
+import { useLogger } from "@common/utils/logger/useLogger";
 import { motion } from "framer-motion";
 import {
-  Mail,
+  AlertTriangle,
   Bell,
-  Volume2,
-  Trash2,
-  UserCircle,
+  CheckCircle,
+  ChevronRight,
+  Clipboard,
   Lock,
   LogOut,
-  Clipboard,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  ChevronRight,
+  Mail,
   RefreshCw,
+  Trash2,
+  UserCircle,
+  Volume2,
+  XCircle,
 } from "lucide-react";
+import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
 const Settings = () => {
@@ -269,11 +269,10 @@ const Settings = () => {
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`btn w-full justify-start gap-3 mb-1 ${
-                    activeTab === tab.id
+                  className={`btn w-full justify-start gap-3 mb-1 ${activeTab === tab.id
                       ? "btn-primary text-white"
                       : "btn-ghost text-slate-700 hover:bg-slate-50"
-                  }`}
+                    }`}
                 >
                   {tab.icon}
                   <span>{tab.label}</span>
@@ -449,22 +448,25 @@ const Settings = () => {
                                         ? "newsletter"
                                         : "newsletters"}
                                     </span>
-                                    {source.unread_count &&
-                                      source.unread_count > 0 && (
-                                        <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
-                                          {source.unread_count} unread
-                                        </span>
-                                      )}
+                                    <span
+                                      className={`text-xs px-2 py-0.5 rounded-full ${(source.unread_count || 0) > 0
+                                          ? "bg-orange-100 text-orange-800"
+                                          : "bg-gray-100 text-gray-600"
+                                        }`}
+                                    >
+                                      {(source.unread_count || 0) > 0
+                                        ? `${source.unread_count} unread`
+                                        : "0 unread"}
+                                    </span>
                                   </div>
                                 </div>
                                 <div className="flex items-center">
                                   <button
                                     type="button"
-                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                                      source.is_archived
+                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${source.is_archived
                                         ? "bg-gray-200"
                                         : "bg-blue-600"
-                                    }`}
+                                      }`}
                                     role="switch"
                                     aria-checked={!source.is_archived}
                                     onClick={() =>
@@ -482,11 +484,10 @@ const Settings = () => {
                                     </span>
                                     <span
                                       aria-hidden="true"
-                                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                        source.is_archived
+                                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${source.is_archived
                                           ? "translate-x-0"
                                           : "translate-x-5"
-                                      }`}
+                                        }`}
                                     />
                                   </button>
                                 </div>
@@ -537,11 +538,10 @@ const Settings = () => {
                               }
                             />
                             <span
-                              className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${
-                                notificationEmail
+                              className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${notificationEmail
                                   ? "translate-x-5"
                                   : "translate-x-0"
-                              }`}
+                                }`}
                             ></span>
                           </div>
                         </div>
@@ -570,11 +570,10 @@ const Settings = () => {
                               }
                             />
                             <span
-                              className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${
-                                notificationBrowser
+                              className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${notificationBrowser
                                   ? "translate-x-5"
                                   : "translate-x-0"
-                              }`}
+                                }`}
                             ></span>
                           </div>
                         </div>

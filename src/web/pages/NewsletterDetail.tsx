@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useState, useMemo, memo } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useRef } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { useNewsletterDetail } from '@common/hooks/useNewsletterDetail';
-import { useTags } from '@common/hooks/useTags';
-import { useAuth } from '@common/contexts/AuthContext';
-import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
-import { useLogger } from '@common/utils/logger/useLogger';
 import LoadingScreen from '@common/components/common/LoadingScreen';
+import { useAuth } from '@common/contexts/AuthContext';
+import { useNewsletterDetail } from '@common/hooks/useNewsletterDetail';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { useTags } from '@common/hooks/useTags';
+import type { NewsletterWithRelations, Tag } from '@common/types';
+import { useLogger } from '@common/utils/logger/useLogger';
 import TagSelector from '@web/components/TagSelector';
+import { ArrowLeft } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
 import NewsletterNavigation from '../../components/NewsletterDetail/NewsletterNavigation';
-import type { NewsletterWithRelations, Tag } from '@common/types';
 
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
@@ -130,7 +129,7 @@ const NewsletterDetail = memo(() => {
   const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
     showToasts: false,
     optimisticUpdates: true,
-    onSuccess: (updatedNewsletter) => {
+    onSuccess: () => {
       // Don't refetch here - let React Query handle cache updates
       // This prevents cascading refetches
     },
