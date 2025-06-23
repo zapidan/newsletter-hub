@@ -33,7 +33,7 @@ vi.mock('lucide-react', () => ({
   Search: () => <div data-testid="search-icon">Search</div>,
   TrendingUp: () => <div data-testid="trending-up-icon">Discover</div>,
   Settings: () => <div data-testid="settings-icon">Settings</div>,
-  Menu: () => <button data-testid="menu-icon">Menu</button>,
+  Menu: () => <div data-testid="menu-icon">Menu</div>,
   X: () => <div data-testid="close-icon">Close</div>,
   Mail: () => <div data-testid="mail-icon">Mail</div>,
   Copy: () => <div data-testid="copy-icon">Copy</div>,
