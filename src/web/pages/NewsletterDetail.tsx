@@ -241,7 +241,7 @@ const NewsletterDetail = memo(() => {
     };
 
     markAsRead();
-  }, [newsletter?.id]); // Only depend on newsletter ID to prevent re-runs
+  }, [newsletter?.id, handleMarkAsRead, log, hasAutoMarkedAsRead]); // Include all dependencies
 
   // Auto-archive newsletter after it's been read and viewed for a short time
   useEffect(() => {
@@ -285,7 +285,7 @@ const NewsletterDetail = memo(() => {
     // Archive after 3 seconds of viewing a read newsletter
     const timeoutId = setTimeout(archiveNewsletter, 3000);
     return () => clearTimeout(timeoutId);
-  }, [newsletter?.id, newsletter?.is_read, newsletter?.is_archived]); // Minimal dependencies
+  }, [newsletter?.id, newsletter?.is_read, newsletter?.is_archived, handleToggleArchive, log]); // Include all dependencies
 
   // Reset auto-mark and auto-archive state when newsletter ID changes
   useEffect(() => {

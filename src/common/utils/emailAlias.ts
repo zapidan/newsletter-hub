@@ -5,11 +5,6 @@ import { logger } from './logger';
 // Initialize logger
 const log = logger;
 
-type EmailAliasResult = {
-  email: string;
-  error?: string;
-};
-
 /**
  * Generates an email alias based on the provided email and configuration
  * @param email User's email address

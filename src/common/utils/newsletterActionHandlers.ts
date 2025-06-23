@@ -1,8 +1,8 @@
-import { readingQueueApi } from "@common/api";
-import type { NewsletterWithRelations } from "@common/types";
-import { toast } from "react-hot-toast";
-import { getCacheManager } from "./cacheUtils";
-import { logger } from "./logger";
+import { readingQueueApi } from '@common/api';
+import type { NewsletterWithRelations } from '@common/types';
+import { toast } from 'react-hot-toast';
+import { getCacheManager } from './cacheUtils';
+import { logger } from './logger';
 
 export interface NewsletterActionHandlers {
   markAsRead: (id: string) => Promise<void>;
@@ -35,10 +35,7 @@ export class SharedNewsletterActionHandlers {
     optimisticUpdates: true,
   };
 
-  constructor(
-    handlers: NewsletterActionHandlers,
-    options?: Partial<NewsletterActionOptions>,
-  ) {
+  constructor(handlers: NewsletterActionHandlers, options?: Partial<NewsletterActionOptions>) {
     this.handlers = handlers;
     this.cacheManager = getCacheManager();
     this.defaultOptions = { ...this.defaultOptions, ...options };
@@ -49,7 +46,7 @@ export class SharedNewsletterActionHandlers {
     updates: Partial<NewsletterWithRelations>,
     operation: () => Promise<T>,
     operationType: string,
-    options: NewsletterActionOptions = {},
+    options: NewsletterActionOptions = {}
   ): Promise<T> {
     const opts = { ...this.defaultOptions, ...options };
     let originalData: NewsletterWithRelations | null = null;
@@ -62,12 +59,12 @@ export class SharedNewsletterActionHandlers {
           originalData = await this.cacheManager.optimisticUpdate(
             newsletterId,
             updates,
-            operationType,
+            operationType
           );
           optimisticUpdateApplied = true;
         } catch (_) {
-          this.log.warn("Failed to apply optimistic update", {
-            action: "optimistic_update",
+          this.log.warn('Failed to apply optimistic update', {
+            action: 'optimistic_update',
             metadata: {
               newsletterId,
               operationType,
@@ -83,17 +80,14 @@ export class SharedNewsletterActionHandlers {
 
       // Use gentle invalidation to prevent UI flashing
       setTimeout(async () => {
-        await this.cacheManager.invalidateRelatedQueries(
-          [newsletterId],
-          operationType,
-        );
+        await this.cacheManager.invalidateRelatedQueries([newsletterId], operationType);
       }, 100);
 
       // Dispatch custom events for real-time updates
-      if (operationType === "mark-read" || operationType === "mark-unread") {
-        window.dispatchEvent(new CustomEvent("newsletter:read-status-changed"));
-      } else if (operationType === "archive" || operationType === "unarchive") {
-        window.dispatchEvent(new CustomEvent("newsletter:archived"));
+      if (operationType === 'mark-read' || operationType === 'mark-unread') {
+        window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
+      } else if (operationType === 'archive' || operationType === 'unarchive') {
+        window.dispatchEvent(new CustomEvent('newsletter:archived'));
       }
 
       opts.onSuccess?.();
@@ -107,27 +101,21 @@ export class SharedNewsletterActionHandlers {
             updates: originalData,
           });
         } catch (_) {
-          this.log.warn("Failed to revert optimistic update", {
-            action: "revert_optimistic_update",
+          this.log.warn('Failed to revert optimistic update', {
+            action: 'revert_optimistic_update',
             metadata: {
               newsletterId,
               operationType,
             },
           });
           // Force refresh if revert fails
-          await this.cacheManager.invalidateRelatedQueries(
-            [newsletterId],
-            "error-recovery",
-          );
+          await this.cacheManager.invalidateRelatedQueries([newsletterId], 'error-recovery');
         }
       }
 
-      const errorMessage =
-        error instanceof Error ? error.message : "An error occurred";
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       if (opts.showToasts) {
-        toast.error(
-          `Failed to ${operationType.replace("-", " ")}: ${errorMessage}`,
-        );
+        toast.error(`Failed to ${operationType.replace('-', ' ')}: ${errorMessage}`);
       }
 
       opts.onError?.(error instanceof Error ? error : new Error(errorMessage));
@@ -140,7 +128,7 @@ export class SharedNewsletterActionHandlers {
     updates: Partial<NewsletterWithRelations>,
     operation: () => Promise<T>,
     operationType: string,
-    options: NewsletterActionOptions = {},
+    options: NewsletterActionOptions = {}
   ): Promise<T> {
     const opts = { ...this.defaultOptions, ...options };
     let optimisticUpdateApplied = false;
@@ -149,13 +137,11 @@ export class SharedNewsletterActionHandlers {
       // Apply bulk optimistic updates if enabled
       if (opts.optimisticUpdates) {
         try {
-          this.cacheManager.batchUpdateNewsletters(
-            newsletterIds.map((id) => ({ id, updates })),
-          );
+          this.cacheManager.batchUpdateNewsletters(newsletterIds.map((id) => ({ id, updates })));
           optimisticUpdateApplied = true;
         } catch (_) {
-          this.log.warn("Failed to apply bulk optimistic update", {
-            action: "bulk_optimistic_update",
+          this.log.warn('Failed to apply bulk optimistic update', {
+            action: 'bulk_optimistic_update',
             metadata: {
               newsletterIds: newsletterIds.length,
               operationType,
@@ -171,10 +157,7 @@ export class SharedNewsletterActionHandlers {
 
       // Use gentle invalidation to prevent UI flashing for bulk operations
       setTimeout(async () => {
-        await this.cacheManager.invalidateRelatedQueries(
-          newsletterIds,
-          operationType,
-        );
+        await this.cacheManager.invalidateRelatedQueries(newsletterIds, operationType);
       }, 150);
 
       opts.onSuccess?.();
@@ -183,18 +166,12 @@ export class SharedNewsletterActionHandlers {
       // For bulk operations, we invalidate the entire cache on error
       // as reverting individual optimistic updates is complex
       if (optimisticUpdateApplied) {
-        await this.cacheManager.invalidateRelatedQueries(
-          newsletterIds,
-          "error-recovery",
-        );
+        await this.cacheManager.invalidateRelatedQueries(newsletterIds, 'error-recovery');
       }
 
-      const errorMessage =
-        error instanceof Error ? error.message : "An error occurred";
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       if (opts.showToasts) {
-        toast.error(
-          `Failed to ${operationType.replace("-", " ")}: ${errorMessage}`,
-        );
+        toast.error(`Failed to ${operationType.replace('-', ' ')}: ${errorMessage}`);
       }
 
       opts.onError?.(error instanceof Error ? error : new Error(errorMessage));
@@ -202,51 +179,45 @@ export class SharedNewsletterActionHandlers {
     }
   }
 
-  async markAsRead(
-    newsletterId: string,
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
+  async markAsRead(newsletterId: string, options?: NewsletterActionOptions): Promise<void> {
     return this.withOptimisticUpdate(
       newsletterId,
       { is_read: true },
       () => this.handlers.markAsRead(newsletterId),
-      "mark-read",
+      'mark-read',
       {
         ...options,
         onSuccess: () => {
           if (options?.showToasts !== false) {
-            toast.success("Marked as read");
+            toast.success('Marked as read');
           }
           options?.onSuccess?.();
         },
-      },
+      }
     );
   }
 
-  async markAsUnread(
-    newsletterId: string,
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
+  async markAsUnread(newsletterId: string, options?: NewsletterActionOptions): Promise<void> {
     return this.withOptimisticUpdate(
       newsletterId,
       { is_read: false },
       () => this.handlers.markAsUnread(newsletterId),
-      "mark-unread",
+      'mark-unread',
       {
         ...options,
         onSuccess: () => {
           if (options?.showToasts !== false) {
-            toast.success("Marked as unread");
+            toast.success('Marked as unread');
           }
           options?.onSuccess?.();
         },
-      },
+      }
     );
   }
 
   async toggleLike(
     newsletter: NewsletterWithRelations,
-    options?: NewsletterActionOptions,
+    options?: NewsletterActionOptions
   ): Promise<void> {
     const newLikedState = !newsletter.is_liked;
     return this.withOptimisticUpdate(
@@ -256,15 +227,13 @@ export class SharedNewsletterActionHandlers {
         updated_at: new Date().toISOString(),
       },
       () => this.handlers.toggleLike(newsletter.id),
-      "toggle-like",
+      'toggle-like',
       {
         ...options,
         optimisticUpdates: true, // Always use optimistic updates for like
         onSuccess: () => {
           if (options?.showToasts !== false) {
-            toast.success(
-              newLikedState ? "Added to liked" : "Removed from liked",
-            );
+            toast.success(newLikedState ? 'Added to liked' : 'Removed from liked');
           }
           options?.onSuccess?.({
             ...newsletter,
@@ -272,45 +241,74 @@ export class SharedNewsletterActionHandlers {
             updated_at: new Date().toISOString(),
           });
         },
-      },
+      }
     );
   }
 
   async toggleArchive(
     newsletter: NewsletterWithRelations,
-    options?: NewsletterActionOptions,
+    options?: NewsletterActionOptions
   ): Promise<void> {
     const newArchivedState = !newsletter.is_archived;
+    const operation = newArchivedState ? 'archive' : 'unarchive';
+    const startTime = Date.now();
+
+    this.log.info('Starting archive operation', {
+      action: 'archive_operation_start',
+      metadata: {
+        newsletterId: newsletter.id,
+        newsletterTitle: newsletter.title,
+        operation,
+        currentArchiveState: newsletter.is_archived,
+        newArchiveState: newArchivedState,
+      },
+    });
+
     return this.withOptimisticUpdate(
       newsletter.id,
       { is_archived: newArchivedState },
-      () => this.handlers.toggleArchive(newsletter.id),
-      newArchivedState ? "archive" : "unarchive",
+      async () => {
+        try {
+          const result = await this.handlers.toggleArchive(newsletter.id);
+
+          this.log.info('Archive operation successful', {
+            action: 'archive_operation_success',
+            metadata: {
+              newsletterId: newsletter.id,
+              operation,
+              duration: Date.now() - startTime,
+            },
+          });
+
+          return result;
+        } catch (error) {
+          this.log.error('Archive operation failed', {
+            action: 'archive_operation_error',
+            metadata: {
+              newsletterId: newsletter.id,
+              operation,
+              error: error instanceof Error ? error.message : 'Unknown error',
+              duration: Date.now() - startTime,
+            },
+          });
+          throw error;
+        }
+      },
+      operation,
       {
         ...options,
         onSuccess: () => {
           if (options?.showToasts !== false) {
-            toast.success(
-              newArchivedState
-                ? "Newsletter archived"
-                : "Newsletter unarchived",
-            );
+            toast.success(newArchivedState ? 'Newsletter archived' : 'Newsletter unarchived');
           }
           options?.onSuccess?.(newsletter);
         },
-      },
+      }
     );
   }
 
-  async deleteNewsletter(
-    newsletterId: string,
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
-    if (
-      !window.confirm(
-        "Are you sure? This action is final and cannot be undone.",
-      )
-    ) {
+  async deleteNewsletter(newsletterId: string, options?: NewsletterActionOptions): Promise<void> {
+    if (!window.confirm('Are you sure? This action is final and cannot be undone.')) {
       return;
     }
 
@@ -318,24 +316,18 @@ export class SharedNewsletterActionHandlers {
       await this.handlers.deleteNewsletter(newsletterId);
 
       // Remove from cache immediately
-      await this.cacheManager.invalidateRelatedQueries(
-        [newsletterId],
-        "delete",
-      );
+      await this.cacheManager.invalidateRelatedQueries([newsletterId], 'delete');
 
       if (options?.showToasts !== false) {
-        toast.success("Newsletter deleted permanently");
+        toast.success('Newsletter deleted permanently');
       }
       options?.onSuccess?.();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "An error occurred";
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       if (options?.showToasts !== false) {
         toast.error(`Failed to delete newsletter: ${errorMessage}`);
       }
-      options?.onError?.(
-        error instanceof Error ? error : new Error(errorMessage),
-      );
+      options?.onError?.(error instanceof Error ? error : new Error(errorMessage));
       throw error;
     }
   }
@@ -343,56 +335,83 @@ export class SharedNewsletterActionHandlers {
   async toggleInQueue(
     newsletter: NewsletterWithRelations,
     isInQueue: boolean,
-    options?: NewsletterActionOptions,
+    options?: NewsletterActionOptions
   ): Promise<void> {
+    const startTime = Date.now();
+    const operation = isInQueue ? 'remove-from-queue' : 'add-to-queue';
+
+    this.log.info('Starting queue operation', {
+      action: 'queue_operation_start',
+      metadata: {
+        newsletterId: newsletter.id,
+        operation,
+        isInQueue,
+        newsletterTitle: newsletter.title,
+      },
+    });
+
     try {
       // Use the isInQueue parameter to determine the correct action
       if (isInQueue) {
         // Remove from queue - find the queue item first
         const queueItems = await readingQueueApi.getAll();
-        const queueItem = queueItems.find(
-          (item) => item.newsletter_id === newsletter.id,
-        );
+        const queueItem = queueItems.find((item) => item.newsletter_id === newsletter.id);
         if (queueItem) {
           await readingQueueApi.remove(queueItem.id);
+          this.log.info('Successfully removed from queue', {
+            action: 'queue_remove_success',
+            metadata: {
+              newsletterId: newsletter.id,
+              queueItemId: queueItem.id,
+              duration: Date.now() - startTime,
+            },
+          });
         } else {
-          throw new Error("Newsletter not found in reading queue");
+          throw new Error('Newsletter not found in reading queue');
         }
       } else {
         // Add to queue
-        await readingQueueApi.add(newsletter.id);
+        const queueItem = await readingQueueApi.add(newsletter.id);
+        this.log.info('Successfully added to queue', {
+          action: 'queue_add_success',
+          metadata: {
+            newsletterId: newsletter.id,
+            queueItemId: queueItem.id,
+            duration: Date.now() - startTime,
+          },
+        });
       }
 
       // Invalidate reading queue cache after successful operation
       setTimeout(async () => {
-        await this.cacheManager.invalidateRelatedQueries(
-          [newsletter.id],
-          "toggle-queue",
-        );
+        await this.cacheManager.invalidateRelatedQueries([newsletter.id], 'toggle-queue');
       }, 100);
 
       if (options?.showToasts !== false) {
-        toast.success(
-          isInQueue ? "Removed from reading queue" : "Added to reading queue",
-        );
+        toast.success(isInQueue ? 'Removed from reading queue' : 'Added to reading queue');
       }
 
       options?.onSuccess?.(newsletter);
     } catch (error) {
-      // Force cache refresh on error to ensure consistency
-      await this.cacheManager.invalidateRelatedQueries(
-        [newsletter.id],
-        "toggle-queue-error",
-      );
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
 
-      const errorMessage =
-        error instanceof Error ? error.message : "An error occurred";
+      this.log.error('Queue operation failed', {
+        action: 'queue_operation_error',
+        metadata: {
+          newsletterId: newsletter.id,
+          operation,
+          error: errorMessage,
+          duration: Date.now() - startTime,
+        },
+      });
+
+      // Force cache refresh on error to ensure consistency
+      await this.cacheManager.invalidateRelatedQueries([newsletter.id], 'toggle-queue-error');
+
       if (options?.showToasts !== false) {
         toast.error(`Failed to update reading queue: ${errorMessage}`);
       }
-      options?.onError?.(
-        error instanceof Error ? error : new Error(errorMessage),
-      );
+      options?.onError?.(error instanceof Error ? error : new Error(errorMessage));
       throw error;
     }
   }
@@ -400,44 +419,35 @@ export class SharedNewsletterActionHandlers {
   async updateTags(
     newsletterId: string,
     tagIds: string[],
-    options?: NewsletterActionOptions,
+    options?: NewsletterActionOptions
   ): Promise<void> {
     try {
       await this.handlers.updateTags(newsletterId, tagIds);
 
       // Invalidate tag-related queries
-      await this.cacheManager.invalidateRelatedQueries(
-        [newsletterId],
-        "tag-update",
-      );
+      await this.cacheManager.invalidateRelatedQueries([newsletterId], 'tag-update');
 
       if (options?.showToasts !== false) {
-        toast.success("Tags updated successfully");
+        toast.success('Tags updated successfully');
       }
       options?.onSuccess?.();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "An error occurred";
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       if (options?.showToasts !== false) {
         toast.error(`Failed to update tags: ${errorMessage}`);
       }
-      options?.onError?.(
-        error instanceof Error ? error : new Error(errorMessage),
-      );
+      options?.onError?.(error instanceof Error ? error : new Error(errorMessage));
       throw error;
     }
   }
 
   // Bulk operations
-  async bulkMarkAsRead(
-    newsletterIds: string[],
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
+  async bulkMarkAsRead(newsletterIds: string[], options?: NewsletterActionOptions): Promise<void> {
     return this.withBulkOptimisticUpdate(
       newsletterIds,
       { is_read: true },
       () => this.handlers.bulkMarkAsRead(newsletterIds),
-      "bulk-mark-read",
+      'bulk-mark-read',
       {
         ...options,
         onSuccess: () => {
@@ -446,42 +456,37 @@ export class SharedNewsletterActionHandlers {
           }
           options?.onSuccess?.();
         },
-      },
+      }
     );
   }
 
   async bulkMarkAsUnread(
     newsletterIds: string[],
-    options?: NewsletterActionOptions,
+    options?: NewsletterActionOptions
   ): Promise<void> {
     return this.withBulkOptimisticUpdate(
       newsletterIds,
       { is_read: false },
       () => this.handlers.bulkMarkAsUnread(newsletterIds),
-      "bulk-mark-unread",
+      'bulk-mark-unread',
       {
         ...options,
         onSuccess: () => {
           if (options?.showToasts !== false) {
-            toast.success(
-              `Marked ${newsletterIds.length} newsletters as unread`,
-            );
+            toast.success(`Marked ${newsletterIds.length} newsletters as unread`);
           }
           options?.onSuccess?.();
         },
-      },
+      }
     );
   }
 
-  async bulkArchive(
-    newsletterIds: string[],
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
+  async bulkArchive(newsletterIds: string[], options?: NewsletterActionOptions): Promise<void> {
     return this.withBulkOptimisticUpdate(
       newsletterIds,
       { is_archived: true },
       () => this.handlers.bulkArchive(newsletterIds),
-      "bulk-archive",
+      'bulk-archive',
       {
         ...options,
         onSuccess: () => {
@@ -490,19 +495,16 @@ export class SharedNewsletterActionHandlers {
           }
           options?.onSuccess?.();
         },
-      },
+      }
     );
   }
 
-  async bulkUnarchive(
-    newsletterIds: string[],
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
+  async bulkUnarchive(newsletterIds: string[], options?: NewsletterActionOptions): Promise<void> {
     return this.withBulkOptimisticUpdate(
       newsletterIds,
       { is_archived: false },
       () => this.handlers.bulkUnarchive(newsletterIds),
-      "bulk-unarchive",
+      'bulk-unarchive',
       {
         ...options,
         onSuccess: () => {
@@ -511,17 +513,14 @@ export class SharedNewsletterActionHandlers {
           }
           options?.onSuccess?.();
         },
-      },
+      }
     );
   }
 
-  async bulkDelete(
-    newsletterIds: string[],
-    options?: NewsletterActionOptions,
-  ): Promise<void> {
+  async bulkDelete(newsletterIds: string[], options?: NewsletterActionOptions): Promise<void> {
     if (
       !window.confirm(
-        `Are you sure you want to permanently delete ${newsletterIds.length} newsletters? This action cannot be undone.`,
+        `Are you sure you want to permanently delete ${newsletterIds.length} newsletters? This action cannot be undone.`
       )
     ) {
       return;
@@ -531,34 +530,24 @@ export class SharedNewsletterActionHandlers {
       await this.handlers.bulkDelete(newsletterIds);
 
       // Invalidate related queries
-      await this.cacheManager.invalidateRelatedQueries(
-        newsletterIds,
-        "bulk-delete",
-      );
+      await this.cacheManager.invalidateRelatedQueries(newsletterIds, 'bulk-delete');
 
       if (options?.showToasts !== false) {
-        toast.success(
-          `Deleted ${newsletterIds.length} newsletters permanently`,
-        );
+        toast.success(`Deleted ${newsletterIds.length} newsletters permanently`);
       }
       options?.onSuccess?.();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "An error occurred";
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       if (options?.showToasts !== false) {
         toast.error(`Failed to delete newsletters: ${errorMessage}`);
       }
-      options?.onError?.(
-        error instanceof Error ? error : new Error(errorMessage),
-      );
+      options?.onError?.(error instanceof Error ? error : new Error(errorMessage));
       throw error;
     }
   }
 
   // Utility method to create handlers with specific options
-  withOptions(
-    options: Partial<NewsletterActionOptions>,
-  ): SharedNewsletterActionHandlers {
+  withOptions(options: Partial<NewsletterActionOptions>): SharedNewsletterActionHandlers {
     return new SharedNewsletterActionHandlers(this.handlers, {
       ...this.defaultOptions,
       ...options,
@@ -569,7 +558,7 @@ export class SharedNewsletterActionHandlers {
 // Factory function to create shared handlers
 export function createSharedNewsletterHandlers(
   handlers: NewsletterActionHandlers,
-  options?: Partial<NewsletterActionOptions>,
+  options?: Partial<NewsletterActionOptions>
 ): SharedNewsletterActionHandlers {
   return new SharedNewsletterActionHandlers(handlers, options);
 }

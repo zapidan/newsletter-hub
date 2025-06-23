@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient, AuthError } from "@supabase/supabase-js";
+import { AuthError, createClient, SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "../utils/logger";
 
 // Configuration constants
@@ -42,12 +42,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
       component: "SupabaseClient",
       metadata: {
         missingVars,
-        mode: import.meta.env.MODE,
+        mode: "meta.env.MODE",
       },
     },
   );
 
-  if (import.meta.env.MODE === "development") {
+  if (process.env.NODE_ENV === "development") {
     log.warn(
       "Running in development mode with missing Supabase configuration",
       { component: "SupabaseClient" },

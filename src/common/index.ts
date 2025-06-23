@@ -1,245 +1,70 @@
 // Re-export common modules
-export * from "./types";
-export * from "./contexts";
 export * from "./components";
+export * from "./contexts";
+export * from "./types";
 
 // Re-export services with explicit names to avoid conflicts
 export {
   // Base service exports
-  BaseService,
-  ServiceError,
-  NetworkError,
-  ValidationError as ServiceValidationError,
-  NotFoundError as ServiceNotFoundError,
-  UnauthorizedError,
-  ServiceOptions,
-  RetryOptions as ServiceRetryOptions,
-
+  BaseService, NetworkError,
   // Newsletter service
   NewsletterService,
-  newsletterService,
-
-  // Tag service
-  TagService,
-  tagService,
-
   // Reading queue service
   ReadingQueueService,
-  readingQueueService,
 
   // Search service
-  SearchService,
-  searchService,
+  searchService, ServiceError, NotFoundError as ServiceNotFoundError, ServiceOptions,
+  RetryOptions as ServiceRetryOptions, ValidationError as ServiceValidationError,
+  tagService, UnauthorizedError
 } from "./services";
 
 // Re-export hooks with explicit names to avoid conflicts
 export {
+  RetryOptions as HookRetryOptions, useEmailAlias,
+  // Error handling
+  useErrorHandling, useInboxFilters, useInfiniteNewsletters,
+  useNewsletterDetail,
   // Business logic hooks
   useNewsletterOperations,
-  useTagOperations,
-  useReadingQueueOperations,
-
   // UI hooks
-  useNewsletters,
-  useInfiniteNewsletters,
-  useNewsletterDetail,
-  useTags,
-  useReadingQueue,
-  useUnreadCount,
-  useEmailAlias,
-  useUrlParams,
-  useInboxFilters,
-  usePerformanceOptimizations,
-  useTagsPageState,
-
-  // Error handling
-  useErrorHandling,
-  RetryOptions as HookRetryOptions,
+  useNewsletters, usePerformanceOptimizations, useReadingQueue, useReadingQueueOperations, useTagOperations, useTags, useTagsPageState, useUnreadCount, useUrlParams
 } from "./hooks";
 
 // Explicitly re-export API to avoid conflicts with hooks
 export {
-  // Core Supabase client and utilities
-  supabase,
-  handleSupabaseError,
-  getCurrentUser,
-  getCurrentSession,
-  requireAuth,
-  checkConnection,
-  withPerformanceLogging,
-  SupabaseError,
-  supabaseClient,
-
+  addSourcesToGroup, addTagToNewsletter, addToReadingQueue, API_CONFIG, archiveNewsletterSource, AuthenticationError, buildOrderQuery, buildPaginationQuery, buildSearchQuery, bulkArchive, bulkArchiveNewsletterSources, bulkCreateTags, bulkUnarchive, bulkUnarchiveNewsletterSources, bulkUpdateNewsletters, checkConnection, clearReadingQueue,
+  // API utilities
+  createApiService, createErrorResponse, createNewsletter, createNewsletterSource, createNewsletterSourceGroup, createSuccessResponse, createTag, createValidationError, deleteNewsletter, deleteNewsletterSource, deleteNewsletterSourceGroup, deleteTag, deleteUserAccount, ErrorType, generateEmailAlias, getActiveNewsletterSources, getAllNewsletters, getAllNewsletterSourceGroups, getAllNewsletterSources, getAllTags, getArchivedNewsletterSources, getCacheKey, getCurrentSession, getCurrentUser, getGroupSources, getNewsletterById, getNewslettersBySource, getNewslettersByTag, getNewsletterSourceById, getNewsletterSourceGroupById, getNewsletterSourceGroupStats, getNewsletterSourceStats, getNewsletterSourcesWithCounts, getNewsletterStats, getOrCreateTag, getPaginatedTags, getReadingQueue, getReadingQueueItemById, getReadingQueueStats, getSourceGroups, getTagById, getTagsForNewsletter, getTagUsageStats, getUserEmailAlias, getUserFriendlyMessage, getUserPreferences, getUserProfile, getUserStats, handleAsyncError, handleSupabaseError, isEmailAliasAvailable, isNewsletterInQueue, logError, markAsRead,
+  markAsUnread, measureApiCall, moveQueueItemToPosition,
+  // Error handling from API (with different export names to avoid conflicts)
   // Newsletter API
-  newsletterApi,
-  getAllNewsletters,
-  getNewsletterById,
-  createNewsletter,
-  updateNewsletter,
-  deleteNewsletter,
-  bulkUpdateNewsletters,
-  markAsRead,
-  markAsUnread,
-  toggleArchive,
-  bulkArchive,
-  bulkUnarchive,
-  toggleLike,
-  getNewslettersByTag,
-  getNewslettersBySource,
-  searchNewsletters,
-  getNewsletterStats,
-  newsletterService,
+  newsletterApi, newsletterService,
 
   // Newsletter Source API
   newsletterSourceApi,
-  getAllNewsletterSources,
-  getNewsletterSourceById,
-  createNewsletterSource,
-  updateNewsletterSource,
-  deleteNewsletterSource,
-  archiveNewsletterSource,
-  unarchiveNewsletterSource,
-  toggleArchiveNewsletterSource,
-  bulkArchiveNewsletterSources,
-  bulkUnarchiveNewsletterSources,
-  searchNewsletterSources,
-  getNewsletterSourcesWithCounts,
-  getActiveNewsletterSources,
-  getArchivedNewsletterSources,
-  getNewsletterSourceStats,
-  newsletterSourceService,
-
-  // Reading Queue API
-  readingQueueApi,
-  getReadingQueue,
-  addToReadingQueue,
-  removeFromReadingQueue,
-  reorderReadingQueue,
-  clearReadingQueue,
-  getReadingQueueItemById,
-  isNewsletterInQueue,
-  getReadingQueueStats,
-  moveQueueItemToPosition,
-  readingQueueService,
-
-  // Tag API
-  tagApi,
-  getAllTags,
-  getTagById,
-  createTag,
-  updateTag,
-  deleteTag,
-  getTagsForNewsletter,
-  updateNewsletterTags,
-  addTagToNewsletter,
-  removeTagFromNewsletter,
-  getOrCreateTag,
-  bulkCreateTags,
-  getTagUsageStats,
-  searchTags,
-  getPaginatedTags,
-  tagService,
-
   // Newsletter Source Group API
-  newsletterSourceGroupApi,
-  getAllNewsletterSourceGroups,
-  getNewsletterSourceGroupById,
-  createNewsletterSourceGroup,
-  updateNewsletterSourceGroup,
-  deleteNewsletterSourceGroup,
-  addSourcesToGroup,
-  removeSourcesFromGroup,
-  getGroupSources,
-  getSourceGroups,
-  getNewsletterSourceGroupStats,
-  searchNewsletterSourceGroups,
-  newsletterSourceGroupService,
-
-  // User API
-  userApi,
-  getUserProfile,
-  updateUserProfile,
-  generateEmailAlias,
-  getUserEmailAlias,
-  updateEmailAlias,
-  isEmailAliasAvailable,
-  deleteUserAccount,
-  getUserStats,
-  updateUserPreferences,
-  getUserPreferences,
-  userService,
-
-  // Error handling from API (with different export names to avoid conflicts)
-  NetworkError,
-  AuthenticationError,
-  ValidationError,
-  NotFoundError,
+  newsletterSourceGroupApi, newsletterSourceGroupService, newsletterSourceService, NotFoundError,
   PermissionError,
-  ErrorType,
-  transformSupabaseError,
-  getUserFriendlyMessage,
-  logError,
-  withRetry,
-  handleAsyncError,
-  createValidationError,
-  validateRequired,
-  validateEmail,
-  validateMinLength,
-  useErrorHandler,
-  setupGlobalErrorHandling,
+  // Reading Queue API
+  readingQueueApi, readingQueueService, removeFromReadingQueue, removeSourcesFromGroup, removeTagFromNewsletter, reorderReadingQueue, requireAuth, searchNewsletters, searchNewsletterSourceGroups, searchNewsletterSources, searchTags, setupGlobalErrorHandling,
   simulateError,
-
-  // API utilities
-  createApiService,
-  buildPaginationQuery,
-  buildOrderQuery,
-  buildSearchQuery,
-  createSuccessResponse,
-  createErrorResponse,
-  measureApiCall,
-  getCacheKey,
-  API_CONFIG,
+  // Core Supabase client and utilities
+  supabase, supabaseClient, SupabaseError,
+  // Tag API
+  tagApi, toggleArchive, toggleArchiveNewsletterSource, toggleLike, transformSupabaseError, unarchiveNewsletterSource, updateEmailAlias, updateNewsletter, updateNewsletterSource, updateNewsletterSourceGroup, updateNewsletterTags, updateTag, updateUserPreferences, updateUserProfile, useErrorHandler,
+  // User API
+  userApi, validateEmail,
+  validateMinLength, validateRequired, ValidationError, withPerformanceLogging, withRetry
 } from "./api";
 
 // Re-export API types
 export type {
-  ApiResponse,
-  ApiError,
-  ApiResult,
-  PaginationParams,
-  PaginatedResponse,
-  BaseQueryParams,
-  FilterParams,
+  ApiError, ApiResponse, ApiResult, ApiValidationError, AuthenticatedOperation, BaseQueryParams, BatchOperation,
+  BatchResult, BulkUpdateNewsletterParams, CacheInvalidationParams, CreateNewsletterParams, CreateNewsletterSourceGroupParams, CreateNewsletterSourceParams, CreateParams, CreateTagParams, CrudOperations, DatabaseOperation, FileUploadParams,
+  FileUploadResult, FilterParams,
   NewsletterQueryParams,
-  NewsletterSourceQueryParams,
-  TagQueryParams,
-  CreateNewsletterParams,
-  UpdateNewsletterParams,
-  BulkUpdateNewsletterParams,
-  CreateNewsletterSourceParams,
-  UpdateNewsletterSourceParams,
-  CreateTagParams,
-  UpdateTagParams,
-  CreateNewsletterSourceGroupParams,
-  UpdateNewsletterSourceGroupParams,
-  DatabaseOperation,
-  CacheInvalidationParams,
-  AuthenticatedOperation,
-  RealtimeSubscriptionParams,
-  ValidationError as ValidationErrorType,
-  ApiValidationError,
-  PerformanceMetrics,
-  BatchOperation,
-  BatchResult,
-  FileUploadParams,
-  FileUploadResult,
-  SearchParams,
-  SearchResult,
-  WithoutId,
-  WithOptionalId,
-  UpdateParams,
-  CreateParams,
-  CrudOperations,
+  NewsletterSourceQueryParams, PaginatedResponse, PaginationParams, PerformanceMetrics, RealtimeSubscriptionParams, SearchParams,
+  SearchResult, TagQueryParams, UpdateNewsletterParams, UpdateNewsletterSourceGroupParams, UpdateNewsletterSourceParams, UpdateParams, UpdateTagParams, ValidationError as ValidationErrorType, WithOptionalId, WithoutId
 } from "./api";
 
 // Add more exports as needed

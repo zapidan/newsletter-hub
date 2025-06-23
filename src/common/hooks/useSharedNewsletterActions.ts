@@ -276,9 +276,6 @@ export const useSharedNewsletterActions = (options: UseSharedNewsletterActionsOp
       isInQueue: boolean,
       actionOptions?: UseSharedNewsletterActionsOptions
     ) => {
-      // Extract the ID from the newsletter object
-      const newsletterId = newsletter.id;
-
       // Merge options with provided actionOptions
       const mergedOptions = {
         ...options,
@@ -286,8 +283,8 @@ export const useSharedNewsletterActions = (options: UseSharedNewsletterActionsOp
       };
 
       try {
-        // Call the handler with just the ID
-        await handlers.toggleInQueue(newsletterId);
+        // Call the handler with the full newsletter object and isInQueue state
+        await sharedHandlers.toggleInQueue(newsletter, isInQueue, mergedOptions);
 
         // Call success callback if provided
         mergedOptions.onSuccess?.(newsletter);
@@ -297,7 +294,7 @@ export const useSharedNewsletterActions = (options: UseSharedNewsletterActionsOp
         throw error;
       }
     },
-    [handlers, options]
+    [sharedHandlers, options]
   );
 
   const handleUpdateTags = useCallback(

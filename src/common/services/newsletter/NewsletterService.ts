@@ -1,16 +1,16 @@
-import { BaseService, NotFoundError } from '../base/BaseService';
 import { newsletterApi } from '@common/api/newsletterApi';
 import { readingQueueApi } from '@common/api/readingQueueApi';
 import { tagApi } from '@common/api/tagApi';
 import {
+  NewsletterFilter,
+  NewsletterQueryParams,
   NewsletterWithRelations,
+  PaginatedResponse,
   Tag,
   TagWithCount,
-  NewsletterQueryParams,
-  NewsletterFilter,
-  PaginatedResponse,
 } from '@common/types';
 import { logger } from '@common/utils/logger';
+import { BaseService, NotFoundError } from '../base/BaseService';
 
 export interface NewsletterOperationResult {
   success: boolean;
@@ -306,13 +306,12 @@ export class NewsletterService extends BaseService {
             };
           }
 
-          const newArchiveStatus = !newsletter.is_archived;
-          const success = await this.withRetry(
+          const updatedNewsletter = await this.withRetry(
             () => newsletterApi.toggleArchive(id),
             'toggleArchive'
           );
 
-          if (!success) {
+          if (!updatedNewsletter) {
             return {
               success: false,
               error: 'Failed to toggle archive status',
@@ -320,13 +319,13 @@ export class NewsletterService extends BaseService {
           }
 
           // Apply business logic - remove from reading queue if archived
-          if (newArchiveStatus) {
+          if (updatedNewsletter.is_archived) {
             await this.removeFromReadingQueueIfExists(id);
           }
 
           return {
             success: true,
-            newsletter: { ...newsletter, is_archived: newArchiveStatus },
+            newsletter: updatedNewsletter,
           };
         } catch (error) {
           return {

@@ -1,4 +1,4 @@
-// Import the mock Supabase client to ensure it's registered
+import { vi } from 'vitest';
 import { createMockSupabaseClient } from './e2e/test-utils/mock-supabase';
 
 // Initialize the mock Supabase client
@@ -9,11 +9,11 @@ const mockSupabase = createMockSupabaseClient();
 
 // Mock any global objects needed for testing
 const localStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
-  key: jest.fn(),
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+  key: vi.fn(),
   length: 0,
 };
 
@@ -36,19 +36,19 @@ Object.defineProperty(window, 'matchMedia', {
 
 // Mock the ResizeObserver
 class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+  observe() { }
+  unobserve() { }
+  disconnect() { }
 }
 
 window.ResizeObserver = window.ResizeObserver || ResizeObserverStub;
 
 // Mock the IntersectionObserver
 class IntersectionObserverStub {
-  constructor() {}
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+  constructor() { }
+  observe() { }
+  unobserve() { }
+  disconnect() { }
 }
 
 window.IntersectionObserver = window.IntersectionObserver || IntersectionObserverStub;
@@ -105,4 +105,5 @@ global.console = {
   warn: (...args: any[]) => originalConsole.warn(...args),
 };
 
-export {};
+export { };
+

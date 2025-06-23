@@ -5,16 +5,20 @@ const log = logger;
 
 // Email configuration with environment variable support
 const emailConfig = {
-  // Default username part for email aliases
-  // Set to 'user' to use the email's username, or specify a custom value
-  // Can be overridden by VITE_EMAIL_DEFAULT_USERNAME environment variable
-  defaultUsername: import.meta.env.VITE_EMAIL_DEFAULT_USERNAME || "user",
-
   // Default domain for email aliases
   // Can be overridden by VITE_EMAIL_DEFAULT_DOMAIN environment variable
-  defaultDomain:
-    import.meta.env.VITE_EMAIL_DEFAULT_DOMAIN || "newsletterhub.com",
+  defaultDomain: 'newsletterhub.com',
 };
+
+// Only try to access import.meta.env in browser environment
+if (typeof import.meta !== 'undefined' && import.meta.env) {
+  emailConfig.defaultDomain = import.meta.env.VITE_EMAIL_DEFAULT_DOMAIN || emailConfig.defaultDomain;
+}
+
+// Fallback to process.env for test environment
+if (process.env.VITE_EMAIL_DEFAULT_DOMAIN) {
+  emailConfig.defaultDomain = process.env.VITE_EMAIL_DEFAULT_DOMAIN;
+}
 
 // Validate configuration
 if (!emailConfig.defaultDomain.includes(".")) {
