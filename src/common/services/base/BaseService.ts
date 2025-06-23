@@ -60,17 +60,21 @@ export abstract class BaseService {
     maxDelay: 30000,
     backoffMultiplier: 2,
     retryCondition: (error: Error) => {
-      if (error instanceof NotFoundError || error instanceof ValidationError) {
+      // Do not retry specific client-side or unrecoverable errors by their name
+      if (error.name === 'NotFoundError' || error.name === 'ValidationError' || error.name === 'UnauthorizedError') {
         return false;
       }
-
       // Retry on network errors, timeout errors, or server errors (5xx)
+      // NetworkError name check is also good here.
       return !!(
-        error instanceof NetworkError ||
-        (error as Error & { code?: string }).code === "NETWORK_ERROR" ||
+        error.name === 'NetworkError' ||
+        (error as Error & { code?: string }).code === "NETWORK_ERROR" || // For generic errors that are network related
         (error as Error & { code?: string }).code === "TIMEOUT" ||
         ((error as Error & { statusCode?: number }).statusCode &&
-          (error as Error & { statusCode?: number }).statusCode! >= 500)
+          (error as Error & { statusCode?: number }).statusCode! >= 500) ||
+        // Add a condition to retry generic errors that don't match above but aren't explicitly excluded
+        (error.name !== 'NotFoundError' && error.name !== 'ValidationError' && error.name !== 'UnauthorizedError' &&
+         error.name !== 'ServiceError' && !((error as Error & { statusCode?: number }).statusCode && (error as Error & { statusCode?: number }).statusCode! < 500 && (error as Error & { statusCode?: number }).statusCode! >= 400))
       );
     },
   };
@@ -146,19 +150,23 @@ export abstract class BaseService {
   }
 
   protected normalizeError(error: Error, operationName: string): ServiceError {
-    if (error instanceof ServiceError) {
-      return error;
-    }
+    // Check by name first to preserve specific error types if they are already set
+    if (error.name === 'NotFoundError') return error as NotFoundError;
+    if (error.name === 'ValidationError') return error as ValidationError;
+    if (error.name === 'NetworkError') return error as NetworkError;
+    if (error.name === 'UnauthorizedError') return error as UnauthorizedError;
+    if (error.name === 'ServiceError' && (error as ServiceError).code) return error as ServiceError;
 
-    // Handle common error patterns
-    if (error.message?.includes("fetch")) {
+
+    // Handle common patterns for generic Error instances and wrap them appropriately
+    if (error.message?.includes("fetch") || error.message?.toLowerCase().includes("network error")) {
       return new NetworkError(
         `Network error during ${operationName}: ${error.message}`,
         error,
       );
     }
 
-    if (error.message?.includes("timeout")) {
+    if (error.message?.toLowerCase().includes("timeout")) {
       return new ServiceError(
         `Timeout during ${operationName}: ${error.message}`,
         "TIMEOUT",
@@ -167,21 +175,14 @@ export abstract class BaseService {
       );
     }
 
-    if (error.message?.includes("unauthorized")) {
-      return new UnauthorizedError(
+    if (error.message?.toLowerCase().includes("unauthorized")) {
+       return new UnauthorizedError(
         `Unauthorized during ${operationName}: ${error.message}`,
         error,
       );
     }
 
-    if (error.message?.includes("not found")) {
-      return new NotFoundError(
-        `Resource not found during ${operationName}: ${error.message}`,
-        error,
-      );
-    }
-
-    // Default to generic service error
+    // Default to generic service error for anything else
     return new ServiceError(
       `Error during ${operationName}: ${error.message}`,
       "GENERIC_ERROR",

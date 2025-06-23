@@ -334,7 +334,9 @@ describe('NewsletterDetail (fast version)', () => {
 
     // Click the mark as read button
     const markAsReadButton = screen.getByLabelText(/mark as read/i);
-    await user.click(markAsReadButton);
+    await act(async () => {
+      await user.click(markAsReadButton);
+    });
 
     // Check that handleMarkAsRead was called with the newsletter id
     await waitFor(() => {
@@ -421,7 +423,9 @@ describe('NewsletterDetail (fast version)', () => {
 
     // Find and click the queue toggle button
     const queueButton = await screen.findByLabelText(/add to queue/i);
-    await user.click(queueButton);
+    await act(async () => {
+      await user.click(queueButton);
+    });
 
     // Verify handleToggleInQueue was called with correct parameters
     expect(mockHandleToggleInQueue).toHaveBeenCalledWith(
@@ -511,7 +515,9 @@ describe('NewsletterDetail (fast version)', () => {
 
     renderPage();
 
-    await user.click(screen.getByTestId('add-tag'));
+    await act(async () => {
+      await user.click(screen.getByTestId('add-tag'));
+    });
 
     expect(mockUpdateNewsletterTags).toHaveBeenCalledWith(newsletter.id, [
       { id: 'tag1', name: 'New Tag', color: '#000' },
