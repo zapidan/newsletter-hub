@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@common/services/supabaseClient';
-import { getUserEmailAlias } from '@common/utils/emailAlias'; // Updated path to match actual file location
-import { User } from '@supabase/supabase-js';
+import { userService } from '@common/services/user/UserService';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { queryKeyFactory } from '@common/utils/queryKeyFactory';
+import { User } from '@supabase/supabase-js';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
 
 type AppUser = User | null;
 
@@ -38,13 +38,16 @@ export function useEmailAlias() {
 
   // Use React Query to fetch email alias with proper caching
   const {
-    data: emailAlias = '',
+    data: aliasResult = { email: '', error: null },
     isLoading: loading,
     error: queryError,
     refetch,
   } = useQuery({
     queryKey: queryKeyFactory.user.emailAlias(user?.id),
-    queryFn: getUserEmailAlias,
+    queryFn: async () => {
+      const result = await userService.getEmailAlias();
+      return result;
+    },
     enabled: !!user, // Only fetch when user is authenticated
     staleTime: 5 * 60 * 1000, // 5 minutes - email alias doesn't change often
     gcTime: 30 * 60 * 1000, // 30 minutes
@@ -60,6 +63,7 @@ export function useEmailAlias() {
 
   // Convert query error to string
   const error = queryError ? 'Failed to load email alias' : null;
+  const emailAlias = aliasResult.email || '';
 
   // Copy email alias to clipboard
   const copyToClipboard = useCallback(async () => {

@@ -64,27 +64,7 @@ export async function getUserEmailAlias(): Promise<string> {
   }
 }
 
-/**
- * Updates a user's email alias
- */
-export async function updateEmailAlias(newAlias: string): Promise<EmailAliasResult> {
-  try {
-    return await userApi.updateEmailAlias(newAlias);
-  } catch (error) {
-    log.error(
-      'Failed to update email alias',
-      {
-        action: 'update_email_alias',
-        metadata: { newAlias },
-      },
-      error instanceof Error ? error : new Error(String(error))
-    );
-    throw error;
-  }
-}
-
 export default {
   generateEmailAliasFromEmail,
-  getUserEmailAlias,
-  updateEmailAlias,
+  getUserEmailAlias
 };
