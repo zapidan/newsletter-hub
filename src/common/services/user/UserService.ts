@@ -257,7 +257,7 @@ export class UserService extends BaseService {
   }
 
   /**
-   * Get or create email alias
+   * Get email alias
    */
   async getEmailAlias(): Promise<EmailAliasResult> {
     return this.executeWithLogging(async () => {

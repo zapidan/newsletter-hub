@@ -6,7 +6,10 @@ import { InfiniteNewsletterList } from '../InfiniteScroll/InfiniteNewsletterList
 
 // Mock the date formatting function to ensure consistent snapshots
 vi.mock('@/common/utils/date', () => ({
-  formatDate: vi.fn().mockImplementation((date) => `Formatted: ${new Date(date).toISOString()}`),
+  formatDate: vi.fn().mockImplementation((date) => {
+    const d = new Date(date);
+    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+  }),
   formatRelativeTime: vi.fn().mockReturnValue('2 days ago'),
 }));
 
