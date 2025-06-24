@@ -22,7 +22,53 @@ run: |
   pnpm run test:dashboard
 ```
 
-### 2. YAML Structure Issues
+### 2. YAML Template Literal Syntax Error
+
+**Problem**: Template literals with backticks in JavaScript code within YAML caused parsing errors
+```javascript
+// ❌ Before (caused YAML parsing error)
+const comment = `## Test Results Dashboard ${status}
+
+### Summary
+- **Tests**: ${testSummary.tests} total, ${testSummary.failures} failed, ${testSummary.errors} errors
+- **Coverage**: ${coverageData.statements}% statements, ${coverageData.branches}% branches
+
+### 📊 View Reports
+- [Test Dashboard](https://${context.repo.owner}.github.io/${context.repo.repo}/test-dashboard/)
+- [Coverage Report](https://${context.repo.owner}.github.io/${context.repo.repo}/html/)
+- [Test Results](https://${context.repo.owner}.github.io/${context.repo.repo}/test-results/)
+
+### 📋 Artifacts
+Download the complete test artifacts to view locally:
+- Test Results: \`test-results/\`
+- Coverage Reports: \`html/\`
+- Dashboard: \`test-dashboard/\`
+
+---
+*Generated automatically by GitHub Actions*`;
+```
+
+**Solution**: Replaced template literals with string concatenation
+```javascript
+// ✅ After (YAML-safe)
+const comment = '## Test Results Dashboard ' + status + '\n\n' +
+  '### Summary\n' +
+  '- **Tests**: ' + testSummary.tests + ' total, ' + testSummary.failures + ' failed, ' + testSummary.errors + ' errors\n' +
+  '- **Coverage**: ' + coverageData.statements + '% statements, ' + coverageData.branches + '% branches\n\n' +
+  '### 📊 View Reports\n' +
+  '- [Test Dashboard](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/test-dashboard/)\n' +
+  '- [Coverage Report](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/html/)\n' +
+  '- [Test Results](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/test-results/)\n\n' +
+  '### 📋 Artifacts\n' +
+  'Download the complete test artifacts to view locally:\n' +
+  '- Test Results: `test-results/`\n' +
+  '- Coverage Reports: `html/`\n' +
+  '- Dashboard: `test-dashboard/`\n\n' +
+  '---\n' +
+  '*Generated automatically by GitHub Actions*';
+```
+
+### 3. YAML Structure Issues
 
 **Problem**: The workflow had proper YAML structure but needed consistency improvements
 
@@ -30,18 +76,7 @@ run: |
 - Ensured consistent indentation
 - Fixed package manager usage
 - Maintained proper YAML syntax
-
-### 3. GitHub Script Comment Formatting
-
-**Problem**: Backticks in the comment string needed proper escaping
-
-**Solution**: Used proper escaping for backticks in the comment:
-```javascript
-// ✅ Properly escaped backticks
-- Test Results: \`test-results/\`
-- Coverage Reports: \`html/\`
-- Dashboard: \`test-dashboard/\`
-```
+- Fixed template literal syntax errors
 
 ## Current Workflow Structure
 
@@ -59,7 +94,7 @@ The test workflow now has the following structure:
 4. **Create Directories**: Ensure test results directory exists
 5. **Run Tests**: Execute tests with coverage
 6. **Generate Dashboard**: Create test results, coverage, and dashboard reports
-7. **Comment PR**: Add dashboard links to pull requests
+7. **Comment PR**: Add dashboard links to pull requests (with fixed syntax)
 8. **Display Summary**: Show coverage summary
 9. **Verify Execution**: Debug test execution
 10. **List Results**: Show test results directory contents
@@ -76,6 +111,7 @@ The workflow has been validated for:
 - ✅ Correct indentation
 - ✅ Proper escaping of special characters
 - ✅ Valid GitHub Actions syntax
+- ✅ No template literal syntax errors
 
 ## Usage
 
@@ -101,6 +137,7 @@ If you encounter YAML parsing errors:
 2. **Validate Syntax**: Use a YAML validator
 3. **Check Special Characters**: Ensure proper escaping
 4. **Verify Package Manager**: Use consistent package manager commands
+5. **Avoid Template Literals**: Use string concatenation instead of template literals in JavaScript within YAML
 
 ## Next Steps
 

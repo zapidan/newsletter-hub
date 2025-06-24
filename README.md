@@ -7,21 +7,27 @@ A comprehensive newsletter management platform built with React, TypeScript, and
 ### View Test Results Online
 
 - **[Test Dashboard](https://zapidan.github.io/newsletterHub/test-dashboard/)** - Main dashboard with overview
+- **[Simple Test Table](https://zapidan.github.io/newsletterHub/test-results/simple-test-table.html)** - Clean table view similar to GitHub Actions
 - **[Coverage Report](https://zapidan.github.io/newsletterHub/html/)** - Detailed code coverage
 - **[Test Results](https://zapidan.github.io/newsletterHub/test-results/)** - Individual test details
 
 ### Local Development
 
-Generate and view test reports locally:
-
 ```bash
-# Generate all reports
+# Run tests and generate all reports
 npm run test:full
 
-# Individual reports
-npm run test:results:parse && npm run test:results:open
-npm run test:coverage:parse && npm run test:coverage:open
-npm run test:dashboard && npm run test:dashboard:open
+# Generate simple test table only
+npm run test:results:simple
+npm run test:results:simple:open
+
+# Generate detailed test results
+npm run test:results:parse
+npm run test:results:open
+
+# Generate coverage report
+npm run test:coverage:html
+npm run test:coverage:open
 ```
 
 ### CI/CD Integration
