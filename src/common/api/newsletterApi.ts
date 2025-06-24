@@ -84,9 +84,11 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
       .filter((tag: Tag | null): tag is Tag => tag !== null)
     : [];
 
+  const { _newsletter_sources, source: rawSource, tags: rawTags, ...restOfData } = data;
+
   const result: NewsletterWithRelations = {
     // Include all base Newsletter properties first
-    ...data,
+    ...restOfData,
 
     // Then include the transformed relations
     source: transformedSource,
