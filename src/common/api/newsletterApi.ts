@@ -92,7 +92,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
     source: transformedSource,
     tags: transformedTags,
     is_archived: Boolean(data.is_archived), // Convert to boolean
-    newsletter_source_id: (data.newsletter_source_id as string) || null,
+    newsletter_source_id: data.newsletter_source_id as string,
 
     // Ensure all required Newsletter properties are present
     id: data.id as string,
@@ -128,7 +128,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
 // Build query based on parameters
 const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
   // Build select clause
-  let selectClause = '*';
+  let selectClause = '*, newsletter_source_id'; // Ensure newsletter_source_id is always selected
   const relations = [];
 
   // Always include source relation when sourceIds is provided or includeSource is true
@@ -136,12 +136,14 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     params.includeSource || (params.sourceIds && params.sourceIds.length > 0);
   if (shouldIncludeSource) {
     // Include the relation with the source filter
-    relations.push('source:newsletter_sources(*)');
+    relations.push('source:newsletter_sources(id, name, from, created_at, updated_at, user_id)'); // Select specific source fields
   }
-  if (params.includeTags) relations.push('tags:newsletter_tags(tag:tags(*))');
+  if (params.includeTags) {
+    relations.push('tags:newsletter_tags(tag:tags(id, name, color, user_id, created_at))'); // Select specific tag fields
+  }
 
   if (relations.length > 0) {
-    selectClause = `*, ${relations.join(', ')}`;
+    selectClause = `*, newsletter_source_id, ${relations.join(', ')}`;
   }
 
   // Start with base query and select

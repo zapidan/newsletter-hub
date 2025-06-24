@@ -87,7 +87,7 @@ export interface NewsletterSourceGroupMember {
 }
 
 export interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {
-  newsletter_source_id: string | null;
+  newsletter_source_id: string;
   source: NewsletterSource | null;
   tags: Tag[];
   is_archived: boolean;
