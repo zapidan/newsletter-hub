@@ -3,7 +3,6 @@
  *
  * Integration-style tests for the Inbox page.
  */
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -246,5 +245,30 @@ describe('Inbox page', () => {
 
     await user.click(screen.getByText('Load More'));
     expect(inf.fetchNextPage).toHaveBeenCalled();
+  });
+
+  it('shows error state when newsletters fail to load', () => {
+    const error = new Error('Failed to load newsletters');
+    useInfiniteNewslettersMock.mockReturnValue({
+      ...mkInfiniteNewsletters([]),
+      error,
+      isLoading: false,
+    });
+
+    renderInbox();
+    expect(screen.getByText(/Error Loading Newsletters/i)).toBeInTheDocument();
+    expect(screen.getByText(error.message)).toBeInTheDocument();
+  });
+
+  it('shows empty state when no newsletters are found', () => {
+    useInfiniteNewslettersMock.mockReturnValue({
+      ...mkInfiniteNewsletters([]),
+      isLoading: false,
+      totalCount: 0,
+    });
+
+    renderInbox();
+    expect(screen.getByText(/No newsletters found/i)).toBeInTheDocument();
+    expect(screen.getByText(/Try adjusting your filters or check back later./i)).toBeInTheDocument();
   });
 });
