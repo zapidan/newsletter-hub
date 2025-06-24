@@ -138,6 +138,12 @@ describe('useCache', () => {
       act(() => result.current.warmCache('user1', 'high'));
       expect(mockCacheManagerInstance.warmCache).toHaveBeenCalledWith('user1', 'high');
     });
+
+    it('warmCache should call cacheManager.warmCache with default priority', () => {
+      const { result } = renderHook(() => useCache());
+      act(() => result.current.warmCache('user1'));
+      expect(mockCacheManagerInstance.warmCache).toHaveBeenCalledWith('user1', 'medium');
+    });
   });
 
   describe('Generic Cache Utilities', () => {
@@ -150,6 +156,14 @@ describe('useCache', () => {
         await result.current.prefetchQuery(queryKey, queryFn, { staleTime: 100 });
       });
       expect(mockPrefetchQuery).toHaveBeenCalledWith(queryKey, queryFn, { staleTime: 100, gcTime: 30 * 60 * 1000 });
+    });
+
+    it('prefetchQuery should call utilsPrefetchQuery with default options', async () => {
+      const { result } = renderHook(() => useCache());
+      await act(async () => {
+        await result.current.prefetchQuery(queryKey, queryFn);
+      });
+      expect(mockPrefetchQuery).toHaveBeenCalledWith(queryKey, queryFn, { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000 });
     });
 
     it('setQueryData should call utilsSetQueryData', () => {
@@ -190,6 +204,28 @@ describe('useCache', () => {
       expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: operations[0].queryKey });
       expect(mockInvalidateQueries).toHaveBeenCalledWith({ predicate: operations[1].predicate });
       expect(mockInvalidateQueries).toHaveBeenCalledTimes(2);
+    });
+
+    it('batchInvalidate should handle empty operations array gracefully', async () => {
+      const { result } = renderHook(() => useCache());
+      const operations: any[] = [];
+      await act(async () => {
+        await result.current.batchInvalidate(operations);
+      });
+      expect(mockInvalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('batchInvalidate should handle operations with neither queryKey nor predicate', async () => {
+      const { result } = renderHook(() => useCache());
+      // Test with an operation that is technically possible if not using TypeScript,
+      // or if `operations` is cast to `any[]`.
+      const operations = [{}];
+      await act(async () => {
+        // @ts-ignore to test runtime behavior with malformed operation
+        await result.current.batchInvalidate(operations);
+      });
+      // It should effectively do nothing for such an operation, not call invalidateQueries
+      expect(mockInvalidateQueries).not.toHaveBeenCalled();
     });
   });
 });

@@ -110,14 +110,18 @@ describe('useEmailAlias', () => {
     expect(result.current.error).toBe('Failed to load email alias');
   });
 
-  it.skip('should copy email alias to clipboard and set copied state', async () => { // Temporarily skip
+  it('should copy email alias to clipboard and set copied state', async () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useEmailAlias(), { wrapper: wrapperFactory(queryClient) });
 
-    await act(async () => { await vi.runAllTimersAsync(); });
+    // Wait for the email alias to be fetched and set
     await waitFor(() => expect(result.current.emailAlias).toBe(mockEmailAlias));
 
-    await act(async () => { await result.current.copyToClipboard(); });
+    // Call copyToClipboard
+    await act(async () => {
+      const success = await result.current.copyToClipboard();
+      expect(success).toBe(true);
+    });
     expect(mockClipboard.writeText).toHaveBeenCalledWith(mockEmailAlias);
     expect(result.current.copied).toBe(true);
 
@@ -154,9 +158,9 @@ describe('useEmailAlias', () => {
     expect(mockUserService.getEmailAlias).toHaveBeenCalledTimes(2);
   });
 
-  it.skip('should use custom retry logic (no retry on auth error, retry up to 2 times on other errors)', async (ctx) => { // Temporarily skip
+  it('should use custom retry logic (no retry on auth error, retry up to 2 times on other errors)', async () => {
     vi.useFakeTimers();
-    const retryQueryClient = createQueryClient(true);
+    const retryQueryClient = createQueryClient(true); // Enable retries for this test
     const retryWrapper = wrapperFactory(retryQueryClient);
     const authMissingError = new Error('Auth session missing');
     const networkError = new Error('Network failed');
@@ -193,5 +197,58 @@ describe('useEmailAlias', () => {
     }, {timeout: 5000});
     expect(mockUserService.getEmailAlias).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
-  }, 15000);
+  });
+
+  it('should unsubscribe from onAuthStateChange on unmount', async () => {
+    const mockUnsubscribe = vi.fn();
+    mockSupabaseAuth.onAuthStateChange.mockImplementationOnce(() => {
+      return { data: { subscription: { unsubscribe: mockUnsubscribe } } } as any;
+    });
+
+    const { unmount } = renderHook(() => useEmailAlias(), { wrapper: wrapperFactory(queryClient) });
+
+    // Wait for initial setup
+    await waitFor(() => expect(mockSupabaseAuth.onAuthStateChange).toHaveBeenCalled());
+
+    unmount();
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('refresh function should do nothing if user is not authenticated', async () => {
+    mockSupabaseAuth.getUser.mockResolvedValue({ data: { user: null }, error: null });
+     // Ensure onAuthStateChange also reflects no user initially
+    mockSupabaseAuth.onAuthStateChange.mockImplementationOnce((callback) => {
+        mockOnAuthStateChangeCallback = callback;
+        if (mockOnAuthStateChangeCallback) mockOnAuthStateChangeCallback("INITIAL_SESSION", null); // Simulate initial state with no user
+        return { data: { subscription: { unsubscribe: vi.fn() } } } as any;
+    });
+
+    const { result } = renderHook(() => useEmailAlias(), { wrapper: wrapperFactory(queryClient) });
+
+    // Wait for the hook to stabilize with no user
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.emailAlias).toBe('');
+    expect(mockUserService.getEmailAlias).not.toHaveBeenCalled(); // Ensure it wasn't called
+
+    // Call refresh
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    // getEmailAlias should still not have been called
+    expect(mockUserService.getEmailAlias).not.toHaveBeenCalled();
+  });
+
+  it('should not set hook error state if userService.getEmailAlias resolves with success:false', async () => {
+    const serviceErrorMessage = 'Service-level error message';
+    mockUserService.getEmailAlias.mockResolvedValue({ success: false, email: '', error: serviceErrorMessage });
+
+    const { result } = renderHook(() => useEmailAlias(), { wrapper: wrapperFactory(queryClient) });
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.emailAlias).toBe(''); // Email should be empty
+    expect(result.current.error).toBeNull(); // Hook's error state should be null
+    expect(mockUserService.getEmailAlias).toHaveBeenCalledTimes(1);
+  });
 });
