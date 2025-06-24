@@ -1,11 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NewsletterService } from '../../newsletter/NewsletterService';
-import { TagService } from '../../tag/TagService';
-import { ReadingQueueService } from '../../readingQueue/ReadingQueueService';
+import { ValidationError } from '@common/api/errorHandling';
 import { newsletterApi } from '@common/api/newsletterApi';
-import { tagApi } from '@common/api/tagApi';
 import { readingQueueApi } from '@common/api/readingQueueApi';
-import { NewsletterWithRelations, Tag, ReadingQueueItem } from '@common/types';
+import { tagApi } from '@common/api/tagApi';
+import { NewsletterWithRelations, ReadingQueueItem, Tag } from '@common/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NewsletterService } from '../../newsletter/NewsletterService';
+import { ReadingQueueService } from '../../readingQueue/ReadingQueueService';
+import { TagService } from '../../tag/TagService';
+
 
 // Mock all API modules
 vi.mock('@common/api/newsletterApi');
@@ -338,7 +340,7 @@ describe('Service Integration Tests', () => {
 
     it('should handle validation errors without retry', async () => {
       // Setup mocks
-      mockNewsletterApi.markAsRead.mockRejectedValue(new Error('Validation failed'));
+      mockNewsletterApi.markAsRead.mockRejectedValue(new ValidationError('Error during markAsRead: Validation failed'));
 
       // Should fail immediately without retry
       const result = await newsletterService.markAsRead('invalid-id');

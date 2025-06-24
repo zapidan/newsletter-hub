@@ -1,8 +1,8 @@
-import { BaseService, ValidationError, NotFoundError } from '../base/BaseService';
-import { tagApi } from '@common/api/tagApi';
 import { newsletterApi } from '@common/api/newsletterApi';
-import { Tag, TagCreate, TagUpdate, TagWithCount, NewsletterWithRelations } from '@common/types';
+import { tagApi } from '@common/api/tagApi';
+import { NewsletterWithRelations, Tag, TagCreate, TagUpdate, TagWithCount } from '@common/types';
 import { logger } from '@common/utils/logger';
+import { BaseService, NotFoundError, ValidationError } from '../base/BaseService';
 
 export interface TagOperationResult {
   success: boolean;
@@ -164,7 +164,7 @@ export class TagService extends BaseService {
           if (!existingTag) {
             return {
               success: false,
-              error: 'Tag not found',
+              error: `Tag with ID ${tagData.id} not found`,
             };
           }
 
