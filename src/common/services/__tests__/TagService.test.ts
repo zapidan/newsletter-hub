@@ -111,7 +111,7 @@ describe('TagService', () => {
     });
 
     it('should validate tag ID', async () => {
-      await expect(service.getTag('')).rejects.toThrow('Tag with ID  not found');
+      await expect(service.getTag('badTagId')).rejects.toThrow('Tag with ID badTagId not found');
     });
   });
 
@@ -237,7 +237,7 @@ describe('TagService', () => {
       const result = await service.updateTag(updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Tag not found');
+      expect(result.error).toBe('Tag with ID tag-1 not found');
       expect(mockTagApi.update).not.toHaveBeenCalled();
     });
 
@@ -265,9 +265,9 @@ describe('TagService', () => {
     });
 
     it('should validate tag ID', async () => {
-      const result = await service.updateTag({ id: '', name: 'Test' });
+      const result = await service.updateTag({ id: 'badTagId', name: 'Test' });
       expect(result.success).toBe(false);
-      expect(result.error).toBe('Tag not found');
+      expect(result.error).toBe('Tag with ID badTagId not found');
     });
   });
 
@@ -405,10 +405,10 @@ describe('TagService', () => {
       // Reset mock to return null for non-existent tags
       mockTagApi.getById.mockResolvedValue(null);
 
-      // Empty newsletter ID should still process but fail when tag not found
-      const result1 = await service.updateNewsletterTagsWithIds('', ['tag-1']);
-      expect(result1.success).toBe(false);
-      expect(result1.error).toBe('Tag with ID tag-1 not found');
+      // Empty newsletter ID should throw validation error
+      await expect(
+        service.updateNewsletterTagsWithIds('', ['tag-1'])
+      ).rejects.toThrow('newsletter ID is required');
 
       // Undefined tag IDs should throw validation error
       await expect(
@@ -429,7 +429,7 @@ describe('TagService', () => {
 
     it('should validate search query', async () => {
       await expect(service.searchTags('')).rejects.toThrow(
-        'search query must be at least 1 characters long'
+        'search query is required'
       );
     });
 

@@ -74,7 +74,7 @@ export abstract class BaseService {
           (error as Error & { statusCode?: number }).statusCode! >= 500) ||
         // Add a condition to retry generic errors that don't match above but aren't explicitly excluded
         (error.name !== 'NotFoundError' && error.name !== 'ValidationError' && error.name !== 'UnauthorizedError' &&
-         error.name !== 'ServiceError' && !((error as Error & { statusCode?: number }).statusCode && (error as Error & { statusCode?: number }).statusCode! < 500 && (error as Error & { statusCode?: number }).statusCode! >= 400))
+          error.name !== 'ServiceError' && !((error as Error & { statusCode?: number }).statusCode && (error as Error & { statusCode?: number }).statusCode! < 500 && (error as Error & { statusCode?: number }).statusCode! >= 400))
       );
     },
   };
@@ -151,12 +151,21 @@ export abstract class BaseService {
 
   protected normalizeError(error: Error, operationName: string): ServiceError {
     // Check by name first to preserve specific error types if they are already set
-    if (error.name === 'NotFoundError') return error as NotFoundError;
-    if (error.name === 'ValidationError') return error as ValidationError;
-    if (error.name === 'NetworkError') return error as NetworkError;
-    if (error.name === 'UnauthorizedError') return error as UnauthorizedError;
-    if (error.name === 'ServiceError' && (error as ServiceError).code) return error as ServiceError;
-
+    if (error.name === 'NotFoundError') {
+      return new NotFoundError(error.message, error);
+    }
+    if (error.name === 'ValidationError') {
+      return new ValidationError(error.message, error);
+    }
+    if (error.name === 'NetworkError') {
+      return new NetworkError(error.message, error);
+    }
+    if (error.name === 'UnauthorizedError') {
+      return new UnauthorizedError(error.message, error);
+    }
+    if (error.name === 'ServiceError' && (error as ServiceError).code) {
+      return error as ServiceError;
+    }
 
     // Handle common patterns for generic Error instances and wrap them appropriately
     if (error.message?.includes("fetch") || error.message?.toLowerCase().includes("network error")) {
@@ -176,7 +185,7 @@ export abstract class BaseService {
     }
 
     if (error.message?.toLowerCase().includes("unauthorized")) {
-       return new UnauthorizedError(
+      return new UnauthorizedError(
         `Unauthorized during ${operationName}: ${error.message}`,
         error,
       );
@@ -199,7 +208,7 @@ export abstract class BaseService {
     value: T | null | undefined,
     fieldName: string,
   ): T {
-    if (value === null || value === undefined) {
+    if (value === null || value === undefined || (typeof value === "string" && value.trim().length === 0)) {
       throw new ValidationError(`${fieldName} is required`);
     }
     return value;

@@ -1,0 +1,127 @@
+Priority Recommendations:
+
+1. **Fix Newsletter Detail to use `useNewsletterDetail` hook** (Quick win)
+   - The hook already has optimizations like initial data from lists, prefetching, and proper caching
+2. **Implement unread count caching/deduplication**
+
+   - Create a single shared unread count query that all components subscribe to
+   - Use React Query's `select` to derive per-source counts from a single query
+
+3. **Optimize cache invalidation**
+
+   - Use more specific query key invalidation
+   - Batch related invalidations
+   - Avoid multiple invalidations of the same query
+
+4. **Add debouncing for rapid operations**
+   - Particularly for navigation between newsletters
+   - For marking multiple items as read/archived quickly
+
+These changes would significantly reduce the number of database queries without changing any user-visible behavior.
+
+Action Items Performance Optimization Plan
+
+1. Optimize Component Rendering
+   File:
+   src/web/components/BulkSelectionActions.tsx
+
+Function/Section:
+BulkSelectionActions
+
+Change: Wrap component with React.memo and optimize prop handling
+Reason: Prevent unnecessary re-renders when parent state changes
+
+2. Optimize Callback Functions
+   File:
+   src/web/pages/Inbox.tsx
+   (or parent component)
+   Function/Section: Action handlers (handleMarkAsRead, handleDelete, etc.)
+   Change: Memoize all callback functions using useCallback
+   Reason: Prevent recreation of function references on each render
+
+3. Implement Optimistic Updates
+   File:
+   src/common/hooks/useNewsletters.ts
+
+Function/Section: Mutation handlers
+Change: Update local cache immediately before server confirmation
+Reason: Provide instant UI feedback while ensuring data consistency
+
+4. Batch State Updates
+   File:
+   src/web/pages/Inbox.tsx
+
+Function/Section: Bulk action handlers
+Change: Use unstable_batchedUpdates or React 18 auto-batching
+Reason: Reduce number of renders during bulk operations
+
+5. Debounce Rapid Actions
+   File:
+   src/web/components/BulkSelectionActions.tsx
+
+Function/Section: Action handlers
+Change: Add debouncing to prevent rapid successive actions
+Reason: Improve performance during rapid user interactions
+
+6. Optimize Database Operations
+   File:
+   src/common/services/newsletter/NewsletterService.ts
+
+Function/Section: Bulk operations
+Change: Implement batch processing for bulk actions
+Reason: Reduce database load and network traffic
+
+7. Cache Management
+   File:
+   src/common/hooks/useNewsletters.ts
+
+Function/Section: Cache update logic
+Change: Implement precise cache updates instead of invalidating entire queries
+Reason: Keep cache fresh while minimizing refetches
+
+8. Virtualize Long Lists
+   File:
+   src/web/components/InfiniteScroll/InfiniteNewsletterList.tsx
+
+Function/Section: List rendering
+Change: Implement windowing/virtualization for long lists
+Reason: Improve render performance with large datasets
+
+9. Performance Monitoring
+   File:
+   src/web/main.tsx
+
+Function/Section: App initialization
+Change: Add React Profiler and performance monitoring
+Reason: Identify and diagnose performance bottlenecks
+
+10. Error Handling & Rollback
+    File: src/common/hooks/useOptimisticUpdate.ts
+    Function/Section: N/A (New file)
+    Change: Create custom hook for optimistic updates with rollback
+    Reason: Handle failed mutations gracefully while maintaining good UX
+
+1. Fix ReadingQueueService tests
+1. Update useUnreadCount hook tests
+1. Complete ServiceIntegration tests
+1. Verify TagService tests
+
+### Medium Priority
+
+1. Refactor TagsPage component
+2. Update NewsletterDetailAction
+3. Migrate tagUtils to use services
+
+#### 1. Integration Testing
+
+- Create end-to-end test scenarios
+- Test service-to-service interactions
+- Verify hook-to-service integration
+
+#### 2. Component Refactoring
+
+Continue the planned refactoring:
+
+- **TagsPage**: Update to use TagService through hooks
+- **NewsletterDetailAction**: Integrate with appropriate services
+- **tagUtils**: Refactor to use TagService

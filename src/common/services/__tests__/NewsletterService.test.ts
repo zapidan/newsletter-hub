@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { NewsletterService } from "../newsletter/NewsletterService";
 import { newsletterApi } from "@common/api/newsletterApi";
 import { readingQueueApi } from "@common/api/readingQueueApi";
 import { tagApi } from "@common/api/tagApi";
 import { NewsletterWithRelations, Tag } from "@common/types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NewsletterService } from "../newsletter/NewsletterService";
 
 // Mock the API modules
 vi.mock("@common/api/newsletterApi");
@@ -80,8 +80,11 @@ describe("NewsletterService", () => {
     });
 
     it("should validate newsletter ID", async () => {
+      await expect(service.getNewsletter("bad-id")).rejects.toThrow(
+        "Newsletter with ID bad-id not found",
+      );
       await expect(service.getNewsletter("")).rejects.toThrow(
-        "Newsletter with ID  not found",
+        "newsletter ID is required",
       );
     });
   });
@@ -425,7 +428,7 @@ describe("NewsletterService", () => {
 
     it("should validate search query", async () => {
       await expect(service.searchNewsletters("")).rejects.toThrow(
-        "search query must be at least 1 characters long",
+        "search query is required",
       );
     });
 
@@ -494,7 +497,10 @@ describe("NewsletterService", () => {
         service.getNewsletter(undefined as unknown as string),
       ).rejects.toThrow("newsletter ID is required");
       await expect(service.getNewsletter("")).rejects.toThrow(
-        "Newsletter with ID  not found",
+        "newsletter ID is required",
+      );
+      await expect(service.getNewsletter("bad-id")).rejects.toThrow(
+        "Newsletter with ID bad-id not found",
       );
     });
 
