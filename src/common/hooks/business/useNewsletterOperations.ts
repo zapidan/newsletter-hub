@@ -155,13 +155,24 @@ export function useNewsletterOperations(options: UseNewsletterOperationsOptions 
 
   // Bulk mark as unread mutation
   const bulkMarkAsUnreadMutation = useMutation({
-    mutationFn: (ids: string[]) => newsletterService.bulkMarkAsUnread(ids),
+    mutationFn: async (ids: string[]) => {
+      // Early return for empty array
+      if (ids.length === 0) {
+        return {
+          success: true,
+          processedCount: 0,
+          failedCount: 0,
+          errors: [],
+        };
+      }
+      return newsletterService.bulkMarkAsUnread(ids);
+    },
     onSuccess: async (result, ids) => {
       await invalidateRelatedQueries(ids);
 
       if (result.success) {
         onSuccess?.("bulkMarkAsUnread");
-        if (showToasts) {
+        if (showToasts && result.processedCount > 0) {
           toast.success(`Marked ${result.processedCount} newsletters as unread`);
         }
       } else {

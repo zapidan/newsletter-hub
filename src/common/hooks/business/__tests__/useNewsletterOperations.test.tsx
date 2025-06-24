@@ -3,8 +3,8 @@ import { NewsletterOperationResult } from "@common/services/newsletter/Newslette
 import { NewsletterWithRelations } from "@common/types";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { toast } from "react-hot-toast";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useNewsletterOperations } from "../useNewsletterOperations";
 
@@ -507,7 +507,7 @@ describe("useNewsletterOperations", () => {
       mockNewsletterService.toggleLike.mockReturnValue(promise);
       const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
       act(() => {
-        result.current.toggleLike("id1").catch(() => {});
+        result.current.toggleLike("id1").catch(() => { });
       });
       await waitFor(() => expect(result.current.isTogglingLike).toBe(true));
       await act(async () => {
@@ -524,7 +524,7 @@ describe("useNewsletterOperations", () => {
       await act(async () => {
         try {
           await result.current.toggleLike("newsletter-1");
-        } catch (e) { /* error expected */ }
+        } catch (_) { /* error expected */ }
       });
       await waitFor(() => expect(result.current.errorTogglingLike).toBe(networkError));
       act(() => result.current.resetToggleLikeError());
@@ -539,7 +539,7 @@ describe("useNewsletterOperations", () => {
     it("should update tags successfully", async () => {
       mockNewsletterService.updateTags.mockResolvedValue({
         success: true,
-        newsletter: { ...mockNewsletter, tags: [{id: "tag-1", name: "Tag 1"}] }, // Simplified
+        newsletter: { ...mockNewsletter, tags: [{ id: "tag-1", name: "Tag 1" }] }, // Simplified
       });
       const onSuccess = vi.fn();
       const { result } = renderHook(() => useNewsletterOperations({ onSuccess, showToasts: false }), { wrapper });
@@ -618,7 +618,7 @@ describe("useNewsletterOperations", () => {
       const promise = new Promise((res) => { resolver = res; });
       mockNewsletterService.updateTags.mockReturnValue(promise);
       const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
-      act(() => { result.current.updateTags({ id: newsletterId, tagIds }).catch(() => {}); });
+      act(() => { result.current.updateTags({ id: newsletterId, tagIds }).catch(() => { }); });
       await waitFor(() => expect(result.current.isUpdatingTags).toBe(true));
       await act(async () => {
         resolver!({ success: true, newsletter: mockNewsletter });
@@ -632,7 +632,7 @@ describe("useNewsletterOperations", () => {
       mockNewsletterService.updateTags.mockRejectedValueOnce(networkError);
       const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
       await act(async () => {
-        try { await result.current.updateTags({ id: newsletterId, tagIds }); } catch (e) { /* error expected */ }
+        try { await result.current.updateTags({ id: newsletterId, tagIds }); } catch (_) { /* error expected */ }
       });
       await waitFor(() => expect(result.current.errorUpdatingTags).toBe(networkError));
       act(() => result.current.resetUpdateTagsError());
@@ -712,7 +712,7 @@ describe("useNewsletterOperations", () => {
         const promise = new Promise((res) => { resolver = res; });
         mockNewsletterService.addToReadingQueue.mockReturnValue(promise);
         const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
-        act(() => { result.current.addToQueue("id1").catch(() => {}); });
+        act(() => { result.current.addToQueue("id1").catch(() => { }); });
         await waitFor(() => expect(result.current.isAddingToQueue).toBe(true));
         await act(async () => {
           resolver!({ success: true, newsletter: mockNewsletter });
@@ -726,7 +726,7 @@ describe("useNewsletterOperations", () => {
         mockNewsletterService.addToReadingQueue.mockRejectedValueOnce(networkError);
         const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
         await act(async () => {
-          try { await result.current.addToQueue("newsletter-1"); } catch (e) { /* error expected */ }
+          try { await result.current.addToQueue("newsletter-1"); } catch (_) { /* error expected */ }
         });
         await waitFor(() => expect(result.current.errorAddingToQueue).toBe(networkError));
         act(() => result.current.resetAddToQueueError());
@@ -799,7 +799,7 @@ describe("useNewsletterOperations", () => {
         const promise = new Promise((res) => { resolver = res; });
         mockNewsletterService.removeFromReadingQueue.mockReturnValue(promise);
         const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
-        act(() => { result.current.removeFromQueue("id1").catch(() => {}); });
+        act(() => { result.current.removeFromQueue("id1").catch(() => { }); });
         await waitFor(() => expect(result.current.isRemovingFromQueue).toBe(true));
         await act(async () => {
           resolver!({ success: true });
@@ -813,7 +813,7 @@ describe("useNewsletterOperations", () => {
         mockNewsletterService.removeFromReadingQueue.mockRejectedValueOnce(networkError);
         const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
         await act(async () => {
-          try { await result.current.removeFromQueue("newsletter-1"); } catch (e) { /* error expected */ }
+          try { await result.current.removeFromQueue("newsletter-1"); } catch (_) { /* error expected */ }
         });
         await waitFor(() => expect(result.current.errorRemovingFromQueue).toBe(networkError));
         act(() => result.current.resetRemoveFromQueueError());
@@ -964,7 +964,7 @@ describe("useNewsletterOperations", () => {
       const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
 
       act(() => {
-        result.current.bulkMarkAsUnread(["id1"]).catch(() => {});
+        result.current.bulkMarkAsUnread(["id1"]).catch(() => { });
       });
       await waitFor(() => expect(result.current.isBulkMarkingAsUnread).toBe(true));
 
@@ -984,7 +984,7 @@ describe("useNewsletterOperations", () => {
       await act(async () => {
         try {
           await result.current.bulkMarkAsUnread(["newsletter-1"]);
-        } catch (e) { /* error expected */ }
+        } catch (_) { /* error expected */ }
       });
 
       await waitFor(() => {
@@ -1120,7 +1120,7 @@ describe("useNewsletterOperations", () => {
       const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
 
       act(() => {
-        result.current.markAsUnread("newsletter-1").catch(() => {});
+        result.current.markAsUnread("newsletter-1").catch(() => { });
       });
       await waitFor(() => expect(result.current.isMarkingAsUnread).toBe(true));
 
@@ -1140,7 +1140,7 @@ describe("useNewsletterOperations", () => {
       await act(async () => {
         try {
           await result.current.markAsUnread("newsletter-1");
-        } catch (e) {
+        } catch (_) {
           // error expected
         }
       });
@@ -1266,7 +1266,7 @@ describe("useNewsletterOperations", () => {
       mockNewsletterService.toggleArchive.mockReturnValue(promise);
       const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
       act(() => {
-        result.current.toggleArchive("id1").catch(() => {});
+        result.current.toggleArchive("id1").catch(() => { });
       });
       await waitFor(() => expect(result.current.isTogglingArchive).toBe(true));
       await act(async () => {
@@ -1283,7 +1283,7 @@ describe("useNewsletterOperations", () => {
       await act(async () => {
         try {
           await result.current.toggleArchive("newsletter-1");
-        } catch (e) { /* error expected */ }
+        } catch (_) { /* error expected */ }
       });
       await waitFor(() => expect(result.current.errorTogglingArchive).toBe(networkError));
       act(() => result.current.resetToggleArchiveError());
@@ -1383,14 +1383,13 @@ describe("useNewsletterOperations", () => {
       const { result } = renderHook(() => useNewsletterOperations({ showToasts: false }), { wrapper });
 
       act(() => {
-        result.current.deleteNewsletter("newsletter-1").catch(() => {});
+        result.current.deleteNewsletter("newsletter-1").catch(() => { });
       });
       await waitFor(() => expect(result.current.isDeleting).toBe(true));
 
       await act(async () => {
         resolver!({ success: true });
         // Wait for the deleteNewsletter's internal try/catch to resolve
-        try { await promise; } catch {}
       });
       await waitFor(() => expect(result.current.isDeleting).toBe(false));
     });
