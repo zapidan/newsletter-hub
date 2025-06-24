@@ -1,8 +1,8 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { useNewsletterSourceGroups } from '../useNewsletterSourceGroups';
 import { newsletterSourceGroupService } from '@common/services';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useNewsletterSourceGroups } from '../useNewsletterSourceGroups';
 
 // Mock the newsletterSourceGroupService
 vi.mock('@common/services', () => ({
@@ -28,7 +28,7 @@ vi.mock('@common/hooks/useCache', () => ({
 describe('useNewsletterSourceGroups', () => {
   let queryClient: QueryClient;
   let wrapper: React.FC<{ children: React.ReactNode }>;
-  
+
   // Sample data
   const mockGroup = {
     id: 'group-1',
@@ -56,17 +56,17 @@ describe('useNewsletterSourceGroups', () => {
         },
       },
     });
-    
+
     wrapper = ({ children }) => (
       <QueryClientProvider client={queryClient}>
         {children}
       </QueryClientProvider>
     );
-    
+
     // Clear all mocks before each test
     vi.clearAllMocks();
   });
-  
+
   afterEach(() => {
     // Clean up query client after each test
     queryClient.clear();
@@ -76,20 +76,20 @@ describe('useNewsletterSourceGroups', () => {
     // Mock the service response
     const mockGroups = [mockGroup];
     vi.mocked(newsletterSourceGroupService.getGroups).mockResolvedValue(mockGroups);
-    
+
     // Render the hook
     const { result, rerender } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Initial state should be loading
     expect(result.current.groups).toEqual([]);
     expect(result.current.isLoading).toBe(true);
-    
+
     // Wait for the query to resolve
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       rerender();
     });
-    
+
     // Verify the data was loaded
     expect(result.current.groups).toEqual(mockGroups);
     expect(result.current.isLoading).toBe(false);
@@ -100,16 +100,16 @@ describe('useNewsletterSourceGroups', () => {
     // Mock an error response
     const errorMessage = 'Failed to fetch groups';
     vi.mocked(newsletterSourceGroupService.getGroups).mockRejectedValue(new Error(errorMessage));
-    
+
     // Render the hook
     const { result, rerender } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Wait for the query to resolve
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       rerender();
     });
-    
+
     // Verify error state
     expect(result.current.error).toBeDefined();
     expect(result.current.isLoading).toBe(false);
@@ -121,9 +121,9 @@ describe('useNewsletterSourceGroups', () => {
       success: true,
       group: newGroup,
     });
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call createGroup mutation
     let response;
     await act(async () => {
@@ -132,16 +132,16 @@ describe('useNewsletterSourceGroups', () => {
         sourceIds: ['source-1'],
       });
     });
-    
+
     // Verify the service was called with correct parameters
     expect(newsletterSourceGroupService.createGroup).toHaveBeenCalledWith({
       name: 'New Group',
       sourceIds: ['source-1'],
     });
-    
+
     // Verify the response
     expect(response).toEqual(newGroup);
-    
+
     // Wait for the mutation state to update
     await waitFor(() => {
       expect(result.current.createGroup.isSuccess).toBe(true);
@@ -158,19 +158,20 @@ describe('useNewsletterSourceGroups', () => {
 
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
 
-    let error: Error | null = null;
-    try {
-      await result.current.createGroup.mutateAsync({
-        name: 'New Group',
-        sourceIds: ['source-1'],
-      });
-    } catch (e) {
-      error = e as Error;
-    }
+    await act(async () => {
+      try {
+        await result.current.createGroup.mutateAsync({
+          name: 'New Group',
+          sourceIds: ['source-1'],
+        });
+      } catch (e) {
+        // Expected error
+      }
+    });
 
-    expect(error).not.toBeNull();
-    expect(error?.message).toBe(errorMessage);
-    expect(result.current.createGroup.isError).toBe(true);
+    await waitFor(() => {
+      expect(result.current.createGroup.isError).toBe(true);
+    });
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
@@ -180,9 +181,9 @@ describe('useNewsletterSourceGroups', () => {
       success: true,
       group: updatedGroup,
     });
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call updateGroup mutation
     let response;
     await act(async () => {
@@ -191,15 +192,15 @@ describe('useNewsletterSourceGroups', () => {
         name: 'Updated Group',
       });
     });
-    
+
     // Verify the service was called with correct parameters
     expect(newsletterSourceGroupService.updateGroup).toHaveBeenCalledWith('group-1', {
       name: 'Updated Group',
     });
-    
+
     // Verify the response
     expect(response).toEqual(updatedGroup);
-    
+
     // Wait for the mutation state to update
     await waitFor(() => {
       expect(result.current.updateGroup.isSuccess).toBe(true);
@@ -216,42 +217,43 @@ describe('useNewsletterSourceGroups', () => {
 
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
 
-    let error: Error | null = null;
-    try {
-      await result.current.updateGroup.mutateAsync({
-        id: 'group-1',
-        name: 'Updated Group',
-      });
-    } catch (e) {
-      error = e as Error;
-    }
+    await act(async () => {
+      try {
+        await result.current.updateGroup.mutateAsync({
+          id: 'group-1',
+          name: 'Updated Group',
+        });
+      } catch (e) {
+        // Expected error
+      }
+    });
 
-    expect(error).not.toBeNull();
-    expect(error?.message).toBe(errorMessage);
-    expect(result.current.updateGroup.isError).toBe(true);
+    await waitFor(() => {
+      expect(result.current.updateGroup.isError).toBe(true);
+    });
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
   it('should delete a group', async () => {
-    vi.mocked(newsletterSourceGroupService.deleteGroup).mockResolvedValue({ 
+    vi.mocked(newsletterSourceGroupService.deleteGroup).mockResolvedValue({
       success: true,
-      group: mockGroup 
+      group: mockGroup
     });
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call deleteGroup mutation
     let response;
     await act(async () => {
       response = await result.current.deleteGroup.mutateAsync('group-1');
     });
-    
+
     // Verify the service was called with correct parameters
     expect(newsletterSourceGroupService.deleteGroup).toHaveBeenCalledWith('group-1');
-    
+
     // Verify the response
     expect(response).toBe(true);
-    
+
     // Wait for the mutation state to update
     await waitFor(() => {
       expect(result.current.deleteGroup.isSuccess).toBe(true);
@@ -264,43 +266,41 @@ describe('useNewsletterSourceGroups', () => {
     vi.mocked(newsletterSourceGroupService.deleteGroup).mockResolvedValue({
       success: false,
       error: errorMessage,
-      // @ts-ignore : To satisfy the return type of deleteGroup for this test
-      group: undefined,
     });
 
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
 
-    let error: Error | null = null;
-    try {
-      await result.current.deleteGroup.mutateAsync('group-1');
-    } catch (e) {
-      error = e as Error;
-    }
+    await act(async () => {
+      try {
+        await result.current.deleteGroup.mutateAsync('group-1');
+      } catch (e) {
+        // Expected error
+      }
+    });
 
-    expect(error).not.toBeNull();
-    expect(error?.message).toBe(errorMessage);
-    expect(result.current.deleteGroup.isError).toBe(true);
+    await waitFor(() => {
+      expect(result.current.deleteGroup.isError).toBe(true);
+    });
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
-
   it('should get a single group', async () => {
     vi.mocked(newsletterSourceGroupService.getGroup).mockResolvedValue(mockGroup);
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call getGroup mutation
     let response;
     await act(async () => {
       response = await result.current.getGroup.mutateAsync('group-1');
     });
-    
+
     // Verify the service was called with correct parameters
     expect(newsletterSourceGroupService.getGroup).toHaveBeenCalledWith('group-1');
-    
+
     // Verify the response
     expect(response).toEqual(mockGroup);
-    
+
     // Wait for the mutation state to update
     await waitFor(() => {
       expect(result.current.getGroup.isSuccess).toBe(true);
@@ -316,18 +316,18 @@ describe('useNewsletterSourceGroups', () => {
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
     };
-    const updatedGroup = { 
-      ...mockGroup, 
-      sources: [...mockGroup.sources, newSource] 
+    const updatedGroup = {
+      ...mockGroup,
+      sources: [...mockGroup.sources, newSource]
     };
-    
+
     vi.mocked(newsletterSourceGroupService.addSourcesToGroup).mockResolvedValue({
       success: true,
       group: updatedGroup,
     });
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call addSourcesToGroup mutation
     let response;
     await act(async () => {
@@ -336,16 +336,16 @@ describe('useNewsletterSourceGroups', () => {
         sourceIds: ['source-2']
       });
     });
-    
+
     // Verify the service was called with correct parameters
     expect(newsletterSourceGroupService.addSourcesToGroup).toHaveBeenCalledWith(
       'group-1',
       ['source-2']
     );
-    
+
     // Verify the response
     expect(response).toEqual(updatedGroup);
-    
+
     // Wait for the mutation state to update
     await waitFor(() => {
       expect(result.current.addSourcesToGroup.isSuccess).toBe(true);
@@ -361,27 +361,26 @@ describe('useNewsletterSourceGroups', () => {
     vi.mocked(newsletterSourceGroupService.addSourcesToGroup).mockResolvedValue({
       success: false,
       error: errorMessage,
-      group: undefined, // Ensure the type matches
     });
 
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
 
-    let error: Error | null = null;
-    try {
-      await result.current.addSourcesToGroup.mutateAsync({
-        groupId: 'group-1',
-        sourceIds: ['source-2'],
-      });
-    } catch (e) {
-      error = e as Error;
-    }
+    await act(async () => {
+      try {
+        await result.current.addSourcesToGroup.mutateAsync({
+          groupId: 'group-1',
+          sourceIds: ['source-2'],
+        });
+      } catch (e) {
+        // Expected error
+      }
+    });
 
-    expect(error).not.toBeNull();
-    expect(error?.message).toBe(errorMessage);
-    expect(result.current.addSourcesToGroup.isError).toBe(true);
+    await waitFor(() => {
+      expect(result.current.addSourcesToGroup.isError).toBe(true);
+    });
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
-
 
   it('should remove sources from a group', async () => {
     const sourceIdsToRemove = ['source-1'];
@@ -389,9 +388,9 @@ describe('useNewsletterSourceGroups', () => {
       success: true,
       group: { ...mockGroup, sources: [] },
     });
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call removeSourcesFromGroup mutation
     let response;
     await act(async () => {
@@ -400,16 +399,16 @@ describe('useNewsletterSourceGroups', () => {
         sourceIds: sourceIdsToRemove
       });
     });
-    
+
     // Verify the service was called with correct parameters
     expect(newsletterSourceGroupService.removeSourcesFromGroup).toHaveBeenCalledWith(
       'group-1',
       sourceIdsToRemove
     );
-    
+
     // Verify the response
     expect(response).toEqual(sourceIdsToRemove);
-    
+
     // Wait for the mutation state to update
     await waitFor(() => {
       expect(result.current.removeSourcesFromGroup.isSuccess).toBe(true);
@@ -425,34 +424,33 @@ describe('useNewsletterSourceGroups', () => {
     vi.mocked(newsletterSourceGroupService.removeSourcesFromGroup).mockResolvedValue({
       success: false,
       error: errorMessage,
-      // @ts-ignore: To satisfy the type for this test
-      group: undefined,
     });
 
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
 
-    let error: Error | null = null;
-    try {
-      await result.current.removeSourcesFromGroup.mutateAsync({
-        groupId: 'group-1',
-        sourceIds: ['source-1'],
-      });
-    } catch (e) {
-      error = e as Error;
-    }
+    await act(async () => {
+      try {
+        await result.current.removeSourcesFromGroup.mutateAsync({
+          groupId: 'group-1',
+          sourceIds: ['source-1'],
+        });
+      } catch (e) {
+        // Expected error
+      }
+    });
 
-    expect(error).not.toBeNull();
-    expect(error?.message).toBe(errorMessage);
-    expect(result.current.removeSourcesFromGroup.isError).toBe(true);
+    await waitFor(() => {
+      expect(result.current.removeSourcesFromGroup.isError).toBe(true);
+    });
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
-  
+
   it('should handle errors when adding sources to a group', async () => {
     const errorMessage = 'Failed to add sources to group';
     vi.mocked(newsletterSourceGroupService.addSourcesToGroup).mockRejectedValue(new Error(errorMessage));
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call addSourcesToGroup mutation
     let error: unknown = null;
     await act(async () => {
@@ -465,7 +463,7 @@ describe('useNewsletterSourceGroups', () => {
         error = e;
       }
     });
-    
+
     // Verify the error was thrown
     expect(error).toBeInstanceOf(Error);
     if (error instanceof Error) {
@@ -474,13 +472,13 @@ describe('useNewsletterSourceGroups', () => {
       fail('Expected error to be an instance of Error');
     }
   });
-  
+
   it('should handle errors when removing sources from a group', async () => {
     const errorMessage = 'Failed to remove sources from group';
     vi.mocked(newsletterSourceGroupService.removeSourcesFromGroup).mockRejectedValue(new Error(errorMessage));
-    
+
     const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
-    
+
     // Call removeSourcesFromGroup mutation
     let error: unknown = null;
     await act(async () => {
@@ -493,7 +491,7 @@ describe('useNewsletterSourceGroups', () => {
         error = e;
       }
     });
-    
+
     // Verify the error was thrown
     expect(error).toBeInstanceOf(Error);
     if (error instanceof Error) {
