@@ -138,13 +138,59 @@ jobs:
       - name: Generate test dashboard
         if: always()
         run: |
-          pnpm run test:results:parse
-          pnpm run test:coverage:parse
-          pnpm run test:dashboard
-          pnpm run test:results:simple
+          echo "=== Generating Test Reports ==="
+          
+          # Create directories if they don't exist
+          mkdir -p test-results
+          mkdir -p test-dashboard
+          mkdir -p html
+          
+          # Generate test results HTML (with error handling)
+          echo "Generating test results HTML..."
+          if pnpm run test:results:parse; then
+            echo "✅ Test results HTML generated successfully"
+          else
+            echo "⚠️ Test results HTML generation failed, creating fallback"
+            # Create a simple fallback HTML file
+            echo '<!DOCTYPE html>' > test-results/test-results.html
+            echo '<html>' >> test-results/test-results.html
+            echo '<head><title>Test Results - Fallback</title></head>' >> test-results/test-results.html
+            echo '<body>' >> test-results/test-results.html
+            echo '<h1>Test Results</h1>' >> test-results/test-results.html
+            echo '<p>Test results could not be generated. Check the test artifacts for more details.</p>' >> test-results/test-results.html
+            echo '</body>' >> test-results/test-results.html
+            echo '</html>' >> test-results/test-results.html
+          fi
+          
+          # Generate coverage report (with error handling)
+          echo "Generating coverage report..."
+          if pnpm run test:coverage:parse; then
+            echo "✅ Coverage report generated successfully"
+          else
+            echo "⚠️ Coverage report generation failed"
+          fi
+          
+          # Generate test dashboard (with error handling)
+          echo "Generating test dashboard..."
+          if pnpm run test:dashboard; then
+            echo "✅ Test dashboard generated successfully"
+          else
+            echo "⚠️ Test dashboard generation failed"
+          fi
+          
+          # Generate simple test table (with error handling)
+          echo "Generating simple test table..."
+          if pnpm run test:results:simple; then
+            echo "✅ Simple test table generated successfully"
+          else
+            echo "⚠️ Simple test table generation failed"
+          fi
+          
+          echo "=== Test Reports Generation Complete ==="
         env:
           CI: 'true'
           NODE_ENV: 'test'
+        continue-on-error: true
 
       - name: Comment PR with dashboard links
         if: github.event_name == 'pull_request' && always()
@@ -199,9 +245,9 @@ jobs:
               '- [Test Results](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/test-results/)\n\n' +
               '### 📋 Artifacts\n' +
               'Download the complete test artifacts to view locally:\n' +
-              '- Test Results: `test-results/`\n' +
-              '- Coverage Reports: `html/`\n' +
-              '- Dashboard: `test-dashboard/`\n\n' +
+              '- Test Results: \'test-results/\'\n' +
+              '- Coverage Reports: \'html/\'\n' +
+              '- Dashboard: \'test-dashboard/\'\n\n' +
               '---\n' +
               '*Generated automatically by GitHub Actions*';
             

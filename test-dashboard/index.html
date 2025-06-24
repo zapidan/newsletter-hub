@@ -3,188 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Results Dashboard - Newsletter Hub</title>
+    <title>Test Dashboard - Newsletter Hub</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+            color: #24292f;
+            background-color: #ffffff;
+            margin: 0;
             padding: 20px;
         }
-        
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
         }
-        
         .header {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+            border-bottom: 1px solid #d0d7de;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
         }
-        
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            font-weight: 300;
+        .title {
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
         }
-        
-        .header .subtitle {
-            font-size: 1.1rem;
-            opacity: 0.9;
+        .subtitle {
+            font-size: 16px;
+            color: #656d76;
+            margin: 0;
         }
-        
-        .status-badge {
+        .overall-status {
             display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 0.9rem;
-            margin-top: 15px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-left: 12px;
+        }
+        .overall-status.success {
+            background-color: #dafbe1;
+            color: #1a7f37;
+        }
+        .overall-status.failure {
+            background-color: #ffebe9;
+            color: #cf222e;
+        }
+        .overall-status.warning {
+            background-color: #fff8c5;
+            color: #9a6700;
         }
         
-        .status-pass {
-            background: #27ae60;
-            color: white;
-        }
-        
-        .status-fail {
-            background: #e74c3c;
-            color: white;
-        }
-        
-        .content {
-            padding: 30px;
-        }
-        
-        .grid {
+        .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 30px;
-            margin-bottom: 30px;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
         }
         
         .card {
-            background: #f8f9fa;
+            border: 1px solid #d0d7de;
             border-radius: 8px;
-            padding: 25px;
-            border-left: 4px solid #3498db;
+            padding: 20px;
+            background-color: #ffffff;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #d0d7de;
         }
         
-        .card h3 {
-            color: #2c3e50;
-            margin-bottom: 15px;
-            font-size: 1.3rem;
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
         }
-        
-        .metric {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            padding: 10px 0;
-            border-bottom: 1px solid #e9ecef;
+        .stat {
+            text-align: center;
+            padding: 12px;
+            border-radius: 6px;
+            background-color: #f6f8fa;
         }
-        
-        .metric:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
+        .stat-number {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
         }
-        
-        .metric-label {
-            font-weight: 500;
-            color: #495057;
+        .stat-label {
+            font-size: 12px;
+            color: #656d76;
         }
+        .passed { color: #1a7f37; }
+        .failed { color: #cf222e; }
+        .skipped { color: #9a6700; }
+        .total { color: #24292f; }
         
-        .metric-value {
-            font-weight: bold;
-            font-size: 1.1rem;
+        .coverage-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
         }
-        
+        .coverage-card {
+            text-align: center;
+            padding: 16px;
+            border-radius: 6px;
+            background-color: #f6f8fa;
+        }
+        .coverage-metric {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .coverage-label {
+            font-size: 12px;
+            color: #656d76;
+            margin-bottom: 8px;
+        }
         .coverage-bar {
             width: 100%;
-            height: 8px;
-            background: #e9ecef;
-            border-radius: 4px;
+            height: 6px;
+            background-color: #e1e4e8;
+            border-radius: 3px;
             overflow: hidden;
-            margin-top: 5px;
         }
-        
         .coverage-fill {
             height: 100%;
-            background: linear-gradient(90deg, #27ae60, #2ecc71);
             transition: width 0.3s ease;
         }
         
-        .coverage-low {
-            background: linear-gradient(90deg, #e74c3c, #f39c12);
+        .test-suites {
+            margin-bottom: 20px;
+        }
+        .suite-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f6f8fa;
+        }
+        .suite-item:last-child {
+            border-bottom: none;
+        }
+        .suite-name {
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .suite-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+        }
+        .suite-stat {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .suite-passed { background-color: #dafbe1; color: #1a7f37; }
+        .suite-failed { background-color: #ffebe9; color: #cf222e; }
+        .suite-skipped { background-color: #fff8c5; color: #9a6700; }
+        
+        .failed-tests {
+            margin-top: 16px;
+        }
+        .failed-test {
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            background-color: #ffebe9;
+            border-left: 4px solid #cf222e;
+        }
+        .failed-test-name {
+            font-weight: 500;
+            font-size: 13px;
+            color: #cf222e;
+            margin-bottom: 4px;
+        }
+        .failed-test-class {
+            font-size: 11px;
+            color: #656d76;
         }
         
-        .coverage-medium {
-            background: linear-gradient(90deg, #f39c12, #f1c40f);
+        .links-section {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #d0d7de;
         }
-        
-        .links {
+        .links-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 30px;
+            gap: 12px;
         }
-        
         .link-card {
-            background: #3498db;
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
+            display: block;
+            padding: 12px 16px;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
             text-decoration: none;
-            text-align: center;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            color: #24292f;
+            background-color: #f6f8fa;
+            transition: all 0.2s ease;
         }
-        
         .link-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+            background-color: #f3f4f6;
+            border-color: #0969da;
+            color: #0969da;
+        }
+        .link-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .link-desc {
+            font-size: 12px;
+            color: #656d76;
         }
         
-        .link-card h4 {
-            margin-bottom: 8px;
-            font-size: 1.1rem;
-        }
-        
-        .link-card p {
-            opacity: 0.9;
-            font-size: 0.9rem;
-        }
-        
-        .timestamp {
+        .footer {
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid #d0d7de;
+            font-size: 12px;
+            color: #656d76;
             text-align: center;
-            color: #6c757d;
-            margin-top: 30px;
-            font-size: 0.9rem;
         }
         
         @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2rem;
-            }
-            
-            .content {
-                padding: 20px;
-            }
-            
-            .grid {
+            .dashboard-grid {
                 grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .coverage-summary {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
@@ -192,93 +246,726 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Test Results Dashboard</h1>
-            <div class="subtitle">Newsletter Hub - Comprehensive Test Report</div>
-            <div class="status-badge status-fail">
-                FAIL
-            </div>
+            <h1 class="title">
+                Test Dashboard
+                <span class="overall-status warning">
+                    ⚠️ Some Tests Skipped
+                </span>
+            </h1>
+            <p class="subtitle">
+                Comprehensive test results and coverage report for Newsletter Hub
+            </p>
         </div>
         
-        <div class="content">
-            <div class="grid">
-                <div class="card">
-                    <h3>Test Results</h3>
-                    <div class="metric">
-                        <span class="metric-label">Total Tests</span>
-                        <span class="metric-value">0</span>
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2 class="card-title">Test Results</h2>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-number total">2212</div>
+                        <div class="stat-label">Total Tests</div>
                     </div>
-                    <div class="metric">
-                        <span class="metric-label">Passed</span>
-                        <span class="metric-value" style="color: #27ae60;">0</span>
+                    <div class="stat">
+                        <div class="stat-number passed">2150</div>
+                        <div class="stat-label">Passed</div>
                     </div>
-                    <div class="metric">
-                        <span class="metric-label">Failed</span>
-                        <span class="metric-value" style="color: #e74c3c;">0</span>
+                    <div class="stat">
+                        <div class="stat-number failed">0</div>
+                        <div class="stat-label">Failed</div>
                     </div>
-                    <div class="metric">
-                        <span class="metric-label">Errors</span>
-                        <span class="metric-value" style="color: #e74c3c;">0</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Skipped</span>
-                        <span class="metric-value" style="color: #f39c12;">0</span>
+                    <div class="stat">
+                        <div class="stat-number skipped">62</div>
+                        <div class="stat-label">Skipped</div>
                     </div>
                 </div>
                 
-                <div class="card">
-                    <h3>Code Coverage</h3>
-                    <div class="metric">
-                        <span class="metric-label">Statements</span>
-                        <span class="metric-value">0%</span>
-                    </div>
-                    <div class="coverage-bar">
-                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
+                <div class="test-suites">
+                    <h3 style="font-size: 14px; margin-bottom: 12px; color: #656d76;">Test Suites</h3>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">vitest tests</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">1106 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">237ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/simple.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">5 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/integration/authFlow.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">2 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/integration/newsletter-workflow.integration.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">24 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/integration/newsletterOperations.integration.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">7 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/integration/queueAndArchive.integration.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">11 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/smoke/auto-mark-read.smoke.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">6 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/smoke/navigation-mark-archive.smoke.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">8 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/smoke/newsletter-navigation-fixes.smoke.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">10 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/smoke/newsletter-navigation.smoke.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">4 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/unit/newsletterActions.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">17 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/supabase/emailHandler.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">6 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/__tests__/utils/emailAlias.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">8 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/api/__tests__/newsletterApi.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">13 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">9 skipped</span>
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/api/__tests__/newsletterSourceApi.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">32 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/api/__tests__/newsletterSourceGroupApi.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">23 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/api/__tests__/readingQueueApi.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">17 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/api/__tests__/tagApi.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">22 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/api/__tests__/userApi.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">27 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">11 skipped</span>
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/contexts/__tests__/FilterContext.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">35 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useCache.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">21 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useEmailAlias.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">10 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">2 skipped</span>
+                                <span style="color: #656d76;">3ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useInboxFilters.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">3 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useInfiniteNewsletters.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">11 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">1 skipped</span>
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useNewsletterDetail.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">10 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useNewsletterSourceGroups.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">15 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useNewsletters.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">15 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useReadingQueue.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">15 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">1 skipped</span>
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useSharedNewsletterActions.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">3 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useTags.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">6 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">3 skipped</span>
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useUnreadCount.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">9 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/__tests__/useUrlParams.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">9 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/services/__tests__/NewsletterService.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">33 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">38ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/services/__tests__/NewsletterSourceGroupService.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">26 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">42ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/services/__tests__/NewsletterSourceService.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">41 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">47ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/services/__tests__/ReadingQueueService.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">42 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">42ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/services/__tests__/TagService.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">48 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">7ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/services/__tests__/UserService.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">40 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">18 skipped</span>
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/utils/__tests__/tagUtils.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">25 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/components/__tests__/InfiniteNewsletterList.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">5 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/components/__tests__/LoadingSentinel.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">6 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/components/__tests__/NewsletterCard.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">28 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/pages/__tests__/Inbox.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">7 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/pages/__tests__/NewsletterDetail.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">14 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/pages/__tests__/NewslettersPage.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">12 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">9 skipped</span>
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/pages/__tests__/ReadingQueuePage.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">0 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">7 skipped</span>
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/pages/__tests__/TagsPage.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">6 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/web/services/__tests__/searchService.simple.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">33 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/components/layout/__tests__/Sidebar.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">7 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">2ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/business/__tests__/useNewsletterOperations.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">80 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">2ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/business/__tests__/useTagOperations.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">20 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/infiniteScroll/__tests__/useInfiniteNewsletters.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">8 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">8ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/infiniteScroll/__tests__/useInfiniteScroll.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">10 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/performance/__tests__/useCacheInvalidation.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">24 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">1ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/performance/__tests__/useDebouncedNewsletterNavigation.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">28 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/ui/__tests__/useNewsletterRowState.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">18 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/ui/__tests__/useTagsPage.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">23 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/hooks/ui/__tests__/useTagsPageState.test.tsx</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">41 passed</span>
+                                
+                                
+                                <span style="color: #656d76;">0ms</span>
+                            </div>
+                        </div>
+                    
+                        <div class="suite-item">
+                            <div class="suite-name">src/common/services/__tests__/integration/ServiceIntegration.test.ts</div>
+                            <div class="suite-stats">
+                                <span class="suite-stat suite-passed">15 passed</span>
+                                
+                                <span class="suite-stat suite-skipped">1 skipped</span>
+                                <span style="color: #656d76;">31ms</span>
+                            </div>
+                        </div>
+                    
+                </div>
+                
+                
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title">Coverage Report</h2>
+                <div class="coverage-summary">
+                    <div class="coverage-card">
+                        <div class="coverage-metric" style="color: #cf222e">
+                            46.4%
+                        </div>
+                        <div class="coverage-label">Statements</div>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill" style="width: 46.44%; background-color: #cf222e;"></div>
+                        </div>
+                        <div style="font-size: 11px; color: #656d76; margin-top: 4px;">
+                            13443/28943
+                        </div>
                     </div>
                     
-                    <div class="metric">
-                        <span class="metric-label">Branches</span>
-                        <span class="metric-value">0%</span>
-                    </div>
-                    <div class="coverage-bar">
-                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
-                    </div>
-                    
-                    <div class="metric">
-                        <span class="metric-label">Functions</span>
-                        <span class="metric-value">0%</span>
-                    </div>
-                    <div class="coverage-bar">
-                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
+                    <div class="coverage-card">
+                        <div class="coverage-metric" style="color: #9a6700">
+                            74.5%
+                        </div>
+                        <div class="coverage-label">Branches</div>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill" style="width: 74.53%; background-color: #9a6700;"></div>
+                        </div>
+                        <div style="font-size: 11px; color: #656d76; margin-top: 4px;">
+                            2430/3260
+                        </div>
                     </div>
                     
-                    <div class="metric">
-                        <span class="metric-label">Lines</span>
-                        <span class="metric-value">0%</span>
+                    <div class="coverage-card">
+                        <div class="coverage-metric" style="color: #cf222e">
+                            55.4%
+                        </div>
+                        <div class="coverage-label">Functions</div>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill" style="width: 55.4%; background-color: #cf222e;"></div>
+                        </div>
+                        <div style="font-size: 11px; color: #656d76; margin-top: 4px;">
+                            564/1018
+                        </div>
                     </div>
-                    <div class="coverage-bar">
-                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
+                    
+                    <div class="coverage-card">
+                        <div class="coverage-metric" style="color: #cf222e">
+                            46.4%
+                        </div>
+                        <div class="coverage-label">Lines</div>
+                        <div class="coverage-bar">
+                            <div class="coverage-fill" style="width: 46.44%; background-color: #cf222e;"></div>
+                        </div>
+                        <div style="font-size: 11px; color: #656d76; margin-top: 4px;">
+                            13443/28943
+                        </div>
                     </div>
                 </div>
+                
+                <div style="font-size: 12px; color: #656d76; text-align: center; margin-top: 16px;">
+                    117 files analyzed
+                </div>
             </div>
-            
-            <div class="links">
-                <a href="../html/index.html" class="link-card" target="_blank">
-                    <h4>📊 Detailed Coverage Report</h4>
-                    <p>View comprehensive code coverage analysis</p>
-                </a>
-                <a href="../test-results/test-results.html" class="link-card" target="_blank">
-                    <h4>📋 Test Results</h4>
-                    <p>Browse test execution details and logs</p>
-                </a>
-                <a href="https://github.com/your-repo/actions" class="link-card" target="_blank">
-                    <h4>🔄 CI/CD Pipeline</h4>
-                    <p>View continuous integration status</p>
-                </a>
+        </div>
+        
+        <div class="card">
+            <h2 class="card-title">Quick Links</h2>
+            <div class="links-section">
+                <div class="links-grid">
+                    <a href="test-results/test-results.html" class="link-card">
+                        <div class="link-title">📋 Detailed Test Results</div>
+                        <div class="link-desc">View comprehensive test results with error details</div>
+                    </a>
+                    <a href="test-results/simple-test-table.html" class="link-card">
+                        <div class="link-title">📊 Simple Test Table</div>
+                        <div class="link-desc">Quick overview of all test cases</div>
+                    </a>
+                    <a href="html/index.html" class="link-card">
+                        <div class="link-title">📈 Coverage Report</div>
+                        <div class="link-desc">Detailed code coverage analysis</div>
+                    </a>
+                    <a href="html/coverage-report.html" class="link-card">
+                        <div class="link-title">📊 Coverage Dashboard</div>
+                        <div class="link-desc">Coverage metrics and file breakdown</div>
+                    </a>
+                </div>
             </div>
-            
-            <div class="timestamp">
-                Generated on 6/24/2025, 4:47:23 PM
-            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Generated on 6/24/2025, 6:23:29 PM</p>
+            <p>Test Dashboard for Newsletter Hub - Comprehensive testing and coverage analysis</p>
         </div>
     </div>
 </body>
