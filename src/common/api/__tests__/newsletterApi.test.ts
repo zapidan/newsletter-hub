@@ -83,26 +83,22 @@ describe('newsletterApi', () => {
     vi.mocked(currentQueryBuilder.single).mockClear().mockResolvedValueOnce({ data: initialNlData, error });
   };
 
-  const mockMainNewsletterUpdate = (updateResult: { data?: any, error?: any }) => {
-    vi.mocked(currentQueryBuilder.single).mockClear().mockResolvedValueOnce(updateResult);
-  };
+  // const mockMainNewsletterUpdate = (updateResult: { data?: any, error?: any }) => {
+  //   vi.mocked(currentQueryBuilder.single).mockClear().mockResolvedValueOnce(updateResult);
+  // };
 
-  const mockDeleteTags = (deleteResult: { error?: any }) => {
-    // For delete().eq().eq().then()
-    const eqChain = { eq: vi.fn().mockReturnThis(), then: vi.fn() }; // eq().eq() -> thenable
-    vi.mocked(currentQueryBuilder.delete).mockReturnValueOnce(eqChain as any);
-    vi.mocked(eqChain.then).mockImplementationOnce((onFulfilled) => onFulfilled(deleteResult));
-    return { deleteMock: currentQueryBuilder.delete, eqNlMock: eqChain.eq, eqUserMock: eqChain.eq }; // return spies for assertion
-  };
+  // const mockDeleteTags = (deleteResult: { error?: any }) => {
+  //   // For delete().eq().eq().then()
+  //   const eqChain = { eq: vi.fn().mockReturnThis(), then: vi.fn() }; // eq().eq() -> thenable
+  //   vi.mocked(currentQueryBuilder.delete).mockReturnValueOnce(eqChain as any);
+  //   vi.mocked(eqChain.then).mockImplementationOnce((onFulfilled) => onFulfilled(deleteResult));
+  //   return { deleteMock: currentQueryBuilder.delete, eqNlMock: eqChain.eq, eqUserMock: eqChain.eq }; // return spies for assertion
+  // };
 
-  const mockInsertTags = (insertResult: { error?: any }) => {
-     // For insert().then()
-    vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled) => onFulfilled(insertResult));
-  };
-
- 
-    vi.mocked(currentQueryBuilder.single).mockClear().mockResolvedValueOnce({ data: finalNlData, error });
-  };
+  // const mockInsertTags = (insertResult: { error?: any }) => {
+  //   // For insert().then()
+  //   vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled) => onFulfilled(insertResult));
+  // };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -113,6 +109,7 @@ describe('newsletterApi', () => {
     vi.mocked(supabaseClientModule.requireAuth).mockResolvedValue(mockUser);
     vi.mocked(supabaseClientModule.handleSupabaseError).mockImplementation((error) => { throw error; });
     currentMockNewsletter = createMockNewsletter();
+    currentQueryBuilder.single.mockResolvedValue({ data: null, error: null });
   });
 
   afterEach(() => { vi.useRealTimers(); });
@@ -131,14 +128,14 @@ describe('newsletterApi', () => {
       newsletter_source_id: 'src-1', word_count: '150', estimated_read_time: null,
     };
     it('should transform newsletter with nested source', async () => {
-      const rawData = {...baseRawData, newsletter_sources: { id: 'src-1', name: 'Nested Source', from: 'n@ex.com', user_id: 'u1', created_at: now, updated_at: now }};
+      const rawData = { ...baseRawData, newsletter_sources: { id: 'src-1', name: 'Nested Source', from: 'n@ex.com', user_id: 'u1', created_at: now, updated_at: now } };
       const result = await mockGetByIdWithTransformedResponse(rawData);
       expect(result?.source).toEqual(expect.objectContaining({ name: 'Nested Source' }));
       expect(result?.is_read).toBe(false); expect(result?.is_liked).toBe(true);
       expect(result?.word_count).toBe(150); expect(result?.estimated_read_time).toBe(0);
     });
-     it('should transform newsletter with array of nested sources (takes first)', async () => {
-      const rawData = {...baseRawData, newsletter_sources: [{ id: 'src-1', name: 'Nested Source Array', from: 'n@ex.com', user_id: 'u1', created_at: now, updated_at: now }]};
+    it('should transform newsletter with array of nested sources (takes first)', async () => {
+      const rawData = { ...baseRawData, newsletter_sources: [{ id: 'src-1', name: 'Nested Source Array', from: 'n@ex.com', user_id: 'u1', created_at: now, updated_at: now }] };
       const result = await mockGetByIdWithTransformedResponse(rawData);
       expect(result?.source?.name).toBe('Nested Source Array');
     });
@@ -147,7 +144,7 @@ describe('newsletterApi', () => {
       expect(result?.source).toBeNull();
     });
     it('should transform newsletter with direct source (backward compatibility)', async () => {
-      const rawData = {...baseRawData, source: { id: 'src-direct', name: 'Direct Source', from: 'd@ex.com', user_id: 'u1', created_at:now, updated_at:now }, newsletter_sources: null};
+      const rawData = { ...baseRawData, source: { id: 'src-direct', name: 'Direct Source', from: 'd@ex.com', user_id: 'u1', created_at: now, updated_at: now }, newsletter_sources: null };
       const result = await mockGetByIdWithTransformedResponse(rawData);
       expect(result?.source?.name).toBe('Direct Source');
     });
@@ -155,19 +152,19 @@ describe('newsletterApi', () => {
 
   describe('buildNewsletterQuery (via getAll)', () => {
     beforeEach(() => { // Mock the final resolution of the query chain for getAll
-      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled) => onFulfilled({data: [], count:0, error: null}));
+      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled) => onFulfilled({ data: [], count: 0, error: null }));
     });
     it('should apply limit and offset for pagination', async () => {
       await newsletterApi.getAll({ limit: 10, offset: 20 });
       expect(currentQueryBuilder.limit).toHaveBeenCalledWith(10);
       expect(currentQueryBuilder.range).toHaveBeenCalledWith(20, 29);
     });
-     it('should correctly calculate range end without limit', async () => {
+    it('should correctly calculate range end without limit', async () => {
       await newsletterApi.getAll({ offset: 10 });
       expect(currentQueryBuilder.range).toHaveBeenCalledWith(10, 10 + 50 - 1);
     });
     it('should combine multiple filters correctly', async () => {
-      const params = { search: 'c', isRead: false, sourceIds:['s1'], dateFrom:'d1', orderBy:'title', ascending:true, limit:5, offset:0, includeSource:true, includeTags:true};
+      const params = { search: 'c', isRead: false, sourceIds: ['s1'], dateFrom: 'd1', orderBy: 'title', ascending: true, limit: 5, offset: 0, includeSource: true, includeTags: true };
       await newsletterApi.getAll(params);
       expect(currentQueryBuilder.or).toHaveBeenCalled();
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('is_read', false);
@@ -176,8 +173,8 @@ describe('newsletterApi', () => {
   });
 
   describe('getAll', () => {
-     beforeEach(() => { // Mock the final resolution of the query chain for getAll
-      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled) => onFulfilled({data: [createMockNewsletter()], count:1, error: null}));
+    beforeEach(() => { // Mock the final resolution of the query chain for getAll
+      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled) => onFulfilled({ data: [createMockNewsletter()], count: 1, error: null }));
     });
     it('should fetch all newsletters with default params', async () => {
       const mockData = [createMockNewsletter()];
@@ -185,8 +182,8 @@ describe('newsletterApi', () => {
       const result = await newsletterApi.getAll();
       expect(result.data).toEqual(mockData);
     });
-     it('should correctly calculate pagination fields for various scenarios', async () => {
-      const nls = (c:number) => Array(c).fill(null).map((_,i)=>createMockNewsletter({id:`nl${i}`}));
+    it('should correctly calculate pagination fields for various scenarios', async () => {
+      const nls = (c: number) => Array(c).fill(null).map((_, i) => createMockNewsletter({ id: `nl${i}` }));
 
       // Scenario 1: No items
       vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: [], count: 0, error: null }));
@@ -238,24 +235,24 @@ describe('newsletterApi', () => {
 
   describe('create', () => {
     it('should create a new newsletter', async () => {
-      const params = { title: 'New', content: 'C', newsletter_source_id:'s1' };
-      const created = createMockNewsletter({...params, id:'new-id'});
+      const params = { title: 'New', content: 'C', newsletter_source_id: 's1' };
+      const created = createMockNewsletter({ ...params, id: 'new-id' });
       vi.mocked(currentQueryBuilder.single)
-        .mockResolvedValueOnce({ data: {...created, tags:undefined, source:undefined}, error: null }) // Insert result
+        .mockResolvedValueOnce({ data: { ...created, tags: undefined, source: undefined }, error: null }) // Insert result
         .mockResolvedValueOnce({ data: created, error: null }); // Final getById result
       const result = await newsletterApi.create(params);
       expect(result).toEqual(created);
     });
     it('should create newsletter with tags', async () => {
-      const params = { title: 'New', content:'C', newsletter_source_id:'s1', tag_ids: ['tA'] };
+      const params = { title: 'New', content: 'C', newsletter_source_id: 's1', tag_ids: ['tA'] };
       const { _tag_ids, ...baseNl } = params;
-      const createdRaw = {...createMockNewsletter({...baseNl, id:'new-id'}), tags:undefined, source: undefined};
-      const finalNl = createMockNewsletter({...baseNl, id:'new-id', tags: [{id:'tA', name:'TagA', color:'red', user_id:mockUser.id, created_at:now, newsletter_count:undefined}]});
+      const createdRaw = { ...createMockNewsletter({ ...baseNl, id: 'new-id' }), tags: undefined, source: undefined };
+      const finalNl = createMockNewsletter({ ...baseNl, id: 'new-id', tags: [{ id: 'tA', name: 'TagA', color: 'red', user_id: mockUser.id, created_at: now, newsletter_count: undefined }] });
 
       const fromMocks = supabaseClientModule.supabase.from;
-      const insertNlBuilder = createQueryBuilder(); vi.mocked(insertNlBuilder.single).mockResolvedValueOnce({data: createdRaw, error:null});
-      const insertTagsBuilder = createQueryBuilder(); vi.mocked(insertTagsBuilder.then).mockImplementationOnce(onF => onF({error:null}));
-      const getByIdBuilder = createQueryBuilder(); vi.mocked(getByIdBuilder.single).mockResolvedValueOnce({data: {...finalNl, newsletter_sources: finalNl.source, source:undefined, tags: finalNl.tags.map(t=>({tag:t}))}, error:null});
+      const insertNlBuilder = createQueryBuilder(); vi.mocked(insertNlBuilder.single).mockResolvedValueOnce({ data: createdRaw, error: null });
+      const insertTagsBuilder = createQueryBuilder(); vi.mocked(insertTagsBuilder.then).mockImplementationOnce(onF => onF({ error: null }));
+      const getByIdBuilder = createQueryBuilder(); vi.mocked(getByIdBuilder.single).mockResolvedValueOnce({ data: { ...finalNl, newsletter_sources: finalNl.source, source: undefined, tags: finalNl.tags.map(t => ({ tag: t })) }, error: null });
 
       vi.mocked(fromMocks)
         .mockImplementationOnce(() => insertNlBuilder)    // For newsletter insert
@@ -268,8 +265,8 @@ describe('newsletterApi', () => {
   });
 
   describe('update', () => {
-     it('should update newsletter tags: remove all existing, then add new ones', async () => {
-      const initialNl = createMockNewsletter({ id: 'nl-update', tags: [{ id: 'old', name: 'Old', color:'',user_id:'',created_at:'' }] });
+    it('should update newsletter tags: remove all existing, then add new ones', async () => {
+      const initialNl = createMockNewsletter({ id: 'nl-update', tags: [{ id: 'old', name: 'Old', color: '', user_id: '', created_at: '' }] });
       const updates = { tag_ids: ['new1'] };
 
       mockInitialGetByIdForUpdate(initialNl);
