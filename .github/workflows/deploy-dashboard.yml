@@ -1,0 +1,61 @@
+name: Deploy Test Dashboard to GitHub Pages
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_run:
+    workflows: ["Test Suite"]
+    types: [completed]
+
+jobs:
+  deploy-dashboard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests and generate reports
+        run: |
+          npm run test:coverage:html
+          npm run test:results:parse
+          npm run test:coverage:parse
+          npm run test:dashboard
+        env:
+          CI: 'true'
+          NODE_ENV: 'test'
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload dashboard to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: |
+            test-dashboard/
+            test-results/
+            html/
+            docs/testing/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' 
