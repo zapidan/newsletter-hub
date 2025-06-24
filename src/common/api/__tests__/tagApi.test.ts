@@ -31,7 +31,7 @@ const { createQueryBuilder, mockUser } = vi.hoisted(() => {
     // will have their promise resolution mocked directly on them in tests.
     // e.g. currentQueryBuilder.order.mockResolvedValueOnce({ data: ..., error: null });
     // This default 'then' is a fallback if a chain is awaited without a specific terminal mock.
-    builder.then = vi.fn((onFulfilled, onRejected) => {
+    builder.then = vi.fn((_onFulfilled, _onRejected) => {
       // Default then: can be configured in tests if needed for generic await cases
       // For instance, if a test expects `await currentQueryBuilder.eq(...).eq(...)` to resolve.
       // Most often, the method that makes the query resolve (like .order, .single) will be mocked.
@@ -192,7 +192,7 @@ describe('tagApi', () => {
 
     it('should call handleSupabaseError and throw on delete error', async () => {
       const mockError = new Error('Delete error');
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled, onRejected) => {
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled, _onRejected) => {
         // In Supabase v2+, errors from write operations are typically in the resolved object
         onFulfilled({ error: mockError });
       });
