@@ -18,9 +18,10 @@ vi.mock('@common/services', () => ({
 }));
 
 // Mock the useCache hook
+const mockBatchInvalidate = vi.fn();
 vi.mock('@common/hooks/useCache', () => ({
   useCache: () => ({
-    batchInvalidate: vi.fn(),
+    batchInvalidate: mockBatchInvalidate,
   }),
 }));
 
@@ -145,6 +146,32 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.createGroup.isSuccess).toBe(true);
     });
+    expect(mockBatchInvalidate).toHaveBeenCalledWith([{ queryKey: ['newsletterSourceGroups'] }]);
+  });
+
+  it('should handle error when creating a group and service returns success:false', async () => {
+    const errorMessage = 'Failed to create group from service';
+    vi.mocked(newsletterSourceGroupService.createGroup).mockResolvedValue({
+      success: false,
+      error: errorMessage,
+    });
+
+    const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
+
+    let error: Error | null = null;
+    try {
+      await result.current.createGroup.mutateAsync({
+        name: 'New Group',
+        sourceIds: ['source-1'],
+      });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toBe(errorMessage);
+    expect(result.current.createGroup.isError).toBe(true);
+    expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
   it('should update a group', async () => {
@@ -177,6 +204,32 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.updateGroup.isSuccess).toBe(true);
     });
+    expect(mockBatchInvalidate).toHaveBeenCalledWith([{ queryKey: ['newsletterSourceGroups'] }]);
+  });
+
+  it('should handle error when updating a group and service returns success:false', async () => {
+    const errorMessage = 'Failed to update group from service';
+    vi.mocked(newsletterSourceGroupService.updateGroup).mockResolvedValue({
+      success: false,
+      error: errorMessage,
+    });
+
+    const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
+
+    let error: Error | null = null;
+    try {
+      await result.current.updateGroup.mutateAsync({
+        id: 'group-1',
+        name: 'Updated Group',
+      });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toBe(errorMessage);
+    expect(result.current.updateGroup.isError).toBe(true);
+    expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
   it('should delete a group', async () => {
@@ -203,6 +256,31 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.deleteGroup.isSuccess).toBe(true);
     });
+    expect(mockBatchInvalidate).toHaveBeenCalledWith([{ queryKey: ['newsletterSourceGroups'] }]);
+  });
+
+  it('should handle error when deleting a group and service returns success:false', async () => {
+    const errorMessage = 'Failed to delete group from service';
+    vi.mocked(newsletterSourceGroupService.deleteGroup).mockResolvedValue({
+      success: false,
+      error: errorMessage,
+      // @ts-ignore : To satisfy the return type of deleteGroup for this test
+      group: undefined,
+    });
+
+    const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
+
+    let error: Error | null = null;
+    try {
+      await result.current.deleteGroup.mutateAsync('group-1');
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toBe(errorMessage);
+    expect(result.current.deleteGroup.isError).toBe(true);
+    expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
 
@@ -272,7 +350,38 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.addSourcesToGroup.isSuccess).toBe(true);
     });
+    expect(mockBatchInvalidate).toHaveBeenCalledWith([
+      { queryKey: ['newsletterSourceGroups'] },
+      { queryKey: ['newsletterSourceGroup', 'group-1'] },
+    ]);
   });
+
+  it('should handle error when adding sources to group and service returns success:false', async () => {
+    const errorMessage = 'Failed to add sources from service';
+    vi.mocked(newsletterSourceGroupService.addSourcesToGroup).mockResolvedValue({
+      success: false,
+      error: errorMessage,
+      group: undefined, // Ensure the type matches
+    });
+
+    const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
+
+    let error: Error | null = null;
+    try {
+      await result.current.addSourcesToGroup.mutateAsync({
+        groupId: 'group-1',
+        sourceIds: ['source-2'],
+      });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toBe(errorMessage);
+    expect(result.current.addSourcesToGroup.isError).toBe(true);
+    expect(mockBatchInvalidate).not.toHaveBeenCalled();
+  });
+
 
   it('should remove sources from a group', async () => {
     const sourceIdsToRemove = ['source-1'];
@@ -305,6 +414,37 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.removeSourcesFromGroup.isSuccess).toBe(true);
     });
+    expect(mockBatchInvalidate).toHaveBeenCalledWith([
+      { queryKey: ['newsletterSourceGroups'] },
+      { queryKey: ['newsletterSourceGroup', 'group-1'] },
+    ]);
+  });
+
+  it('should handle error when removing sources from group and service returns success:false', async () => {
+    const errorMessage = 'Failed to remove sources from service';
+    vi.mocked(newsletterSourceGroupService.removeSourcesFromGroup).mockResolvedValue({
+      success: false,
+      error: errorMessage,
+      // @ts-ignore: To satisfy the type for this test
+      group: undefined,
+    });
+
+    const { result } = renderHook(() => useNewsletterSourceGroups(), { wrapper });
+
+    let error: Error | null = null;
+    try {
+      await result.current.removeSourcesFromGroup.mutateAsync({
+        groupId: 'group-1',
+        sourceIds: ['source-1'],
+      });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error).not.toBeNull();
+    expect(error?.message).toBe(errorMessage);
+    expect(result.current.removeSourcesFromGroup.isError).toBe(true);
+    expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
   
   it('should handle errors when adding sources to a group', async () => {
