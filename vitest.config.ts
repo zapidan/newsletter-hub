@@ -7,9 +7,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/__tests__/setup.ts"],
     css: true,
-    reporters: process.env.CI ? ["junit", "default"] : ["default", "junit"],
+    reporters: process.env.CI ? ["junit", "default"] : ["default"],
     outputFile: {
-      junit: "test-results/junit.xml"
+      junit: process.env.CI ? "test-results/junit.xml" : undefined
     },
     coverage: {
       provider: "v8",
