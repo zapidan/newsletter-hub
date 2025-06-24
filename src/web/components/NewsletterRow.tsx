@@ -126,11 +126,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-3 mb-1">
-          <img
-            src={newsletter.image_url || "/newsletter-icon.svg"}
-            alt={newsletter.title}
-            className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
-          />
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">

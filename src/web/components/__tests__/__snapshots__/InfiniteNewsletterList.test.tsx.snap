@@ -70,11 +70,6 @@ exports[`InfiniteNewsletterList > renders newsletters list correctly 1`] = `
           <div
             class="flex items-start gap-3 mb-1"
           >
-            <img
-              alt="Test Newsletter 1"
-              class="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
-              src="https://example.com/image.jpg"
-            />
             <div
               class="flex-1 min-w-0"
             >
@@ -275,11 +270,6 @@ exports[`InfiniteNewsletterList > renders newsletters list correctly 1`] = `
           <div
             class="flex items-start gap-3 mb-1"
           >
-            <img
-              alt="Test Newsletter 2"
-              class="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
-              src="https://example.com/image.jpg"
-            />
             <div
               class="flex-1 min-w-0"
             >
@@ -507,11 +497,6 @@ exports[`InfiniteNewsletterList > shows loading more indicator when fetching nex
           <div
             class="flex items-start gap-3 mb-1"
           >
-            <img
-              alt="Test Newsletter 1"
-              class="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
-              src="https://example.com/image.jpg"
-            />
             <div
               class="flex-1 min-w-0"
             >
@@ -712,11 +697,6 @@ exports[`InfiniteNewsletterList > shows loading more indicator when fetching nex
           <div
             class="flex items-start gap-3 mb-1"
           >
-            <img
-              alt="Test Newsletter 2"
-              class="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
-              src="https://example.com/image.jpg"
-            />
             <div
               class="flex-1 min-w-0"
             >
