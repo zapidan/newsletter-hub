@@ -137,10 +137,79 @@ jobs:
 
       - name: Generate test dashboard
         if: always()
-        run: pnpm test:dashboard
+        run: |
+          pnpm run test:results:parse
+          pnpm run test:coverage:parse
+          pnpm run test:dashboard
         env:
           CI: 'true'
           NODE_ENV: 'test'
+
+      - name: Comment PR with dashboard links
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read test results for summary
+            let testSummary = { tests: 0, failures: 0, errors: 0 };
+            const junitFile = 'test-results/junit.xml';
+            if (fs.existsSync(junitFile)) {
+              const xmlContent = fs.readFileSync(junitFile, 'utf8');
+              const testMatch = xmlContent.match(/tests="(\d+)" failures="(\d+)" errors="(\d+)"/);
+              if (testMatch) {
+                testSummary = {
+                  tests: parseInt(testMatch[1]),
+                  failures: parseInt(testMatch[2]),
+                  errors: parseInt(testMatch[3])
+                };
+              }
+            }
+            
+            // Read coverage data
+            let coverageData = { statements: 0, branches: 0 };
+            const coverageSummaryFile = 'html/coverage-summary.json';
+            if (fs.existsSync(coverageSummaryFile)) {
+              try {
+                const summaryContent = fs.readFileSync(coverageSummaryFile, 'utf8');
+                const summary = JSON.parse(summaryContent);
+                const total = summary.total;
+                coverageData = {
+                  statements: Math.round(total.statements.pct),
+                  branches: Math.round(total.branches.pct)
+                };
+              } catch (error) {
+                console.log('Could not parse coverage summary');
+              }
+            }
+            
+            const hasFailures = testSummary.failures > 0 || testSummary.errors > 0;
+            const status = hasFailures ? '❌' : '✅';
+            
+            const comment = '## Test Results Dashboard ' + status + '\n\n' +
+              '### Summary\n' +
+              '- **Tests**: ' + testSummary.tests + ' total, ' + testSummary.failures + ' failed, ' + testSummary.errors + ' errors\n' +
+              '- **Coverage**: ' + coverageData.statements + '% statements, ' + coverageData.branches + '% branches\n\n' +
+              '### 📊 View Reports\n' +
+              '- [Test Dashboard](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/test-dashboard/)\n' +
+              '- [Coverage Report](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/html/)\n' +
+              '- [Test Results](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/test-results/)\n\n' +
+              '### 📋 Artifacts\n' +
+              'Download the complete test artifacts to view locally:\n' +
+              '- Test Results: `test-results/`\n' +
+              '- Coverage Reports: `html/`\n' +
+              '- Dashboard: `test-dashboard/`\n\n' +
+              '---\n' +
+              '*Generated automatically by GitHub Actions*';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
 
       - name: Display coverage summary
         if: always()
