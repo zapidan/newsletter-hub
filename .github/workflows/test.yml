@@ -133,6 +133,25 @@ jobs:
           NODE_ENV: 'test'
           VITEST_JUNIT_OUTPUT_DIR: 'test-results'
           VITEST_JUNIT_SUITE_NAME: 'Test Results'
+        continue-on-error: true
+
+      - name: Generate test dashboard
+        if: always()
+        run: pnpm test:dashboard
+        env:
+          CI: 'true'
+          NODE_ENV: 'test'
+
+      - name: Display coverage summary
+        if: always()
+        run: |
+          echo "=== Coverage Summary ==="
+          if [ -f "html/coverage-summary.json" ]; then
+            cat html/coverage-summary.json | jq '.total' || echo "Could not parse coverage summary"
+          else
+            echo "No coverage summary found"
+          fi
+          echo "=== End Coverage Summary ==="
 
       - name: Verify test execution
         if: always()
@@ -189,6 +208,7 @@ jobs:
           name: test-artifacts
           path: |
             test-results/
+            test-dashboard/
+            html/
             playwright-report/
-            coverage/
           retention-days: 7
