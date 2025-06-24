@@ -116,7 +116,7 @@ jobs:
           chmod -R 777 test-results
 
       - name: Run tests with coverage
-        run: pnpm test:ci --update --ci=false
+        run: pnpm test:ci --update-snapshot
         env:
           CI: 'true'
           NODE_ENV: 'test'
