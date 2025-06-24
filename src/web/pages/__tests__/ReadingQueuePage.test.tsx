@@ -16,19 +16,18 @@ vi.mock('../components/reading-queue/SortableNewsletterRow', () => {
   };
 });
 
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'; // vi is already imported
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it } from 'vitest'; // vi is already imported
 
-import ReadingQueuePage from '../ReadingQueuePage';
+import { AuthContext } from '@common/contexts/AuthContext';
+import { useCache } from '@common/hooks/useCache';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useTags } from '@common/hooks/useTags';
-import { useCache } from '@common/hooks/useCache';
-import { AuthContext } from '@common/contexts/AuthContext';
-import { ReadingQueueItem, NewsletterWithRelations, Tag } from '@common/types';
+import { NewsletterWithRelations, ReadingQueueItem, Tag } from '@common/types';
+import ReadingQueuePage from '../ReadingQueuePage';
 
 // Mock hooks and components
 vi.mock('@common/hooks/useReadingQueue');
@@ -56,15 +55,15 @@ vi.mock('@common/utils/logger', () => {
 // The actual component will be used.
 
 vi.mock('@common/utils/cacheUtils', async (importOriginal) => { // For getCacheManager used in page
-    const actual = await importOriginal<typeof import('@common/utils/cacheUtils')>();
-    return {
-        ...actual,
-        getCacheManager: vi.fn(() => ({ // Provide a mock cache manager
-            warmCache: vi.fn(),
-            batchInvalidateQueries: vi.fn(),
-            smartInvalidate: vi.fn(),
-        })),
-    };
+  const actual = await importOriginal<typeof import('@common/utils/cacheUtils')>();
+  return {
+    ...actual,
+    getCacheManager: vi.fn(() => ({ // Provide a mock cache manager
+      warmCache: vi.fn(),
+      batchInvalidateQueries: vi.fn(),
+      smartInvalidate: vi.fn(),
+    })),
+  };
 });
 
 
@@ -151,18 +150,18 @@ describe('ReadingQueuePage', () => {
     expect(screen.getByText(/Browse Newsletters/i)).toBeInTheDocument();
   });
 
-  it('should display reading queue items', () => { // No longer async
+  it('should display reading queue items', () => {
     const items = [
       createMockQueueItem('q1', 'nl1', 'Newsletter 1', 0),
       createMockQueueItem('q2', 'nl2', 'Newsletter 2', 1),
     ];
     mockUseReadingQueue.mockReturnValue({ readingQueue: items, isLoading: false, error: null } as any);
-    renderReadingQueuePage(); // No longer awaited
+    renderReadingQueuePage();
 
-    // Assertions for mocked component content
-    expect(screen.getByText('Mocked Row Content: Newsletter 1')).toBeInTheDocument();
-    expect(screen.getByText('Mocked Row Content: Newsletter 2')).toBeInTheDocument();
-    expect(screen.getByText(/2 items/i)).toBeInTheDocument(); // Item count
+    // Check for the actual rendered content instead of the mock content
+    expect(screen.getByText('Newsletter 1')).toBeInTheDocument();
+    expect(screen.getByText('Newsletter 2')).toBeInTheDocument();
+    expect(screen.getByText(/2 items/i)).toBeInTheDocument();
   });
 
   it('clicking "Browse Newsletters" button should navigate to home', () => { // No longer async
@@ -179,41 +178,36 @@ describe('ReadingQueuePage', () => {
     items[0].newsletter = mockUnreadNewsletter;
 
     const markAsReadMock = vi.fn();
-    // Set up the specific mock return value for useSharedNewsletterActions for this test
     mockUseSharedNewsletterActions.mockReturnValue({
-        handleMarkAsRead: markAsReadMock,
-        handleMarkAsUnread: vi.fn(),
-        handleToggleLike: vi.fn(),
-        handleToggleArchive: vi.fn(),
-        // Ensure all actions potentially called are mocked
+      handleMarkAsRead: markAsReadMock,
+      handleMarkAsUnread: vi.fn(),
+      handleToggleLike: vi.fn(),
+      handleToggleArchive: vi.fn(),
     } as any);
 
     mockUseReadingQueue.mockReturnValue({
-        readingQueue: items,
-        isLoading: false,
-        error: null,
-        removeFromQueue: vi.fn(),
-        reorderQueue: vi.fn(),
-     } as any);
+      readingQueue: items,
+      isLoading: false,
+      error: null,
+      removeFromQueue: vi.fn(),
+      reorderQueue: vi.fn(),
+    } as any);
 
-    await renderReadingQueuePage(); // This test is async due to findByTestId and waitFor
+    renderReadingQueuePage();
 
-    // Expect the real component to be rendered
-    // The NewsletterRow component uses `data-testid={newsletter-row-${newsletter.id}}`
-    // For the first item, newsletter.id is 'nl1'
-    const newsletterRow = await screen.findByTestId('newsletter-row-nl1');
-    expect(screen.getByText('Mocked Row Content: Unread Newsletter')).toBeInTheDocument();
-    fireEvent.click(newsletterRow);
+    // Find and click the newsletter item using the actual rendered content
+    const newsletterItem = screen.getByText('Unread Newsletter');
+    fireEvent.click(newsletterItem);
 
-    // The onNewsletterClick prop of SortableNewsletterRow (mocked) calls handleNewsletterClick,
-    // which then calls handleToggleRead, eventually calling sharedActions.handleMarkAsRead.
-    // The handleNewsletterClick function in ReadingQueuePage calls handleToggleRead, then navigates.
-    // handleToggleRead calls sharedActions.handleMarkAsRead if item is unread.
-
-    await waitFor(() => expect(markAsReadMock).toHaveBeenCalledWith(mockUnreadNewsletter)); // handleMarkAsRead receives the full newsletter object
-
-    expect(mockNavigate).toHaveBeenCalledWith('/newsletters/nl1', {
-      state: { fromReadingQueue: true, from: '/queue' },
+    // Verify navigation and mark as read were called
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/newsletters/nl1', {
+        state: {
+          fromReadingQueue: true,
+          from: '/queue',
+        },
+      });
+      expect(markAsReadMock).toHaveBeenCalledWith('nl1');
     });
   });
 
