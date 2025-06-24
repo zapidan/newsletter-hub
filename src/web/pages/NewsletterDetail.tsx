@@ -442,7 +442,7 @@ const NewsletterDetail = memo(() => {
           <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
             <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
             <div className="text-sm text-gray-600">
-              {newsletter?.summary || 'No summary available'}
+              {/* Intentionally left empty as per requirements */}
             </div>
           </div>
 
