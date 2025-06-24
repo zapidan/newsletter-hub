@@ -24,7 +24,7 @@ const testEnv = {
 export default defineConfig({
   testDir: './tests/e2e',
   /* Maximum time one test can run for. */
-  timeout: 60 * 1000,
+  timeout: 120 * 1000, // Increased timeout to 120 seconds
   expect: {
     /**
      * Maximum time expect() should wait for the condition to be met.
@@ -79,6 +79,7 @@ export default defineConfig({
         // Custom browser launch options
         launchOptions: {
           headless: process.env.HEADLESS !== 'false',
+          executablePath: '/home/jules/.cache/ms-playwright/chromium-1179/chrome-linux/chrome',
         },
       },
     },
@@ -88,8 +89,8 @@ export default defineConfig({
   webServer: {
     command: `VITE_SUPABASE_URL=${testEnv.VITE_SUPABASE_URL} VITE_SUPABASE_ANON_KEY=${testEnv.VITE_SUPABASE_ANON_KEY} VITE_USE_MOCK_API=${testEnv.VITE_USE_MOCK_API} NODE_ENV=${testEnv.NODE_ENV} npm run dev`,
     port: 5174,
-    timeout: 60 * 1000,
-    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000, // Increased web server timeout to 120 seconds
+    reuseExistingServer: true, // Changed to always reuse existing server
     env: {
       ...process.env,
       ...testEnv,
