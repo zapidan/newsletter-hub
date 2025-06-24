@@ -1362,7 +1362,7 @@ const NewslettersPage: React.FC = () => {
             )}
 
             {isLoadingNewsletters ? (
-              <div className="flex justify-center items-center h-64">
+              <div data-testid="loader-container" className="flex justify-center items-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
               </div>
             ) : isErrorNewsletters ? (

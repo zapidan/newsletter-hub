@@ -27,6 +27,7 @@ import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsl
 
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { getCacheManager } from '@common/utils/cacheUtils';
+import { useReadingQueueCacheOptimizer } from '@common/hooks/useReadingQueueCacheOptimizer';
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
@@ -84,41 +85,8 @@ const ReadingQueuePage: React.FC = () => {
     }
   }, []);
 
-  // Enhanced cache warming and pre-loading
-  useEffect(() => {
-    if (cacheManager && user?.id) {
-      // Warm up critical caches for better performance
-      cacheManager.warmCache(user.id, 'high');
-
-      // Pre-warm newsletter details for queue items
-      if (readingQueue.length > 0) {
-        // Batch pre-load first 5 newsletters for instant access
-        const newsletterIds = readingQueue.slice(0, 5).map((item) => item.newsletter_id);
-
-        setTimeout(() => {
-          cacheManager.batchInvalidateQueries([
-            {
-              type: 'newsletter-detail',
-              ids: newsletterIds,
-            },
-          ]);
-        }, 100);
-
-        // Pre-load next batch in background
-        if (readingQueue.length > 5) {
-          const nextBatchIds = readingQueue.slice(5, 10).map((item) => item.newsletter_id);
-          setTimeout(() => {
-            cacheManager.batchInvalidateQueries([
-              {
-                type: 'newsletter-detail',
-                ids: nextBatchIds,
-              },
-            ]);
-          }, 500);
-        }
-      }
-    }
-  }, [cacheManager, user?.id, readingQueue]);
+  // Use the new hook for cache optimization
+  useReadingQueueCacheOptimizer(cacheManager, user, readingQueue);
 
   // Load all tags when component mounts
   useEffect(() => {
@@ -529,7 +497,7 @@ const ReadingQueuePage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div role="progressbar" className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
