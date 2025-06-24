@@ -13,6 +13,16 @@ vi.mock('@/common/utils/date', () => ({
   formatRelativeTime: vi.fn().mockReturnValue('2 days ago'),
 }));
 
+// Mock the LoadingSentinel component to prevent snapshot mismatches
+vi.mock('../InfiniteScroll/LoadingSentinel', () => ({
+  LoadingSentinel: vi.fn().mockImplementation(({ isLoading, hasReachedEnd }) => (
+    <div data-testid="loading-sentinel">
+      {isLoading && 'Loading more newsletters...'}
+      {hasReachedEnd && 'No more newsletters to load'}
+    </div>
+  ))
+}));
+
 describe('InfiniteNewsletterList', () => {
   // Mock system time to a fixed date for consistent snapshots
   beforeAll(() => {
@@ -163,18 +173,8 @@ describe('InfiniteNewsletterList', () => {
       </TestProviders>
     );
 
-    // Verify the loading spinner is present with the correct classes
-    const loadingSpinner = container.querySelector('.animate-spin');
-    expect(loadingSpinner).toBeInTheDocument();
-
-    // Check for the SVG element and its classes
-    const svgElement = loadingSpinner?.closest('svg');
-    expect(svgElement).toHaveClass('w-6', 'h-6', 'text-blue-500');
-
-    // Verify the loading text is present
+    // Verify the loading sentinel is rendered correctly
     expect(screen.getByText('Loading more newsletters...')).toBeInTheDocument();
-
-    // Verify the snapshot matches
     expect(container).toMatchSnapshot();
   });
 

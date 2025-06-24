@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useCallback, useMemo, useEffect } from 'react';
-import { subDays, subWeeks, subMonths } from 'date-fns';
 import { useInboxUrlParams } from '@common/hooks/useUrlParams';
 import type { NewsletterFilter } from '@common/types/cache';
 import type { TimeRange } from '@web/components/TimeFilter';
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 
 export interface FilterState {
   filter: 'all' | 'unread' | 'liked' | 'archived';
@@ -92,24 +91,30 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
     // Handle time range filter
     if (filterState.timeRange && filterState.timeRange !== 'all') {
+      // Create a date at the current time in UTC
       const now = new Date();
+      const nowUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds()));
       let dateFrom: Date;
 
       switch (filterState.timeRange) {
         case 'day':
-          dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          dateFrom = new Date(Date.UTC(nowUTC.getUTCFullYear(), nowUTC.getUTCMonth(), nowUTC.getUTCDate()));
           break;
         case 'week':
-          dateFrom = subWeeks(now, 1);
+          dateFrom = new Date(nowUTC);
+          dateFrom.setUTCDate(nowUTC.getUTCDate() - 7);
           break;
         case 'month':
-          dateFrom = subMonths(now, 1);
+          dateFrom = new Date(nowUTC);
+          dateFrom.setUTCMonth(nowUTC.getUTCMonth() - 1);
           break;
         case '2days':
-          dateFrom = subDays(now, 2);
+          dateFrom = new Date(nowUTC);
+          dateFrom.setUTCDate(nowUTC.getUTCDate() - 2);
           break;
         default:
-          dateFrom = subDays(now, 7);
+          dateFrom = new Date(nowUTC);
+          dateFrom.setUTCDate(nowUTC.getUTCDate() - 7);
       }
 
       filters.dateFrom = dateFrom.toISOString();
