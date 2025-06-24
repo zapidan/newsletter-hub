@@ -321,7 +321,7 @@ export const useKeyboardNavigation = (
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [navigateToPrevious, navigateToNext, canNavigate]);
+  }, [navigateToPrevious, navigateToNext, canNavigate, enabled]);
 };
 
 /**

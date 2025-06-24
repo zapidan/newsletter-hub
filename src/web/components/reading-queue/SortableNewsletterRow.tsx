@@ -151,6 +151,7 @@ export const SortableNewsletterRow: React.FC<
       ref={setNodeRef}
       style={style}
       className={`relative group w-full ${className} ${isDragging ? "z-10" : ""}`}
+      data-testid={`sortable-row-${id}`}
       {...rest}
     >
       <div

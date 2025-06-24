@@ -121,7 +121,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     }
 
     return filters;
-  }, [filterState]);
+  }, [filterState, useLocalTagFiltering]);
 
   // Check if any filters are active (non-default)
   const hasActiveFilters = useMemo(() => {

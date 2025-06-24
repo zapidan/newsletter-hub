@@ -180,7 +180,7 @@ export const useUnreadCount = (sourceId?: string | null) => {
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [user, debouncedInvalidate]);
+  }, [user, debouncedInvalidate, log]);
 
   // Return 0 during initial load, then return actual count or fallback to previous count
   const displayCount =

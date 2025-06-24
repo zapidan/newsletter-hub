@@ -241,7 +241,7 @@ const NewsletterDetail = memo(() => {
     };
 
     markAsRead();
-  }, [newsletter?.id, handleMarkAsRead, log, hasAutoMarkedAsRead]); // Include all dependencies
+  }, [newsletter, loading, fetchError, hasAutoMarkedAsRead, handleMarkAsRead, log]);
 
   // Auto-archive newsletter after it's been read and viewed for a short time
   useEffect(() => {
@@ -260,12 +260,12 @@ const NewsletterDetail = memo(() => {
 
     const archiveNewsletter = async () => {
       try {
-        await handleToggleArchive(newsletter);
+        await handleToggleArchive(newsletter); // newsletter is from outer scope
         log.debug('Auto-archived newsletter after reading', {
           action: 'auto_archive_detail',
           metadata: {
-            newsletterId: newsletter.id,
-            title: newsletter.title,
+            newsletterId: newsletter.id, // newsletter is from outer scope
+            title: newsletter.title, // newsletter is from outer scope
           },
         });
       } catch (error) {
@@ -275,7 +275,7 @@ const NewsletterDetail = memo(() => {
           'Failed to auto-archive newsletter in detail view',
           {
             action: 'auto_archive_detail_error',
-            metadata: { newsletterId: newsletter.id },
+            metadata: { newsletterId: newsletter.id }, // newsletter is from outer scope
           },
           error instanceof Error ? error : new Error(String(error))
         );
@@ -285,7 +285,7 @@ const NewsletterDetail = memo(() => {
     // Archive after 3 seconds of viewing a read newsletter
     const timeoutId = setTimeout(archiveNewsletter, 3000);
     return () => clearTimeout(timeoutId);
-  }, [newsletter?.id, newsletter?.is_read, newsletter?.is_archived, handleToggleArchive, log]); // Include all dependencies
+  }, [newsletter, loading, fetchError, hasAutoArchived, handleToggleArchive, log]);
 
   // Reset auto-mark and auto-archive state when newsletter ID changes
   useEffect(() => {

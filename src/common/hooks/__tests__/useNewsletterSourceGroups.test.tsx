@@ -172,6 +172,7 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.createGroup.isError).toBe(true);
     });
+
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
@@ -281,6 +282,7 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.deleteGroup.isError).toBe(true);
     });
+
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
@@ -379,6 +381,7 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.addSourcesToGroup.isError).toBe(true);
     });
+
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 
@@ -442,6 +445,7 @@ describe('useNewsletterSourceGroups', () => {
     await waitFor(() => {
       expect(result.current.removeSourcesFromGroup.isError).toBe(true);
     });
+
     expect(mockBatchInvalidate).not.toHaveBeenCalled();
   });
 

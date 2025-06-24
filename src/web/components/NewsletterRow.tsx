@@ -99,6 +99,8 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
 
   return (
     <div
+      role="listitem"
+      data-testid={`newsletter-row-main-${newsletter.id}`}
       onClick={handleRowClick}
       onMouseEnter={handleMouseEnter}
       className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${!newsletter.is_read
