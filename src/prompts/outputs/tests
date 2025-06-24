@@ -1,0 +1,37 @@
+API Layer:
+common/api/errorHandling.ts
+ - No test file found
+common/api/newsletterApi.ts
+ - No direct test file found
+common/api/tagApi.ts
+ - No test file found
+Hooks:
+common/hooks/business/useNewsletterOperations.ts
+/Users/dzapata/Documents/Projects/Personal/newsletterHub/src/common/hooks/business/useNewsletterOperations.ts
+ - No test file found
+common/hooks/business/useTagOperations.ts
+ - No test file found
+common/hooks/performance/useNewsletterOperations.ts
+ - Has a test file but might need more coverage
+common/hooks/ui/useNewsletterRowState.ts
+/Users/dzapata/Documents/Projects/Personal/newsletterHub/src/common/hooks/ui/useNewsletterRowState.ts
+ - No test file found
+common/hooks/ui/useTagsPageState.ts
+/Users/dzapata/Documents/Projects/Personal/newsletterHub/src/common/hooks/ui/useTagsPageState.ts
+ - No test file found
+Contexts:
+common/contexts/AuthContext.tsx
+ - No test file found
+common/contexts/FilterContext.tsx
+ - No test file found
+common/contexts/ToastContext.tsx
+ - No test file found
+Components:
+common/components/ProtectedRoute.tsx
+ - No test file found
+common/components/layout/Header.tsx
+ - No test file found
+common/components/layout/Sidebar.tsx
+ - No test file found
+Services:
+While you have test files for services, some might need more comprehensive test coverage, especially for edge cases.

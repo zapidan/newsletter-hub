@@ -9,13 +9,6 @@ interface NewsletterSourceGroupOperationResult {
   error?: string;
 }
 
-// interface BulkNewsletterSourceGroupOperationResult {
-//   success: boolean;
-//   groups?: NewsletterSourceGroup[];
-//   failedIds?: string[];
-//   error?: string;
-// }
-
 interface NewsletterSourceGroupServiceOptions {
   enableOptimisticUpdates?: boolean;
   batchSize?: number;
@@ -62,7 +55,7 @@ export class NewsletterSourceGroupService extends BaseService {
    * Get a single newsletter source group by ID
    */
   async getGroup(id: string): Promise<NewsletterSourceGroup | null> {
-    this.validateString(id, 'group ID');
+    this.validateString(id, 'Group ID')
 
     return this.withRetry(async () => {
       const group = await newsletterSourceGroupApi.getById(id);

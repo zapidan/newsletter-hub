@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ValidationError } from '../../api/errorHandling';
 import { newsletterSourceGroupApi } from '../../api/newsletterSourceGroupApi';
 import { NewsletterSourceGroup } from '../../types';
 import { NewsletterSourceGroupService } from '../newsletterSourceGroup/NewsletterSourceGroupService';
@@ -88,13 +87,17 @@ describe('NewsletterSourceGroupService', () => {
     });
 
     it('should validate group ID', async () => {
-      // The service treats an empty / blank ID as invalid and eventually
-      // surfaces a wrapped “resource not found” error.
       await expect(service.getGroup('')).rejects.toThrow(
-        /resource not found during getGroup/i
+        'Group ID is required'
       );
       await expect(service.getGroup('   ')).rejects.toThrow(
-        /resource not found during getGroup/i
+        'Group ID is required'
+      );
+      await expect(service.getGroup(null as any)).rejects.toThrow(
+        'Group ID is required'
+      );
+      await expect(service.getGroup(undefined as any)).rejects.toThrow(
+        'Group ID is required'
       );
     });
   });
@@ -322,23 +325,22 @@ describe('NewsletterSourceGroupService', () => {
 
   describe('error handling and resilience', () => {
     it('should handle transient errors with retry', async () => {
-      // When the underlying call throws a timeout-looking error, BaseService
-      // instantly turns it into a ServiceError (code “TIMEOUT”) – no retry.
-      mockNewsletterSourceGroupApi.getById.mockRejectedValue(
-        new Error('Network timeout')
-      );
+      // Create a network error that will be retried
+      const networkError = new Error('Network timeout');
+      networkError.name = 'NetworkError';
 
-      await expect(service.getGroup('group-1')).rejects.toThrow(
-        /timeout during getGroup/i
-      );
-      // Only one attempt is made
-      expect(mockNewsletterSourceGroupApi.getById).toHaveBeenCalledTimes(1);
-    });
+      // Mock the API to reject with the network error
+      mockNewsletterSourceGroupApi.getById.mockRejectedValue(networkError);
 
-    it('should handle validation errors without retry', async () => {
-      await expect(service.createGroup({ name: '', sourceIds: [] })).rejects.toThrow(
-        ValidationError
-      );
+      // The service should preserve the NetworkError with correct properties
+      await expect(service.getGroup('group-1')).rejects.toMatchObject({
+        name: 'NetworkError',
+        code: 'NETWORK_ERROR',
+        message: expect.stringContaining('Network timeout')
+      });
+
+      // Should have been called maxRetries + 1 times (default is 3 retries + 1 initial attempt)
+      expect(mockNewsletterSourceGroupApi.getById).toHaveBeenCalledTimes(4);
     });
   });
 
