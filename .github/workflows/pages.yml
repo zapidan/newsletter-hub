@@ -61,6 +61,7 @@ jobs:
           pnpm run test:results:parse
           pnpm run test:coverage:parse
           pnpm run test:dashboard
+          pnpm run test:results:simple
         env:
           CI: 'true'
           NODE_ENV: 'test'

@@ -34,6 +34,8 @@
     "test:coverage:full": "npm run test:coverage:html && npm run test:coverage:open",
     "test:results:parse": "node scripts/parse-junit-results.js",
     "test:results:open": "open test-results/test-results.html || xdg-open test-results/test-results.html || start test-results/test-results.html",
+    "test:results:simple": "node scripts/generate-simple-test-table.js",
+    "test:results:simple:open": "open test-results/simple-test-table.html || xdg-open test-results/simple-test-table.html || start test-results/simple-test-table.html",
     "test:coverage:parse": "node scripts/generate-coverage-report.js",
     "test:dashboard": "node scripts/generate-test-dashboard.js",
     "test:dashboard:open": "open test-dashboard/index.html || xdg-open test-dashboard/index.html || start test-dashboard/index.html",
