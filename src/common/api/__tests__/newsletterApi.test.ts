@@ -100,7 +100,7 @@ describe('newsletterApi', () => {
     vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled) => onFulfilled(insertResult));
   };
 
-  const mockFinalGetByIdForUpdate = (finalNlData: any, error?: any) => {
+ 
     vi.mocked(currentQueryBuilder.single).mockClear().mockResolvedValueOnce({ data: finalNlData, error });
   };
 
@@ -248,7 +248,7 @@ describe('newsletterApi', () => {
     });
     it('should create newsletter with tags', async () => {
       const params = { title: 'New', content:'C', newsletter_source_id:'s1', tag_ids: ['tA'] };
-      const { tag_ids, ...baseNl } = params;
+      const { _tag_ids, ...baseNl } = params;
       const createdRaw = {...createMockNewsletter({...baseNl, id:'new-id'}), tags:undefined, source: undefined};
       const finalNl = createMockNewsletter({...baseNl, id:'new-id', tags: [{id:'tA', name:'TagA', color:'red', user_id:mockUser.id, created_at:now, newsletter_count:undefined}]});
 
@@ -271,7 +271,6 @@ describe('newsletterApi', () => {
      it('should update newsletter tags: remove all existing, then add new ones', async () => {
       const initialNl = createMockNewsletter({ id: 'nl-update', tags: [{ id: 'old', name: 'Old', color:'',user_id:'',created_at:'' }] });
       const updates = { tag_ids: ['new1'] };
-      const finalNl = createMockNewsletter({...initialNl, ...updates, tags: [{id:'new1', name:'New1',color:'',user_id:'',created_at:''}] });
 
       mockInitialGetByIdForUpdate(initialNl);
       // For this specific test, we only want to ensure the first getById works.
