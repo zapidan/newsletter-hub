@@ -23,7 +23,7 @@
     "test:all": "node --max-old-space-size=4096 scripts/run-tests.js all",
     "test:fast": "npm run test:unit && npm run test:integration",
     "test:ci": "node --max-old-space-size=4096 --expose-gc node_modules/.bin/vitest run --coverage --coverage.provider=v8 --reporter=junit --outputFile.junit=test-results/junit.xml",
-    "test:ci:update": "node --max-old-space-size=4096 --expose-gc node_modules/.bin/vitest run --coverage --coverage.provider=v8 --reporter=junit --outputFile.junit=test-results/junit.xml -u",
+    "test:ci:update": "node --max-old-space-size=4096 --expose-gc node_modules/vitest/vitest.mjs run --coverage --coverage.provider=v8 --reporter=junit --outputFile.junit=test-results/junit.xml -u",
     "test:watch:unit": "node --max-old-space-size=4096 --expose-gc node_modules/.bin/vitest --watch src/**/*.{test,spec}.{js,ts,jsx,tsx}",
     "test:watch:integration": "node --max-old-space-size=4096 --expose-gc node_modules/.bin/vitest --watch src/**/*.integration.{test,spec}.{js,ts,jsx,tsx}",
     "test:debug": "node --max-old-space-size=4096 --expose-gc node_modules/.bin/vitest --inspect-brk --no-coverage",
