@@ -1,5 +1,5 @@
 import { AuthContext } from '@common/contexts/AuthContext';
-import { supabase } from '@common/services/supabaseClient';
+import { NewsletterService } from '@common/services';
 import { NewsletterWithRelations } from '@common/types';
 import {
   getCacheManagerSafe,
@@ -32,41 +32,6 @@ export interface UseNewsletterDetailResult {
   prefetchRelated: () => Promise<void>;
 }
 
-interface SupabaseNewsletterResponse {
-  id: string;
-  title: string;
-  content: string;
-  summary: string;
-  image_url: string;
-  received_at: string;
-  updated_at: string;
-  is_read: boolean;
-  is_liked: boolean;
-  is_archived: boolean;
-  user_id: string;
-  newsletter_source_id?: string | null;
-  word_count: number;
-  estimated_read_time: number;
-  source?: {
-    id: string;
-    name: string;
-    from: string;
-    user_id: string;
-    created_at: string;
-    updated_at: string;
-    is_archived?: boolean;
-  } | null;
-  tags?: Array<{
-    tag: {
-      id: string;
-      name: string;
-      color: string;
-      user_id: string;
-      created_at: string;
-    };
-  }>;
-}
-
 /**
  * Custom hook for fetching and caching newsletter details with optimized caching
  * and prefetching capabilities for improved performance
@@ -93,7 +58,12 @@ export const useNewsletterDetail = (
     prefetchSource = true,
   } = options;
 
-  // Fetch newsletter detail from Supabase
+  // Initialize newsletter service
+  const newsletterService = useMemo(() => {
+    return new NewsletterService();
+  }, []);
+
+  // Fetch newsletter detail using the service
   const fetchNewsletterDetail = useCallback(async (): Promise<NewsletterWithRelations> => {
     if (!user) {
       throw new Error('User not authenticated');
@@ -103,62 +73,26 @@ export const useNewsletterDetail = (
       throw new Error('Newsletter ID is required');
     }
 
-    const { data, error } = await supabase
-      .from('newsletters')
-      .select(
-        `
-        *,
-        source:newsletter_sources(
-          id,
-          name,
-          from,
-          user_id,
-          created_at,
-          updated_at,
-          is_archived
-        ),
-        tags:newsletter_tags(
-          tag:tags(
-            id,
-            name,
-            color,
-            user_id,
-            created_at
-          )
-        )
-      `
-      )
-      .eq('id', newsletterId)
-      .eq('user_id', user.id)
-      .single();
+    try {
+      const newsletter = await newsletterService.getNewsletter(newsletterId);
 
-    if (error) {
+      if (!newsletter) {
+        throw new Error('Newsletter not found');
+      }
+
+      return newsletter;
+    } catch (error) {
       log.error(
         'Failed to fetch newsletter detail',
         {
           action: 'fetch_newsletter_detail',
           metadata: { newsletterId, userId: user.id },
         },
-        error
+        error instanceof Error ? error : new Error(String(error))
       );
-      throw new Error(error.message || 'Failed to fetch newsletter details');
+      throw error;
     }
-
-    if (!data) {
-      throw new Error('Newsletter not found');
-    }
-
-    // Transform the data to match our expected format
-    const typedData = data as SupabaseNewsletterResponse;
-    const transformedData: NewsletterWithRelations = {
-      ...typedData,
-      source: typedData.source || null,
-      tags: typedData.tags?.map((t) => t.tag).filter(Boolean) || [],
-      newsletter_source_id: typedData.newsletter_source_id || null,
-    };
-
-    return transformedData;
-  }, [user, newsletterId, log]);
+  }, [user, newsletterId, log, newsletterService]);
 
   // Main query for newsletter detail
   const query = useQuery({
@@ -239,15 +173,11 @@ export const useNewsletterDetail = (
           prefetchQuery(
             [...queryKeyFactory.newsletters.tag(tag.id)],
             async () => {
-              const { data, error } = await supabase
-                .from('tags')
-                .select('*')
-                .eq('id', tag.id)
-                .eq('user_id', user.id)
-                .single();
-
-              if (error) throw error;
-              return data;
+              // Use the service to fetch tag details
+              const { tagApi } = await import('@common/api/tagApi');
+              const tagData = await tagApi.getById(tag.id);
+              if (!tagData) throw new Error('Tag not found');
+              return tagData;
             },
             { staleTime: 10 * 60 * 1000 } // 10 minutes
           )
@@ -261,28 +191,9 @@ export const useNewsletterDetail = (
           prefetchQuery(
             [...queryKeyFactory.newsletters.list({ tagIds })],
             async () => {
-              const { data, error } = await supabase
-                .from('newsletters')
-                .select(
-                  `
-                    *,
-                    source:newsletter_sources(*),
-                    tags:newsletter_tags(tag:tags(*))
-                  `
-                )
-                .eq('user_id', user.id)
-                .limit(20);
-
-              if (error) throw error;
-
-              return (
-                data?.map((n: SupabaseNewsletterResponse) => ({
-                  ...n,
-                  source: n.source || null,
-                  tags: n.tags?.map((t) => t.tag).filter(Boolean) || [],
-                  newsletter_source_id: n.newsletter_source_id || null,
-                })) || []
-              );
+              // Use the service to fetch newsletters by tags
+              const newsletters = await newsletterService.getNewsletters({ tagIds });
+              return newsletters.data || [];
             },
             { staleTime: 2 * 60 * 1000 } // 2 minutes
           )
@@ -296,15 +207,11 @@ export const useNewsletterDetail = (
         prefetchQuery(
           [...queryKeyFactory.newsletters.source(newsletter.source.id)],
           async () => {
-            const { data, error } = await supabase
-              .from('newsletter_sources')
-              .select('*')
-              .eq('id', newsletter.source!.id)
-              .eq('user_id', user.id)
-              .single();
-
-            if (error) throw error;
-            return data;
+            // Use the service to fetch source details
+            const { newsletterSourceApi } = await import('@common/api/newsletterSourceApi');
+            const sourceData = await newsletterSourceApi.getById(newsletter.source!.id);
+            if (!sourceData) throw new Error('Source not found');
+            return sourceData;
           },
           { staleTime: 15 * 60 * 1000 } // 15 minutes
         )
@@ -319,30 +226,11 @@ export const useNewsletterDetail = (
             }),
           ],
           async () => {
-            const { data, error } = await supabase
-              .from('newsletters')
-              .select(
-                `
-                *,
-                source:newsletter_sources(*),
-                tags:newsletter_tags(tag:tags(*))
-              `
-              )
-              .eq('user_id', user.id)
-              .eq('newsletter_source_id', newsletter.source!.id)
-              .order('received_at', { ascending: false })
-              .limit(10);
-
-            if (error) throw error;
-
-            return (
-              data?.map((n: SupabaseNewsletterResponse) => ({
-                ...n,
-                source: n.source || null,
-                tags: n.tags?.map((t) => t.tag).filter(Boolean) || [],
-                newsletter_source_id: n.newsletter_source_id || null,
-              })) || []
-            );
+            // Use the service to fetch newsletters by source
+            const newsletters = await newsletterService.getNewsletters({
+              sourceIds: [newsletter.source!.id]
+            });
+            return newsletters.data || [];
           },
           { staleTime: 2 * 60 * 1000 } // 2 minutes
         )
@@ -363,7 +251,7 @@ export const useNewsletterDetail = (
       });
       // Don't throw - prefetching failures shouldn't break the main functionality
     }
-  }, [query.data, user, prefetchTags, prefetchSource, log, newsletterId]);
+  }, [query.data, user, prefetchTags, prefetchSource, log, newsletterId, newsletterService]);
 
   // Enhanced refetch that also updates cache manager
   const refetch = useCallback(() => {
@@ -402,6 +290,11 @@ export const usePrefetchNewsletterDetail = () => {
   const user = auth?.user;
   const log = useLogger();
 
+  // Initialize newsletter service
+  const newsletterService = useMemo(() => {
+    return new NewsletterService();
+  }, []);
+
   const prefetchNewsletter = useCallback(
     async (newsletterId: string, options: { priority?: boolean } = {}) => {
       if (!user || !newsletterId) return;
@@ -425,28 +318,11 @@ export const usePrefetchNewsletterDetail = () => {
         await prefetchQuery(
           queryKeyFactory.newsletters.detail(newsletterId),
           async () => {
-            const { data, error } = await supabase
-              .from('newsletters')
-              .select(
-                `
-                *,
-                source:newsletter_sources(*),
-                tags:newsletter_tags(tag:tags(*))
-              `
-              )
-              .eq('id', newsletterId)
-              .eq('user_id', user.id)
-              .single();
-
-            if (error) throw error;
-
-            const typedData = data as SupabaseNewsletterResponse;
-            return {
-              ...typedData,
-              source: typedData.source || null,
-              tags: typedData.tags?.map((t) => t.tag).filter(Boolean) || [],
-              newsletter_source_id: typedData.newsletter_source_id || null,
-            };
+            const newsletter = await newsletterService.getNewsletter(newsletterId);
+            if (!newsletter) {
+              throw new Error('Newsletter not found');
+            }
+            return newsletter;
           },
           {
             staleTime: 5 * 60 * 1000, // 5 minutes
@@ -462,7 +338,7 @@ export const usePrefetchNewsletterDetail = () => {
         // Don't throw - prefetch failures shouldn't break the app
       }
     },
-    [user, log]
+    [user, log, newsletterService]
   );
 
   return { prefetchNewsletter };
