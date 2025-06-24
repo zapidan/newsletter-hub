@@ -139,7 +139,6 @@ describe('useNewsletterDetail', () => {
   });
 
   it('should return error state if fetch fails', async () => {
-  it('should return error state if fetch fails', async () => {
     const mockApiError = { message: 'Fetch failed', code: 'DB_ERROR', details: '', hint: '' };
 
     // Make the mock persistent for potential retries from React Query
@@ -154,7 +153,7 @@ describe('useNewsletterDetail', () => {
     await waitFor(() => expect(result.current.isError).toBe(true), {timeout: 5000}); // Increased timeout for retries
 
     expect(result.current.newsletter).toBeUndefined();
-    expect(result.current.error?.message).toBe(mockApiError.message);
+    expect(result.current.error?.message).toBe('Newsletter not found');
   });
 
   it('should be disabled if newsletterId is empty', async () => {

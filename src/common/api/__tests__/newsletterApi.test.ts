@@ -112,7 +112,7 @@ describe('newsletterApi', () => {
       currentQueryBuilder.order.mockResolvedValueOnce(mockResponse);
       const result = await newsletterApi.getAll();
       expect(supabaseClient.supabase.from).toHaveBeenCalledWith('newsletters');
-      expect(currentQueryBuilder.select).toHaveBeenCalledWith('*', { count: 'exact' });
+      expect(currentQueryBuilder.select).toHaveBeenCalledWith('*, newsletter_source_id', { count: 'exact' });
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('user_id', 'user-1');
       expect(currentQueryBuilder.order).toHaveBeenCalledWith('received_at', { ascending: false });
       expect(result).toEqual({
@@ -184,7 +184,7 @@ describe('newsletterApi', () => {
       currentQueryBuilder.order.mockResolvedValueOnce({ data: [], count: 0, error: null });
       await newsletterApi.getAll({ includeSource: true, includeTags: true });
       expect(currentQueryBuilder.select).toHaveBeenCalledWith(
-        "*, source:newsletter_sources(*), tags:newsletter_tags(tag:tags(*))",
+        "*, newsletter_source_id, source:newsletter_sources(id, name, from, created_at, updated_at, user_id), tags:newsletter_tags(tag:tags(id, name, color, user_id, created_at))",
         { count: "exact" }
       );
     });
