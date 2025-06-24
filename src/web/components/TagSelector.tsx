@@ -206,8 +206,9 @@ export default function TagSelector({
         ))}
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200"
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          disabled={disabled}
+          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-75 disabled:cursor-not-allowed"
         >
           <Plus size={14} className="mr-1" />
           Add Tag

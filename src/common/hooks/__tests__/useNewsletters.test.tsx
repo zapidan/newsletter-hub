@@ -1,13 +1,43 @@
-// src/common/hooks/__tests__/useNewsletters.test.tsx
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { useNewsletters } from '../useNewsletters';
+import { newsletterService } from '@common/services';
+import type { NewsletterWithRelations } from '@common/types';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// Mock dependencies
+vi.mock('@common/services', () => ({
+  newsletterService: {
+    getAll: vi.fn(),
+    getById: vi.fn(), // Was getNewsletter
+    markAsRead: vi.fn(),
+    markAsUnread: vi.fn(),
+    bulkUpdate: vi.fn(),
+    toggleLike: vi.fn(),
+    toggleArchive: vi.fn(),
+    bulkArchive: vi.fn(),
+    bulkUnarchive: vi.fn(),
+    delete: vi.fn(), // Was deleteNewsletter
+    // createNewsletter: vi.fn(), // Not used by useNewsletters directly
+    // updateNewsletter: vi.fn(), // Not used by useNewsletters directly
+    update: vi.fn(), // For unarchive specific
+    updateTags: vi.fn(), // For updateNewsletterTags
+  },
+  readingQueueService: {
+    isInQueue: vi.fn(),
+    add: vi.fn(),
+    remove: vi.fn(),
+    // getAll: vi.fn(), // Not directly used by useNewsletters mutations
+  },
+  newsletterSourceGroupService: {}, // Keep other services if needed by full module mock
+  tagService: {},
+  userService: {},
+}));
 
-/* ─────────── 1. GLOBAL MOCKS ─────────── */
+const mockActualCacheUtils = await vi.importActual<typeof import('@common/utils/cacheUtils')>('@common/utils/cacheUtils');
+const mockQueryClientInstance = new QueryClient();
 
-// In-memory cache-manager stub
-const mockCacheManager: any = {
+const mockCacheManagerInstance = {
   updateNewsletterInCache: vi.fn(),
   batchUpdateNewsletters: vi.fn(),
   optimisticUpdate: vi.fn(),
@@ -51,48 +81,25 @@ vi.mock('@common/utils/tagUtils', () => ({
   updateNewsletterTags: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('../../contexts/AuthContext', () => ({ useAuth: vi.fn() }))
+vi.mock('@common/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'test-user-id', email: 'test@example.com' }, // Consistent user ID
+    // isAuthenticated: true, // Not part of useAuth return
+    // loading: false, // Not part of useAuth return
+  }),
+}));
 
-vi.mock('@common/services', async () => {
-  const real = await vi.importActual<typeof import('@common/services')>('@common/services')
-  return {
-    ...real,
-    newsletterService: {
-      getAll: vi.fn(),
-      getById: vi.fn(),
-      markAsRead: vi.fn(),
-      markAsUnread: vi.fn(),
-      bulkUpdate: vi.fn(),
-      toggleLike: vi.fn(),
-      toggleArchive: vi.fn(),
-      bulkArchive: vi.fn(),
-      bulkUnarchive: vi.fn(),
-      delete: vi.fn(),
-      update: vi.fn(),
-      updateTags: vi.fn(),
-    },
-    readingQueueService: {
-      isInQueue: vi.fn(),
-      add: vi.fn(),
-      remove: vi.fn(),
-    },
-  }
-})
+const mockNewsletterService = vi.mocked(newsletterService);
+const mockReadingQueueService = vi.mocked(readingQueueService);
+const mockUpdateNewsletterTagsUtil = vi.mocked(require('@common/utils/tagUtils').updateNewsletterTags);
 
-/* ─────────── 2. REAL IMPORTS ─────────── */
-import { newsletterService, readingQueueService } from '@common/services'
-import type { NewsletterWithRelations, ReadingQueueItem } from '@common/types'
-import * as cacheUtils from '@common/utils/cacheUtils'
-import * as optimizedInvalidation from '@common/utils/optimizedCacheInvalidation'
-import { queryKeyFactory } from '@common/utils/queryKeyFactory'
-import { useNewsletters } from '../useNewsletters'
 
-/* ─────────── 3. FIXTURES ─────────── */
-const nl: NewsletterWithRelations = {
-  id: 'nl-1',
-  title: 'Mock NL',
-  content: '',
-  summary: '',
+// Mock data
+const mockNewsletter: NewsletterWithRelations = {
+  id: 'test-newsletter-1',
+  title: 'Test Newsletter',
+  content: 'Test content',
+  summary: 'Test summary',
   is_read: false,
   is_liked: false,
   is_archived: false,
@@ -120,104 +127,107 @@ const paginated = (items: NewsletterWithRelations[]) => ({
   hasMore: false,
   nextPage: null,
   prevPage: null,
-})
+});
 
-const ns = vi.mocked(newsletterService)
-const qs = vi.mocked(readingQueueService)
 
-/* ─────────── 4. PER-TEST SETUP ─────────── */
-let qc: QueryClient
-let wrapper: React.FC<{ children: React.ReactNode }>
+describe('useNewsletters', () => {
+  let queryClient: QueryClient;
+  let wrapper: ({ children }: { children: React.ReactNode }) => JSX.Element;
 
-beforeEach(async () => {
-  qc = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, refetchOnMount: false },
-      mutations: { retry: false },
-    },
-  })
-  qc.clear()
-  vi.clearAllMocks()
 
-    ; (cacheUtils as any).__setClient(qc)
-  mockCacheManager.queryClient = qc
+  beforeEach(() => {
+    // Create a new QueryClient for each test to ensure isolation
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
 
-  // wire cache-manager writes to qc
-  const write = (id: string, updates: any) => {
-    qc.getQueryCache().findAll().forEach(({ queryKey }) => {
-      const d = qc.getQueryData<any>(queryKey)
-      if (!d) return
-      const patch = (x: any) => (x.id === id ? { ...x, ...updates } : x)
-      if (Array.isArray(d)) qc.setQueryData(queryKey, d.map(patch))
-      else if (d.data) qc.setQueryData(queryKey, { ...d, data: d.data.map(patch) })
-      else if (d.id === id) qc.setQueryData(queryKey, { ...d, ...updates })
-    })
-  }
+    // Reset all mocks before each test
+    vi.clearAllMocks();
+    mockQueryClientInstance.clear(); // Clear the internal query client for the mock cache manager
 
-  mockCacheManager.updateNewsletterInCache.mockImplementation(({ id, updates }) =>
-    write(id, updates),
-  )
-  mockCacheManager.batchUpdateNewsletters.mockImplementation((batch: any[]) =>
-    batch.forEach(({ id, updates }) => write(id, updates)),
-  )
-  mockCacheManager.optimisticUpdateWithRollback.mockImplementation(
-    async (key: any, updater: any) => {
-      const cur = qc.getQueryData(key)
-      const next = updater(cur)
-      qc.setQueryData(key, next)
-      return { rollback: () => qc.setQueryData(key, cur) }
-    },
-  )
+    // Default mock for useAuth
+    vi.mocked(require('@common/contexts/AuthContext').useAuth).mockReturnValue({
+      user: { id: 'test-user-id', email: 'test@example.com' },
+    });
 
-  const Auth = await import('../../contexts/AuthContext')
-  vi.mocked(Auth.useAuth).mockReturnValue({
-    user: { id: 'u-1', email: 'test@example.com' } as any,
-    session: null,
-    loading: false,
-    error: null,
-    signIn: vi.fn(),
-    signUp: vi.fn(),
-    signOut: vi.fn(),
-    resetPassword: vi.fn(),
-    updatePassword: vi.fn(),
-    checkPasswordStrength: vi.fn(),
-  })
+    // Default mock for newsletterService.getAll
+    mockNewsletterService.getAll.mockResolvedValue(mockPaginatedResponse());
 
-  ns.getAll.mockResolvedValue(paginated([nl]))
-  wrapper = ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-})
+    // Default mock for cache manager interactions
+    mockCacheManagerInstance.updateNewsletterInCache.mockImplementation(({ id, updates }) => {
+      // This is a simplified mock. A real one might update queryClient cache.
+      // console.log(`Mock updateNewsletterInCache called for ${id} with`, updates);
+    });
+    mockCacheManagerInstance.batchUpdateNewsletters.mockImplementation((updatesArray) => {
+      // console.log(`Mock batchUpdateNewsletters called with`, updatesArray);
+    });
+    mockCacheManagerInstance.optimisticUpdateWithRollback.mockImplementation(async (key, updater) => {
+      const currentData = require('@common/utils/cacheUtils').getQueryData(key, mockQueryClientInstance);
+      const newData = updater(currentData);
+      require('@common/utils/cacheUtils').setQueryData(key, newData, mockQueryClientInstance);
+      return {
+        rollback: vi.fn().mockImplementation(() => {
+          require('@common/utils/cacheUtils').setQueryData(key, currentData, mockQueryClientInstance);
+        }),
+      };
+    });
 
-const mount = async (filters = {}, opts = {}) => {
-  const h = renderHook(() => useNewsletters(filters, opts), { wrapper })
-  await waitFor(() => expect(h.result.current.isLoadingNewsletters).toBe(false))
-  return h
-}
-const useHook = mount
 
-/* ─────────── 5. TESTS ─────────── */
-describe('useNewsletters (hook)', () => {
-  describe('initial fetch', () => {
-    it('calls newsletterService.getAll once on mount', async () => {
-      await useHook()
-      expect(ns.getAll).toHaveBeenCalledTimes(1)
-    })
+    // Define the wrapper for each test, using the fresh QueryClient
+    wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+  });
 
-    it('passes filters through', async () => {
-      await useHook({ search: 'test' })
-      expect(ns.getAll).toHaveBeenCalledWith(expect.objectContaining({ search: 'test' }))
-    })
+  // Helper function to initialize hook and wait for initial data load
+  const setupHook = async (filters = {}, options = {}) => {
+    const hookResult = renderHook(() => useNewsletters(filters, options), { wrapper });
+    await waitFor(() => expect(hookResult.result.current.isLoadingNewsletters).toBe(false), { timeout: 2000 });
+    return hookResult;
+  };
 
-    it('skips fetch when disabled', async () => {
-      await useHook({}, { enabled: false })
-      expect(ns.getAll).not.toHaveBeenCalled()
-    })
+  describe('Initial Data Fetching', () => {
+    it('should fetch newsletters on mount if enabled and user is authenticated', async () => {
+      await setupHook();
+      expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(1);
+      const { result } = await setupHook(); // re-render to check newsletters
+      expect(result.current.newsletters).toEqual([mockNewsletter]);
+    });
 
-    it('shows empty list when service rejects', async () => {
-      ns.getAll.mockRejectedValue(new Error('boom'))
-      const { result } = renderHook(() => useNewsletters(), { wrapper })
-      await waitFor(() => expect(result.current.newsletters).toEqual([]))
-    })
-  })
+    it('should not fetch if not enabled', async () => {
+      await setupHook({}, { enabled: false });
+      expect(mockNewsletterService.getAll).not.toHaveBeenCalled();
+    });
+
+    it('should not fetch if user is not authenticated', async () => {
+      vi.mocked(require('@common/contexts/AuthContext').useAuth).mockReturnValue({ user: null });
+      // queryClient.clear(); // Clear previous queries that might have run with a user
+      const { result } = renderHook(() => useNewsletters(), { wrapper });
+      // Wait for isLoading to settle, it might briefly be true
+      await waitFor(() => expect(result.current.isLoadingNewsletters).toBe(false));
+      expect(mockNewsletterService.getAll).not.toHaveBeenCalled();
+      // Verify newsletters array is empty
+      expect(result.current.newsletters).toEqual([]);
+    });
+
+    it('should use filters when fetching newsletters', async () => {
+      const filters = { search: 'test', isRead: true };
+      await setupHook(filters);
+      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(expect.objectContaining(filters));
+    });
+
+    it('should handle error during initial fetch', async () => {
+      const mockError = new Error('Failed to fetch');
+      mockNewsletterService.getAll.mockRejectedValueOnce(mockError);
+      const { result } = renderHook(() => useNewsletters(), { wrapper });
+      await waitFor(() => expect(result.current.isLoadingNewsletters).toBe(false));
+      expect(result.current.errorNewsletters).toBe(mockError);
+      expect(result.current.newsletters).toEqual([]);
+    });
+  });
 
   describe('getNewsletter', () => {
     it('delegates to service', async () => {

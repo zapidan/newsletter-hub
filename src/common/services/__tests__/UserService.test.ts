@@ -178,11 +178,8 @@ describe('UserService', () => {
         await vi.advanceTimersByTimeAsync(1000);
         // 2nd retry: 2000ms
         await vi.advanceTimersByTimeAsync(2000);
-        // 3rd retry: 4000ms
-        await vi.advanceTimersByTimeAsync(4000);
-
-        // Process any pending promises
-        await new Promise(process.nextTick);
+        // Run all scheduled timers to exhaust retries
+        await vi.runAllTimersAsync();
 
         // Verify the promise rejects with the expected error
         await expect(promise).rejects.toMatchObject({
@@ -528,11 +525,8 @@ describe('UserService', () => {
         // 1st retry: 1000ms
         // 2nd retry: 2000ms
         // 3rd retry: 4000ms
-        // Total: 7000ms should be enough
-        await vi.advanceTimersByTimeAsync(7000);
-
-        // Wait for all pending promises to resolve
-        await new Promise(process.nextTick);
+        // Run all scheduled timers to exhaust retries
+        await vi.runAllTimersAsync();
 
         // The promise should be rejected
         await expect(promise).rejects.toThrow('Network error');

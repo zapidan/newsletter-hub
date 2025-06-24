@@ -154,7 +154,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
         clearTimeout(checkDebounceRef.current);
       }
     };
-  }, [newsletter?.id]); // Only depend on newsletter ID
+  }, [newsletter?.id, checkIsInQueue, isFromReadingQueue, log, localNewsletter?.id]);
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingReadStatus) return;
@@ -198,6 +198,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     handleMarkAsUnread,
     onNewsletterUpdate,
     newsletter,
+    log,
   ]);
 
   const handleToggleLikeAction = useCallback(async () => {
@@ -316,7 +317,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     } finally {
       setIsArchiving(false);
     }
-  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter]);
+  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter, log]);
 
   const handleUnarchive = useCallback(async () => {
     if (!localNewsletter?.id || isArchiving || !localNewsletter.is_archived) return;
@@ -349,7 +350,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     } finally {
       setIsArchiving(false);
     }
-  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter]);
+  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter, log]);
 
   const handleTrash = useCallback(async () => {
     if (!localNewsletter?.id) return;

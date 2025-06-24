@@ -119,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       log.auth('Cleaning up auth listener');
       subscription?.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, log]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
@@ -217,7 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setError, log, supabase.auth, userApi]);
+  }, [setLoading, setError, log, supabase.auth, userService]);
 
   const signOut = useCallback(async () => {
     try {
