@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Results Dashboard - Newsletter Hub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-top: 15px;
+        }
+        
+        .status-pass {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .status-fail {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .metric:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .metric-label {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .metric-value {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .coverage-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        
+        .coverage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #27ae60, #2ecc71);
+            transition: width 0.3s ease;
+        }
+        
+        .coverage-low {
+            background: linear-gradient(90deg, #e74c3c, #f39c12);
+        }
+        
+        .coverage-medium {
+            background: linear-gradient(90deg, #f39c12, #f1c40f);
+        }
+        
+        .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .link-card {
+            background: #3498db;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            text-align: center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .link-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+        }
+        
+        .link-card h4 {
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+        
+        .link-card p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+        
+        .timestamp {
+            text-align: center;
+            color: #6c757d;
+            margin-top: 30px;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Test Results Dashboard</h1>
+            <div class="subtitle">Newsletter Hub - Comprehensive Test Report</div>
+            <div class="status-badge status-fail">
+                FAIL
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="grid">
+                <div class="card">
+                    <h3>Test Results</h3>
+                    <div class="metric">
+                        <span class="metric-label">Total Tests</span>
+                        <span class="metric-value">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Passed</span>
+                        <span class="metric-value" style="color: #27ae60;">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Failed</span>
+                        <span class="metric-value" style="color: #e74c3c;">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Errors</span>
+                        <span class="metric-value" style="color: #e74c3c;">0</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Skipped</span>
+                        <span class="metric-value" style="color: #f39c12;">0</span>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>Code Coverage</h3>
+                    <div class="metric">
+                        <span class="metric-label">Statements</span>
+                        <span class="metric-value">0%</span>
+                    </div>
+                    <div class="coverage-bar">
+                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="metric">
+                        <span class="metric-label">Branches</span>
+                        <span class="metric-value">0%</span>
+                    </div>
+                    <div class="coverage-bar">
+                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="metric">
+                        <span class="metric-label">Functions</span>
+                        <span class="metric-value">0%</span>
+                    </div>
+                    <div class="coverage-bar">
+                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="metric">
+                        <span class="metric-label">Lines</span>
+                        <span class="metric-value">0%</span>
+                    </div>
+                    <div class="coverage-bar">
+                        <div class="coverage-fill coverage-low" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="links">
+                <a href="../html/index.html" class="link-card" target="_blank">
+                    <h4>📊 Detailed Coverage Report</h4>
+                    <p>View comprehensive code coverage analysis</p>
+                </a>
+                <a href="../test-results/test-results.html" class="link-card" target="_blank">
+                    <h4>📋 Test Results</h4>
+                    <p>Browse test execution details and logs</p>
+                </a>
+                <a href="https://github.com/your-repo/actions" class="link-card" target="_blank">
+                    <h4>🔄 CI/CD Pipeline</h4>
+                    <p>View continuous integration status</p>
+                </a>
+            </div>
+            
+            <div class="timestamp">
+                Generated on 6/24/2025, 4:47:23 PM
+            </div>
+        </div>
+    </div>
+</body>
+</html>
