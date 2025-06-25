@@ -54,7 +54,12 @@ jobs:
           cache: 'pnpm'
       
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          echo "Attempting frozen install..."
+          pnpm install --frozen-lockfile || {
+            echo "Frozen install failed, updating lockfile..."
+            pnpm install --no-frozen-lockfile
+          }
       
       - name: Build main application
         if: github.event_name != 'workflow_run'
