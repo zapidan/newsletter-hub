@@ -243,33 +243,6 @@ jobs:
           ls -la html/ || echo "html empty"
           ls -la docs/testing/ || echo "docs/testing empty"
       
-      - name: Create upload path list
-        id: create-upload-paths
-        run: |
-          echo "Creating upload path list..."
-          upload_paths=""
-          
-          # Add dist if it exists
-          if [ -d "dist" ]; then
-            upload_paths="$upload_paths dist/"
-          fi
-          
-          # Add test directories (these should always exist after our steps)
-          upload_paths="$upload_paths test-results/ test-dashboard/ html/ docs/testing/"
-          
-          # Add index.html if it exists
-          if [ -f "index.html" ]; then
-            upload_paths="$upload_paths index.html"
-          fi
-          
-          # Add public if it exists
-          if [ -d "public" ]; then
-            upload_paths="$upload_paths public/"
-          fi
-          
-          echo "Upload paths: $upload_paths"
-          echo "paths=$upload_paths" >> $GITHUB_OUTPUT
-      
       - name: Setup Pages
         uses: actions/configure-pages@v4
       
