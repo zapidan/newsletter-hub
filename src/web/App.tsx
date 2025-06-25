@@ -1,16 +1,16 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { Suspense, lazy, useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { ToastProvider } from '@common/contexts/ToastContext';
-import { FilterProvider } from '@common/contexts/FilterContext';
+import { CacheInitializer } from '@common/components/CacheInitializer';
 import { Layout } from '@common/components/layout';
 import { ProtectedRoute } from '@common/components/ProtectedRoute';
-import { CacheInitializer } from '@common/components/CacheInitializer';
-import ErrorBoundary from '@web/components/ErrorBoundary';
 import { useAuth } from '@common/contexts/AuthContext';
+import { FilterProvider } from '@common/contexts/FilterContext';
+import { ToastProvider } from '@common/contexts/ToastContext';
 import { useLogger, useLoggerStatic } from '@common/utils/logger/useLogger';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import ErrorBoundary from '@web/components/ErrorBoundary';
+import React, { Suspense, lazy, useEffect } from 'react';
+import { Toaster } from 'react-hot-toast';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 // Lazy load page components
 const InboxPage = lazy(() => import('@web/pages/Inbox'));
@@ -135,33 +135,35 @@ const App: React.FC = () => {
         <FilterProvider useLocalTagFiltering={true}>
           <CacheInitializer>
             <div className="min-h-screen bg-gray-50">
-              <Toaster
-                position="bottom-right"
-                toastOptions={{
-                  duration: 5000,
-                  style: {
-                    background: '#fff',
-                    color: '#1f2937',
-                    boxShadow:
-                      '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                    borderRadius: '0.5rem',
-                    padding: '0.75rem 1rem',
-                    fontSize: '0.875rem',
-                  },
-                  success: {
-                    iconTheme: {
-                      primary: '#10B981',
-                      secondary: '#fff',
+              {import.meta.env.MODE !== 'production' && (
+                <Toaster
+                  position="bottom-right"
+                  toastOptions={{
+                    duration: 5000,
+                    style: {
+                      background: '#fff',
+                      color: '#1f2937',
+                      boxShadow:
+                        '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                      borderRadius: '0.5rem',
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.875rem',
                     },
-                  },
-                  error: {
-                    iconTheme: {
-                      primary: '#EF4444',
-                      secondary: '#fff',
+                    success: {
+                      iconTheme: {
+                        primary: '#10B981',
+                        secondary: '#fff',
+                      },
                     },
-                  },
-                }}
-              />
+                    error: {
+                      iconTheme: {
+                        primary: '#EF4444',
+                        secondary: '#fff',
+                      },
+                    },
+                  }}
+                />
+              )}
               <Layout>
                 <Suspense fallback={<LoadingFallback />}>
                   <Routes>
