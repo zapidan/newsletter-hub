@@ -1,6 +1,5 @@
 import { Session, User } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { userApi } from '../api/userApi';
 import { userService } from '../services/user/UserService';
 import { useLoggerStatic } from '../utils/logger';
 import { useSupabase } from './SupabaseContext';
