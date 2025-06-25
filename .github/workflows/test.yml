@@ -17,9 +17,6 @@ jobs:
   # Job to detect changes and set up matrix
   changes:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
     outputs:
       src: ${{ steps.changes.outputs.src }}
       tests: ${{ steps.changes.outputs.tests }}
@@ -52,7 +49,7 @@ jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest
     needs: changes
-    if: always() && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.result == 'failure')
+    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
     permissions:
       contents: read
       pull-requests: write
@@ -86,7 +83,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: [changes, lint-and-typecheck]
-    if: always() && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.result == 'failure')
+    if: needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true'
     permissions:
       contents: read
       checks: write
@@ -110,14 +107,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Debug vitest setup
-        run: |
-          echo "=== Vitest Debug Info ==="
-          pnpm exec vitest --version
-          echo "Vitest config:"
-          cat vitest.config.ts
-          echo "=== End Vitest Debug ==="
-
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
@@ -127,195 +116,30 @@ jobs:
           chmod -R 777 test-results
 
       - name: Run tests with coverage and update snapshots
-        run: pnpm test:ci:update
+        run: pnpm test:ci
         env:
           CI: 'true'
           NODE_ENV: 'test'
           VITEST_JUNIT_OUTPUT_DIR: 'test-results'
           VITEST_JUNIT_SUITE_NAME: 'Test Results'
-        continue-on-error: true
 
-      - name: Generate test dashboard
+      - name: Generate HTML coverage report
         if: always()
-        run: |
-          echo "=== Generating Test Reports ==="
-          
-          # Create directories if they don't exist
-          mkdir -p test-results
-          mkdir -p test-dashboard
-          mkdir -p html
-          
-          # Generate test results HTML (with error handling)
-          echo "Generating test results HTML..."
-          if pnpm run test:results:parse; then
-            echo "✅ Test results HTML generated successfully"
-          else
-            echo "⚠️ Test results HTML generation failed, creating fallback"
-            # Create a simple fallback HTML file
-            echo '<!DOCTYPE html>' > test-results/test-results.html
-            echo '<html>' >> test-results/test-results.html
-            echo '<head><title>Test Results - Fallback</title></head>' >> test-results/test-results.html
-            echo '<body>' >> test-results/test-results.html
-            echo '<h1>Test Results</h1>' >> test-results/test-results.html
-            echo '<p>Test results could not be generated. Check the test artifacts for more details.</p>' >> test-results/test-results.html
-            echo '</body>' >> test-results/test-results.html
-            echo '</html>' >> test-results/test-results.html
-          fi
-          
-          # Generate coverage report (with error handling)
-          echo "Generating coverage report..."
-          if pnpm run test:coverage:parse; then
-            echo "✅ Coverage report generated successfully"
-          else
-            echo "⚠️ Coverage report generation failed"
-          fi
-          
-          # Generate test dashboard (with error handling)
-          echo "Generating test dashboard..."
-          if pnpm run test:dashboard; then
-            echo "✅ Test dashboard generated successfully"
-          else
-            echo "⚠️ Test dashboard generation failed"
-          fi
-          
-          # Generate simple test table (with error handling)
-          echo "Generating simple test table..."
-          if pnpm run test:results:simple; then
-            echo "✅ Simple test table generated successfully"
-          else
-            echo "⚠️ Simple test table generation failed"
-          fi
-          
-          echo "=== Test Reports Generation Complete ==="
+        run: pnpm test:coverage:html
         env:
           CI: 'true'
           NODE_ENV: 'test'
         continue-on-error: true
-
-      - name: Comment PR with dashboard links
-        if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            
-            // Read test results for summary
-            let testSummary = { tests: 0, failures: 0, errors: 0 };
-            const junitFile = 'test-results/junit.xml';
-            if (fs.existsSync(junitFile)) {
-              const xmlContent = fs.readFileSync(junitFile, 'utf8');
-              const testMatch = xmlContent.match(/tests="(\d+)" failures="(\d+)" errors="(\d+)"/);
-              if (testMatch) {
-                testSummary = {
-                  tests: parseInt(testMatch[1]),
-                  failures: parseInt(testMatch[2]),
-                  errors: parseInt(testMatch[3])
-                };
-              }
-            }
-            
-            // Read coverage data
-            let coverageData = { statements: 0, branches: 0 };
-            const coverageSummaryFile = 'html/coverage-summary.json';
-            if (fs.existsSync(coverageSummaryFile)) {
-              try {
-                const summaryContent = fs.readFileSync(coverageSummaryFile, 'utf8');
-                const summary = JSON.parse(summaryContent);
-                const total = summary.total;
-                coverageData = {
-                  statements: Math.round(total.statements.pct),
-                  branches: Math.round(total.branches.pct)
-                };
-              } catch (error) {
-                console.log('Could not parse coverage summary');
-              }
-            }
-            
-            const hasFailures = testSummary.failures > 0 || testSummary.errors > 0;
-            const status = hasFailures ? '❌' : '✅';
-            
-            const comment = '## Test Results Dashboard ' + status + '\n\n' +
-              '### Summary\n' +
-              '- **Tests**: ' + testSummary.tests + ' total, ' + testSummary.failures + ' failed, ' + testSummary.errors + ' errors\n' +
-              '- **Coverage**: ' + coverageData.statements + '% statements, ' + coverageData.branches + '% branches\n\n' +
-              '### 📊 View Reports\n' +
-              '- [Test Dashboard](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/test-dashboard/)\n' +
-              '- [Coverage Report](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/html/)\n' +
-              '- [Test Results](https://' + context.repo.owner + '.github.io/' + context.repo.repo + '/test-results/)\n\n' +
-              '### 📋 Artifacts\n' +
-              'Download the complete test artifacts to view locally:\n' +
-              '- Test Results: \'test-results/\'\n' +
-              '- Coverage Reports: \'html/\'\n' +
-              '- Dashboard: \'test-dashboard/\'\n\n' +
-              '---\n' +
-              '*Generated automatically by GitHub Actions*';
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
-
-      - name: Display coverage summary
-        if: always()
-        run: |
-          echo "=== Coverage Summary ==="
-          if [ -f "html/coverage-summary.json" ]; then
-            cat html/coverage-summary.json | jq '.total' || echo "Could not parse coverage summary"
-          else
-            echo "No coverage summary found"
-          fi
-          echo "=== End Coverage Summary ==="
-
-      - name: Verify test execution
-        if: always()
-        run: |
-          echo "=== Test Execution Verification ==="
-          echo "Exit code: $?"
-          echo "Current directory: $(pwd)"
-          echo "=== End Verification ==="
-
-      - name: List test results directory
-        if: always()
-        run: |
-          echo "=== Test Results Directory Contents ==="
-          ls -la test-results/ || echo "Directory does not exist"
-          echo "=== End Directory Contents ==="
-
-      - name: Check for XML files
-        if: always()
-        run: |
-          echo "=== Checking for XML files ==="
-          find test-results -name "*.xml" -type f || echo "No XML files found"
-          echo "=== End XML check ==="
-
-      - name: Create fallback test result if none exist
-        if: always()
-        run: |
-          if [ ! -f "test-results/junit.xml" ]; then
-            echo "Creating fallback test result file"
-            mkdir -p test-results
-            echo '<?xml version="1.0" encoding="UTF-8"?>' > test-results/junit.xml
-            echo '<testsuites name="vitest tests" tests="0" failures="0" errors="0" time="0">' >> test-results/junit.xml
-            echo '  <testsuite name="fallback" tests="0" failures="0" errors="0" skipped="0" time="0">' >> test-results/junit.xml
-            echo '  </testsuite>' >> test-results/junit.xml
-            echo '</testsuites>' >> test-results/junit.xml
-          fi
 
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@v1
         with:
           name: 'Test Results'
-          path: |
-            test-results/junit.xml
-            test-results/*.xml
+          path: 'test-results/*.xml'
           reporter: 'java-junit'
           fail-on-error: 'false'
           only-summary: 'true'
-          fail-on-empty: 'false'
 
       - name: Upload test artifacts
         if: always()
@@ -324,7 +148,52 @@ jobs:
           name: test-artifacts
           path: |
             test-results/
-            test-dashboard/
             html/
+            playwright-report/
+            coverage/
+          retention-days: 7
+
+  # Visual regression tests (runs only on PRs)
+  visual-tests:
+    runs-on: ubuntu-latest
+    needs: [changes, lint-and-typecheck]
+    if: needs.changes.outputs.src == 'true' && github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Start development server
+        run: pnpm dev &
+
+      - name: Run visual regression tests
+        run: pnpm test:visual
+
+      - name: Upload visual test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-test-artifacts
+          path: |
+            test-visual/
             playwright-report/
           retention-days: 7
