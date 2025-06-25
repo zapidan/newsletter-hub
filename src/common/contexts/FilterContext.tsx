@@ -1,7 +1,7 @@
 import { useInboxUrlParams } from '@common/hooks/useUrlParams';
 import type { NewsletterFilter } from '@common/types/cache';
 import type { TimeRange } from '@web/components/TimeFilter';
-import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo } from 'react'; // Removed createContext
 
 export interface FilterState {
   filter: 'all' | 'unread' | 'liked' | 'archived';
@@ -29,7 +29,8 @@ export interface FilterContextType extends FilterState, FilterActions {
   isFilterActive: (filterName: keyof FilterState) => boolean;
 }
 
-const FilterContext = createContext<FilterContextType | undefined>(undefined);
+// Removed: const FilterContext = createContext<FilterContextType | undefined>(undefined);
+import { FilterContext } from './FilterContextValue'; // Added import
 
 interface FilterProviderProps {
   children: React.ReactNode;
@@ -268,27 +269,6 @@ export const useFilters = (): FilterContextType => {
     throw new Error('useFilters must be used within a FilterProvider');
   }
   return context;
-};
-
-// Convenience hooks for specific filter types
-export const useStatusFilter = () => {
-  const { filter, setFilter } = useFilters();
-  return { filter, setFilter };
-};
-
-export const useSourceFilter = () => {
-  const { sourceFilter, setSourceFilter } = useFilters();
-  return { sourceFilter, setSourceFilter };
-};
-
-export const useTimeFilter = () => {
-  const { timeRange, setTimeRange } = useFilters();
-  return { timeRange, setTimeRange };
-};
-
-export const useTagFilter = () => {
-  const { tagIds, setTagIds, toggleTag, addTag, removeTag, clearTags } = useFilters();
-  return { tagIds, setTagIds, toggleTag, addTag, removeTag, clearTags };
 };
 
 export default FilterContext;

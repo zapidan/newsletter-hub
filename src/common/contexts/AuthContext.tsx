@@ -1,5 +1,5 @@
 import { Session, User } from '@supabase/supabase-js';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react'; // Removed useContext
 import { userService } from '../services/user/UserService';
 import { useLoggerStatic } from '../utils/logger';
 import { useSupabase } from './SupabaseContext';
@@ -12,7 +12,7 @@ type PasswordRequirement = {
   satisfied: boolean;
 };
 
-type AuthContextType = {
+export type AuthContextType = { // Added export
   user: AppUser;
   session: Session | null;
   loading: boolean;
@@ -25,7 +25,8 @@ type AuthContextType = {
   checkPasswordStrength: (password: string) => PasswordRequirement[];
 };
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Removed: export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext } from './AuthContextValue'; // Added import
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { supabase } = useSupabase();
@@ -353,14 +354,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };
 
 export default AuthProvider;

@@ -8,7 +8,7 @@ import { ToastProvider } from "@common/contexts/ToastContext";
 import { FilterProvider } from "@common/contexts/FilterContext";
 import { ToastContainer } from "@common/components/ui/ToastContainer";
 
-interface AppProvidersProps {
+export interface AppProvidersProps {
   children: React.ReactNode;
   queryClient?: QueryClient;
   enableDevtools?: boolean;
@@ -81,59 +81,6 @@ export const AppProviders: React.FC<AppProvidersProps> = ({
         {enableDevtools && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </BrowserRouter>
-  );
-};
-
-// Hook to check if we're inside the providers
-export const useAppProviders = () => {
-  return {
-    isInsideProviders: true, // We can expand this if needed
-  };
-};
-
-// Higher-order component for wrapping components with providers
-export const withAppProviders = <P extends object>(
-  Component: React.ComponentType<P>,
-  providerOptions?: Omit<AppProvidersProps, "children">,
-) => {
-  const WrappedComponent = (props: P) => (
-    <AppProviders {...providerOptions}>
-      <Component {...props} />
-    </AppProviders>
-  );
-
-  WrappedComponent.displayName = `withAppProviders(${Component.displayName || Component.name})`;
-  return WrappedComponent;
-};
-
-// Test wrapper for unit tests
-export const TestProviders: React.FC<{
-  children: React.ReactNode;
-  initialFilters?: any;
-  mockToasts?: boolean;
-}> = ({ children, mockToasts = false }) => {
-  const testQueryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        gcTime: 0,
-      },
-      mutations: {
-        retry: false,
-      },
-    },
-  });
-
-  return (
-    <QueryClientProvider client={testQueryClient}>
-      <SupabaseProvider>
-        <AuthProvider>
-          <ToastProvider defaultDuration={mockToasts ? 0 : 5000}>
-            <FilterProvider>{children}</FilterProvider>
-          </ToastProvider>
-        </AuthProvider>
-      </SupabaseProvider>
-    </QueryClientProvider>
   );
 };
 

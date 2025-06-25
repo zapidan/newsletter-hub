@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { useContext, useState, useCallback } from "react"; // Removed createContext
 
 export interface Toast {
   id: string;
@@ -19,7 +19,11 @@ export interface ToastContextType {
   clearAllToasts: () => void;
 }
 
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
+// Exporting ToastContextType for use in the hook file
+export type { ToastContextType };
+
+// Removed: const ToastContext = createContext<ToastContextType | undefined>(undefined);
+import { ToastContext } from './ToastContextValue'; // Added import
 
 interface ToastProviderProps {
   children: React.ReactNode;
@@ -132,46 +136,5 @@ export const useToast = (): ToastContextType => {
   return context;
 };
 
-// Helper hook for common toast patterns
-export const useToastActions = () => {
-  const { showSuccess, showError, showInfo, showWarning } = useToast();
-
-  const toastSuccess = useCallback(
-    (message: string) => {
-      return showSuccess(message);
-    },
-    [showSuccess],
-  );
-
-  const toastError = useCallback(
-    (error: Error | string, fallbackMessage = "An error occurred") => {
-      const message =
-        error instanceof Error ? error.message : error || fallbackMessage;
-      return showError(message);
-    },
-    [showError],
-  );
-
-  const toastInfo = useCallback(
-    (message: string) => {
-      return showInfo(message);
-    },
-    [showInfo],
-  );
-
-  const toastWarning = useCallback(
-    (message: string) => {
-      return showWarning(message);
-    },
-    [showWarning],
-  );
-
-  return {
-    toastSuccess,
-    toastError,
-    toastInfo,
-    toastWarning,
-  };
-};
-
-export default ToastContext;
+// Hooks are moved, ToastContext is moved. ToastProvider should be the default export.
+export default ToastProvider;

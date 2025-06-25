@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { createCacheManager, getCacheManagerSafe } from "../utils/cacheUtils";
 
@@ -36,14 +36,3 @@ export const CacheInitializer: React.FC<CacheInitializerProps> = ({
   return <>{children}</>;
 };
 
-// Export a hook to check if cache is initialized
-export const useIsCacheInitialized = (): boolean => {
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  useEffect(() => {
-    const manager = getCacheManagerSafe();
-    setIsInitialized(!!manager);
-  }, []);
-
-  return isInitialized;
-};
