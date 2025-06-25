@@ -63,8 +63,8 @@ jobs:
     needs: changes
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true')) ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true'))
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -102,116 +102,24 @@ jobs:
         env:
           NODE_ENV: production
       
-      - name: Check what directories exist for upload
-        id: check-upload-dirs
-        run: |
-          echo "Checking what directories exist for upload..."
-          
-          # Check if dist exists
-          if [ -d "dist" ]; then
-            echo "✅ dist directory exists"
-            echo "has_dist=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ dist directory does not exist"
-            echo "has_dist=false" >> $GITHUB_OUTPUT
-          fi
-          
-          # Check if public exists
-          if [ -d "public" ]; then
-            echo "✅ public directory exists"
-            echo "has_public=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ public directory does not exist"
-            echo "has_public=false" >> $GITHUB_OUTPUT
-          fi
-          
-          # Check if index.html exists
-          if [ -f "index.html" ]; then
-            echo "✅ index.html exists"
-            echo "has_index=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ index.html does not exist"
-            echo "has_index=false" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Check if test workflow succeeded
-        if: github.event_name == 'workflow_run'
-        id: test-workflow-status
-        run: |
-          if [ "${{ github.event.workflow_run.conclusion }}" == "success" ]; then
-            echo "✅ Test workflow succeeded, proceeding with artifact processing"
-            echo "should_process_artifacts=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Test workflow failed or was cancelled, skipping artifact processing"
-            echo "should_process_artifacts=false" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Download test artifacts (if available)
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: test-artifacts
-          path: ./
-        continue-on-error: true
-      
-      - name: Check test artifacts
-        id: check-artifacts
-        run: |
-          echo "Checking for test artifacts..."
-          echo "Event type: ${{ github.event_name }}"
-          
-          if [ "${{ github.event_name }}" == "workflow_run" ]; then
-            echo "Test workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
-            echo "Should process artifacts: ${{ steps.test-workflow-status.outputs.should_process_artifacts }}"
-            
-            # If test workflow failed, don't expect artifacts
-            if [ "${{ steps.test-workflow-status.outputs.should_process_artifacts }}" == "false" ]; then
-              echo "⚠️ Test workflow failed, creating minimal test data"
-              echo "found_artifacts=false" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-          else
-            echo "Direct push event - checking for existing artifacts"
-          fi
-          
-          ls -la test-results/ 2>/dev/null || echo "test-results directory not found"
-          ls -la html/ 2>/dev/null || echo "html directory not found"
-          
-          if [ -f "test-results/junit.xml" ]; then
-            echo "✅ Test artifacts found"
-            echo "found_artifacts=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ No test artifacts found, will create minimal test data"
-            echo "found_artifacts=false" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Create fallback test data
-        if: steps.check-artifacts.outputs.found_artifacts == 'false'
-        run: |
-          echo "Creating fallback test data..."
-          mkdir -p test-results
-          mkdir -p html
-          mkdir -p test-dashboard
-          
-          # Create minimal test results
-          echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
-          
-          # Create minimal coverage report
-          echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
-          
-          # Create minimal dashboard
-          echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
-        continue-on-error: true
-      
       - name: Ensure all directories exist and have content
         run: |
-          echo "Ensuring all required directories exist..."
+          echo "=== Starting directory creation step ==="
+          echo "Current directory: $(pwd)"
+          echo "Current contents:"
+          ls -la
           
-          # Create directories if they don't exist
+          echo "Creating directories..."
           mkdir -p test-results
           mkdir -p test-dashboard
           mkdir -p html
           mkdir -p docs/testing
+          
+          echo "Directories after creation:"
+          ls -la test-results/ || echo "test-results creation failed"
+          ls -la test-dashboard/ || echo "test-dashboard creation failed"
+          ls -la html/ || echo "html creation failed"
+          ls -la docs/testing/ || echo "docs/testing creation failed"
           
           # Ensure test-results has content
           if [ ! -f "test-results/junit.xml" ]; then
@@ -237,23 +145,34 @@ jobs:
             echo '# Testing Documentation\n\nThis directory contains testing documentation and reports.\n\n## Available Reports\n\n- Test Results: `/test-results/`\n- Coverage Reports: `/html/`\n- Test Dashboard: `/test-dashboard/`' > docs/testing/README.md
           fi
           
-          echo "Directory contents:"
+          echo "Final directory contents:"
           ls -la test-dashboard/ || echo "test-dashboard empty"
           ls -la test-results/ || echo "test-results empty"
           ls -la html/ || echo "html empty"
           ls -la docs/testing/ || echo "docs/testing empty"
+          echo "=== Directory creation step complete ==="
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
       
+      - name: Verify directories before upload
+        run: |
+          echo "=== Verifying directories before upload ==="
+          echo "Current directory: $(pwd)"
+          echo "All contents:"
+          ls -la
+          echo ""
+          echo "Checking specific directories:"
+          ls -la test-results/ 2>/dev/null || echo "❌ test-results does not exist"
+          ls -la test-dashboard/ 2>/dev/null || echo "❌ test-dashboard does not exist"
+          ls -la html/ 2>/dev/null || echo "❌ html does not exist"
+          ls -la docs/testing/ 2>/dev/null || echo "❌ docs/testing does not exist"
+          echo "=== Verification complete ==="
+      
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: |
-            test-results/
-            test-dashboard/
-            html/
-            docs/testing/
+          path: test-results/,test-dashboard/,html/,docs/testing/
         continue-on-error: true
 
   # Deployment job
