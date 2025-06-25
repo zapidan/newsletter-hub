@@ -175,7 +175,7 @@ jobs:
           only-summary: 'true'
 
       - name: Upload test artifacts
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-artifacts
