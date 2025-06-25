@@ -149,6 +149,7 @@ describe.skip('SortableNewsletterRow', () => { // TODO: Fix "newsletterRow decla
     expect(mockOnToggleQueue).toHaveBeenCalledWith(mockNewsletter.id);
   });
 
+
   test('calls onNewsletterClick with newsletter data when NewsletterRow is clicked', () => {
     render(
       <TestDndContext items={[mockNewsletter.id]}>
