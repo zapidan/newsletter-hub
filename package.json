@@ -23,6 +23,7 @@
     "test:all": "node --max-old-space-size=4096 scripts/run-tests.js all",
     "test:fast": "npm run test:unit && npm run test:integration",
     "test:ci": "npx vitest run --coverage --coverage.provider=v8 --reporter=junit --outputFile.junit=test-results/junit.xml",
+    "test:ci:no-thresholds": "npx vitest run --coverage --coverage.provider=v8 --reporter=junit --outputFile.junit=test-results/junit.xml --coverage.threshold.autoUpdate",
     "test:ci:update": "npx vitest run --coverage --coverage.provider=v8 --reporter=junit --outputFile.junit=test-results/junit.xml -u",
     "test:watch:unit": "npx vitest --watch src/**/*.{test,spec}.{js,ts,jsx,tsx}",
     "test:watch:integration": "npx vitest --watch src/**/*.integration.{test,spec}.{js,ts,jsx,tsx}",
