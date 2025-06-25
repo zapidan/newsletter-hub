@@ -143,6 +143,7 @@ describe.skip('SortableNewsletterRow', () => { // TODO: Fix "newsletterRow decla
         <SortableNewsletterRow {...defaultProps} />
       </TestDndContext>
     );
+
     // Simulate the call from the mocked NewsletterRow
     await (NewsletterRow as any).mock.calls[0][0].onToggleQueue(mockNewsletter.id);
     expect(mockOnToggleQueue).toHaveBeenCalledWith(mockNewsletter.id);
