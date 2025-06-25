@@ -1,5 +1,6 @@
 name: Deploy to GitHub Pages
 
+# Force refresh: Updated to fix upload path parsing issues
 on:
   # Runs on pushes targeting the default branch
   push:
@@ -63,19 +64,29 @@ jobs:
     needs: changes
     if: |
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true')) ||
+      github.event_name == 'workflow_run'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
       - name: Log workflow trigger
         run: |
+          echo "=== WORKFLOW DEBUG INFO ==="
           echo "Workflow triggered by: ${{ github.event_name }}"
+          echo "Workflow file version: $(date)"
+          echo "Current working directory: $(pwd)"
+          echo "GitHub ref: ${{ github.ref }}"
+          echo "GitHub SHA: ${{ github.sha }}"
           if [ "${{ github.event_name }}" == "workflow_run" ]; then
             echo "Triggering workflow: ${{ github.event.workflow_run.name }}"
             echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+            echo "Workflow run ID: ${{ github.event.workflow_run.id }}"
+            if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+              echo "⚠️ Test workflow did not succeed, skipping artifact download"
+            fi
           fi
+          echo "=== END DEBUG INFO ==="
       
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -96,6 +107,14 @@ jobs:
             pnpm install --no-frozen-lockfile
           }
       
+      - name: Download test artifacts (if available)
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: test-artifacts
+          path: .
+        continue-on-error: true
+      
       - name: Build main application
         if: github.event_name != 'workflow_run' && (needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch')
         run: pnpm build
@@ -109,40 +128,47 @@ jobs:
           echo "Current contents:"
           ls -la
           
-          echo "Creating directories..."
-          mkdir -p test-results
-          mkdir -p test-dashboard
-          mkdir -p html
-          mkdir -p docs/testing
-          
-          echo "Directories after creation:"
-          ls -la test-results/ || echo "test-results creation failed"
-          ls -la test-dashboard/ || echo "test-dashboard creation failed"
-          ls -la html/ || echo "html creation failed"
-          ls -la docs/testing/ || echo "docs/testing creation failed"
-          
-          # Ensure test-results has content
-          if [ ! -f "test-results/junit.xml" ]; then
-            echo "Creating minimal test results..."
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
-          fi
-          
-          # Ensure html has content
-          if [ ! -f "html/index.html" ]; then
-            echo "Creating minimal coverage report..."
-            echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
-          fi
-          
-          # Ensure test-dashboard has content
-          if [ ! -f "test-dashboard/index.html" ]; then
-            echo "Creating minimal dashboard..."
-            echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
-          fi
-          
-          # Ensure docs/testing has content
-          if [ ! -f "docs/testing/README.md" ]; then
-            echo "Creating minimal docs/testing content..."
-            echo '# Testing Documentation\n\nThis directory contains testing documentation and reports.\n\n## Available Reports\n\n- Test Results: `/test-results/`\n- Coverage Reports: `/html/`\n- Test Dashboard: `/test-dashboard/`' > docs/testing/README.md
+          # Check if test artifacts were downloaded
+          if [ -d "test-results" ] && [ "$(ls -A test-results 2>/dev/null)" ]; then
+            echo "✅ Test artifacts found, using downloaded content"
+          else
+            echo "⚠️ No test artifacts found, creating fallback content"
+            
+            echo "Creating directories..."
+            mkdir -p test-results
+            mkdir -p test-dashboard
+            mkdir -p html
+            mkdir -p docs/testing
+            
+            echo "Directories after creation:"
+            ls -la test-results/ || echo "test-results creation failed"
+            ls -la test-dashboard/ || echo "test-dashboard creation failed"
+            ls -la html/ || echo "html creation failed"
+            ls -la docs/testing/ || echo "docs/testing creation failed"
+            
+            # Ensure test-results has content
+            if [ ! -f "test-results/junit.xml" ]; then
+              echo "Creating minimal test results..."
+              echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
+            fi
+            
+            # Ensure html has content
+            if [ ! -f "html/index.html" ]; then
+              echo "Creating minimal coverage report..."
+              echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
+            fi
+            
+            # Ensure test-dashboard has content
+            if [ ! -f "test-dashboard/index.html" ]; then
+              echo "Creating minimal dashboard..."
+              echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
+            fi
+            
+            # Ensure docs/testing has content
+            if [ ! -f "docs/testing/README.md" ]; then
+              echo "Creating minimal docs/testing content..."
+              echo '# Testing Documentation\n\nThis directory contains testing documentation and reports.\n\n## Available Reports\n\n- Test Results: `/test-results/`\n- Coverage Reports: `/html/`\n- Test Dashboard: `/test-dashboard/`' > docs/testing/README.md
+            fi
           fi
           
           echo "Final directory contents:"
@@ -169,10 +195,55 @@ jobs:
           ls -la docs/testing/ 2>/dev/null || echo "❌ docs/testing does not exist"
           echo "=== Verification complete ==="
       
-      - name: Upload artifact
+      - name: Build upload path list
+        run: |
+          echo "Creating upload path list..."
+          # Create a file with the paths, one per line
+          cat > upload-paths.txt << EOF
+          test-results/
+          test-dashboard/
+          html/
+          docs/testing/
+          index.html
+          public/
+          EOF
+          echo "Upload paths:"
+          cat upload-paths.txt
+      
+      - name: Ensure all upload paths exist
+        run: |
+          echo "Ensuring all upload paths exist..."
+          mkdir -p test-results test-dashboard html docs/testing public
+          
+          # Create minimal files if they don't exist
+          [ -f "test-results/junit.xml" ] || echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
+          [ -f "html/index.html" ] || echo '<html><head><title>Coverage Report - No Data Available</title></head><body><h1>No Coverage Data Available</h1></body></html>' > html/index.html
+          [ -f "test-dashboard/index.html" ] || echo '<html><head><title>Test Dashboard - No Data Available</title></head><body><h1>No Test Data Available</h1></body></html>' > test-dashboard/index.html
+          [ -f "index.html" ] || echo '<html><head><title>NewsletterHub</title></head><body><h1>NewsletterHub</h1></body></html>' > index.html
+          
+          echo "All paths verified:"
+          ls -la test-results/ html/ test-dashboard/ docs/testing/ public/ index.html
+      
+      - name: Prepare pages content
+        run: |
+          echo "Preparing pages content..."
+          mkdir -p _pages
+          
+          # Copy all content to _pages directory
+          cp -r test-results _pages/ 2>/dev/null || echo "test-results not found"
+          cp -r test-dashboard _pages/ 2>/dev/null || echo "test-dashboard not found"
+          cp -r html _pages/ 2>/dev/null || echo "html not found"
+          cp -r docs/testing _pages/ 2>/dev/null || echo "docs/testing not found"
+          cp index.html _pages/ 2>/dev/null || echo "index.html not found"
+          cp -r public _pages/ 2>/dev/null || echo "public not found"
+          
+          echo "Pages content prepared:"
+          ls -la _pages/
+      
+      - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: test-results/,test-dashboard/,html/,docs/testing/
+          path: _pages/
         continue-on-error: true
 
   # Deployment job
