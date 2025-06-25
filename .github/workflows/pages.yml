@@ -3,12 +3,10 @@ name: Deploy to GitHub Pages - Updated
 # Force refresh: Updated to fix upload path parsing issues - v2
 # This version uses _pages directory approach to avoid path parsing issues
 on:
-  # Runs on pushes targeting the default branch
-  push:
-    branches: ["main", "develop"]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Test Suite"]
+    types:
+      - completed
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -23,74 +21,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Job to detect changes and set up matrix
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      src: ${{ steps.changes.outputs.src }}
-      tests: ${{ steps.changes.outputs.tests }}
-      deps: ${{ steps.changes.outputs.deps }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Detect changes
-        uses: dorny/paths-filter@v2
-        id: changes
-        with:
-          filters: |
-            src:
-              - 'src/**'
-              - 'public/**'
-              - '*.config.*'
-              - 'tsconfig*.json'
-            tests:
-              - 'src/**/*.{test,spec}.{js,ts,jsx,tsx}'
-              - 'src/__tests__/**'
-              - 'playwright.config.ts'
-              - 'vitest.config.ts'
-            deps:
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'package-lock.json'
-
-  # Build job
   build:
     runs-on: ubuntu-latest
-    needs: changes
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Log change detection results
-        run: |
-          echo "=== CHANGE DETECTION RESULTS ==="
-          echo "Event: ${{ github.event_name }}"
-          echo "Source changes: ${{ needs.changes.outputs.src }}"
-          echo "Test changes: ${{ needs.changes.outputs.tests }}"
-          echo "Dependency changes: ${{ needs.changes.outputs.deps }}"
-          echo "Should run: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true')) }}"
-          echo "=== END CHANGE DETECTION ==="
-      
-      - name: Show changed files
-        if: github.event_name == 'push'
-        run: |
-          echo "=== CHANGED FILES ==="
-          git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "Could not determine changed files"
-          echo "=== END CHANGED FILES ==="
-      
-      - name: Verify workflow version
-        run: |
-          echo "=== WORKFLOW VERSION CHECK ==="
-          echo "Running: Deploy to GitHub Pages - Updated"
-          echo "Version: v2 - Fixed upload path parsing"
-          echo "Date: $(date)"
-          echo "SHA: ${{ github.sha }}"
-          echo "=== END VERSION CHECK ==="
-      
+
       - name: Log workflow trigger
         run: |
           echo "=== WORKFLOW DEBUG INFO ==="
@@ -100,132 +36,25 @@ jobs:
           echo "GitHub ref: ${{ github.ref }}"
           echo "GitHub SHA: ${{ github.sha }}"
           echo "=== END DEBUG INFO ==="
-      
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+
+      - name: Download test artifacts
+        uses: actions/download-artifact@v4
         with:
-          version: '8'
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'pnpm'
-      
-      - name: Install dependencies
+          name: test-artifacts
+          path: .
+
+      - name: Fail if artifacts are missing
         run: |
-          echo "Attempting frozen install..."
-          pnpm install --frozen-lockfile || {
-            echo "Frozen install failed, updating lockfile..."
-            pnpm install --no-frozen-lockfile
-          }
-      
-      - name: Build main application
-        if: needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        run: pnpm build
-        env:
-          NODE_ENV: production
-      
-      - name: Ensure all directories exist and have content
-        run: |
-          echo "=== Starting directory creation step ==="
-          echo "Current directory: $(pwd)"
-          echo "Current contents:"
-          ls -la
-          
-          echo "Creating directories..."
-          mkdir -p test-results
-          mkdir -p test-dashboard
-          mkdir -p html
-          mkdir -p docs/testing
-          
-          echo "Directories after creation:"
-          ls -la test-results/ || echo "test-results creation failed"
-          ls -la test-dashboard/ || echo "test-dashboard creation failed"
-          ls -la html/ || echo "html creation failed"
-          ls -la docs/testing/ || echo "docs/testing creation failed"
-          
-          # Ensure test-results has content
-          if [ ! -f "test-results/junit.xml" ]; then
-            echo "Creating minimal test results..."
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
+          echo "Checking for test artifacts..."
+          if [ ! -d "test-results" ] || [ ! -f "test-results/junit.xml" ]; then
+            echo "❌ Test artifacts not found. Deployment aborted."
+            exit 1
           fi
-          
-          # Ensure html has content
-          if [ ! -f "html/index.html" ]; then
-            echo "Creating minimal coverage report..."
-            echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
-          fi
-          
-          # Ensure test-dashboard has content
-          if [ ! -f "test-dashboard/index.html" ]; then
-            echo "Creating minimal dashboard..."
-            echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
-          fi
-          
-          # Ensure docs/testing has content
-          if [ ! -f "docs/testing/README.md" ]; then
-            echo "Creating minimal docs/testing content..."
-            echo '# Testing Documentation\n\nThis directory contains testing documentation and reports.\n\n## Available Reports\n\n- Test Results: `/test-results/`\n- Coverage Reports: `/html/`\n- Test Dashboard: `/test-dashboard/`' > docs/testing/README.md
-          fi
-          
-          echo "Final directory contents:"
-          ls -la test-dashboard/ || echo "test-dashboard empty"
-          ls -la test-results/ || echo "test-results empty"
-          ls -la html/ || echo "html empty"
-          ls -la docs/testing/ || echo "docs/testing empty"
-          echo "=== Directory creation step complete ==="
-      
+          echo "✅ Test artifacts found. Proceeding with deployment."
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
-      
-      - name: Verify directories before upload
-        run: |
-          echo "=== Verifying directories before upload ==="
-          echo "Current directory: $(pwd)"
-          echo "All contents:"
-          ls -la
-          echo ""
-          echo "Checking specific directories:"
-          ls -la test-results/ 2>/dev/null || echo "❌ test-results does not exist"
-          ls -la test-dashboard/ 2>/dev/null || echo "❌ test-dashboard does not exist"
-          ls -la html/ 2>/dev/null || echo "❌ html does not exist"
-          ls -la docs/testing/ 2>/dev/null || echo "❌ docs/testing does not exist"
-          echo "=== Verification complete ==="
-      
-      - name: Build upload path list
-        run: |
-          echo "Creating upload path list..."
-          # Create a file with the paths, one per line
-          cat > upload-paths.txt << EOF
-          test-results/
-          test-dashboard/
-          html/
-          docs/testing/
-          index.html
-          public/
-          EOF
-          echo "Upload paths:"
-          cat upload-paths.txt
-      
-      - name: Ensure all upload paths exist
-        run: |
-          echo "Ensuring all upload paths exist..."
-          mkdir -p test-results test-dashboard html docs/testing public
-          
-          # Create minimal files if they don't exist (but don't overwrite built files)
-          [ -f "test-results/junit.xml" ] || echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
-          [ -f "html/index.html" ] || echo '<html><head><title>Coverage Report - No Data Available</title></head><body><h1>No Coverage Data Available</h1></body></html>' > html/index.html
-          [ -f "test-dashboard/index.html" ] || echo '<html><head><title>Test Dashboard - No Data Available</title></head><body><h1>No Test Data Available</h1></body></html>' > test-dashboard/index.html
-          
-          # Only create minimal index.html if no built version exists
-          if [ ! -f "index.html" ] && [ ! -f "dist/index.html" ]; then
-            echo '<html><head><title>NewsletterHub</title></head><body><h1>NewsletterHub</h1></body></html>' > index.html
-          fi
-          
-          echo "All paths verified:"
-          ls -la test-results/ html/ test-dashboard/ docs/testing/ public/ index.html dist/ 2>/dev/null || echo "dist directory not found"
-      
+
       - name: Prepare pages content
         run: |
           echo "Preparing pages content..."
@@ -257,14 +86,13 @@ jobs:
           
           echo "Pages content prepared:"
           ls -la _pages/
-      
+
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: _pages/
         continue-on-error: true
 
-  # Deployment job
   deploy:
     environment:
       name: github-pages
