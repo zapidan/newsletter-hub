@@ -65,6 +65,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Log change detection results
+        run: |
+          echo "=== CHANGE DETECTION RESULTS ==="
+          echo "Event: ${{ github.event_name }}"
+          echo "Source changes: ${{ needs.changes.outputs.src }}"
+          echo "Test changes: ${{ needs.changes.outputs.tests }}"
+          echo "Dependency changes: ${{ needs.changes.outputs.deps }}"
+          echo "Should run: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true')) }}"
+          echo "=== END CHANGE DETECTION ==="
+      
+      - name: Show changed files
+        if: github.event_name == 'push'
+        run: |
+          echo "=== CHANGED FILES ==="
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "Could not determine changed files"
+          echo "=== END CHANGED FILES ==="
+      
       - name: Verify workflow version
         run: |
           echo "=== WORKFLOW VERSION CHECK ==="
@@ -234,6 +251,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
