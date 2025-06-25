@@ -206,6 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: null };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign up';
+
       log.error(
         'Sign up exception',
         { component: 'Auth', metadata: { email } },
