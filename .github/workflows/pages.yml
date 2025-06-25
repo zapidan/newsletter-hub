@@ -26,10 +26,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Job to detect changes and set up matrix
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src: ${{ steps.changes.outputs.src }}
+      tests: ${{ steps.changes.outputs.tests }}
+      deps: ${{ steps.changes.outputs.deps }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect changes
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            src:
+              - 'src/**'
+              - 'public/**'
+              - '*.config.*'
+              - 'tsconfig*.json'
+            tests:
+              - 'src/**/*.{test,spec}.{js,ts,jsx,tsx}'
+              - 'src/__tests__/**'
+              - 'playwright.config.ts'
+              - 'vitest.config.ts'
+            deps:
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'package-lock.json'
+
   # Build job
   build:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    needs: changes
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true')) ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,12 +97,25 @@ jobs:
           }
       
       - name: Build main application
-        if: github.event_name != 'workflow_run'
+        if: github.event_name != 'workflow_run' && (needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch')
         run: pnpm build
         env:
           NODE_ENV: production
       
+      - name: Check if test workflow succeeded
+        if: github.event_name == 'workflow_run'
+        id: test-workflow-status
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" == "success" ]; then
+            echo "✅ Test workflow succeeded, proceeding with artifact processing"
+            echo "should_process_artifacts=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Test workflow failed or was cancelled, skipping artifact processing"
+            echo "should_process_artifacts=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Download test artifacts (if available)
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
         uses: actions/download-artifact@v4
         with:
           name: test-artifacts
@@ -78,6 +126,20 @@ jobs:
         id: check-artifacts
         run: |
           echo "Checking for test artifacts..."
+          echo "Event type: ${{ github.event_name }}"
+          
+          if [ "${{ github.event_name }}" == "workflow_run" ]; then
+            echo "Test workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+            echo "Should process artifacts: ${{ steps.test-workflow-status.outputs.should_process_artifacts }}"
+          fi
+          
+          # If test workflow failed, don't expect artifacts
+          if [ "${{ github.event_name }}" == "workflow_run" ] && [ "${{ steps.test-workflow-status.outputs.should_process_artifacts }}" == "false" ]; then
+            echo "⚠️ Test workflow failed, creating minimal test data"
+            echo "found_artifacts=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           ls -la test-results/ 2>/dev/null || echo "test-results directory not found"
           ls -la html/ 2>/dev/null || echo "html directory not found"
           
@@ -98,61 +160,13 @@ jobs:
           mkdir -p test-dashboard
           
           # Create minimal test results
-          cat > test-results/junit.xml << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <testsuites>
-            <testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0">
-            </testsuite>
-          </testsuites>
-          EOF
+          echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
           
           # Create minimal coverage report
-          cat > html/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Coverage Report - No Data Available</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 40px; }
-              .container { max-width: 800px; margin: 0 auto; }
-              .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>Coverage Report</h1>
-              <div class="warning">
-                <h2>⚠️ No Coverage Data Available</h2>
-                <p>Test coverage data was not found.</p>
-              </div>
-            </div>
-          </body>
-          </html>
-          EOF
+          echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
           
           # Create minimal dashboard
-          cat > test-dashboard/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>Test Dashboard - No Data Available</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 40px; }
-              .container { max-width: 800px; margin: 0 auto; }
-              .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>Test Dashboard</h1>
-              <div class="warning">
-                <h2>⚠️ No Test Data Available</h2>
-                <p>Test artifacts were not found.</p>
-              </div>
-            </div>
-          </body>
-          </html>
-          EOF
+          echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
         continue-on-error: true
       
       - name: Ensure all directories exist and have content
@@ -168,84 +182,25 @@ jobs:
           # Ensure test-results has content
           if [ ! -f "test-results/junit.xml" ]; then
             echo "Creating minimal test results..."
-            cat > test-results/junit.xml << 'EOF'
-            <?xml version="1.0" encoding="UTF-8"?>
-            <testsuites>
-              <testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0">
-              </testsuite>
-            </testsuites>
-            EOF
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
           fi
           
           # Ensure html has content
           if [ ! -f "html/index.html" ]; then
             echo "Creating minimal coverage report..."
-            cat > html/index.html << 'EOF'
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Coverage Report - No Data Available</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .container { max-width: 800px; margin: 0 auto; }
-                .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <h1>Coverage Report</h1>
-                <div class="warning">
-                  <h2>⚠️ No Coverage Data Available</h2>
-                  <p>Test coverage data was not found.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-            EOF
+            echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
           fi
           
           # Ensure test-dashboard has content
           if [ ! -f "test-dashboard/index.html" ]; then
             echo "Creating minimal dashboard..."
-            cat > test-dashboard/index.html << 'EOF'
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Test Dashboard - No Data Available</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .container { max-width: 800px; margin: 0 auto; }
-                .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <h1>Test Dashboard</h1>
-                <div class="warning">
-                  <h2>⚠️ No Test Data Available</h2>
-                  <p>Test artifacts were not found.</p>
-                </div>
-              </div>
-            </body>
-            </html>
-            EOF
+            echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
           fi
           
           # Ensure docs/testing has content
           if [ ! -f "docs/testing/README.md" ]; then
             echo "Creating minimal docs/testing content..."
-            cat > docs/testing/README.md << 'EOF'
-            # Testing Documentation
-            
-            This directory contains testing documentation and reports.
-            
-            ## Available Reports
-            
-            - Test Results: `/test-results/`
-            - Coverage Reports: `/html/`
-            - Test Dashboard: `/test-dashboard/`
-            
-            EOF
+            echo '# Testing Documentation\n\nThis directory contains testing documentation and reports.\n\n## Available Reports\n\n- Test Results: `/test-results/`\n- Coverage Reports: `/html/`\n- Test Dashboard: `/test-dashboard/`' > docs/testing/README.md
           fi
           
           echo "Directory contents:"
