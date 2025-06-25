@@ -121,7 +121,7 @@ jobs:
           }
       
       - name: Build main application
-        if: needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: pnpm build
         env:
           NODE_ENV: production
@@ -213,27 +213,47 @@ jobs:
           echo "Ensuring all upload paths exist..."
           mkdir -p test-results test-dashboard html docs/testing public
           
-          # Create minimal files if they don't exist
+          # Create minimal files if they don't exist (but don't overwrite built files)
           [ -f "test-results/junit.xml" ] || echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
           [ -f "html/index.html" ] || echo '<html><head><title>Coverage Report - No Data Available</title></head><body><h1>No Coverage Data Available</h1></body></html>' > html/index.html
           [ -f "test-dashboard/index.html" ] || echo '<html><head><title>Test Dashboard - No Data Available</title></head><body><h1>No Test Data Available</h1></body></html>' > test-dashboard/index.html
-          [ -f "index.html" ] || echo '<html><head><title>NewsletterHub</title></head><body><h1>NewsletterHub</h1></body></html>' > index.html
+          
+          # Only create minimal index.html if no built version exists
+          if [ ! -f "index.html" ] && [ ! -f "dist/index.html" ]; then
+            echo '<html><head><title>NewsletterHub</title></head><body><h1>NewsletterHub</h1></body></html>' > index.html
+          fi
           
           echo "All paths verified:"
-          ls -la test-results/ html/ test-dashboard/ docs/testing/ public/ index.html
+          ls -la test-results/ html/ test-dashboard/ docs/testing/ public/ index.html dist/ 2>/dev/null || echo "dist directory not found"
       
       - name: Prepare pages content
         run: |
           echo "Preparing pages content..."
           mkdir -p _pages
           
-          # Copy all content to _pages directory
+          # Copy built application first (if it exists)
+          if [ -d "dist" ]; then
+            echo "Copying built application from dist/..."
+            cp -r dist/* _pages/ 2>/dev/null || echo "dist copy failed"
+          fi
+          
+          # Copy other content
           cp -r test-results _pages/ 2>/dev/null || echo "test-results not found"
           cp -r test-dashboard _pages/ 2>/dev/null || echo "test-dashboard not found"
           cp -r html _pages/ 2>/dev/null || echo "html not found"
           cp -r docs/testing _pages/ 2>/dev/null || echo "docs/testing not found"
-          cp index.html _pages/ 2>/dev/null || echo "index.html not found"
           cp -r public _pages/ 2>/dev/null || echo "public not found"
+          
+          # Copy index.html if it exists in root (fallback)
+          if [ -f "index.html" ] && [ ! -f "_pages/index.html" ]; then
+            cp index.html _pages/ 2>/dev/null || echo "index.html copy failed"
+          fi
+          
+          # Make simple test table the main index for test-results directory
+          if [ -f "_pages/test-results/simple-test-table.html" ]; then
+            echo "Setting simple test table as main index for test-results..."
+            cp _pages/test-results/simple-test-table.html _pages/test-results/index.html
+          fi
           
           echo "Pages content prepared:"
           ls -la _pages/

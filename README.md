@@ -6,10 +6,14 @@ A comprehensive newsletter management platform built with React, TypeScript, and
 
 ### View Test Results Online
 
-- **[Test Dashboard](https://zapidan.github.io/newsletterHub/test-dashboard/)** - Main dashboard with overview
-- **[Simple Test Table](https://zapidan.github.io/newsletterHub/test-results/simple-test-table.html)** - Clean table view similar to GitHub Actions
-- **[Coverage Report](https://zapidan.github.io/newsletterHub/html/)** - Detailed code coverage
-- **[Test Results](https://zapidan.github.io/newsletterHub/test-results/)** - Individual test details
+- **[Test Dashboard](https://dzapatariesco.dev/newsletter-hub/test-dashboard/)** - Main dashboard with overview
+- **[Simple Test Table](https://dzapatariesco.dev/newsletter-hub/test-results)** - Clean table view similar to GitHub Actions
+- **[Coverage Report](https://dzapatariesco.dev/newsletter-hub/html/)** - Detailed code coverage
+- **[Test Results](https://dzapatariesco.dev/newsletter-hub/test-results/)** - Individual test details
+
+### Live Application
+
+- **[NewsletterHub App](https://dzapatariesco.dev/newsletter-hub/)** - Main application
 
 ### Local Development
 
