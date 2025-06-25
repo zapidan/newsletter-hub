@@ -1,10 +1,10 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
-import { Heart, Bookmark as BookmarkIcon, Archive, ArchiveX } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
-import { useLogger } from '@common/utils/logger/useLogger';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import type { NewsletterWithRelations } from '@common/types';
+import { useLogger } from '@common/utils/logger/useLogger';
+import { Archive, ArchiveX, Bookmark as BookmarkIcon, Heart } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 interface NewsletterDetailActionsProps {
   newsletter: NewsletterWithRelations;
@@ -154,7 +154,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
         clearTimeout(checkDebounceRef.current);
       }
     };
-  }, [newsletter?.id, checkIsInQueue, isFromReadingQueue, log, localNewsletter?.id]);
+  }, [newsletter?.id]); // IMPORTANT: Only depend on newsletter ID
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingReadStatus) return;
@@ -387,11 +387,10 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       <button
         onClick={handleToggleReadStatus}
         disabled={isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread}
-        className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          localNewsletter?.is_read
-            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-            : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-        }`}
+        className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${localNewsletter?.is_read
+          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+          : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+          }`}
         aria-label={localNewsletter?.is_read ? 'Mark as unread' : 'Mark as read'}
       >
         {(isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread) && (
@@ -404,11 +403,10 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       <button
         onClick={handleToggleLikeAction}
         disabled={isLiking}
-        className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          localNewsletter?.is_liked
-            ? 'bg-red-100 text-red-600 hover:bg-red-200'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`}
+        className={`flex items-center justify-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${localNewsletter?.is_liked
+          ? 'bg-red-100 text-red-600 hover:bg-red-200'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
         aria-label={localNewsletter?.is_liked ? 'Unlike' : 'Like'}
       >
         {isLiking && (
@@ -425,11 +423,10 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       <button
         onClick={handleToggleQueue}
         disabled={isTogglingQueue || isCheckingQueue}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          isInQueue
-            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-        }`}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isInQueue
+          ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
         aria-label={isInQueue ? 'Remove from queue' : 'Add to queue'}
       >
         {(isTogglingQueue || isCheckingQueue) && (

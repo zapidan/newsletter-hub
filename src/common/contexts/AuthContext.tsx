@@ -118,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       log.auth('Cleaning up auth listener');
       subscription?.unsubscribe();
     };
-  }, [supabase, log]);
+  }, [supabase]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     try {
