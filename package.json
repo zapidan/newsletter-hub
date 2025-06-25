@@ -26,7 +26,8 @@
     "logs:scan": "node scripts/find-console-logs.js",
     "logs:report": "node scripts/find-console-logs.js --json",
     "logs:dev": "VITE_LOG_LEVEL=DEBUG npm run dev",
-    "logs:prod": "VITE_LOG_LEVEL=WARN npm run dev"
+    "logs:prod": "VITE_LOG_LEVEL=WARN npm run dev",
+    "postbuild": "cp dist/index.html dist/404.html"
   },
   "overrides": {
     "@types/react": "18.3.23",

@@ -62,33 +62,29 @@ jobs:
         run: |
           echo "Preparing pages content..."
           mkdir -p _pages
-          
-          # Copy built application first (if it exists)
+          # Copy built application contents to the root of _pages
           if [ -d "dist" ]; then
-            echo "Copying built application from dist/..."
-            cp -r dist/* _pages/ 2>/dev/null || echo "dist copy failed"
+            echo "Copying built application contents from dist/..."
+            cp -r dist/* _pages/
           fi
-          
           # Copy other content
           cp -r test-results _pages/ 2>/dev/null || echo "test-results not found"
           cp -r test-dashboard _pages/ 2>/dev/null || echo "test-dashboard not found"
           cp -r html _pages/ 2>/dev/null || echo "html not found"
           cp -r docs/testing _pages/ 2>/dev/null || echo "docs/testing not found"
           cp -r public _pages/ 2>/dev/null || echo "public not found"
-          
           # Copy index.html if it exists in root (fallback)
           if [ -f "index.html" ] && [ ! -f "_pages/index.html" ]; then
             cp index.html _pages/ 2>/dev/null || echo "index.html copy failed"
           fi
-          
           # Make simple test table the main index for test-results directory
           if [ -f "_pages/test-results/simple-test-table.html" ]; then
             echo "Setting simple test table as main index for test-results..."
             cp _pages/test-results/simple-test-table.html _pages/test-results/index.html
           fi
-          
           echo "Pages content prepared:"
           ls -la _pages/
+          ls -la _pages/assets/ 2>/dev/null || echo "no assets dir"
 
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
