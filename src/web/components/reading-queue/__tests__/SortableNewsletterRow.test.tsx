@@ -1,9 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { SortableNewsletterRow } from '../SortableNewsletterRow';
 import { NewsletterWithRelations } from '@common/types'; // Removed unused Tag
-import { vi } from 'vitest';
 import { DndContext } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable'; // Removed unused arrayMove, verticalListSortingStrategy
+import { fireEvent, render, screen } from '@testing-library/react';
+import { vi } from 'vitest';
+import { SortableNewsletterRow } from '../SortableNewsletterRow';
 
 // Import the mocked component to access its .mock property
 import NewsletterRow from '../../NewsletterRow';
@@ -42,7 +42,7 @@ const mockNewsletter: NewsletterWithRelations = {
 
 // A simplified DndContext setup for testing sortable items
 const TestDndContext: React.FC<{ children: React.ReactNode; items: string[] }> = ({ children, items }) => (
-  <DndContext onDragEnd={() => {}}>
+  <DndContext onDragEnd={() => { }}>
     <SortableContext items={items} strategy={vi.fn()}> {/* Mock strategy */}
       {children}
     </SortableContext>
@@ -63,12 +63,12 @@ describe.skip('SortableNewsletterRow', () => { // TODO: Fix "newsletterRow decla
     onToggleQueue: mockOnToggleQueue,
     onNewsletterClick: mockOnNewsletterClick,
     // Provide defaults for all other required props of NewsletterRow that SortableNewsletterRow passes down
-    onToggleArchive: async () => {},
-    onToggleRead: async () => {},
-    onTrash: () => {},
-    onUpdateTags: async () => {},
-    onTagClick: () => {},
-    onToggleTagVisibility: () => {},
+    onToggleArchive: async () => { },
+    onToggleRead: async () => { },
+    onTrash: () => { },
+    onUpdateTags: async () => { },
+    onTagClick: () => { },
+    onToggleTagVisibility: () => { },
     isInReadingQueue: false,
     visibleTags: new Set<string>(),
     readingQueue: [],
@@ -128,7 +128,6 @@ describe.skip('SortableNewsletterRow', () => { // TODO: Fix "newsletterRow decla
         <SortableNewsletterRow {...defaultProps} />
       </TestDndContext>
     );
-    const newsletterRow = screen.getByTestId('newsletter-row');
     // const newsletterRowProps = JSON.parse(newsletterRow.getAttribute('data-props') || '{}'); // Not needed for this test style
 
     // Simulate the call from the mocked NewsletterRow by invoking the passed prop
@@ -156,13 +155,13 @@ describe.skip('SortableNewsletterRow', () => { // TODO: Fix "newsletterRow decla
       </TestDndContext>
     );
     // Simulate the click from the mocked NewsletterRow
-     (NewsletterRow as any).mock.calls[0][0].onNewsletterClick(mockNewsletter);
+    (NewsletterRow as any).mock.calls[0][0].onNewsletterClick(mockNewsletter);
 
     // The callback in SortableNewsletterRow receives NewsletterWithRelations and converts it
     const expectedPayload: Partial<NewsletterWithRelations> = {
-        ...mockNewsletter,
-        source: mockNewsletter.source,
-        tags: mockNewsletter.tags,
+      ...mockNewsletter,
+      source: mockNewsletter.source,
+      tags: mockNewsletter.tags,
     };
 
     expect(mockOnNewsletterClick).toHaveBeenCalledWith(expect.objectContaining(expectedPayload));
