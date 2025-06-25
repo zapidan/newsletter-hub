@@ -189,6 +189,7 @@ jobs:
           path: |
             test-results/
             html/
+            test-dashboard/
             playwright-report/
             coverage/
           retention-days: 7

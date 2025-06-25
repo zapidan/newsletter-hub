@@ -3,12 +3,12 @@ name: Deploy to GitHub Pages
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: ["main", "develop"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-  # Runs after test suite completes
+  # Runs after test suite completes (for test dashboard updates)
   workflow_run:
     workflows: ["Test Suite"]
     types: [completed]
@@ -29,9 +29,23 @@ jobs:
   # Build job
   build:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      - name: Log workflow trigger
+        run: |
+          echo "Workflow triggered by: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" == "workflow_run" ]; then
+            echo "Triggering workflow: ${{ github.event.workflow_run.name }}"
+            echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
+          fi
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: '8'
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -39,32 +53,114 @@ jobs:
           node-version: '18'
           cache: 'pnpm'
       
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: '8'
-          run_install: true
-      
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       
-      - name: Create necessary directories
+      - name: Build main application
+        if: github.event_name != 'workflow_run'
+        run: pnpm build
+        env:
+          NODE_ENV: production
+      
+      - name: Download test artifacts (if available)
+        uses: actions/download-artifact@v4
+        with:
+          name: test-artifacts
+          path: ./
+        continue-on-error: true
+      
+      - name: Check test artifacts
+        id: check-artifacts
+        run: |
+          echo "Checking for test artifacts..."
+          ls -la test-results/ 2>/dev/null || echo "test-results directory not found"
+          ls -la html/ 2>/dev/null || echo "html directory not found"
+          
+          if [ -f "test-results/junit.xml" ]; then
+            echo "✅ Test artifacts found"
+            echo "found_artifacts=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ No test artifacts found, will create minimal test data"
+            echo "found_artifacts=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create fallback test data
+        if: steps.check-artifacts.outputs.found_artifacts == 'false'
+        run: |
+          echo "Creating fallback test data..."
+          mkdir -p test-results
+          mkdir -p html
+          mkdir -p test-dashboard
+          
+          # Create minimal test results
+          cat > test-results/junit.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <testsuites>
+            <testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0">
+            </testsuite>
+          </testsuites>
+          EOF
+          
+          # Create minimal coverage report
+          cat > html/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Coverage Report - No Data Available</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .container { max-width: 800px; margin: 0 auto; }
+              .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Coverage Report</h1>
+              <div class="warning">
+                <h2>⚠️ No Coverage Data Available</h2>
+                <p>Test coverage data was not found.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+          EOF
+          
+          # Create minimal dashboard
+          cat > test-dashboard/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Test Dashboard - No Data Available</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .container { max-width: 800px; margin: 0 auto; }
+              .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Test Dashboard</h1>
+              <div class="warning">
+                <h2>⚠️ No Test Data Available</h2>
+                <p>Test artifacts were not found.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+          EOF
+        continue-on-error: true
+      
+      - name: Ensure all directories exist
         run: |
           mkdir -p test-results
           mkdir -p test-dashboard
           mkdir -p html
-          chmod -R 777 test-results
-      
-      - name: Run tests and generate reports
-        run: |
-          pnpm run test:coverage:html
-          pnpm run test:results:parse
-          pnpm run test:coverage:parse
-          pnpm run test:dashboard
-          pnpm run test:results:simple
-        env:
-          CI: 'true'
-          NODE_ENV: 'test'
+          mkdir -p docs/testing
+          
+          echo "Directory contents:"
+          ls -la test-dashboard/ || echo "test-dashboard empty"
+          ls -la test-results/ || echo "test-results empty"
+          ls -la html/ || echo "html empty"
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -72,11 +168,12 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload only the generated reports and dashboard
           path: |
+            dist/
             test-results/
             test-dashboard/
             html/
+            docs/testing/
             index.html
             public/
 
@@ -87,6 +184,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
