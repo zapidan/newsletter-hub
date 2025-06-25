@@ -79,9 +79,11 @@ vi.mock('@common/utils/queryKeyFactory', () => ({
   },
 }))
 
+
 vi.mock('@common/utils/optimizedCacheInvalidation', () => ({
   invalidateForOperation: vi.fn().mockResolvedValue(undefined),
 }))
+
 
 vi.mock('@common/utils/tagUtils', () => ({
   updateNewsletterTags: vi.fn().mockResolvedValue(undefined),

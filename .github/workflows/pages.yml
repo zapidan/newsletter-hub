@@ -150,17 +150,104 @@ jobs:
           EOF
         continue-on-error: true
       
-      - name: Ensure all directories exist
+      - name: Ensure all directories exist and have content
         run: |
+          echo "Ensuring all required directories exist..."
+          
+          # Create directories if they don't exist
           mkdir -p test-results
           mkdir -p test-dashboard
           mkdir -p html
           mkdir -p docs/testing
           
+          # Ensure test-results has content
+          if [ ! -f "test-results/junit.xml" ]; then
+            echo "Creating minimal test results..."
+            cat > test-results/junit.xml << 'EOF'
+            <?xml version="1.0" encoding="UTF-8"?>
+            <testsuites>
+              <testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0">
+              </testsuite>
+            </testsuites>
+            EOF
+          fi
+          
+          # Ensure html has content
+          if [ ! -f "html/index.html" ]; then
+            echo "Creating minimal coverage report..."
+            cat > html/index.html << 'EOF'
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Coverage Report - No Data Available</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .container { max-width: 800px; margin: 0 auto; }
+                .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>Coverage Report</h1>
+                <div class="warning">
+                  <h2>⚠️ No Coverage Data Available</h2>
+                  <p>Test coverage data was not found.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+            EOF
+          fi
+          
+          # Ensure test-dashboard has content
+          if [ ! -f "test-dashboard/index.html" ]; then
+            echo "Creating minimal dashboard..."
+            cat > test-dashboard/index.html << 'EOF'
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Test Dashboard - No Data Available</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .container { max-width: 800px; margin: 0 auto; }
+                .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>Test Dashboard</h1>
+                <div class="warning">
+                  <h2>⚠️ No Test Data Available</h2>
+                  <p>Test artifacts were not found.</p>
+                </div>
+              </div>
+            </body>
+            </html>
+            EOF
+          fi
+          
+          # Ensure docs/testing has content
+          if [ ! -f "docs/testing/README.md" ]; then
+            echo "Creating minimal docs/testing content..."
+            cat > docs/testing/README.md << 'EOF'
+            # Testing Documentation
+            
+            This directory contains testing documentation and reports.
+            
+            ## Available Reports
+            
+            - Test Results: `/test-results/`
+            - Coverage Reports: `/html/`
+            - Test Dashboard: `/test-dashboard/`
+            
+            EOF
+          fi
+          
           echo "Directory contents:"
           ls -la test-dashboard/ || echo "test-dashboard empty"
           ls -la test-results/ || echo "test-results empty"
           ls -la html/ || echo "html empty"
+          ls -la docs/testing/ || echo "docs/testing empty"
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
