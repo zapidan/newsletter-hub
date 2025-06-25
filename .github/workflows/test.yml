@@ -112,6 +112,14 @@ jobs:
         env:
           NODE_ENV: production
 
+      - name: Run postbuild script (ensure 404.html)
+        run: pnpm run postbuild
+
+      - name: Debug dist directory after build
+        run: |
+          echo "Listing dist directory after build:"
+          ls -la dist || echo "dist directory not found"
+
       - name: Create test results directory
         run: |
           mkdir -p test-results
