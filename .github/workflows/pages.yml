@@ -37,11 +37,14 @@ jobs:
           echo "GitHub SHA: ${{ github.sha }}"
           echo "=== END DEBUG INFO ==="
 
-      - name: Download test artifacts
-        uses: actions/download-artifact@v4
+      - name: Download test artifacts from triggering workflow
+        uses: dawidd6/action-download-artifact@v3
         with:
+          workflow: test.yml
+          workflow_conclusion: success
           name: test-artifacts
           path: .
+          run_id: ${{ github.event.workflow_run.id }}
 
       - name: Fail if artifacts are missing
         run: |
