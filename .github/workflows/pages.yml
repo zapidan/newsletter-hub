@@ -1,6 +1,7 @@
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages - Updated
 
-# Force refresh: Updated to fix upload path parsing issues
+# Force refresh: Updated to fix upload path parsing issues - v2
+# This version uses _pages directory approach to avoid path parsing issues
 on:
   # Runs on pushes targeting the default branch
   push:
@@ -8,11 +9,6 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
-
-  # Runs after test suite completes (for test dashboard updates)
-  workflow_run:
-    workflows: ["Test Suite"]
-    types: [completed]
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
@@ -64,11 +60,19 @@ jobs:
     needs: changes
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true')) ||
-      github.event_name == 'workflow_run'
+      (github.event_name == 'push' && (needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.deps == 'true'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      - name: Verify workflow version
+        run: |
+          echo "=== WORKFLOW VERSION CHECK ==="
+          echo "Running: Deploy to GitHub Pages - Updated"
+          echo "Version: v2 - Fixed upload path parsing"
+          echo "Date: $(date)"
+          echo "SHA: ${{ github.sha }}"
+          echo "=== END VERSION CHECK ==="
       
       - name: Log workflow trigger
         run: |
@@ -78,14 +82,6 @@ jobs:
           echo "Current working directory: $(pwd)"
           echo "GitHub ref: ${{ github.ref }}"
           echo "GitHub SHA: ${{ github.sha }}"
-          if [ "${{ github.event_name }}" == "workflow_run" ]; then
-            echo "Triggering workflow: ${{ github.event.workflow_run.name }}"
-            echo "Workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
-            echo "Workflow run ID: ${{ github.event.workflow_run.id }}"
-            if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
-              echo "⚠️ Test workflow did not succeed, skipping artifact download"
-            fi
-          fi
           echo "=== END DEBUG INFO ==="
       
       - name: Install pnpm
@@ -107,16 +103,8 @@ jobs:
             pnpm install --no-frozen-lockfile
           }
       
-      - name: Download test artifacts (if available)
-        if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: test-artifacts
-          path: .
-        continue-on-error: true
-      
       - name: Build main application
-        if: github.event_name != 'workflow_run' && (needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch')
+        if: needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch'
         run: pnpm build
         env:
           NODE_ENV: production
@@ -128,47 +116,40 @@ jobs:
           echo "Current contents:"
           ls -la
           
-          # Check if test artifacts were downloaded
-          if [ -d "test-results" ] && [ "$(ls -A test-results 2>/dev/null)" ]; then
-            echo "✅ Test artifacts found, using downloaded content"
-          else
-            echo "⚠️ No test artifacts found, creating fallback content"
-            
-            echo "Creating directories..."
-            mkdir -p test-results
-            mkdir -p test-dashboard
-            mkdir -p html
-            mkdir -p docs/testing
-            
-            echo "Directories after creation:"
-            ls -la test-results/ || echo "test-results creation failed"
-            ls -la test-dashboard/ || echo "test-dashboard creation failed"
-            ls -la html/ || echo "html creation failed"
-            ls -la docs/testing/ || echo "docs/testing creation failed"
-            
-            # Ensure test-results has content
-            if [ ! -f "test-results/junit.xml" ]; then
-              echo "Creating minimal test results..."
-              echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
-            fi
-            
-            # Ensure html has content
-            if [ ! -f "html/index.html" ]; then
-              echo "Creating minimal coverage report..."
-              echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
-            fi
-            
-            # Ensure test-dashboard has content
-            if [ ! -f "test-dashboard/index.html" ]; then
-              echo "Creating minimal dashboard..."
-              echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
-            fi
-            
-            # Ensure docs/testing has content
-            if [ ! -f "docs/testing/README.md" ]; then
-              echo "Creating minimal docs/testing content..."
-              echo '# Testing Documentation\n\nThis directory contains testing documentation and reports.\n\n## Available Reports\n\n- Test Results: `/test-results/`\n- Coverage Reports: `/html/`\n- Test Dashboard: `/test-dashboard/`' > docs/testing/README.md
-            fi
+          echo "Creating directories..."
+          mkdir -p test-results
+          mkdir -p test-dashboard
+          mkdir -p html
+          mkdir -p docs/testing
+          
+          echo "Directories after creation:"
+          ls -la test-results/ || echo "test-results creation failed"
+          ls -la test-dashboard/ || echo "test-dashboard creation failed"
+          ls -la html/ || echo "html creation failed"
+          ls -la docs/testing/ || echo "docs/testing creation failed"
+          
+          # Ensure test-results has content
+          if [ ! -f "test-results/junit.xml" ]; then
+            echo "Creating minimal test results..."
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
+          fi
+          
+          # Ensure html has content
+          if [ ! -f "html/index.html" ]; then
+            echo "Creating minimal coverage report..."
+            echo '<html><head><title>Coverage Report - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Coverage Report</h1><div class="warning"><h2>⚠️ No Coverage Data Available</h2><p>Test coverage data was not found.</p></div></div></body></html>' > html/index.html
+          fi
+          
+          # Ensure test-dashboard has content
+          if [ ! -f "test-dashboard/index.html" ]; then
+            echo "Creating minimal dashboard..."
+            echo '<html><head><title>Test Dashboard - No Data Available</title><style>body{font-family:Arial,sans-serif;margin:40px}.container{max-width:800px;margin:0 auto}.warning{background:#fff3cd;border:1px solid #ffeaa7;padding:20px;border-radius:5px}</style></head><body><div class="container"><h1>Test Dashboard</h1><div class="warning"><h2>⚠️ No Test Data Available</h2><p>Test artifacts were not found.</p></div></div></body></html>' > test-dashboard/index.html
+          fi
+          
+          # Ensure docs/testing has content
+          if [ ! -f "docs/testing/README.md" ]; then
+            echo "Creating minimal docs/testing content..."
+            echo '# Testing Documentation\n\nThis directory contains testing documentation and reports.\n\n## Available Reports\n\n- Test Results: `/test-results/`\n- Coverage Reports: `/html/`\n- Test Dashboard: `/test-dashboard/`' > docs/testing/README.md
           fi
           
           echo "Final directory contents:"
