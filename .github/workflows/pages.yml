@@ -131,13 +131,15 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_run" ]; then
             echo "Test workflow conclusion: ${{ github.event.workflow_run.conclusion }}"
             echo "Should process artifacts: ${{ steps.test-workflow-status.outputs.should_process_artifacts }}"
-          fi
-          
-          # If test workflow failed, don't expect artifacts
-          if [ "${{ github.event_name }}" == "workflow_run" ] && [ "${{ steps.test-workflow-status.outputs.should_process_artifacts }}" == "false" ]; then
-            echo "⚠️ Test workflow failed, creating minimal test data"
-            echo "found_artifacts=false" >> $GITHUB_OUTPUT
-            exit 0
+            
+            # If test workflow failed, don't expect artifacts
+            if [ "${{ steps.test-workflow-status.outputs.should_process_artifacts }}" == "false" ]; then
+              echo "⚠️ Test workflow failed, creating minimal test data"
+              echo "found_artifacts=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          else
+            echo "Direct push event - checking for existing artifacts"
           fi
           
           ls -la test-results/ 2>/dev/null || echo "test-results directory not found"
