@@ -48,6 +48,7 @@ export default defineConfig(({ mode }) => {
   ] : [];
 
   return {
+    base: '/newsletter-hub/',
     plugins: [
       react(),
       // Visualize bundle size in development

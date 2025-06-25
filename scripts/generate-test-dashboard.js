@@ -518,11 +518,11 @@ function generateTestDashboard(testData, coverageData) {
                         <div class="link-title">📋 Detailed Test Results</div>
                         <div class="link-desc">View comprehensive test results with error details</div>
                     </a>
-                    <a href="test-results/simple-test-table.html" class="link-card">
+                    <a href="test-results/" class="link-card">
                         <div class="link-title">📊 Simple Test Table</div>
                         <div class="link-desc">Quick overview of all test cases</div>
                     </a>
-                    <a href="html/index.html" class="link-card">
+                    <a href="html/" class="link-card">
                         <div class="link-title">📈 Coverage Report</div>
                         <div class="link-desc">Detailed code coverage analysis</div>
                     </a>

@@ -1,11 +1,11 @@
+import { AuthProvider } from '@common/contexts/AuthContext';
+import { SupabaseProvider } from '@common/contexts/SupabaseContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
-import './index.css';  // This imports from /src/web/index.css
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SupabaseProvider } from '@common/contexts/SupabaseContext';
-import { AuthProvider } from '@common/contexts/AuthContext';
+import './index.css'; // This imports from /src/web/index.css
 
 // Create a client with optimized caching
 const queryClient = new QueryClient({
@@ -32,7 +32,7 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename="/newsletter-hub">
         <SupabaseProvider>
           <AuthProvider>
             <App />
