@@ -180,6 +180,7 @@ jobs:
         with:
           name: test-artifacts
           path: |
+            dist/
             test-results/
             html/
             test-dashboard/
