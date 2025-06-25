@@ -1,16 +1,16 @@
-import { useState, useMemo } from "react";
-import { Navigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@common/contexts/AuthContext";
 import { motion } from "framer-motion";
 import {
-  Inbox,
-  Mail,
-  Lock,
   AlertCircle,
   ArrowRight,
   Check,
+  Inbox,
+  Lock,
+  Mail,
   X,
 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, Navigate, useLocation } from "react-router-dom";
 
 type LocationState = {
   from?: {
@@ -51,6 +51,8 @@ const Login = () => {
       await signIn(email, password);
     }
   };
+
+  const isProduction = import.meta.env.MODE === 'production';
 
   if (user) {
     return <Navigate to={from} replace />;
@@ -193,34 +195,36 @@ const Login = () => {
             </div>
           </form>
 
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">
-                  {isSignUp
-                    ? "Already have an account?"
-                    : "Don't have an account?"}
-                </span>
-              </div>
-            </div>
-
+          {!isProduction && (
             <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignUp(!isSignUp);
-                }}
-                className="btn btn-secondary btn-lg w-full"
-              >
-                {isSignUp
-                  ? "Sign in to existing account"
-                  : "Create a new account"}
-              </button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">
+                    {isSignUp
+                      ? "Already have an account?"
+                      : "Don't have an account?"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                  }}
+                  className="btn btn-secondary btn-lg w-full"
+                >
+                  {isSignUp
+                    ? "Sign in to existing account"
+                    : "Create a new account"}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </motion.div>
       </div>
 

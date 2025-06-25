@@ -1,24 +1,24 @@
-import React from "react";
-import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import React from "react";
+import { BrowserRouter } from "react-router-dom";
 
-import { SupabaseProvider, AuthProvider } from "@common/contexts";
-import { ToastProvider } from "@common/contexts/ToastContext";
-import { FilterProvider } from "@common/contexts/FilterContext";
 import { ToastContainer } from "@common/components/ui/ToastContainer";
+import { AuthProvider, SupabaseProvider } from "@common/contexts";
+import { FilterProvider } from "@common/contexts/FilterContext";
+import { ToastProvider } from "@common/contexts/ToastContext";
 
 interface AppProvidersProps {
   children: React.ReactNode;
   queryClient?: QueryClient;
   enableDevtools?: boolean;
   toastPosition?:
-    | "top-right"
-    | "top-left"
-    | "top-center"
-    | "bottom-right"
-    | "bottom-left"
-    | "bottom-center";
+  | "top-right"
+  | "top-left"
+  | "top-center"
+  | "bottom-right"
+  | "bottom-left"
+  | "bottom-center";
   maxToasts?: number;
 }
 
@@ -70,10 +70,12 @@ export const AppProviders: React.FC<AppProvidersProps> = ({
             <ToastProvider defaultDuration={5000} maxToasts={maxToasts}>
               <FilterProvider>
                 {children}
-                <ToastContainer
-                  position={toastPosition}
-                  maxToasts={maxToasts}
-                />
+                {import.meta.env.MODE !== 'production' && (
+                  <ToastContainer
+                    position={toastPosition}
+                    maxToasts={maxToasts}
+                  />
+                )}
               </FilterProvider>
             </ToastProvider>
           </AuthProvider>
