@@ -38,20 +38,62 @@ jobs:
         with:
           name: test-artifacts
           path: ./
+        continue-on-error: true
+
+      - name: Check if artifacts were downloaded
+        id: check-artifacts
+        run: |
+          if [ -f "test-results/junit.xml" ]; then
+            echo "✅ Test artifacts found, proceeding with report generation"
+            echo "found_artifacts=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ No test artifacts found, will create minimal dashboard"
+            echo "found_artifacts=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate additional reports from existing data
+        if: steps.check-artifacts.outputs.found_artifacts == 'true'
         run: |
-          # Only generate additional reports if the test artifacts exist
-          if [ -f "test-results/junit.xml" ]; then
-            npm run test:results:parse || echo "Could not parse test results"
-            npm run test:coverage:parse || echo "Could not parse coverage"
-            npm run test:dashboard || echo "Could not generate dashboard"
-          else
-            echo "No test artifacts found, skipping report generation"
-          fi
+          npm run test:results:parse || echo "Could not parse test results"
+          npm run test:coverage:parse || echo "Could not parse coverage"
+          npm run test:dashboard || echo "Could not generate dashboard"
         env:
           CI: 'true'
           NODE_ENV: 'test'
+        continue-on-error: true
+
+      - name: Create minimal dashboard if no artifacts
+        if: steps.check-artifacts.outputs.found_artifacts == 'false'
+        run: |
+          mkdir -p test-dashboard
+          cat > test-dashboard/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Test Dashboard - No Data Available</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .container { max-width: 800px; margin: 0 auto; }
+              .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 20px; border-radius: 5px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Test Dashboard</h1>
+              <div class="warning">
+                <h2>⚠️ No Test Data Available</h2>
+                <p>Test artifacts were not found. This could be because:</p>
+                <ul>
+                  <li>The main test workflow hasn't completed yet</li>
+                  <li>The test workflow failed before generating artifacts</li>
+                  <li>There was an issue with artifact upload/download</li>
+                </ul>
+                <p>Please check the main test workflow status and try again.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+          EOF
         continue-on-error: true
 
       - name: Setup Pages
