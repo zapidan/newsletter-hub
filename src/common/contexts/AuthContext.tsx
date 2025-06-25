@@ -195,7 +195,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
       }
-
       log.auth('Sign up successful', {
         component: 'Auth',
         metadata: {
