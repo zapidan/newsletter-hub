@@ -218,7 +218,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [setLoading, setError, log, supabase.auth, userService]);
 
-
   const signOut = useCallback(async () => {
     try {
       setLoading(true);
