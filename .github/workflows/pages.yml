@@ -102,6 +102,38 @@ jobs:
         env:
           NODE_ENV: production
       
+      - name: Check what directories exist for upload
+        id: check-upload-dirs
+        run: |
+          echo "Checking what directories exist for upload..."
+          
+          # Check if dist exists
+          if [ -d "dist" ]; then
+            echo "✅ dist directory exists"
+            echo "has_dist=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ dist directory does not exist"
+            echo "has_dist=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if public exists
+          if [ -d "public" ]; then
+            echo "✅ public directory exists"
+            echo "has_public=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ public directory does not exist"
+            echo "has_public=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if index.html exists
+          if [ -f "index.html" ]; then
+            echo "✅ index.html exists"
+            echo "has_index=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ index.html does not exist"
+            echo "has_index=false" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Check if test workflow succeeded
         if: github.event_name == 'workflow_run'
         id: test-workflow-status
@@ -211,6 +243,33 @@ jobs:
           ls -la html/ || echo "html empty"
           ls -la docs/testing/ || echo "docs/testing empty"
       
+      - name: Create upload path list
+        id: create-upload-paths
+        run: |
+          echo "Creating upload path list..."
+          upload_paths=""
+          
+          # Add dist if it exists
+          if [ -d "dist" ]; then
+            upload_paths="$upload_paths dist/"
+          fi
+          
+          # Add test directories (these should always exist after our steps)
+          upload_paths="$upload_paths test-results/ test-dashboard/ html/ docs/testing/"
+          
+          # Add index.html if it exists
+          if [ -f "index.html" ]; then
+            upload_paths="$upload_paths index.html"
+          fi
+          
+          # Add public if it exists
+          if [ -d "public" ]; then
+            upload_paths="$upload_paths public/"
+          fi
+          
+          echo "Upload paths: $upload_paths"
+          echo "paths=$upload_paths" >> $GITHUB_OUTPUT
+      
       - name: Setup Pages
         uses: actions/configure-pages@v4
       
@@ -218,13 +277,11 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: |
-            dist/
             test-results/
             test-dashboard/
             html/
             docs/testing/
-            index.html
-            public/
+        continue-on-error: true
 
   # Deployment job
   deploy:
