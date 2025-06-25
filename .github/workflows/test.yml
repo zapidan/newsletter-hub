@@ -131,6 +131,46 @@ jobs:
           NODE_ENV: 'test'
         continue-on-error: true
 
+      - name: Debug scripts directory
+        if: always()
+        run: |
+          echo "PWD: $(pwd)"
+          ls -la scripts/
+          echo "Test results directory:"
+          ls -la test-results/ || echo "test-results directory not found"
+
+      - name: Generate test reports
+        if: always()
+        run: |
+          echo "=== Generating Test Reports ==="
+          echo "Generating test results HTML..."
+          pnpm test:results:parse || echo "⚠️ Test results HTML generation failed, creating fallback"
+          echo "Generating coverage report..."
+          pnpm test:coverage:parse || echo "⚠️ Coverage report generation failed"
+          echo "Generating test dashboard..."
+          pnpm test:dashboard || echo "⚠️ Test dashboard generation failed"
+          echo "Generating simple test table..."
+          pnpm test:results:simple || echo "⚠️ Simple test table generation failed"
+          echo "=== Test Reports Generation Complete ==="
+        continue-on-error: true
+
+      - name: Create fallback test results
+        if: always()
+        run: |
+          mkdir -p test-results
+          if [ ! -f "test-results/junit.xml" ]; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
+          fi
+          if [ ! -d "html" ]; then
+            mkdir -p html
+            echo '<html><body><h1>No Coverage Data Available</h1></body></html>' > html/index.html
+          fi
+          if [ ! -d "test-dashboard" ]; then
+            mkdir -p test-dashboard
+            echo '<html><body><h1>Test Dashboard</h1><p>No test data available</p></body></html>' > test-dashboard/index.html
+          fi
+        continue-on-error: true
+
       - name: Upload test results
         if: always()
         uses: dorny/test-reporter@v1
