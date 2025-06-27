@@ -13,9 +13,7 @@ interface NewsletterRowProps {
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
   onToggleQueue: (newsletterId: string) => Promise<void>;
-  onToggleTagVisibility: (id: string, e: React.MouseEvent) => void;
   onTagClick: (tag: Tag, e: React.MouseEvent) => void;
-  onRemoveFromQueue?: (e: React.MouseEvent, id: string) => void;
   onNewsletterClick?: (newsletter: NewsletterWithRelations) => void;
   onRowClick?: (
     newsletter: NewsletterWithRelations,
@@ -70,7 +68,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   onToggleRead,
   onTrash,
   onToggleQueue,
-  onToggleTagVisibility,
   onTagClick,
   onNewsletterClick,
   onRowClick,
@@ -109,22 +106,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     },
     [newsletter, onRowClick, onNewsletterClick]
   );
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    } else if (diffInHours < 48) {
-      return "Yesterday";
-    } else if (diffInHours < 168) {
-      return date.toLocaleDateString([], { weekday: "short" });
-    } else {
-      return date.toLocaleDateString([], { month: "short", day: "numeric" });
-    }
-  };
 
   const isRead = newsletter.is_read;
   const _isLiked = newsletter.is_liked;

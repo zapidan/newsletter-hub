@@ -71,10 +71,6 @@ const ReadingQueuePage: React.FC = () => {
     mutationFn: (id: string) => newsletterService.addToReadingQueue(id),
   });
 
-  const removeFromQueueMutation = useMutation({
-    mutationFn: (id: string) => newsletterService.removeFromReadingQueue(id),
-  });
-
   const updateTagsMutation = useMutation({
     mutationFn: ({ id, tagIds }: { id: string; tagIds: string[] }) =>
       newsletterService.updateTags(id, tagIds),

@@ -118,7 +118,7 @@ const NewsletterDetail = memo(() => {
     }
   }, [navigate, location.state, id, log]);
 
-  const { updateNewsletterTags: updateTagsFromUseTags } = useTags();
+  useTags();
 
   // Create mutations directly using useMutation
   const markAsReadMutation = useMutation({
@@ -143,10 +143,6 @@ const NewsletterDetail = memo(() => {
 
   const addToQueueMutation = useMutation({
     mutationFn: (id: string) => newsletterService.addToReadingQueue(id),
-  });
-
-  const removeFromQueueMutation = useMutation({
-    mutationFn: (id: string) => newsletterService.removeFromReadingQueue(id),
   });
 
   const updateTagsMutation = useMutation({
@@ -198,7 +194,7 @@ const NewsletterDetail = memo(() => {
     try {
       await updateTagsMutation.mutateAsync({ id, tagIds });
       return true;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }, [updateTagsMutation]);

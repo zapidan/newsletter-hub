@@ -435,7 +435,6 @@ const NewslettersPage: React.FC = () => {
     handleToggleRead,
     handleDeleteNewsletter,
     handleToggleInQueue,
-    handleUpdateTags: sharedHandleUpdateTags,
     isUpdatingTags,
   } = useSharedNewsletterActions(
     {
@@ -757,28 +756,6 @@ const NewslettersPage: React.FC = () => {
       await handleDeleteNewsletter(id);
     },
     [handleDeleteNewsletter]
-  );
-
-  const handleUpdateTags = useCallback(
-    async (newsletterId: string, tagIds: string[]): Promise<void> => {
-      setIsActionInProgress(true);
-      try {
-        await sharedHandleUpdateTags(newsletterId, tagIds);
-      } catch (error) {
-        log.error(
-          'Failed to update newsletter tags',
-          {
-            action: 'update_tags',
-            metadata: { newsletterId, tagCount: tagIds.length },
-          },
-          error instanceof Error ? error : new Error(String(error))
-        );
-        // Error handling is already done by shared actions
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
-      }
-    },
-    [sharedHandleUpdateTags, log]
   );
 
   const toggleTagVisibility = useCallback(
