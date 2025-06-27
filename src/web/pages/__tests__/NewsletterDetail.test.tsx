@@ -3,7 +3,6 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import * as ReactRouterDom from 'react-router-dom'; // Import for spyOn
 import { vi, type MockedFunction } from 'vitest';
-import * as NavModule from '../../../components/NewsletterDetail/NewsletterNavigation';
 
 /* ────────────  HOISTED MODULE-MOCKS  ──────────── */
 /*   Mock every possible path to NewsletterNavigation so the real file
@@ -198,6 +197,7 @@ import { AuthContext } from '@common/contexts/AuthContext';
 import { FilterProvider } from '@common/contexts/FilterContext';
 import { ToastProvider } from '@common/contexts/ToastContext';
 import type { NewsletterWithRelations } from '@common/types';
+import * as NewsletterNavigationModule from '../../../components/NewsletterDetail/NewsletterNavigation';
 import NewsletterDetail from '../NewsletterDetail';
 // Using mocked version of useTags
 
@@ -1012,7 +1012,7 @@ describe('NewsletterDetail - TagSelector Interactions', () => {
   });
 });
 
-describe.skip('NewsletterDetail - NewsletterNavigation Props', () => {
+describe('NewsletterDetail - NewsletterNavigation Props', () => {
   const originalUseParams = ReactRouterDom.useParams;
 
   beforeEach(() => {
@@ -1069,51 +1069,134 @@ describe.skip('NewsletterDetail - NewsletterNavigation Props', () => {
       prefetchRelated: vi.fn(),
     });
 
-    // Custom render for this test to control MemoryRouter's initial entry
-    render(
-      <MemoryRouter initialEntries={[`/newsletters/${currentId}`]}>
-        <QueryClientProvider client={queryClient}>
-          <AuthContext.Provider
-            value={{
-              user: mockUser,
-              session: {
-                access_token: 'test-token',
-                refresh_token: 'test-refresh',
-                expires_in: 3600,
-                token_type: 'bearer',
-                user: mockUser
-              },
-              loading: false,
-              error: null,
-              signIn: vi.fn(),
-              signOut: vi.fn(),
-              signUp: vi.fn(),
-              resetPassword: vi.fn(),
-              updatePassword: vi.fn(),
-              checkPasswordStrength: vi.fn(),
-            }}
-          >
-            <FilterProvider useLocalTagFiltering={true}>
-              <CacheInitializer>
-                <ToastProvider>
-                  <NewsletterDetail />
-                </ToastProvider>
-              </CacheInitializer>
-            </FilterProvider>
-          </AuthContext.Provider>
-        </QueryClientProvider>
-      </MemoryRouter>
-    );
+    renderPage();
 
-    // Debug: log NavMock.default calls
-    console.log('NavMock.default.mock.calls:', (NavModule.default as any).mock.calls);
+    // Check that NewsletterNavigation is rendered with correct props
+    expect(screen.getByTestId('newsletter-detail')).toBeInTheDocument();
 
-    expect(NavModule.default).toHaveBeenCalledWith(
+    // The NewsletterNavigation component should be rendered with the correct props
+    // We can verify this by checking that the navigation component is present
+    // and that it receives the correct context information
+    expect(NewsletterNavigationModule.default).toHaveBeenCalledWith(
       expect.objectContaining({
         currentNewsletterId: currentId,
         isFromReadingQueue: true,
         sourceId: 'source-xyz',
-        autoMarkAsRead: false,
+        autoMarkAsRead: true,
+        showLabels: true,
+        showCounter: true,
+      }),
+      expect.anything()
+    );
+  });
+
+  test('passes correct props to NewsletterNavigation from newsletter sources', () => {
+    const currentId = 'nl-456';
+    mockUseLocation.mockReturnValue({
+      pathname: `/newsletters/${currentId}`,
+      state: { fromNewsletterSources: true, sourceId: 'source-abc' },
+      search: '',
+      key: 'nav-test-key',
+      hash: ''
+    });
+
+    // @ts-ignore
+    ReactRouterDom.useParams = vi.fn().mockReturnValue({ id: currentId });
+
+    mockUseNewsletterDetail.mockReturnValue({
+      newsletter: {
+        id: currentId,
+        title: "Source Newsletter Test",
+        content: "<p>Test</p>",
+        summary: "Summary",
+        image_url: "",
+        received_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_read: false,
+        is_liked: false,
+        is_archived: false,
+        user_id: mockUser.id,
+        newsletter_source_id: 'source-abc',
+        source_id: 'source-abc',
+        source: { id: 'source-abc', name: 'Test Source', from_address: 'test@source.com', user_id: mockUser.id, created_at: '', updated_at: '', is_archived: false },
+        tags: [],
+        word_count: 10,
+        estimated_read_time: 1,
+        created_at: new Date().toISOString(),
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(NewsletterNavigationModule.default).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentNewsletterId: currentId,
+        isFromReadingQueue: false,
+        sourceId: 'source-abc',
+        autoMarkAsRead: true,
+        showLabels: true,
+        showCounter: true,
+      }),
+      expect.anything()
+    );
+  });
+
+  test('passes correct props to NewsletterNavigation from inbox', () => {
+    const currentId = 'nl-789';
+    mockUseLocation.mockReturnValue({
+      pathname: `/newsletters/${currentId}`,
+      state: null, // No specific context - defaults to inbox
+      search: '',
+      key: 'nav-test-key',
+      hash: ''
+    });
+
+    // @ts-ignore
+    ReactRouterDom.useParams = vi.fn().mockReturnValue({ id: currentId });
+
+    mockUseNewsletterDetail.mockReturnValue({
+      newsletter: {
+        id: currentId,
+        title: "Inbox Newsletter Test",
+        content: "<p>Test</p>",
+        summary: "Summary",
+        image_url: "",
+        received_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_read: false,
+        is_liked: false,
+        is_archived: false,
+        user_id: mockUser.id,
+        newsletter_source_id: 'source-inbox',
+        source_id: 'source-inbox',
+        source: { id: 'source-inbox', name: 'Inbox Source', from_address: 'test@inbox.com', user_id: mockUser.id, created_at: '', updated_at: '', is_archived: false },
+        tags: [],
+        word_count: 10,
+        estimated_read_time: 1,
+        created_at: new Date().toISOString(),
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn().mockResolvedValue({}),
+      prefetchRelated: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(NewsletterNavigationModule.default).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentNewsletterId: currentId,
+        isFromReadingQueue: false,
+        sourceId: undefined, // No source context from inbox
+        autoMarkAsRead: true,
+        showLabels: true,
+        showCounter: true,
       }),
       expect.anything()
     );

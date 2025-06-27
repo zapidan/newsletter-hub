@@ -354,13 +354,17 @@ export const newsletterApi = {
       const offset = params.offset || 0;
       const page = Math.floor(offset / limit) + 1;
 
+      // Calculate hasMore based on total count and current offset, not filtered result length
+      const totalCount = count || 0;
+      const hasMore = (offset + limit) < totalCount;
+
       const result = {
         data: transformedData,
-        count: count || transformedData.length,
+        count: totalCount,
         page,
         limit,
-        hasMore: transformedData.length === limit,
-        nextPage: transformedData.length === limit ? page + 1 : null,
+        hasMore,
+        nextPage: hasMore ? page + 1 : null,
         prevPage: page > 1 ? page - 1 : null,
       };
 

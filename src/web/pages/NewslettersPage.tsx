@@ -352,6 +352,18 @@ const NewslettersPage: React.FC = () => {
     errorTogglingLike,
     bulkArchive,
     refetchNewsletters,
+    // Extract mutations to pass to useSharedNewsletterActions
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
   } = useNewsletters(newsletterFilter, {
     debug: true,
     refetchOnWindowFocus: false,
@@ -425,16 +437,32 @@ const NewslettersPage: React.FC = () => {
     handleToggleInQueue,
     handleUpdateTags: sharedHandleUpdateTags,
     isUpdatingTags,
-  } = useSharedNewsletterActions({
-    showToasts: true,
-    optimisticUpdates: true,
-    onSuccess: () => {
-      // Success handled by shared handlers
+  } = useSharedNewsletterActions(
+    {
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      bulkMarkAsRead,
+      bulkMarkAsUnread,
+      bulkArchive,
+      bulkUnarchive,
+      bulkDeleteNewsletters,
+      updateNewsletterTags,
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+    {
+      showToasts: true,
+      optimisticUpdates: true,
+      onSuccess: () => {
+        // Success handled by shared handlers
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }
+  );
 
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   const [isActionInProgress, setIsActionInProgress] = useState(false);
@@ -806,11 +834,12 @@ const NewslettersPage: React.FC = () => {
           }
         }
 
-        // Navigate to the newsletter detail
+        // Navigate to the newsletter detail with source context
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
             fromNewsletterSources: true,
             from: '/newsletters',
+            sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
           },
         });
       } catch (error) {
@@ -827,6 +856,7 @@ const NewslettersPage: React.FC = () => {
           state: {
             fromNewsletterSources: true,
             from: '/newsletters',
+            sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
           },
         });
       }
@@ -1308,25 +1338,6 @@ const NewslettersPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-neutral-900">
                 {selectedSourceId ? `Newsletters from this Source` : `Newsletters in this Group`}
               </h3>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => refetchNewsletters()}
-                  className="text-sm text-green-600 hover:underline flex items-center space-x-1"
-                >
-                  🔄 Refresh
-                </button>
-                {(selectedGroupId || selectedSourceId) && (
-                  <button
-                    onClick={() => {
-                      setSelectedSourceId(null);
-                      setSelectedGroupId(null);
-                    }}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    Clear filter
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Tag Filter Display */}
@@ -1396,7 +1407,6 @@ const NewslettersPage: React.FC = () => {
                     onToggleQueue={handleToggleInQueueWrapper}
                     onTrash={handleTrashWrapper}
                     onToggleTagVisibility={toggleTagVisibility}
-                    onUpdateTags={handleUpdateTags}
                     onTagClick={handleTagClick}
                     onNewsletterClick={handleNewsletterClick}
                     visibleTags={visibleTags}

@@ -1,5 +1,5 @@
 import { Mail } from 'lucide-react';
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
@@ -12,6 +12,7 @@ import { useInfiniteNewsletters } from '@common/hooks/infiniteScroll';
 import { useErrorHandling } from '@common/hooks/useErrorHandling';
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useBulkLoadingStates } from '@common/hooks/useLoadingStates';
+import { useNewsletters } from '@common/hooks/useNewsletters';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 
@@ -140,56 +141,6 @@ const Inbox: React.FC = memo(() => {
     debug: process.env.NODE_ENV === 'development',
   });
 
-  // Debug: Log newsletter data only when it changes significantly
-  const lastDebugStateRef = useRef<string>('');
-
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const currentState = JSON.stringify({
-        rawNewslettersCount: rawNewsletters.length,
-        isLoadingNewsletters,
-        errorNewsletters: errorNewsletters?.message,
-        totalCount,
-        hasNextPage,
-      });
-
-      // Only log if the state has actually changed
-      if (lastDebugStateRef.current !== currentState) {
-        lastDebugStateRef.current = currentState;
-        console.log('Newsletter Debug:', {
-          newsletterFilter: stableNewsletterFilter,
-          rawNewslettersCount: rawNewsletters.length,
-          isLoadingNewsletters,
-          errorNewsletters: errorNewsletters?.message,
-          totalCount,
-          hasNextPage,
-          user: user?.id,
-          isAuthenticated: !!user,
-          rawNewsletters: rawNewsletters.slice(0, 3).map(n => ({ id: n.id, title: n.title })), // Show first 3 newsletters
-        });
-      }
-    }
-  }, [stableNewsletterFilter, rawNewsletters.length, isLoadingNewsletters, errorNewsletters, totalCount, hasNextPage, user, rawNewsletters]);
-
-  // Additional debugging for newsletter data
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Newsletter Data Debug:', {
-        rawNewslettersLength: rawNewsletters.length,
-        rawNewslettersType: typeof rawNewsletters,
-        isArray: Array.isArray(rawNewsletters),
-        firstNewsletter: rawNewsletters[0],
-        allNewsletters: rawNewsletters.map(n => ({ id: n.id, title: n.title })),
-        isLoadingNewsletters,
-        errorNewsletters: errorNewsletters?.message,
-        totalCount,
-        hasNextPage,
-        user: user?.id,
-        isAuthenticated: !!user,
-      });
-    }
-  }, [rawNewsletters, isLoadingNewsletters, errorNewsletters, totalCount, hasNextPage, user]);
-
   // Reading queue
   const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
 
@@ -201,6 +152,22 @@ const Inbox: React.FC = memo(() => {
 
   // Loading states for bulk operations
   const bulkLoadingStates = useBulkLoadingStates();
+
+  // Get newsletter mutations from useNewsletters hook
+  const {
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  } = useNewsletters();
 
   // Helper function to preserve URL parameters after actions
   const preserveFilterParams = useCallback(() => {
@@ -263,16 +230,32 @@ const Inbox: React.FC = memo(() => {
   }, [filter, sourceFilter, timeRange, debouncedTagIds]);
 
   // Shared newsletter actions with our enhanced version
-  const newsletterActions = useSharedNewsletterActions({
-    showToasts: true,
-    optimisticUpdates: true,
-    enableErrorHandling: true,
-    enableLoadingStates: true,
-    onSuccess: useCallback(() => {
-      // Trigger any additional success handling
-    }, []),
-    onError: handleError,
-  });
+  const newsletterActions = useSharedNewsletterActions(
+    {
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      bulkMarkAsRead,
+      bulkMarkAsUnread,
+      bulkArchive,
+      bulkUnarchive,
+      bulkDeleteNewsletters,
+      updateNewsletterTags,
+    },
+    {
+      showToasts: true,
+      optimisticUpdates: true,
+      enableErrorHandling: true,
+      enableLoadingStates: true,
+      onSuccess: useCallback(() => {
+        // Trigger any additional success handling
+      }, []),
+      onError: handleError,
+    }
+  );
 
   // Selection state (local to component since it's UI-only)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

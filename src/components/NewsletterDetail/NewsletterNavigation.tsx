@@ -1,5 +1,6 @@
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
+import type { NewsletterMutations } from '@common/hooks/useSharedNewsletterActions';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
@@ -15,6 +16,7 @@ interface NewsletterNavigationProps {
   autoMarkAsRead?: boolean;
   isFromReadingQueue?: boolean;
   sourceId?: string;
+  mutations?: NewsletterMutations;
 }
 
 export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
@@ -26,6 +28,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
   autoMarkAsRead = true,
   isFromReadingQueue = false,
   sourceId,
+  mutations,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -94,10 +97,13 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     navigateToNext,
   } = useNewsletterNavigation(currentNewsletterId, navigationOptions);
 
-  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
-    showToasts: false, // Don't show toasts for auto-mark-as-read and auto-archive
-    optimisticUpdates: true,
-  });
+  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions(
+    mutations,
+    {
+      showToasts: false, // Don't show toasts for auto-mark-as-read and auto-archive
+      optimisticUpdates: true,
+    }
+  );
 
   // Auto-mark current newsletter as read when it loads (instantaneous)
   useEffect(() => {
@@ -183,6 +189,9 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         state: {
           from: currentPath + currentSearch,
           fromNavigation: true,
+          fromReadingQueue: isFromReadingQueue,
+          fromNewsletterSources: !!sourceId,
+          sourceId: sourceId,
           context: isFromReadingQueue
             ? 'reading_queue'
             : sourceId
@@ -262,6 +271,9 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         state: {
           from: currentPath + currentSearch,
           fromNavigation: true,
+          fromReadingQueue: isFromReadingQueue,
+          fromNewsletterSources: !!sourceId,
+          sourceId: sourceId,
           context: isFromReadingQueue
             ? 'reading_queue'
             : sourceId

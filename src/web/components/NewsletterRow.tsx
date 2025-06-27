@@ -1,9 +1,8 @@
 import { NewsletterWithRelations, Tag } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
-import { ExternalLink, Loader2, Tag as TagIcon } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import React, { useCallback } from "react";
 import NewsletterActions from "./NewsletterActions";
-import TagSelector from "./TagSelector";
 
 interface NewsletterRowProps {
   newsletter: NewsletterWithRelations;
@@ -172,7 +171,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
       )}
 
       <div className={`p-4 ${showCheckbox ? "pl-12" : ""}`}>
-        {/* Header Row - Source and Date */}
+        {/* Header Row - Source only (date moved to bottom) */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {showSource && newsletter.source && (
@@ -197,13 +196,22 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
             />
           </div>
 
-          {showDate && (
-            <time
-              dateTime={newsletter.received_at}
-              className="text-xs text-gray-500 flex-shrink-0"
-            >
-              {formatDate(newsletter.received_at)}
-            </time>
+          {/* Action buttons moved to upper right */}
+          {showActions && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <NewsletterActions
+                newsletter={newsletter}
+                onToggleLike={onToggleLike}
+                onToggleArchive={onToggleArchive}
+                onToggleRead={onToggleRead}
+                onTrash={onTrash}
+                onToggleQueue={onToggleQueue}
+                loadingStates={loadingStates}
+                _errorTogglingLike={errorTogglingLike}
+                isInReadingQueue={isInReadingQueue}
+                compact={true}
+              />
+            </div>
           )}
         </div>
 
@@ -225,54 +233,6 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
           )}
         </div>
 
-        {/* Tags Row */}
-        {showTags && hasTags && (
-          <div className="hidden sm:flex flex-wrap items-center gap-1 mb-3">
-            {newsletter.tags?.slice(0, 3).map((tag: Tag) => (
-              <button
-                key={tag.id}
-                type="button"
-                className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                onClick={e => { e.stopPropagation(); if (onTagClick) { onTagClick(tag, e); } }}
-                tabIndex={0}
-                aria-label={`Filter by tag ${tag.name}`}
-              >
-                <TagIcon className="w-3 h-3 mr-1" />
-                {tag.name}
-              </button>
-            ))}
-            {newsletter.tags && newsletter.tags.length > 3 && (
-              <span className="text-xs text-gray-500">
-                +{newsletter.tags.length - 3} more
-              </span>
-            )}
-            {/* Tag visibility toggle button */}
-            <button
-              title="Edit tags"
-              className="ml-2 p-1 rounded hover:bg-blue-100 focus:outline-none"
-              onClick={e => { e.stopPropagation(); if (onToggleTagVisibility) { onToggleTagVisibility(newsletter.id, e); } }}
-              aria-label="Edit tags"
-            >
-              <TagIcon className="w-4 h-4" />
-            </button>
-            <span className="ml-2 text-xs text-gray-500">{newsletter.estimated_read_time} min read</span>
-          </div>
-        )}
-
-        {/* Tag Selector - Only on mobile */}
-        {showTags && (
-          <div className="sm:hidden flex flex-shrink-0 mb-2" onClick={e => e.stopPropagation()}>
-            <TagSelector
-              selectedTags={newsletter.tags || []}
-              onTagsChange={() => { }}
-              onTagClick={onTagClick}
-              onTagDeleted={() => { }}
-              className=""
-              disabled={false}
-            />
-          </div>
-        )}
-
         {/* Tag update error and loading spinner */}
         {visibleTags.has(newsletter.id) && (
           <>
@@ -293,41 +253,58 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
           </>
         )}
 
-        {/* Actions Row */}
-        {showActions && (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <NewsletterActions
-                newsletter={newsletter}
-                onToggleLike={onToggleLike}
-                onToggleArchive={onToggleArchive}
-                onToggleRead={onToggleRead}
-                onTrash={onTrash}
-                onToggleQueue={onToggleQueue}
-                loadingStates={loadingStates}
-                _errorTogglingLike={errorTogglingLike}
-                isInReadingQueue={isInReadingQueue}
-                compact={true}
-              />
+        {/* Bottom Row - Tags (left) and Date (right) */}
+        <div className="flex items-center justify-between mt-2">
+          {/* Tags as pills on the left */}
+          {showTags && hasTags && (
+            <div className="flex flex-wrap gap-1">
+              {newsletter.tags?.map((tag: Tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer"
+                  style={{
+                    backgroundColor: `${tag.color}20`,
+                    color: tag.color,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onTagClick) {
+                      onTagClick(tag, e);
+                    }
+                  }}
+                >
+                  {tag.name}
+                </span>
+              ))}
             </div>
+          )}
 
-            {/* External Link */}
-            {newsletter.content && (
-              <a
-                href={newsletter.content}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`
-                  p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50
-                  transition-all duration-200 flex-shrink-0
-                  ${compact ? "p-1" : "p-1.5"}
-                `}
-                onClick={(e) => e.stopPropagation()}
-                aria-label="Open newsletter in new tab"
-              >
-                <ExternalLink className={compact ? "w-3 h-3" : "w-4 h-4"} />
-              </a>
-            )}
+          {/* Date and read time on the right */}
+          {showDate && (
+            <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
+              {new Date(newsletter.received_at).toLocaleDateString()} ·{" "}
+              {newsletter.estimated_read_time} min read
+            </span>
+          )}
+        </div>
+
+        {/* External Link - positioned below if needed */}
+        {newsletter.content && (
+          <div className="flex justify-end mt-2">
+            <a
+              href={newsletter.content}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`
+                p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50
+                transition-all duration-200 flex-shrink-0
+                ${compact ? "p-1" : "p-1.5"}
+              `}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Open newsletter in new tab"
+            >
+              <ExternalLink className={compact ? "w-3 h-3" : "w-4 h-4"} />
+            </a>
           </div>
         )}
 

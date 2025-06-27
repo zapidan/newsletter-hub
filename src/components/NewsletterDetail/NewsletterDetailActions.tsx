@@ -1,4 +1,5 @@
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
+import type { NewsletterMutations } from '@common/hooks/useSharedNewsletterActions';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import type { NewsletterWithRelations } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
@@ -10,6 +11,7 @@ interface NewsletterDetailActionsProps {
   newsletter: NewsletterWithRelations;
   onNewsletterUpdate: (updatedNewsletter: NewsletterWithRelations) => void;
   isFromReadingQueue?: boolean;
+  mutations?: NewsletterMutations;
 }
 
 // Action Button Component
@@ -55,6 +57,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   newsletter,
   onNewsletterUpdate,
   isFromReadingQueue = false,
+  mutations,
 }) => {
   const log = useLogger();
   const { isInQueue: checkIsInQueue } = useReadingQueue();
@@ -62,11 +65,14 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     handleMarkAsRead, handleMarkAsUnread, handleToggleLike, handleToggleArchive,
     handleDeleteNewsletter, handleToggleInQueue, isMarkingAsRead, isMarkingAsUnread,
     isDeletingNewsletter,
-  } = useSharedNewsletterActions({
-    showToasts: false, optimisticUpdates: true,
-    onSuccess: (updatedNl) => { if (updatedNl) onNewsletterUpdate(updatedNl); },
-    onError: (error) => log.error('Newsletter action failed', { action: 'newsletter_action', metadata: { newsletterId: newsletter.id } }, error),
-  });
+  } = useSharedNewsletterActions(
+    mutations,
+    {
+      showToasts: false, optimisticUpdates: true,
+      onSuccess: (updatedNl) => { if (updatedNl) onNewsletterUpdate(updatedNl); },
+      onError: (error) => log.error('Newsletter action failed', { action: 'newsletter_action', metadata: { newsletterId: newsletter.id } }, error),
+    }
+  );
 
   const [localNewsletter, setLocalNewsletter] = useState<NewsletterWithRelations>(newsletter);
   const [isLiking, setIsLiking] = useState(false);

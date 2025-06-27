@@ -1,10 +1,10 @@
+import { useLogger } from '@common/utils/logger/useLogger';
 import { useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import type { NewsletterFilter, NewsletterWithRelations } from '../types';
 import { useInfiniteNewsletters } from './infiniteScroll';
 import { useInboxFilters } from './useInboxFilters';
 import { useReadingQueue } from './useReadingQueue';
-import { useLogger } from '@common/utils/logger/useLogger';
-import type { NewsletterWithRelations, NewsletterFilter } from '../types';
 
 export interface NewsletterNavigationState {
   currentNewsletter: NewsletterWithRelations | null;
@@ -37,7 +37,7 @@ export interface UseNewsletterNavigationOptions {
 
 export interface UseNewsletterNavigationReturn
   extends NewsletterNavigationState,
-    NewsletterNavigationActions {}
+  NewsletterNavigationActions { }
 
 /**
  * Custom hook for newsletter navigation functionality
@@ -51,7 +51,7 @@ export const useNewsletterNavigation = (
   const log = useLogger('useNewsletterNavigation');
   const location = useLocation();
   const {
-    enabled = true,
+    enabled = false,
     preloadAdjacent = true,
     debug = false,
     overrideFilter,
@@ -146,7 +146,10 @@ export const useNewsletterNavigation = (
     fetchNextPage,
     isFetchingNextPage,
   } = useInfiniteNewsletters(contextualFilter, {
-    enabled: enabled && !!currentNewsletterId && !isUsingReadingQueue,
+    enabled: enabled && !!currentNewsletterId && !isUsingReadingQueue &&
+      // Only enable if we're actually on a detail page and need navigation
+      (window.location.pathname.includes('/newsletters/') &&
+        window.location.pathname.split('/').length > 2),
     pageSize: 50, // Larger page size for better navigation experience
     debug,
   });

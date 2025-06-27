@@ -50,33 +50,24 @@ export const useInfiniteNewsletters = (
   // Track current page for debugging/analytics
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Track if we're currently fetching to prevent multiple simultaneous requests
+  // Track if component is mounted to prevent queries after unmount
+  const isMounted = useRef(true);
+
+  // Track if currently fetching to prevent multiple simultaneous requests
   const isFetchingRef = useRef(false);
-  const lastQueryKeyRef = useRef<string>('');
 
-  // Generate query key with filters - use JSON.stringify for stable comparison
-  const queryKey = useMemo(() => {
-    const key = queryKeyFactory.newsletters.infinite(filters);
-    const keyString = JSON.stringify(key);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
-    if (debug) {
-      log.debug('Query key generated', {
-        action: 'query_key_generated',
-        metadata: {
-          key,
-          keyString,
-          filters: JSON.stringify(filters),
-          hasChanged: lastQueryKeyRef.current !== keyString,
-        },
-      });
-    }
+  // Determine if query should run
+  const shouldRunQuery = enabled && !!user;
 
-    // Track if the query key has changed
-    const _hasChanged = lastQueryKeyRef.current !== keyString;
-    lastQueryKeyRef.current = keyString;
-
-    return key;
-  }, [filters, debug, log]);
+  // Generate query key with filters
+  const queryKey = useMemo(() => queryKeyFactory.newsletters.infinite(filters), [filters]);
 
   // Build API query parameters from filters - memoize to prevent unnecessary re-renders
   const baseQueryParams = useMemo(() => {
@@ -198,32 +189,30 @@ export const useInfiniteNewsletters = (
           isFetchingRef.current = false;
         }
       },
-      enabled: enabled && !!user,
+      enabled: shouldRunQuery,
       getNextPageParam: (lastPage, allPages) => {
+        // Check if there's more data available
+        if (!lastPage.hasMore) {
+          if (debug) {
+            log.debug('No more pages available - hasMore is false', {
+              action: 'no_more_pages',
+              metadata: {
+                totalCount: lastPage.count,
+                currentPageDataLength: lastPage.data.length,
+                hasMore: lastPage.hasMore,
+                totalPages: allPages.length,
+                totalFetched: allPages.reduce((sum, page) => sum + page.data.length, 0)
+              },
+            });
+          }
+          return undefined;
+        }
+
         // Calculate next offset based on current data
         const totalFetched = allPages.reduce((sum, page) => sum + page.data.length, 0);
 
         // Return next offset if there's more data, otherwise undefined
-        const shouldFetchMore = lastPage.hasMore && totalFetched < lastPage.count;
-        const nextOffset = shouldFetchMore ? totalFetched : undefined;
-
-        if (debug) {
-          log.debug('Next page param calculated', {
-            action: 'next_page_param_calculated',
-            metadata: {
-              totalFetched,
-              totalCount: lastPage.count,
-              hasMore: lastPage.hasMore,
-              shouldFetchMore,
-              nextOffset,
-              lastPageKeys: Object.keys(lastPage),
-              lastPageDataLength: lastPage.data?.length || 0,
-              allPagesLength: allPages.length,
-            },
-          });
-        }
-
-        return nextOffset;
+        return lastPage.hasMore && totalFetched < lastPage.count ? totalFetched : undefined;
       },
       initialPageParam: 0,
       staleTime: 60000, // Increase stale time to 1 minute to prevent constant refetches
@@ -293,6 +282,26 @@ export const useInfiniteNewsletters = (
   // Calculate metadata
   const totalCount = data?.pages[0]?.count || 0;
   const pageCount = Math.ceil(totalCount / pageSize);
+
+  // Debug logging for hasNextPage calculation
+  useEffect(() => {
+    if (debug) {
+      log.debug('hasNextPage calculation', {
+        action: 'has_next_page_calculation',
+        metadata: {
+          hasNextPage,
+          totalCount,
+          currentNewsletters: newsletters.length,
+          pageCount,
+          currentPage,
+          isFetchingNextPage,
+          pages: data?.pages?.length || 0,
+          lastPageHasMore: data?.pages?.[data.pages.length - 1]?.hasMore,
+          lastPageDataLength: data?.pages?.[data.pages.length - 1]?.data?.length || 0,
+        },
+      });
+    }
+  }, [hasNextPage, totalCount, newsletters.length, pageCount, currentPage, isFetchingNextPage, data?.pages, debug, log]);
 
   // Update current page when data changes
   useMemo(() => {

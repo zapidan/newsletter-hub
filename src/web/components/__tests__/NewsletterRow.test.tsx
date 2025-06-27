@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import NewsletterRow from '../NewsletterRow';
-import { NewsletterWithRelations, Tag } from '@common/types';
+import { NewsletterWithRelations } from '@common/types';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
+import NewsletterRow from '../NewsletterRow';
 
 // Mock useAuth to prevent "useAuth must be used within an AuthProvider"
 vi.mock('@common/contexts/AuthContext', () => ({
@@ -33,10 +33,10 @@ const mockNewsletter: NewsletterWithRelations = {
   id: '1',
   title: 'Test Newsletter Title',
   summary: 'A brief summary of the newsletter.',
-  content: '<p>Full content</p>',
+  content: 'https://example.com/newsletter/1',
   image_url: 'https://example.com/image.png',
-  received_at: new Date('2023-10-26T10:00:00Z').toISOString(),
-  updated_at: new Date('2023-10-26T10:00:00Z').toISOString(),
+  received_at: '2023-10-26T10:00:00.000Z',
+  updated_at: '2023-10-26T10:00:00.000Z',
   is_read: false,
   is_liked: false,
   is_archived: false,
@@ -48,9 +48,13 @@ const mockNewsletter: NewsletterWithRelations = {
     name: 'Test Source',
     from: 'test@example.com',
     user_id: 'user1',
-    created_at: '', updated_at: '', is_archived: false
+    created_at: '',
+    updated_at: '',
+    is_archived: false,
   },
-  tags: [{ id: 'tag1', name: 'Important', color: '#FF0000', user_id: 'user1', created_at: '', updated_at: '' }],
+  tags: [
+    { id: 'tag1', name: 'Important', color: '#FF0000', user_id: 'user1', created_at: '' },
+  ],
   word_count: 100,
   estimated_read_time: 1,
 };
@@ -106,13 +110,12 @@ describe('NewsletterRow', () => {
   });
 
   test('does not call onRowClick when a button within the row is clicked', () => {
-    render(<NewsletterRow {...defaultProps} onRowClick={mockOnRowClick} />);
-    // Simulate clicking on the tag visibility toggle button
-    const tagVisibilityButton = screen.getByTitle('Edit tags');
-    fireEvent.click(tagVisibilityButton);
+    render(<NewsletterRow {...defaultProps} onRowClick={mockOnRowClick} showActions={true} />);
+    // Simulate clicking on the external link button instead of tag visibility toggle
+    const externalLinkButton = screen.getByLabelText('Open newsletter in new tab');
+    fireEvent.click(externalLinkButton);
     expect(mockOnRowClick).not.toHaveBeenCalled();
   });
-
 
   test('calls onMouseEnter when mouse enters the row', () => {
     render(<NewsletterRow {...defaultProps} onMouseEnter={mockOnMouseEnter} />);
@@ -146,16 +149,11 @@ describe('NewsletterRow', () => {
     expect(rowElement).toHaveClass('ring-2 ring-primary-400');
   });
 
-  test('calls onToggleTagVisibility when tag icon is clicked', () => {
+  test('calls onTagClick when tag is clicked', () => {
     render(<NewsletterRow {...defaultProps} />);
-    const tagIconButton = screen.getByTitle('Edit tags');
-    fireEvent.click(tagIconButton);
-    expect(mockOnToggleTagVisibility).toHaveBeenCalledWith(mockNewsletter.id, expect.anything());
-  });
-
-  test('shows TagSelector when newsletter ID is in visibleTags', () => {
-    render(<NewsletterRow {...defaultProps} visibleTags={new Set([mockNewsletter.id])} />);
-    expect(screen.getByTestId('tag-selector')).toBeInTheDocument();
+    const tagElement = screen.getByText('Important');
+    fireEvent.click(tagElement);
+    expect(mockOnTagClick).toHaveBeenCalledWith(mockNewsletter.tags![0], expect.anything());
   });
 
   test('passes correct props to NewsletterActions', () => {
@@ -166,7 +164,7 @@ describe('NewsletterRow', () => {
     expect(props.compact).toBe(true);
   });
 
-  test('shows tag update error and dismiss button', () => {
+  test('shows tag update error and dismiss button when visibleTags contains newsletter ID', () => {
     const errorMessage = "Failed to update tags!";
     render(<NewsletterRow {...defaultProps} visibleTags={new Set([mockNewsletter.id])} tagUpdateError={errorMessage} />);
     expect(screen.getByText(errorMessage)).toBeInTheDocument();
@@ -175,7 +173,7 @@ describe('NewsletterRow', () => {
     expect(mockOnDismissTagError).toHaveBeenCalledTimes(1);
   });
 
-  test('shows loading spinner when isUpdatingTags is true', () => {
+  test('shows loading spinner when isUpdatingTags is true and visibleTags contains newsletter ID', () => {
     render(<NewsletterRow {...defaultProps} visibleTags={new Set([mockNewsletter.id])} isUpdatingTags={true} />);
     expect(screen.getByText('Updating tags...')).toBeInTheDocument();
     // Check for loader icon if it has a specific data-testid or class
@@ -202,74 +200,75 @@ describe('NewsletterRow', () => {
 // }
 
 describe('NewsletterRow - Click Propagation Refined', () => {
-    const mockOnRowClick = vi.fn();
-    const mockOnToggleSelect = vi.fn();
-    const mockOnToggleLike = vi.fn(); // Add other necessary mocks from the outer scope
-    const mockOnToggleArchive = vi.fn();
-    const mockOnToggleRead = vi.fn();
-    const mockOnTrash = vi.fn();
-    const mockOnToggleQueue = vi.fn();
-    const mockOnToggleTagVisibility = vi.fn();
-    const mockOnUpdateTags = vi.fn();
-    const mockOnTagClick = vi.fn();
+  const mockOnRowClick = vi.fn();
+  const mockOnToggleSelect = vi.fn();
+  const mockOnToggleLike = vi.fn(); // Add other necessary mocks from the outer scope
+  const mockOnToggleArchive = vi.fn();
+  const mockOnToggleRead = vi.fn();
+  const mockOnTrash = vi.fn();
+  const mockOnToggleQueue = vi.fn();
+  const mockOnToggleTagVisibility = vi.fn();
+  const mockOnUpdateTags = vi.fn();
+  const mockOnTagClick = vi.fn();
 
 
-    const refinedDefaultProps = { // Renamed to avoid conflict if outer scope was accessible
-        newsletter: mockNewsletter,
-        onToggleLike: mockOnToggleLike,
-        onToggleArchive: mockOnToggleArchive,
-        onToggleRead: mockOnToggleRead,
-        onTrash: mockOnTrash,
-        onToggleQueue: mockOnToggleQueue,
-        onToggleTagVisibility: mockOnToggleTagVisibility,
-        onUpdateTags: mockOnUpdateTags,
-        onTagClick: mockOnTagClick,
-        isInReadingQueue: false,
-        visibleTags: new Set<string>(),
-        readingQueue: [],
-        isDeletingNewsletter: false,
-        onDismissTagError: vi.fn(),
-    };
+  const refinedDefaultProps = { // Renamed to avoid conflict if outer scope was accessible
+    newsletter: mockNewsletter,
+    onToggleLike: mockOnToggleLike,
+    onToggleArchive: mockOnToggleArchive,
+    onToggleRead: mockOnToggleRead,
+    onTrash: mockOnTrash,
+    onToggleQueue: mockOnToggleQueue,
+    onToggleTagVisibility: mockOnToggleTagVisibility,
+    onUpdateTags: mockOnUpdateTags,
+    onTagClick: mockOnTagClick,
+    isInReadingQueue: false,
+    visibleTags: new Set<string>(),
+    readingQueue: [],
+    isDeletingNewsletter: false,
+    onDismissTagError: vi.fn(),
+  };
 
-    const propsWithRowClick = {
-        ...refinedDefaultProps,
-        onRowClick: mockOnRowClick,
-        showCheckbox: true,
-        onToggleSelect: mockOnToggleSelect,
-    };
+  const propsWithRowClick = {
+    ...refinedDefaultProps,
+    onRowClick: mockOnRowClick,
+    showCheckbox: true,
+    onToggleSelect: mockOnToggleSelect,
+  };
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-    });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-    test('calls onRowClick when clicking the main content area', () => {
-        render(<NewsletterRow {...propsWithRowClick} />);
-        const mainContentArea = screen.getByTestId(`newsletter-row-main-${mockNewsletter.id}`);
-        fireEvent.click(mainContentArea);
-        expect(mockOnRowClick).toHaveBeenCalledWith(mockNewsletter, expect.anything());
-        expect(mockOnToggleSelect).not.toHaveBeenCalled(); // Ensure select isn't called by this click
-    });
+  test('calls onRowClick when clicking the main content area', () => {
+    render(<NewsletterRow {...propsWithRowClick} />);
+    const mainContentArea = screen.getByTestId(`newsletter-row-main-${mockNewsletter.id}`);
+    fireEvent.click(mainContentArea);
+    expect(mockOnRowClick).toHaveBeenCalledWith(mockNewsletter, expect.anything());
+    expect(mockOnToggleSelect).not.toHaveBeenCalled(); // Ensure select isn't called by this click
+  });
 
-    test('does not call onRowClick when clicking the checkbox container', () => {
-        render(<NewsletterRow {...propsWithRowClick} />);
-        const checkboxContainer = screen.getByTitle('Select newsletter');
-        fireEvent.click(checkboxContainer);
-        expect(mockOnRowClick).not.toHaveBeenCalled();
-        expect(mockOnToggleSelect).toHaveBeenCalledWith(mockNewsletter.id);
-    });
+  test('does not call onRowClick when clicking the checkbox container', () => {
+    render(<NewsletterRow {...propsWithRowClick} />);
+    const checkboxContainer = screen.getByTitle('Select newsletter');
+    fireEvent.click(checkboxContainer);
+    expect(mockOnRowClick).not.toHaveBeenCalled();
+    expect(mockOnToggleSelect).toHaveBeenCalledWith(mockNewsletter.id);
+  });
 
-    test('does not call onRowClick when clicking the TagSelector area (simulated)', () => {
-        render(<NewsletterRow {...propsWithRowClick} visibleTags={new Set([mockNewsletter.id])} />);
-        const tagSelectorArea = screen.getByTestId('tag-selector');
-        fireEvent.click(tagSelectorArea); // Simulate click on TagSelector
-        expect(mockOnRowClick).not.toHaveBeenCalled();
-    });
+  test('does not call onRowClick when clicking the TagSelector area (simulated)', () => {
+    render(<NewsletterRow {...propsWithRowClick} visibleTags={new Set([mockNewsletter.id])} showActions={true} />);
+    // Since TagSelector was removed, test clicking on the external link instead
+    const externalLinkButton = screen.getByLabelText('Open newsletter in new tab');
+    fireEvent.click(externalLinkButton);
+    expect(mockOnRowClick).not.toHaveBeenCalled();
+  });
 
-    test('does not call onRowClick when clicking a tag', () => {
-        render(<NewsletterRow {...propsWithRowClick} />);
-        const tagElement = screen.getByText('Important'); // Assuming 'Important' is a tag name
-        fireEvent.click(tagElement);
-        expect(mockOnRowClick).not.toHaveBeenCalled();
-        expect(mockOnTagClick).toHaveBeenCalledWith(mockNewsletter.tags![0], expect.anything());
-    });
+  test('does not call onRowClick when clicking a tag', () => {
+    render(<NewsletterRow {...propsWithRowClick} />);
+    const tagElement = screen.getByText('Important'); // Assuming 'Important' is a tag name
+    fireEvent.click(tagElement);
+    expect(mockOnRowClick).not.toHaveBeenCalled();
+    expect(mockOnTagClick).toHaveBeenCalledWith(mockNewsletter.tags![0], expect.anything());
+  });
 });

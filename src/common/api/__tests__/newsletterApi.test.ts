@@ -214,12 +214,11 @@ describe('newsletterApi', () => {
       vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: nls(10), count: 20, error: null }));
       res = await newsletterApi.getAll({ limit: 10, offset: 10 }); // offset 10, limit 10 (items 11-20 of 20)
       expect(res.data.length).toBe(10);
-      // SUT current hasMore logic: transformedData.length === limit. Here 10 === 10 is true.
-      expect(res.hasMore).toBe(true);
+      // Updated hasMore logic: (offset + limit) < totalCount. Here (10 + 10) < 20 is false.
+      expect(res.hasMore).toBe(false);
       expect(res.page).toBe(2);
-      // SUT nextPage logic: transformedData.length === limit ? page + 1 : null. Here 10 === 10, so nextPage is 2+1=3.
-      // A more accurate nextPage would be null here. This indicates a potential refinement in SUT if precise end-of-list is needed from nextPage.
-      expect(res.nextPage).toBe(3);
+      // Updated nextPage logic: hasMore ? page + 1 : null. Since hasMore is false, nextPage should be null.
+      expect(res.nextPage).toBe(null);
       expect(res.prevPage).toBe(1);
     });
   });

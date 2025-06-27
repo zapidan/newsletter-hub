@@ -3,13 +3,16 @@ import { useAuth } from '@common/contexts/AuthContext';
 import { useNewsletterDetail } from '@common/hooks/useNewsletterDetail';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useTags } from '@common/hooks/useTags';
+import { newsletterService } from '@common/services';
 import type { NewsletterWithRelations, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
+import { useMutation } from '@tanstack/react-query';
 import TagSelector from '@web/components/TagSelector';
 import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
+import NewsletterNavigation from '../../components/NewsletterDetail/NewsletterNavigation';
 
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
@@ -114,15 +117,111 @@ const NewsletterDetail = memo(() => {
       });
     }
   }, [navigate, location.state, id, log]);
-  const { updateNewsletterTags } = useTags();
-  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
-    showToasts: false,
-    optimisticUpdates: true,
-    onSuccess: () => {
-      // Don't refetch here - let React Query handle cache updates
-      // This prevents cascading refetches
-    },
+
+  const { updateNewsletterTags: updateTagsFromUseTags } = useTags();
+
+  // Create mutations directly using useMutation
+  const markAsReadMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.markAsRead(id),
   });
+
+  const markAsUnreadMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.markAsUnread(id),
+  });
+
+  const toggleLikeMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.toggleLike(id),
+  });
+
+  const toggleArchiveMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.toggleArchive(id),
+  });
+
+  const deleteNewsletterMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.deleteNewsletter(id),
+  });
+
+  const addToQueueMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.addToReadingQueue(id),
+  });
+
+  const removeFromQueueMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.removeFromReadingQueue(id),
+  });
+
+  const updateTagsMutation = useMutation({
+    mutationFn: ({ id, tagIds }: { id: string; tagIds: string[] }) =>
+      newsletterService.updateTags(id, tagIds),
+  });
+
+  // Create wrapper functions to convert NewsletterOperationResult to boolean
+  const markAsRead = useCallback(async (id: string) => {
+    const result = await markAsReadMutation.mutateAsync(id);
+    return result.success;
+  }, [markAsReadMutation]);
+
+  const markAsUnread = useCallback(async (id: string) => {
+    const result = await markAsUnreadMutation.mutateAsync(id);
+    return result.success;
+  }, [markAsUnreadMutation]);
+
+  const toggleLike = useCallback(async (id: string) => {
+    const result = await toggleLikeMutation.mutateAsync(id);
+    return result.success;
+  }, [toggleLikeMutation]);
+
+  const toggleArchive = useCallback(async (id: string) => {
+    const result = await toggleArchiveMutation.mutateAsync(id);
+    return result.success;
+  }, [toggleArchiveMutation]);
+
+  const deleteNewsletter = useCallback(async (id: string) => {
+    const result = await deleteNewsletterMutation.mutateAsync(id);
+    return result.success;
+  }, [deleteNewsletterMutation]);
+
+  // Create a toggleInQueue function that combines addToQueue and removeFromQueue
+  const toggleInQueue = useCallback(async (id: string) => {
+    // This is a simplified version - in practice you'd need to check if the newsletter is in queue
+    // For now, we'll just use addToQueue as a fallback
+    const result = await addToQueueMutation.mutateAsync(id);
+    return result.success;
+  }, [addToQueueMutation]);
+
+  // Create a wrapper for updateNewsletterTags to match the expected signature for useSharedNewsletterActions
+  const updateNewsletterTagsForActions = useCallback(async (id: string, tagIds: string[]) => {
+    await updateTagsMutation.mutateAsync({ id, tagIds });
+  }, [updateTagsMutation]);
+
+  // Create a wrapper for updateNewsletterTags that returns boolean for TagSelector
+  const updateNewsletterTagsForSelector = useCallback(async (id: string, tagIds: string[]) => {
+    try {
+      await updateTagsMutation.mutateAsync({ id, tagIds });
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }, [updateTagsMutation]);
+
+  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions(
+    {
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      updateNewsletterTags: updateNewsletterTagsForActions,
+    },
+    {
+      showToasts: false,
+      optimisticUpdates: true,
+      onSuccess: () => {
+        // Don't refetch here - let React Query handle cache updates
+        // This prevents cascading refetches
+      },
+    }
+  );
 
   const { user } = useAuth();
 
@@ -141,6 +240,19 @@ const NewsletterDetail = memo(() => {
     prefetchTags: true,
     prefetchSource: true,
   });
+
+  // Get source ID from location state or newsletter data
+  const sourceId = useMemo(() => {
+    // First try to get from location state (most reliable)
+    if (location.state?.sourceId) {
+      return location.state.sourceId;
+    }
+    // Fallback to newsletter source ID if coming from newsletter sources
+    if (isFromNewsletterSources && newsletter?.source?.id) {
+      return newsletter.source.id;
+    }
+    return undefined;
+  }, [location.state?.sourceId, isFromNewsletterSources, newsletter?.source?.id]);
 
   const [hasAutoMarkedAsRead, setHasAutoMarkedAsRead] = useState(false);
   const [hasAutoArchived, setHasAutoArchived] = useState(false);
@@ -334,7 +446,7 @@ const NewsletterDetail = memo(() => {
                     onTagsChange={async (newTags: Tag[]) => {
                       if (!id) return;
                       try {
-                        const ok = await updateNewsletterTags(id, newTags);
+                        const ok = await updateNewsletterTagsForSelector(id, newTags.map(t => t.id));
                         if (ok) {
                           await refetch();
                           setTagSelectorKey((k) => k + 1);
@@ -353,7 +465,7 @@ const NewsletterDetail = memo(() => {
                     onTagDeleted={async () => {
                       if (!id) return;
                       try {
-                        const ok = await updateNewsletterTags(id, []);
+                        const ok = await updateNewsletterTagsForSelector(id, []);
                         if (ok) {
                           await refetch();
                           setTagSelectorKey((k) => k + 1);
@@ -379,11 +491,44 @@ const NewsletterDetail = memo(() => {
                       newsletter={newsletter}
                       onNewsletterUpdate={handleNewsletterUpdate}
                       isFromReadingQueue={isFromReadingQueue}
+                      mutations={{
+                        markAsRead,
+                        markAsUnread,
+                        toggleLike,
+                        toggleArchive,
+                        deleteNewsletter,
+                        toggleInQueue,
+                        updateNewsletterTags: updateNewsletterTagsForActions,
+                      }}
                     />
                   )}
                 </div>
               </div>
             </div>
+
+            {/* Newsletter Navigation */}
+            {newsletter && (
+              <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+                <NewsletterNavigation
+                  currentNewsletterId={newsletter.id}
+                  isFromReadingQueue={isFromReadingQueue}
+                  sourceId={sourceId}
+                  autoMarkAsRead={true}
+                  showLabels={true}
+                  showCounter={true}
+                  className=""
+                  mutations={{
+                    markAsRead,
+                    markAsUnread,
+                    toggleLike,
+                    toggleArchive,
+                    deleteNewsletter,
+                    toggleInQueue,
+                    updateNewsletterTags: updateNewsletterTagsForActions,
+                  }}
+                />
+              </div>
+            )}
 
             {/* Newsletter Content */}
             <div className="prose max-w-none mb-6">
