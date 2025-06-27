@@ -354,7 +354,17 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     // Remove tagIds from the filter
     const { tagIds: _tagIds, ...filterWithoutTags } = newsletterFilter;
     return filterWithoutTags;
-  }, [newsletterFilter]);
+  }, [
+    newsletterFilter.isRead,
+    newsletterFilter.isArchived,
+    newsletterFilter.isLiked,
+    newsletterFilter.sourceIds,
+    newsletterFilter.dateFrom,
+    newsletterFilter.dateTo,
+    newsletterFilter.orderBy,
+    newsletterFilter.ascending,
+    newsletterFilter.tagIds
+  ]);
 
   const state: InboxFiltersState = {
     filter,

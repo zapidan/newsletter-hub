@@ -128,15 +128,47 @@ vi.mock('@common/hooks/useLoadingStates', () => ({
 const mockNewsletter = {
   id: 'nl1',
   title: 'Test Newsletter',
+  content: 'Test content',
+  summary: 'Test summary',
+  image_url: '',
+  received_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
   is_read: false,
   is_liked: false,
   is_archived: false,
+  user_id: 'user-123',
+  newsletter_source_id: 'source-1',
+  source: {
+    id: 'source-1',
+    name: 'Test Source',
+    from: 'test@example.com',
+    user_id: 'user-123',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
   tags: [],
+  word_count: 100,
+  estimated_read_time: 1,
+};
+
+const mockMutations = {
+  markAsRead: mockMarkAsRead,
+  markAsUnread: mockMarkAsUnread,
+  toggleLike: mockToggleLike,
+  toggleArchive: mockToggleArchive,
+  deleteNewsletter: mockDeleteNewsletter,
+  toggleInQueue: vi.fn(),
+  updateNewsletterTags: mockUpdateNewsletterTags,
+  bulkMarkAsRead: vi.fn(),
+  bulkMarkAsUnread: vi.fn(),
+  bulkArchive: vi.fn(),
+  bulkUnarchive: vi.fn(),
+  bulkDeleteNewsletters: vi.fn(),
 };
 
 describe('useSharedNewsletterActions', () => {
-  const setupHook = (options = {}) => {
-    return renderHook(() => useSharedNewsletterActions(options));
+  const setupHook = (mutations = mockMutations, options = {}) => {
+    return renderHook(() => useSharedNewsletterActions(mutations, options));
   };
 
   beforeEach(() => {
@@ -248,7 +280,7 @@ describe('useSharedNewsletterActions', () => {
 
     // Setup the initial hook with showToasts: true but don't render yet
     const { result } = renderHook(() =>
-      useSharedNewsletterActions({ showToasts: true })
+      useSharedNewsletterActions(mockMutations, { showToasts: true })
     );
 
     // Create new handlers with showToasts: false

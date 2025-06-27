@@ -3,13 +3,16 @@ import { useAuth } from '@common/contexts/AuthContext';
 import { useNewsletterDetail } from '@common/hooks/useNewsletterDetail';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useTags } from '@common/hooks/useTags';
+import { newsletterService } from '@common/services';
 import type { NewsletterWithRelations, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
+import { useMutation } from '@tanstack/react-query';
 import TagSelector from '@web/components/TagSelector';
 import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
+import NewsletterNavigation from '../../components/NewsletterDetail/NewsletterNavigation';
 
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
@@ -17,6 +20,7 @@ const NewsletterDetail = memo(() => {
   const log = useLogger();
   const navigate = useNavigate();
   const location = useLocation();
+
   // Check if we came from the reading queue using multiple indicators
   const isFromReadingQueue = useMemo(() => {
     return (
@@ -27,30 +31,14 @@ const NewsletterDetail = memo(() => {
     );
   }, [location.state]);
 
-  // Check if we came from newsletter sources page
-  const isFromNewsletterSources = useMemo(() => {
-    return (
-      location.state?.fromNewsletterSources === true ||
-      location.state?.from === '/newsletters' ||
-      (typeof location.state?.from === 'string' &&
-        location.state.from.includes('/newsletters') &&
-        !location.state.from.includes('reading-queue')) ||
-      (typeof document.referrer === 'string' &&
-        document.referrer.includes('/newsletters') &&
-        !document.referrer.includes('reading-queue'))
-    );
-  }, [location.state]);
-
   // Helper function to get the correct back button text
   const getBackButtonText = useCallback(() => {
     if (isFromReadingQueue) {
       return 'Back to Reading Queue';
-    } else if (isFromNewsletterSources) {
-      return 'Back to Newsletter Sources';
     } else {
       return 'Back to Inbox';
     }
-  }, [isFromReadingQueue, isFromNewsletterSources]);
+  }, [isFromReadingQueue]);
 
   const handleBack = useCallback(() => {
     log.debug('Navigation state for back action', {
@@ -61,28 +49,17 @@ const NewsletterDetail = memo(() => {
       },
     });
 
-    // Check multiple indicators to determine where we came from
+    // Check if we came from reading queue
     const fromReadingQueue =
       location.state?.fromReadingQueue === true ||
       location.state?.from === '/reading-queue' ||
       (typeof document.referrer === 'string' && document.referrer.includes('reading-queue')) ||
       (typeof location.state?.from === 'string' && location.state.from.includes('reading-queue'));
 
-    const fromNewsletterSources =
-      location.state?.fromNewsletterSources === true ||
-      location.state?.from === '/newsletters' ||
-      (typeof document.referrer === 'string' &&
-        document.referrer.includes('/newsletters') &&
-        !document.referrer.includes('reading-queue')) ||
-      (typeof location.state?.from === 'string' &&
-        location.state.from.includes('/newsletters') &&
-        !location.state.from.includes('reading-queue'));
-
     log.debug('Determined navigation context', {
       action: 'navigate_back',
       metadata: {
         fromReadingQueue,
-        fromNewsletterSources,
       },
     });
 
@@ -90,39 +67,114 @@ const NewsletterDetail = memo(() => {
     let targetRoute = '/inbox';
     if (fromReadingQueue) {
       targetRoute = '/queue';
-    } else if (fromNewsletterSources) {
-      targetRoute = '/newsletters';
     }
 
-    // Use window.history to go back first, then navigate if needed
-    if (window.history.length > 1) {
-      // If we have history, go back
-      window.history.back();
-      // Then navigate to the correct route if needed (as a fallback)
-      setTimeout(() => {
-        if (window.location.pathname === '/newsletters/' + id) {
-          // If we're still on the same page, force navigation
-          navigate(targetRoute, {
-            replace: true,
-          });
-        }
-      }, 100);
-    } else {
-      // If no history, navigate directly
-      navigate(targetRoute, {
-        replace: true,
-      });
-    }
-  }, [navigate, location.state, id, log]);
-  const { updateNewsletterTags } = useTags();
-  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
-    showToasts: false,
-    optimisticUpdates: true,
-    onSuccess: () => {
-      // Don't refetch here - let React Query handle cache updates
-      // This prevents cascading refetches
-    },
+    // Navigate directly to the target route
+    navigate(targetRoute, {
+      replace: true,
+    });
+  }, [navigate, location.state, log]);
+
+  useTags();
+
+  // Create mutations directly using useMutation
+  const markAsReadMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.markAsRead(id),
   });
+
+  const markAsUnreadMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.markAsUnread(id),
+  });
+
+  const toggleLikeMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.toggleLike(id),
+  });
+
+  const toggleArchiveMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.toggleArchive(id),
+  });
+
+  const deleteNewsletterMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.deleteNewsletter(id),
+  });
+
+  const addToQueueMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.addToReadingQueue(id),
+  });
+
+  const updateTagsMutation = useMutation({
+    mutationFn: ({ id, tagIds }: { id: string; tagIds: string[] }) =>
+      newsletterService.updateTags(id, tagIds),
+  });
+
+  // Create wrapper functions to convert NewsletterOperationResult to boolean
+  const markAsRead = useCallback(async (id: string) => {
+    const result = await markAsReadMutation.mutateAsync(id);
+    return result.success;
+  }, [markAsReadMutation]);
+
+  const markAsUnread = useCallback(async (id: string) => {
+    const result = await markAsUnreadMutation.mutateAsync(id);
+    return result.success;
+  }, [markAsUnreadMutation]);
+
+  const toggleLike = useCallback(async (id: string) => {
+    const result = await toggleLikeMutation.mutateAsync(id);
+    return result.success;
+  }, [toggleLikeMutation]);
+
+  const toggleArchive = useCallback(async (id: string) => {
+    const result = await toggleArchiveMutation.mutateAsync(id);
+    return result.success;
+  }, [toggleArchiveMutation]);
+
+  const deleteNewsletter = useCallback(async (id: string) => {
+    const result = await deleteNewsletterMutation.mutateAsync(id);
+    return result.success;
+  }, [deleteNewsletterMutation]);
+
+  // Create a toggleInQueue function that combines addToQueue and removeFromQueue
+  const toggleInQueue = useCallback(async (id: string) => {
+    // This is a simplified version - in practice you'd need to check if the newsletter is in queue
+    // For now, we'll just use addToQueue as a fallback
+    const result = await addToQueueMutation.mutateAsync(id);
+    return result.success;
+  }, [addToQueueMutation]);
+
+  // Create a wrapper for updateNewsletterTags to match the expected signature for useSharedNewsletterActions
+  const updateNewsletterTagsForActions = useCallback(async (id: string, tagIds: string[]) => {
+    await updateTagsMutation.mutateAsync({ id, tagIds });
+  }, [updateTagsMutation]);
+
+  // Create a wrapper for updateNewsletterTags that returns boolean for TagSelector
+  const updateNewsletterTagsForSelector = useCallback(async (id: string, tagIds: string[]) => {
+    try {
+      await updateTagsMutation.mutateAsync({ id, tagIds });
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }, [updateTagsMutation]);
+
+  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions(
+    {
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      updateNewsletterTags: updateNewsletterTagsForActions,
+    },
+    {
+      showToasts: false,
+      optimisticUpdates: false,
+      onSuccess: () => {
+        // Don't refetch here - let React Query handle cache updates
+        // This prevents cascading refetches
+      },
+    }
+  );
 
   const { user } = useAuth();
 
@@ -141,6 +193,19 @@ const NewsletterDetail = memo(() => {
     prefetchTags: true,
     prefetchSource: true,
   });
+
+  // Get source ID from location state or newsletter data
+  const sourceId = useMemo(() => {
+    // First try to get from location state (most reliable)
+    if (location.state?.sourceId) {
+      return location.state.sourceId;
+    }
+    // Fallback to newsletter source ID if coming from newsletter sources
+    if (isFromReadingQueue && newsletter?.source?.id) {
+      return newsletter.source.id;
+    }
+    return undefined;
+  }, [location.state?.sourceId, isFromReadingQueue, newsletter?.source?.id]);
 
   const [hasAutoMarkedAsRead, setHasAutoMarkedAsRead] = useState(false);
   const [hasAutoArchived, setHasAutoArchived] = useState(false);
@@ -283,6 +348,25 @@ const NewsletterDetail = memo(() => {
     markAsReadInProgress.current = false;
   }, [id]);
 
+  // Memoize mutations object to prevent unnecessary re-renders and infinite loops
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    updateNewsletterTags: updateNewsletterTagsForActions,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    updateNewsletterTagsForActions,
+  ]);
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -312,6 +396,15 @@ const NewsletterDetail = memo(() => {
   return (
     <div data-testid="newsletter-detail" className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Back Button */}
+        <button
+          onClick={handleBack}
+          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {getBackButtonText()}
+        </button>
+
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Main content */}
           <div className="flex-1">
@@ -334,7 +427,7 @@ const NewsletterDetail = memo(() => {
                     onTagsChange={async (newTags: Tag[]) => {
                       if (!id) return;
                       try {
-                        const ok = await updateNewsletterTags(id, newTags);
+                        const ok = await updateNewsletterTagsForSelector(id, newTags.map(t => t.id));
                         if (ok) {
                           await refetch();
                           setTagSelectorKey((k) => k + 1);
@@ -353,7 +446,7 @@ const NewsletterDetail = memo(() => {
                     onTagDeleted={async () => {
                       if (!id) return;
                       try {
-                        const ok = await updateNewsletterTags(id, []);
+                        const ok = await updateNewsletterTagsForSelector(id, []);
                         if (ok) {
                           await refetch();
                           setTagSelectorKey((k) => k + 1);
@@ -379,11 +472,28 @@ const NewsletterDetail = memo(() => {
                       newsletter={newsletter}
                       onNewsletterUpdate={handleNewsletterUpdate}
                       isFromReadingQueue={isFromReadingQueue}
+                      mutations={mutations}
                     />
                   )}
                 </div>
               </div>
             </div>
+
+            {/* Newsletter Navigation */}
+            {newsletter && (
+              <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+                <NewsletterNavigation
+                  currentNewsletterId={newsletter.id}
+                  isFromReadingQueue={isFromReadingQueue}
+                  sourceId={sourceId}
+                  autoMarkAsRead={true}
+                  showLabels={true}
+                  showCounter={true}
+                  className=""
+                  mutations={mutations}
+                />
+              </div>
+            )}
 
             {/* Newsletter Content */}
             <div className="prose max-w-none mb-6">
@@ -410,16 +520,17 @@ const NewsletterDetail = memo(() => {
                 <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
               )}
             </div>
-          </div>
-          {/* Sidebar */}
-          <div className="lg:w-80 flex-shrink-0">
+
+            {/* Context & Insights - Moved below newsletter content */}
             <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
               <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
               <div className="text-sm text-gray-600">
                 {/* Intentionally left empty as per requirements */}
               </div>
             </div>
-
+          </div>
+          {/* Sidebar */}
+          <div className="lg:w-80 flex-shrink-0">
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
               <div className="flex flex-wrap gap-2">

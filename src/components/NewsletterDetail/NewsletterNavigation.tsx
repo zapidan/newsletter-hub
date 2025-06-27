@@ -1,9 +1,11 @@
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
-import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import type { NewsletterMutations } from '@common/hooks/useSharedNewsletterActions';
+import type { NewsletterFilter, NewsletterWithRelations } from '@common/types';
+import { getCacheManager } from '@common/utils/cacheUtils';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NewsletterNavigationProps {
@@ -15,6 +17,7 @@ interface NewsletterNavigationProps {
   autoMarkAsRead?: boolean;
   isFromReadingQueue?: boolean;
   sourceId?: string;
+  mutations?: NewsletterMutations;
 }
 
 export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
@@ -26,6 +29,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
   autoMarkAsRead = true,
   isFromReadingQueue = false,
   sourceId,
+  mutations,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,6 +47,17 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     // Check if we're in a specific source context
     const isSourceContext =
       sourceId || location.pathname.includes('/sources/') || location.search.includes('source=');
+
+    // Check if we're coming from inbox with specific filter context
+    const isFromInboxWithFilter = location.state?.fromInbox && location.state?.currentFilter;
+
+    console.log('🔍 DEBUG: NewsletterNavigation context detection', {
+      isReadingQueueContext,
+      isSourceContext,
+      isFromInboxWithFilter,
+      locationState: location.state,
+      currentFilter: location.state?.currentFilter,
+    });
 
     if (isReadingQueueContext) {
       return {
@@ -67,6 +82,36 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
       };
     }
 
+    // Use filter context from inbox if available
+    if (isFromInboxWithFilter) {
+      // Convert inbox filter state to NewsletterFilter format
+      const inboxFilter: NewsletterFilter = {
+        // Convert filter string to boolean properties
+        is_read: location.state.currentFilter === 'unread' ? false : undefined,
+        is_archived: location.state.currentFilter === 'archived' ? true : undefined,
+        is_liked: location.state.currentFilter === 'liked' ? true : undefined,
+        // Add source filter if present
+        source_id: location.state.sourceFilter || undefined,
+        // Add tag IDs if present
+        tag_ids: location.state.tagIds && location.state.tagIds.length > 0 ? location.state.tagIds : undefined,
+        // Add date range if present
+        start_date: location.state.timeRange && location.state.timeRange !== 'all' ? location.state.timeRange : undefined,
+        end_date: location.state.timeRange && location.state.timeRange !== 'all' ? location.state.timeRange : undefined,
+      };
+
+      console.log('🔍 DEBUG: Using inbox filter context', {
+        originalFilter: location.state.currentFilter,
+        convertedFilter: inboxFilter,
+      });
+
+      return {
+        enabled: !disabled,
+        preloadAdjacent: true,
+        debug: process.env.NODE_ENV === 'development',
+        overrideFilter: inboxFilter,
+      };
+    }
+
     // Default to current inbox filters
     return {
       enabled: !disabled,
@@ -80,6 +125,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     sourceId,
     location.pathname,
     location.search,
+    location.state,
     newsletterFilter,
   ]);
 
@@ -94,17 +140,81 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     navigateToNext,
   } = useNewsletterNavigation(currentNewsletterId, navigationOptions);
 
-  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions({
-    showToasts: false, // Don't show toasts for auto-mark-as-read and auto-archive
-    optimisticUpdates: true,
-  });
+  // Navigation-specific handlers that use optimistic unread count updates
+  const handleNavigationMarkAsRead = useCallback(async (newsletterId: string) => {
+    if (!mutations?.markAsRead) {
+      throw new Error('markAsRead mutation not available');
+    }
+
+    try {
+      // Use the mutation directly but with navigation-specific cache handling
+      await mutations.markAsRead(newsletterId);
+
+      // Use optimistic unread count update instead of cache invalidation
+      const cacheManager = getCacheManager();
+      cacheManager.updateUnreadCountOptimistically({
+        type: 'mark-read',
+        newsletterIds: [newsletterId],
+      });
+
+      log.debug('Navigation mark as read completed', {
+        action: 'navigation_mark_read',
+        metadata: { newsletterId },
+      });
+    } catch (error) {
+      log.error(
+        'Failed to mark newsletter as read during navigation',
+        {
+          action: 'navigation_mark_read_error',
+          metadata: { newsletterId },
+        },
+        error instanceof Error ? error : new Error(String(error))
+      );
+      throw error;
+    }
+  }, [mutations?.markAsRead, log]);
+
+  const handleNavigationToggleArchive = useCallback(async (newsletter: NewsletterWithRelations) => {
+    if (!mutations?.toggleArchive) {
+      throw new Error('toggleArchive mutation not available');
+    }
+
+    try {
+      await mutations.toggleArchive(newsletter.id);
+
+      log.debug('Navigation toggle archive completed', {
+        action: 'navigation_toggle_archive',
+        metadata: { newsletterId: newsletter.id },
+      });
+    } catch (error) {
+      log.error(
+        'Failed to toggle archive during navigation',
+        {
+          action: 'navigation_toggle_archive_error',
+          metadata: { newsletterId: newsletter.id },
+        },
+        error instanceof Error ? error : new Error(String(error))
+      );
+      throw error;
+    }
+  }, [mutations?.toggleArchive, log]);
+
+  // Track which newsletters have been auto-marked as read to prevent infinite loops
+  const autoMarkedRef = useRef<Set<string>>(new Set());
 
   // Auto-mark current newsletter as read when it loads (instantaneous)
   useEffect(() => {
-    if (autoMarkAsRead && currentNewsletter && !currentNewsletter.is_read && !disabled) {
+    if (
+      autoMarkAsRead &&
+      currentNewsletter &&
+      !currentNewsletter.is_read &&
+      !disabled &&
+      !autoMarkedRef.current.has(currentNewsletter.id)
+    ) {
+      autoMarkedRef.current.add(currentNewsletter.id);
       const markAsRead = async () => {
         try {
-          await handleMarkAsRead(currentNewsletter.id);
+          await handleNavigationMarkAsRead(currentNewsletter.id);
           log.debug('Auto-marked newsletter as read via navigation', {
             action: 'auto_mark_read_navigation',
             metadata: {
@@ -123,11 +233,9 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
           );
         }
       };
-
-      // Mark as read immediately without delay
       markAsRead();
     }
-  }, [currentNewsletter?.id, autoMarkAsRead, disabled]); // Stable deps only to avoid infinite loops
+  }, [currentNewsletter?.id, autoMarkAsRead, disabled, handleNavigationMarkAsRead, log]);
 
   const handlePrevious = useCallback(async () => {
     if (disabled || !hasPrevious) return;
@@ -136,10 +244,10 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     if (currentNewsletter && autoMarkAsRead && !isFromReadingQueue) {
       try {
         if (!currentNewsletter.is_read) {
-          await handleMarkAsRead(currentNewsletter.id);
+          await handleNavigationMarkAsRead(currentNewsletter.id);
         }
         if (!currentNewsletter.is_archived) {
-          await handleToggleArchive(currentNewsletter);
+          await handleNavigationToggleArchive(currentNewsletter);
         }
       } catch (error) {
         log.error(
@@ -183,6 +291,15 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         state: {
           from: currentPath + currentSearch,
           fromNavigation: true,
+          fromReadingQueue: isFromReadingQueue,
+          fromNewsletterSources: !!sourceId,
+          sourceId: sourceId,
+          // Preserve original inbox filter context if it exists
+          fromInbox: location.state?.fromInbox || false,
+          currentFilter: location.state?.currentFilter,
+          sourceFilter: location.state?.sourceFilter,
+          timeRange: location.state?.timeRange,
+          tagIds: location.state?.tagIds,
           context: isFromReadingQueue
             ? 'reading_queue'
             : sourceId
@@ -203,8 +320,8 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     location.pathname,
     location.search,
     sourceId,
-    handleMarkAsRead,
-    handleToggleArchive,
+    handleNavigationMarkAsRead,
+    handleNavigationToggleArchive,
     log,
   ]);
 
@@ -215,10 +332,10 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     if (currentNewsletter && autoMarkAsRead && !isFromReadingQueue) {
       try {
         if (!currentNewsletter.is_read) {
-          await handleMarkAsRead(currentNewsletter.id);
+          await handleNavigationMarkAsRead(currentNewsletter.id);
         }
         if (!currentNewsletter.is_archived) {
-          await handleToggleArchive(currentNewsletter);
+          await handleNavigationToggleArchive(currentNewsletter);
         }
       } catch (error) {
         log.error(
@@ -262,6 +379,15 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         state: {
           from: currentPath + currentSearch,
           fromNavigation: true,
+          fromReadingQueue: isFromReadingQueue,
+          fromNewsletterSources: !!sourceId,
+          sourceId: sourceId,
+          // Preserve original inbox filter context if it exists
+          fromInbox: location.state?.fromInbox || false,
+          currentFilter: location.state?.currentFilter,
+          sourceFilter: location.state?.sourceFilter,
+          timeRange: location.state?.timeRange,
+          tagIds: location.state?.tagIds,
           context: isFromReadingQueue
             ? 'reading_queue'
             : sourceId
@@ -282,8 +408,8 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     location.pathname,
     location.search,
     sourceId,
-    handleMarkAsRead,
-    handleToggleArchive,
+    handleNavigationMarkAsRead,
+    handleNavigationToggleArchive,
     log,
   ]);
 

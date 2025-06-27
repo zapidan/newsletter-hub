@@ -2,14 +2,13 @@ import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Archive,
-  Clock,
   Eye,
   Filter,
   Lightbulb,
   Search as SearchIcon,
   Tag,
   TrendingUp,
-  X,
+  X
 } from "lucide-react";
 import React from "react";
 
@@ -46,20 +45,15 @@ const SearchInput: React.FC<{
   onQueryChange,
   onSearch,
   onClear,
-  showSuggestions,
-  suggestions,
-  recentSearches,
-  onSuggestionClick,
-  onRemoveRecentSearch,
   onShowSuggestions,
   onHideSuggestions,
   inputRef,
-  suggestionsRef,
 }) => {
     const { handleKeyDown } = useSearchKeyboard(onSearch, onHideSuggestions);
 
     return (
-      <div className="relative">
+      <div className="flex items-center gap-2">
+        <SearchIcon size={20} className="text-neutral-500" />
         <input
           ref={inputRef}
           type="text"
@@ -68,83 +62,17 @@ const SearchInput: React.FC<{
           onFocus={onShowSuggestions}
           onKeyDown={handleKeyDown}
           placeholder="Search for topics, newsletters, or keywords..."
-          className="input-field pl-10 py-3 pr-10 text-lg"
+          className="input-field pl-0 pr-10 text-lg"
         />
-
-        <SearchIcon
-          size={20}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"
-        />
-
         {query && (
           <button
             onClick={onClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-700"
+            className="ml-auto text-neutral-500 hover:text-neutral-700"
             aria-label="Clear search"
           >
             <X size={16} />
           </button>
         )}
-
-        {/* Search Suggestions Dropdown */}
-        <AnimatePresence>
-          {showSuggestions &&
-            (suggestions.length > 0 || recentSearches.length > 0) && (
-              <motion.div
-                ref={suggestionsRef}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
-              >
-                {suggestions.length > 0 && (
-                  <div className="p-2">
-                    <div className="text-xs font-medium text-neutral-500 mb-2 px-2">
-                      Suggestions
-                    </div>
-                    {suggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        onClick={() => onSuggestionClick(suggestion)}
-                        className="w-full text-left px-3 py-2 hover:bg-neutral-50 rounded-md text-sm flex items-center"
-                      >
-                        <SearchIcon size={14} className="mr-2 text-neutral-400" />
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {!query && recentSearches.length > 0 && (
-                  <div className="p-2 border-t border-neutral-100">
-                    <div className="text-xs font-medium text-neutral-500 mb-2 px-2 flex items-center">
-                      <Clock size={12} className="mr-1" />
-                      Recent Searches
-                    </div>
-                    {recentSearches.slice(0, 5).map((search, index) => (
-                      <button
-                        key={index}
-                        onClick={() => onSuggestionClick(search)}
-                        className="w-full text-left px-3 py-2 hover:bg-neutral-50 rounded-md text-sm flex items-center group"
-                      >
-                        <Clock size={14} className="mr-2 text-neutral-400" />
-                        {search}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRemoveRecentSearch(search);
-                          }}
-                          className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-neutral-200 rounded"
-                        >
-                          <X size={12} />
-                        </button>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            )}
-        </AnimatePresence>
       </div>
     );
   };
@@ -154,12 +82,12 @@ const SearchFilters: React.FC<{
   sources: NewsletterSource[];
   selectedSources: string[];
   readStatus: "all" | "read" | "unread";
-  archivedStatus: string;
+  archivedStatus: "all" | "archived" | "active";
   dateFrom: string;
   dateTo: string;
   onToggleSource: (sourceId: string) => void;
   onReadStatusChange: (status: "all" | "read" | "unread") => void;
-  onArchivedStatusChange: (status: string) => void;
+  onArchivedStatusChange: (status: "all" | "archived" | "active") => void;
   onDateFromChange: (date: string) => void;
   onDateToChange: (date: string) => void;
   onClearFilters: () => void;
@@ -230,7 +158,7 @@ const SearchFilters: React.FC<{
             </label>
             <select
               value={readStatus}
-              onChange={(e) => onReadStatusChange(e.target.value)}
+              onChange={(e) => onReadStatusChange(e.target.value as "all" | "read" | "unread")}
               className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
             >
               <option value="all">All newsletters</option>
@@ -246,7 +174,7 @@ const SearchFilters: React.FC<{
             </label>
             <select
               value={archivedStatus}
-              onChange={(e) => onArchivedStatusChange(e.target.value)}
+              onChange={(e) => onArchivedStatusChange(e.target.value as "all" | "archived" | "active")}
               className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
             >
               <option value="active">Active only</option>

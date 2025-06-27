@@ -36,6 +36,7 @@ const ActionButton: React.FC<{
   label: string;
   variant?: "primary" | "secondary" | "danger";
   size?: "sm" | "md";
+  className?: string;
 }> = ({
   onClick,
   disabled = false,
@@ -44,7 +45,8 @@ const ActionButton: React.FC<{
   icon,
   label,
   variant = "secondary",
-  size = "md"
+  size = "md",
+  className
 }) => {
     const baseClasses = `
     inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200
@@ -53,16 +55,18 @@ const ActionButton: React.FC<{
   `;
 
     const variantClasses = {
-      primary: "bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500",
-      secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500",
-      danger: "bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-500"
+      primary: "text-gray-700 hover:bg-gray-200 focus:ring-gray-500",
+      secondary: "text-gray-700 hover:bg-gray-200 focus:ring-gray-500",
+      danger: "text-gray-700 hover:bg-gray-200 focus:ring-gray-500"
     };
+
+    const finalClasses = className || variantClasses[variant];
 
     return (
       <button
         onClick={onClick}
         disabled={disabled || isLoading}
-        className={`${baseClasses} ${variantClasses[variant]}`}
+        className={`${baseClasses} ${finalClasses}`}
         aria-label={label}
         title={label}
       >
@@ -140,15 +144,16 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     {
       key: "read",
       action: handleToggleRead,
-      icon: isRead ? <EyeOff size={compact ? 12 : 16} /> : <Eye size={compact ? 12 : 16} />,
+      icon: isRead ? <EyeOff size={14} /> : <Eye size={14} />,
       label: isRead ? "Mark as unread" : "Mark as read",
       variant: "primary" as const,
       isLoading: loadingStates[newsletter.id] === "read",
+      className: !isRead ? "text-blue-600 hover:bg-blue-100" : undefined,
     },
     {
       key: "like",
       action: handleToggleLike,
-      icon: <Heart size={compact ? 12 : 16} className={isLiked ? "fill-red-500 text-red-500" : "text-gray-700"} />,
+      icon: <Heart size={14} className={isLiked ? "fill-red-500 text-red-500" : "text-gray-700"} />,
       label: isLiked ? "Unlike" : "Like",
       variant: "secondary" as const,
       _isActive: isLiked,
@@ -160,7 +165,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     ...(onToggleQueue ? [{
       key: "queue",
       action: handleToggleQueue,
-      icon: <BookmarkIcon size={compact ? 12 : 16} className={isInReadingQueue ? "fill-blue-500 text-blue-500" : "text-gray-700"} />,
+      icon: <BookmarkIcon size={14} className={isInReadingQueue ? "fill-blue-500 text-blue-500" : "text-gray-700"} />,
       label: isInReadingQueue ? "Remove from queue" : "Add to queue",
       variant: "secondary" as const,
       _isActive: isInReadingQueue,
@@ -169,19 +174,22 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     {
       key: "archive",
       action: handleToggleArchive,
-      icon: isArchived ? <ArchiveX size={compact ? 12 : 16} /> : <Archive size={compact ? 12 : 16} />,
+      icon: isArchived ? <ArchiveX size={14} /> : <Archive size={14} />,
       label: isArchived ? "Unarchive" : "Archive",
       variant: "secondary" as const,
       isLoading: loadingStates[newsletter.id] === "archive",
+      className: isArchived ? "text-green-600 hover:bg-green-100" : undefined,
     },
-    {
+    // Only show trash icon for archived newsletters
+    ...(isArchived ? [{
       key: "trash",
       action: handleTrash,
-      icon: <Trash size={compact ? 12 : 16} />,
+      icon: <Trash size={14} />,
       label: "Delete",
       variant: "danger" as const,
       isLoading: loadingStates[newsletter.id] === "trash",
-    },
+      className: "text-red-600 hover:bg-red-100",
+    }] : []),
   ];
 
   return (
@@ -198,6 +206,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
           label={action.label}
           variant={action.variant}
           size={size}
+          className={action.className}
         />
       ))}
 
@@ -214,6 +223,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             label={action.label}
             variant={action.variant}
             size={size}
+            className={action.className}
           />
         ))}
       </div>
@@ -223,7 +233,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
         <ActionButton
           onClick={() => setShowMoreMenu(!showMoreMenu)}
           disabled={isLoading}
-          icon={<MoreHorizontal size={compact ? 12 : 16} />}
+          icon={<MoreHorizontal size={14} />}
           label="More actions"
           variant="secondary"
           size={size}
@@ -238,7 +248,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             />
 
             {/* Dropdown Menu */}
-            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-[110] py-1">
+            <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-[110] py-1">
               {secondaryActions.map((action) => (
                 <button
                   key={action.key}
@@ -248,18 +258,19 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
                   }}
                   disabled={isLoading || action.isLoading}
                   className={clsx(
-                    'newsletter-action',
-                    action.variant,
-                    { 'active': action._isActive },
-                    { 'loading': isLoading }
+                    'flex items-center justify-center p-2 hover:bg-gray-100 transition-colors',
+                    'w-10 h-10 rounded-lg',
+                    { 'opacity-50 cursor-not-allowed': isLoading || action.isLoading },
+                    action.className
                   )}
+                  title={action.label}
+                  aria-label={action.label}
                 >
                   {action.isLoading ? (
                     <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   ) : (
                     <span className="w-4 h-4">{action.icon}</span>
                   )}
-                  {action.label}
                 </button>
               ))}
             </div>

@@ -1,6 +1,6 @@
 import { useAuth } from "@common/contexts/AuthContext";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Menu, Search, User } from "lucide-react";
+import { Menu, Search, User } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -62,28 +62,19 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
         {/* Right side - Search and user menu */}
         <div className="flex items-center gap-2">
           {pathname !== "/search" && (
-            <form onSubmit={handleSearch} className="hidden sm:block relative">
-              <input
-                type="text"
-                placeholder="Search..."
-                className="input-field pl-9 pr-3 py-2 w-40 md:w-64 lg:w-72 bg-slate-50/50 border-slate-200 text-sm placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-blue-500/10 rounded-lg"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
+            <form onSubmit={handleSearch} className="hidden sm:block">
+              <div className="flex items-center gap-2">
+                <Search size={20} className="text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  className="input-field pl-0 pr-3 text-sm placeholder:text-slate-400"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </form>
           )}
-
-          <button
-            className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 hover:text-slate-800 relative"
-            aria-label="Notifications"
-          >
-            <Bell size={18} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full shadow-sm"></span>
-          </button>
 
           <div className="relative">
             <button

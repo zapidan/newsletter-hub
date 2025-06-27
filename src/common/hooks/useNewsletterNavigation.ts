@@ -1,10 +1,11 @@
+import { useLogger } from '@common/utils/logger/useLogger';
+import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import type { NewsletterFilter, NewsletterWithRelations } from '../types';
 import { useInfiniteNewsletters } from './infiniteScroll';
 import { useInboxFilters } from './useInboxFilters';
 import { useReadingQueue } from './useReadingQueue';
-import { useLogger } from '@common/utils/logger/useLogger';
-import type { NewsletterWithRelations, NewsletterFilter } from '../types';
 
 export interface NewsletterNavigationState {
   currentNewsletter: NewsletterWithRelations | null;
@@ -37,7 +38,7 @@ export interface UseNewsletterNavigationOptions {
 
 export interface UseNewsletterNavigationReturn
   extends NewsletterNavigationState,
-    NewsletterNavigationActions {}
+  NewsletterNavigationActions { }
 
 /**
  * Custom hook for newsletter navigation functionality
@@ -51,7 +52,7 @@ export const useNewsletterNavigation = (
   const log = useLogger('useNewsletterNavigation');
   const location = useLocation();
   const {
-    enabled = true,
+    enabled = false,
     preloadAdjacent = true,
     debug = false,
     overrideFilter,
@@ -67,6 +68,10 @@ export const useNewsletterNavigation = (
   const contextualFilter: NewsletterFilter = useMemo(() => {
     // Use override filter if provided
     if (overrideFilter) {
+      console.log('🔍 DEBUG: useNewsletterNavigation using overrideFilter', {
+        overrideFilter,
+        currentNewsletterId,
+      });
       return {
         ...overrideFilter,
         orderBy: 'received_at',
@@ -114,6 +119,10 @@ export const useNewsletterNavigation = (
     }
 
     // Default to current inbox filters
+    console.log('🔍 DEBUG: useNewsletterNavigation using default newsletterFilter', {
+      newsletterFilter,
+      currentNewsletterId,
+    });
     return {
       ...newsletterFilter,
       order_by: 'received_at',
@@ -128,6 +137,9 @@ export const useNewsletterNavigation = (
     newsletterFilter,
   ]);
 
+  // Normalize contextualFilter before passing to useInfiniteNewsletters
+  const normalizedContextualFilter = useMemo(() => normalizeNewsletterFilter(contextualFilter), [contextualFilter]);
+
   // Handle reading queue context separately
   const isUsingReadingQueue = contextualFilter.search === 'reading_queue';
 
@@ -137,7 +149,7 @@ export const useNewsletterNavigation = (
     return readingQueue.map((item) => item.newsletter).filter(Boolean);
   }, [isUsingReadingQueue, readingQueue]);
 
-  // Fetch newsletters using contextual filters (skip if using reading queue)
+  // Fetch newsletters using normalized contextual filters (skip if using reading queue)
   const {
     newsletters: fetchedNewsletters,
     isLoading,
@@ -145,8 +157,10 @@ export const useNewsletterNavigation = (
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useInfiniteNewsletters(contextualFilter, {
-    enabled: enabled && !!currentNewsletterId && !isUsingReadingQueue,
+  } = useInfiniteNewsletters(normalizedContextualFilter, {
+    enabled: enabled && !!currentNewsletterId && !isUsingReadingQueue &&
+      (window.location.pathname.includes('/newsletters/') &&
+        window.location.pathname.split('/').length > 2),
     pageSize: 50, // Larger page size for better navigation experience
     debug,
   });

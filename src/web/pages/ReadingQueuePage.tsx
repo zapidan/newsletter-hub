@@ -1,33 +1,34 @@
-import React, { useCallback, useMemo, useState, useEffect, useContext } from 'react';
+import { AuthContext } from '@common/contexts/AuthContext';
+import { useCache } from '@common/hooks/useCache';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
-import { useNavigate } from 'react-router-dom';
-import { ReadingQueueItem, Tag, NewsletterWithRelations, NewsletterSource } from '@common/types';
-import { toast } from 'react-hot-toast';
 import { useTags } from '@common/hooks/useTags';
-import { updateNewsletterTags } from '@common/utils/tagUtils';
-import { useCache } from '@common/hooks/useCache';
-import { AuthContext } from '@common/contexts/AuthContext';
+import { NewsletterSource, NewsletterWithRelations, ReadingQueueItem, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import {
-  DndContext,
   closestCenter,
+  DndContext,
+  DragEndEvent,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { SortableNewsletterRow } from '../components/reading-queue/SortableNewsletterRow';
 
-import { ArrowUp, ArrowDown } from 'lucide-react';
-import { getCacheManager } from '@common/utils/cacheUtils';
 import { useReadingQueueCacheOptimizer } from '@common/hooks/useReadingQueueCacheOptimizer';
+import { newsletterService } from '@common/services';
+import { getCacheManager } from '@common/utils/cacheUtils';
+import { useMutation } from '@tanstack/react-query';
+import { ArrowDown, ArrowLeft, ArrowUp } from 'lucide-react';
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
@@ -45,32 +46,119 @@ const ReadingQueuePage: React.FC = () => {
     reorderQueue,
   } = useReadingQueue() || {};
 
+  // Create mutations for useSharedNewsletterActions
+  const markAsReadMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.markAsRead(id),
+  });
+
+  const markAsUnreadMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.markAsUnread(id),
+  });
+
+  const toggleLikeMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.toggleLike(id),
+  });
+
+  const toggleArchiveMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.toggleArchive(id),
+  });
+
+  const deleteNewsletterMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.deleteNewsletter(id),
+  });
+
+  const addToQueueMutation = useMutation({
+    mutationFn: (id: string) => newsletterService.addToReadingQueue(id),
+  });
+
+  const updateTagsMutation = useMutation({
+    mutationFn: ({ id, tagIds }: { id: string; tagIds: string[] }) =>
+      newsletterService.updateTags(id, tagIds),
+  });
+
+  // Create wrapper functions to convert NewsletterOperationResult to boolean
+  const markAsRead = useCallback(async (id: string) => {
+    const result = await markAsReadMutation.mutateAsync(id);
+    return result.success;
+  }, [markAsReadMutation]);
+
+  const markAsUnread = useCallback(async (id: string) => {
+    const result = await markAsUnreadMutation.mutateAsync(id);
+    return result.success;
+  }, [markAsUnreadMutation]);
+
+  const toggleLike = useCallback(async (id: string) => {
+    const result = await toggleLikeMutation.mutateAsync(id);
+    return result.success;
+  }, [toggleLikeMutation]);
+
+  const toggleArchive = useCallback(async (id: string) => {
+    const result = await toggleArchiveMutation.mutateAsync(id);
+    return result.success;
+  }, [toggleArchiveMutation]);
+
+  const deleteNewsletter = useCallback(async (id: string) => {
+    const result = await deleteNewsletterMutation.mutateAsync(id);
+    return result.success;
+  }, [deleteNewsletterMutation]);
+
+  const toggleInQueueForActions = useCallback(async (id: string) => {
+    const result = await addToQueueMutation.mutateAsync(id);
+    return result.success;
+  }, [addToQueueMutation]);
+
+  const updateNewsletterTags = useCallback(async (id: string, tagIds: string[]) => {
+    await updateTagsMutation.mutateAsync({ id, tagIds });
+  }, [updateTagsMutation]);
+
+  // Memoize mutations object to prevent unnecessary re-renders
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue: toggleInQueueForActions,
+    updateNewsletterTags,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueueForActions,
+    updateNewsletterTags,
+  ]);
+
   // Use shared newsletter actions for consistent cache management
   const { handleMarkAsRead, handleMarkAsUnread, handleToggleLike, handleToggleArchive } =
-    useSharedNewsletterActions({
-      showToasts: true,
-      optimisticUpdates: true,
-      onSuccess: () => {
-        // Invalidate reading queue after successful actions
-        if (cacheManager) {
-          cacheManager.smartInvalidate({
-            operation: 'queue-action',
-            newsletterIds: [],
-            priority: 'high',
-          });
-        }
-      },
-      onError: (error) => {
-        log.error(
-          'Reading queue action failed',
-          {
-            action: 'reading_queue_action',
-            metadata: { userId: user?.id },
-          },
-          error
-        );
-      },
-    });
+    useSharedNewsletterActions(
+      mutations,
+      {
+        showToasts: true,
+        optimisticUpdates: false,
+        onSuccess: () => {
+          // Invalidate reading queue after successful actions
+          if (cacheManager) {
+            cacheManager.smartInvalidate({
+              operation: 'queue-action',
+              newsletterIds: [],
+              priority: 'high',
+            });
+          }
+        },
+        onError: (error) => {
+          log.error(
+            'Reading queue action failed',
+            {
+              action: 'reading_queue_action',
+              metadata: { userId: user?.id },
+            },
+            error
+          );
+        },
+      }
+    );
 
   const { getTags } = useTags();
   const [allTags, setAllTags] = useState<Tag[]>([]);
@@ -539,6 +627,15 @@ const ReadingQueuePage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate('/inbox')}
+        className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Inbox
+      </button>
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Reading Queue</h1>
         <div className="flex items-center space-x-4">
@@ -551,9 +648,8 @@ const ReadingQueuePage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={toggleSortMode}
-              className={`px-3 py-1 text-sm rounded-md ${
-                sortByDate ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-              }`}
+              className={`px-3 py-1 text-sm rounded-md ${sortByDate ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                }`}
             >
               {sortByDate ? 'Sort by Position' : 'Sort by Date'}
             </button>
@@ -662,7 +758,7 @@ const ReadingQueuePage: React.FC = () => {
                     }}
                     onToggleArchive={handleToggleArchiveAction}
                     onToggleQueue={toggleInQueue}
-                    onTrash={() => {}}
+                    onTrash={() => { }}
                     onNewsletterClick={(newsletter) => {
                       // Convert back to NewsletterWithRelations for handleNewsletterClick
                       const newsletterWithRelations = {
@@ -728,9 +824,9 @@ const ReadingQueuePage: React.FC = () => {
                             // Show success message with details
                             const message = [
                               result.added > 0 &&
-                                `${result.added} tag${result.added !== 1 ? 's' : ''} added`,
+                              `${result.added} tag${result.added !== 1 ? 's' : ''} added`,
                               result.removed > 0 &&
-                                `${result.removed} tag${result.removed !== 1 ? 's' : ''} removed`,
+                              `${result.removed} tag${result.removed !== 1 ? 's' : ''} removed`,
                             ]
                               .filter(Boolean)
                               .join(', ');

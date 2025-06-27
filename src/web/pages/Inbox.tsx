@@ -1,5 +1,5 @@
 import { Mail } from 'lucide-react';
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
@@ -12,6 +12,7 @@ import { useInfiniteNewsletters } from '@common/hooks/infiniteScroll';
 import { useErrorHandling } from '@common/hooks/useErrorHandling';
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useBulkLoadingStates } from '@common/hooks/useLoadingStates';
+import { useNewsletters } from '@common/hooks/useNewsletters';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 
@@ -75,7 +76,7 @@ const ErrorState: React.FC<{
 ));
 
 // Main Inbox component - now focused primarily on rendering
-const Inbox: React.FC = memo(() => {
+const Inbox: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showError } = useToast();
@@ -140,56 +141,6 @@ const Inbox: React.FC = memo(() => {
     debug: process.env.NODE_ENV === 'development',
   });
 
-  // Debug: Log newsletter data only when it changes significantly
-  const lastDebugStateRef = useRef<string>('');
-
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const currentState = JSON.stringify({
-        rawNewslettersCount: rawNewsletters.length,
-        isLoadingNewsletters,
-        errorNewsletters: errorNewsletters?.message,
-        totalCount,
-        hasNextPage,
-      });
-
-      // Only log if the state has actually changed
-      if (lastDebugStateRef.current !== currentState) {
-        lastDebugStateRef.current = currentState;
-        console.log('Newsletter Debug:', {
-          newsletterFilter: stableNewsletterFilter,
-          rawNewslettersCount: rawNewsletters.length,
-          isLoadingNewsletters,
-          errorNewsletters: errorNewsletters?.message,
-          totalCount,
-          hasNextPage,
-          user: user?.id,
-          isAuthenticated: !!user,
-          rawNewsletters: rawNewsletters.slice(0, 3).map(n => ({ id: n.id, title: n.title })), // Show first 3 newsletters
-        });
-      }
-    }
-  }, [stableNewsletterFilter, rawNewsletters.length, isLoadingNewsletters, errorNewsletters, totalCount, hasNextPage, user, rawNewsletters]);
-
-  // Additional debugging for newsletter data
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Newsletter Data Debug:', {
-        rawNewslettersLength: rawNewsletters.length,
-        rawNewslettersType: typeof rawNewsletters,
-        isArray: Array.isArray(rawNewsletters),
-        firstNewsletter: rawNewsletters[0],
-        allNewsletters: rawNewsletters.map(n => ({ id: n.id, title: n.title })),
-        isLoadingNewsletters,
-        errorNewsletters: errorNewsletters?.message,
-        totalCount,
-        hasNextPage,
-        user: user?.id,
-        isAuthenticated: !!user,
-      });
-    }
-  }, [rawNewsletters, isLoadingNewsletters, errorNewsletters, totalCount, hasNextPage, user]);
-
   // Reading queue
   const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
 
@@ -201,6 +152,51 @@ const Inbox: React.FC = memo(() => {
 
   // Loading states for bulk operations
   const bulkLoadingStates = useBulkLoadingStates();
+
+  // Get newsletter mutations from useNewsletters hook (new onMutate handlers)
+  const {
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  } = useNewsletters();
+
+  // Memoize mutations object to prevent unnecessary re-renders
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  ]);
 
   // Helper function to preserve URL parameters after actions
   const preserveFilterParams = useCallback(() => {
@@ -263,16 +259,19 @@ const Inbox: React.FC = memo(() => {
   }, [filter, sourceFilter, timeRange, debouncedTagIds]);
 
   // Shared newsletter actions with our enhanced version
-  const newsletterActions = useSharedNewsletterActions({
-    showToasts: true,
-    optimisticUpdates: true,
-    enableErrorHandling: true,
-    enableLoadingStates: true,
-    onSuccess: useCallback(() => {
-      // Trigger any additional success handling
-    }, []),
-    onError: handleError,
-  });
+  const newsletterActions = useSharedNewsletterActions(
+    mutations,
+    {
+      showToasts: true,
+      optimisticUpdates: false,
+      enableErrorHandling: true,
+      enableLoadingStates: true,
+      onSuccess: useCallback(() => {
+        // Trigger any additional success handling
+      }, []),
+      onError: handleError,
+    }
+  );
 
   // Selection state (local to component since it's UI-only)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -423,6 +422,29 @@ const Inbox: React.FC = memo(() => {
     async (newsletter: NewsletterWithRelations) => {
       setIsActionInProgress(true);
 
+      // Navigate immediately to avoid async issues
+      const targetPath = `/newsletters/${newsletter.id}`;
+      log.debug('Navigating to newsletter detail immediately', {
+        action: 'navigate_to_detail',
+        metadata: {
+          newsletterId: newsletter.id,
+          targetPath,
+          currentPath: window.location.pathname,
+        },
+      });
+
+      navigate(targetPath, {
+        state: {
+          from: '/inbox',
+          fromInbox: true,
+          currentFilter: filter,
+          sourceFilter: sourceFilter,
+          timeRange: timeRange,
+          tagIds: debouncedTagIds,
+        },
+      });
+
+      // Perform actions after navigation (they will continue in background)
       try {
         // Perform optimistic updates simultaneously for better UX
         const actions = [];
@@ -430,20 +452,24 @@ const Inbox: React.FC = memo(() => {
         // Mark as read if unread (optimistic)
         if (!newsletter.is_read) {
           actions.push(
-            newsletterActions.handleMarkAsRead(newsletter.id, {
-              optimisticUpdates: true,
-              showToasts: false, // Don't show toast for auto-actions
-            })
+            newsletterActions.handleMarkAsRead(newsletter.id)
           );
         }
 
         // Archive the newsletter when opened from the inbox (optimistic)
-        if (!newsletter.is_archived) {
+        // But only if we're not in a filtered view that would hide it
+        const shouldArchive = !newsletter.is_archived && (
+          // Don't auto-archive if we're viewing archived newsletters
+          filter !== 'archived' &&
+          // Don't auto-archive if we're on a filter that would hide this newsletter
+          // when it gets archived (like 'unread' for read newsletters, 'liked' for unliked newsletters)
+          !(filter === 'unread' && newsletter.is_read) &&
+          !(filter === 'liked' && !newsletter.is_liked)
+        );
+
+        if (shouldArchive) {
           actions.push(
-            newsletterActions.handleToggleArchive(newsletter, {
-              optimisticUpdates: true,
-              showToasts: false, // Don't show toast for auto-actions
-            })
+            newsletterActions.handleToggleArchive(newsletter)
           );
         }
 
@@ -451,6 +477,14 @@ const Inbox: React.FC = memo(() => {
         if (actions.length > 0) {
           try {
             await Promise.allSettled(actions);
+            log.debug('Newsletter actions completed successfully', {
+              action: 'newsletter_actions_completed',
+              metadata: {
+                newsletterId: newsletter.id,
+                actionsCount: actions.length,
+                shouldArchive,
+              },
+            });
           } catch (actionError) {
             log.error(
               'Some newsletter actions failed during click',
@@ -459,19 +493,16 @@ const Inbox: React.FC = memo(() => {
                 metadata: {
                   newsletterId: newsletter.id,
                   actionsCount: actions.length,
+                  shouldArchive,
                 },
               },
               actionError instanceof Error ? actionError : new Error(String(actionError))
             );
-            // Continue with navigation even if actions fail
           }
         }
 
-        // Preserve filter parameters before navigation
+        // Preserve filter parameters after navigation
         preserveFilterParams();
-
-        // Navigate to the newsletter detail
-        navigate(`/newsletters/${newsletter.id}`);
       } catch (error) {
         log.error(
           'Unexpected error in newsletter click handler',
@@ -481,13 +512,11 @@ const Inbox: React.FC = memo(() => {
           },
           error instanceof Error ? error : new Error(String(error))
         );
-        // Still navigate even if other actions fail
-        navigate(`/newsletters/${newsletter.id}`);
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [navigate, newsletterActions, preserveFilterParams, log]
+    [navigate, newsletterActions, preserveFilterParams, log, filter, sourceFilter, timeRange, debouncedTagIds]
   );
 
   const handleRemoveFromQueue = useCallback(
@@ -547,7 +576,7 @@ const Inbox: React.FC = memo(() => {
       setIsActionInProgress(true);
 
       try {
-        await newsletterActions.handleToggleLike(newsletter);
+        await toggleLike(newsletter.id);
         preserveFilterParams();
         // Dispatch event for unread count updates
         window.dispatchEvent(new CustomEvent('newsletter:like-status-changed'));
@@ -569,7 +598,7 @@ const Inbox: React.FC = memo(() => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [newsletterActions, filter, preserveFilterParams, refetchNewsletters, log]
+    [toggleLike, filter, preserveFilterParams, refetchNewsletters, log]
   );
 
   const handleToggleArchiveWrapper = useCallback(
@@ -577,7 +606,7 @@ const Inbox: React.FC = memo(() => {
       setIsActionInProgress(true);
 
       try {
-        await newsletterActions.handleToggleArchive(newsletter);
+        await toggleArchive(newsletter.id);
         preserveFilterParams();
       } catch (error) {
         log.error(
@@ -593,7 +622,7 @@ const Inbox: React.FC = memo(() => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [newsletterActions, preserveFilterParams, filter, log]
+    [toggleArchive, preserveFilterParams, filter, log]
   );
 
   const handleToggleReadWrapper = useCallback(
@@ -601,7 +630,11 @@ const Inbox: React.FC = memo(() => {
       setIsActionInProgress(true);
 
       try {
-        await newsletterActions.handleToggleRead(newsletter);
+        if (newsletter.is_read) {
+          await markAsUnread(newsletter.id); // Use direct mutation instead of newsletterActions
+        } else {
+          await markAsRead(newsletter.id); // Use direct mutation instead of newsletterActions
+        }
         preserveFilterParams();
       } catch (error) {
         log.error(
@@ -617,7 +650,7 @@ const Inbox: React.FC = memo(() => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [newsletterActions, preserveFilterParams, filter, log]
+    [markAsRead, markAsUnread, preserveFilterParams, filter, log]
   );
 
   const handleDeleteNewsletterWrapper = useCallback(
@@ -832,7 +865,7 @@ const Inbox: React.FC = memo(() => {
       </div>
     </div>
   );
-});
+};
 
 Inbox.displayName = 'Inbox';
 

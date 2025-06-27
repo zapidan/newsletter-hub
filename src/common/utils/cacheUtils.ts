@@ -1,12 +1,12 @@
-import { QueryClient } from '@tanstack/react-query';
-import { queryKeyFactory } from './queryKeyFactory';
-import { logger } from './logger';
 import type {
   NewsletterWithRelations,
+  PaginatedResponse,
   ReadingQueueItem,
   Tag,
-  PaginatedResponse,
 } from '@common/types';
+import { QueryClient } from '@tanstack/react-query';
+import { logger } from './logger';
+import { queryKeyFactory } from './queryKeyFactory';
 
 interface CacheManagerConfig {
   enableOptimisticUpdates?: boolean;
@@ -73,8 +73,7 @@ export class SimpleCacheManager {
             return (
               Array.isArray(key) &&
               key[0] === 'newsletters' &&
-              key[1] === 'list' &&
-              key[2] === 'infinite'
+              key[1] === 'infinite'
             );
           },
         },
@@ -138,9 +137,9 @@ export class SimpleCacheManager {
             return oldData.map((queueItem) =>
               queueItem.newsletter?.id === update.id
                 ? {
-                    ...queueItem,
-                    newsletter: { ...queueItem.newsletter, ...update.updates },
-                  }
+                  ...queueItem,
+                  newsletter: { ...queueItem.newsletter, ...update.updates },
+                }
                 : queueItem
             );
           }
@@ -218,8 +217,7 @@ export class SimpleCacheManager {
             return (
               Array.isArray(key) &&
               key[0] === 'newsletters' &&
-              key[1] === 'list' &&
-              key[2] === 'infinite'
+              key[1] === 'infinite'
             );
           },
         },
@@ -365,19 +363,19 @@ export class SimpleCacheManager {
             oldData.map((item) =>
               item.newsletter_id === operation.newsletterId
                 ? {
-                    ...item,
-                    newsletter: {
-                      ...item.newsletter,
-                      tags: operation.tagIds!.map((tagId) => ({
-                        id: tagId,
-                        name: '',
-                        color: '#808080',
-                        user_id: operation.userId,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                      })),
-                    },
-                  }
+                  ...item,
+                  newsletter: {
+                    ...item.newsletter,
+                    tags: operation.tagIds!.map((tagId) => ({
+                      id: tagId,
+                      name: '',
+                      color: '#808080',
+                      user_id: operation.userId,
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                    })),
+                  },
+                }
                 : item
             )
           );
@@ -392,6 +390,124 @@ export class SimpleCacheManager {
     }
   }
 
+  // Update unread count optimistically without database hit
+  updateUnreadCountOptimistically(operation: {
+    type: 'mark-read' | 'mark-unread' | 'bulk-mark-read' | 'bulk-mark-unread' | 'archive' | 'unarchive' | 'delete';
+    newsletterIds: string[];
+    sourceId?: string;
+  }): void {
+    try {
+      this.log.debug('Updating unread count optimistically', {
+        action: 'update_unread_count_optimistic',
+        metadata: {
+          operation: operation.type,
+          newsletterIds: operation.newsletterIds,
+          sourceId: operation.sourceId,
+        },
+      });
+
+      // Get current unread count data
+      const unreadCountQueryKey = ['unreadCount', 'all'];
+      const currentData = this.queryClient.getQueryData<{ total: number; bySource: Record<string, number> }>(unreadCountQueryKey);
+
+      if (!currentData) {
+        this.log.debug('No current unread count data found, skipping optimistic update', {
+          action: 'update_unread_count_no_data',
+        });
+        return;
+      }
+
+      // Calculate the change based on operation type
+      let totalChange = 0;
+      const sourceChanges: Record<string, number> = {};
+
+      switch (operation.type) {
+        case 'mark-read':
+        case 'bulk-mark-read':
+          totalChange = -operation.newsletterIds.length;
+          if (operation.sourceId) {
+            sourceChanges[operation.sourceId] = -operation.newsletterIds.length;
+          }
+          break;
+
+        case 'mark-unread':
+        case 'bulk-mark-unread':
+          totalChange = operation.newsletterIds.length;
+          if (operation.sourceId) {
+            sourceChanges[operation.sourceId] = operation.newsletterIds.length;
+          }
+          break;
+
+        case 'archive':
+        case 'delete':
+          // For archive/delete, we need to check if the newsletters were unread
+          // This is more complex and might require fetching newsletter details
+          // For now, we'll invalidate the cache for these operations
+          this.log.debug('Archive/delete operation detected, invalidating unread count', {
+            action: 'update_unread_count_archive_delete',
+          });
+          this.queryClient.invalidateQueries({
+            queryKey: ['unreadCount'],
+            refetchType: 'active',
+          });
+          return;
+
+        case 'unarchive':
+          // For unarchive, we need to check if the newsletters should be unread
+          // This is also complex, so we'll invalidate
+          this.log.debug('Unarchive operation detected, invalidating unread count', {
+            action: 'update_unread_count_unarchive',
+          });
+          this.queryClient.invalidateQueries({
+            queryKey: ['unreadCount'],
+            refetchType: 'active',
+          });
+          return;
+
+        default:
+          this.log.warn('Unknown operation type for unread count update', {
+            action: 'update_unread_count_unknown_operation',
+            metadata: { operation: operation.type },
+          });
+          return;
+      }
+
+      // Update the cache optimistically
+      const updatedData = {
+        total: Math.max(0, currentData.total + totalChange),
+        bySource: { ...currentData.bySource },
+      };
+
+      // Update source-specific counts
+      Object.entries(sourceChanges).forEach(([sourceId, change]) => {
+        const currentSourceCount = updatedData.bySource[sourceId] || 0;
+        updatedData.bySource[sourceId] = Math.max(0, currentSourceCount + change);
+      });
+
+      // Set the updated data in cache
+      this.queryClient.setQueryData(unreadCountQueryKey, updatedData);
+
+      this.log.debug('Unread count updated optimistically', {
+        action: 'update_unread_count_success',
+        metadata: {
+          previousTotal: currentData.total,
+          newTotal: updatedData.total,
+          totalChange,
+          sourceChanges,
+        },
+      });
+    } catch (error) {
+      this.log.error(
+        'Failed to update unread count optimistically',
+        {
+          action: 'update_unread_count_optimistic_error',
+          metadata: { operation: operation.type, newsletterIds: operation.newsletterIds },
+        },
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  }
+
   // Smart invalidation with operation types
   invalidateRelatedQueries(newsletterIds: string[], operationType: string): void {
     const invalidationPromises: Promise<void>[] = [];
@@ -401,13 +517,11 @@ export class SimpleCacheManager {
       case 'mark-unread':
       case 'bulk-mark-read':
       case 'bulk-mark-unread':
-        // Only invalidate unread count, keep newsletter lists with optimistic updates
-        invalidationPromises.push(
-          this.queryClient.invalidateQueries({
-            queryKey: ['unreadCount'],
-            refetchType: 'active',
-          })
-        );
+        // Use optimistic updates for unread count instead of invalidation
+        this.updateUnreadCountOptimistically({
+          type: operationType as 'mark-read' | 'mark-unread' | 'bulk-mark-read' | 'bulk-mark-unread',
+          newsletterIds,
+        });
         break;
 
       case 'toggle-archive':
@@ -521,6 +635,15 @@ export class SimpleCacheManager {
             refetchType: 'active',
           })
         );
+        break;
+
+      case 'navigation':
+        // For navigation operations, don't invalidate unread count
+        // Let optimistic updates handle the changes
+        this.log.debug('Navigation operation detected, skipping unread count invalidation', {
+          action: 'navigation_skip_unread_invalidation',
+          metadata: { newsletterIds },
+        });
         break;
 
       default:
@@ -798,10 +921,10 @@ export class SimpleCacheManager {
           foundOriginalData: currentData !== null,
           originalValues: currentData
             ? {
-                is_read: currentData.is_read,
-                is_liked: currentData.is_liked,
-                is_archived: currentData.is_archived,
-              }
+              is_read: currentData.is_read,
+              is_liked: currentData.is_liked,
+              is_archived: currentData.is_archived,
+            }
             : null,
         },
       });
@@ -1022,6 +1145,11 @@ export const getCacheManagerSafe = (): SimpleCacheManager | null => {
   return cacheManagerInstance;
 };
 
+// Reset function for testing purposes
+export const resetCacheManager = (): void => {
+  cacheManagerInstance = null;
+};
+
 // Additional cache utility methods
 export const prefetchQuery = async <T>(
   queryKey: readonly unknown[],
@@ -1082,6 +1210,12 @@ export const cancelQueries = async (options: {
   await manager.queryClient.cancelQueries(
     options as Parameters<typeof manager.queryClient.cancelQueries>[0]
   );
+};
+
+// Utility function to get current unread count from cache
+export const getCurrentUnreadCount = (): { total: number; bySource: Record<string, number> } | undefined => {
+  const manager = getCacheManager();
+  return manager.queryClient.getQueryData<{ total: number; bySource: Record<string, number> }>(['unreadCount', 'all']);
 };
 
 // Utility functions for backward compatibility

@@ -352,11 +352,53 @@ const NewslettersPage: React.FC = () => {
     errorTogglingLike,
     bulkArchive,
     refetchNewsletters,
+    // Extract mutations to pass to useSharedNewsletterActions
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
   } = useNewsletters(newsletterFilter, {
     debug: true,
     refetchOnWindowFocus: false,
-    staleTime: 30000, // Use 30 second stale time to prevent excessive refetches
+    staleTime: 0,
+    optimisticUpdates: false,
   });
+
+  // Memoize mutations object to prevent unnecessary re-renders
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  ]);
 
   // Stable newsletter list with preserved order
   const [stableNewsletters, setStableNewsletters] = useState<NewsletterWithRelations[]>([]);
@@ -416,27 +458,29 @@ const NewslettersPage: React.FC = () => {
 
   const fetchedNewsletters = filteredNewsletters;
 
-  // Shared newsletter action handlers
+  // Shared newsletter actions
   const {
     handleToggleLike,
     handleToggleArchive,
     handleToggleRead,
     handleDeleteNewsletter,
     handleToggleInQueue,
-    handleUpdateTags: sharedHandleUpdateTags,
     isUpdatingTags,
-  } = useSharedNewsletterActions({
-    showToasts: true,
-    optimisticUpdates: true,
-    onSuccess: () => {
-      // Success handled by shared handlers
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  } = useSharedNewsletterActions(
+    mutations,
+    {
+      showToasts: true,
+      optimisticUpdates: false,
+      onSuccess: () => {
+        // Success handled by shared handlers
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }
+  );
 
-  const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
+  const [visibleTags] = useState<Set<string>>(new Set());
   const [isActionInProgress, setIsActionInProgress] = useState(false);
 
   // Stable keys for newsletter rows to prevent unnecessary re-renders
@@ -731,45 +775,6 @@ const NewslettersPage: React.FC = () => {
     [handleDeleteNewsletter]
   );
 
-  const handleUpdateTags = useCallback(
-    async (newsletterId: string, tagIds: string[]): Promise<void> => {
-      setIsActionInProgress(true);
-      try {
-        await sharedHandleUpdateTags(newsletterId, tagIds);
-      } catch (error) {
-        log.error(
-          'Failed to update newsletter tags',
-          {
-            action: 'update_tags',
-            metadata: { newsletterId, tagCount: tagIds.length },
-          },
-          error instanceof Error ? error : new Error(String(error))
-        );
-        // Error handling is already done by shared actions
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
-      }
-    },
-    [sharedHandleUpdateTags, log]
-  );
-
-  const toggleTagVisibility = useCallback(
-    (newsletterId: string, e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setVisibleTags((prev) => {
-        const newSet = new Set(prev);
-        if (newSet.has(newsletterId)) {
-          newSet.delete(newsletterId);
-        } else {
-          newSet.add(newsletterId);
-        }
-        return newSet;
-      });
-    },
-    [setVisibleTags]
-  );
-
   // Handle newsletter click with proper navigation state
   const handleNewsletterClick = useCallback(
     async (newsletter: NewsletterWithRelations) => {
@@ -806,11 +811,11 @@ const NewslettersPage: React.FC = () => {
           }
         }
 
-        // Navigate to the newsletter detail
+        // Navigate to the newsletter detail with source context
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
-            fromNewsletterSources: true,
             from: '/newsletters',
+            sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
           },
         });
       } catch (error) {
@@ -825,8 +830,8 @@ const NewslettersPage: React.FC = () => {
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
-            fromNewsletterSources: true,
             from: '/newsletters',
+            sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
           },
         });
       }
@@ -1308,25 +1313,6 @@ const NewslettersPage: React.FC = () => {
               <h3 className="text-lg font-semibold text-neutral-900">
                 {selectedSourceId ? `Newsletters from this Source` : `Newsletters in this Group`}
               </h3>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => refetchNewsletters()}
-                  className="text-sm text-green-600 hover:underline flex items-center space-x-1"
-                >
-                  🔄 Refresh
-                </button>
-                {(selectedGroupId || selectedSourceId) && (
-                  <button
-                    onClick={() => {
-                      setSelectedSourceId(null);
-                      setSelectedGroupId(null);
-                    }}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    Clear filter
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Tag Filter Display */}
@@ -1395,8 +1381,6 @@ const NewslettersPage: React.FC = () => {
                     onToggleRead={handleToggleReadWrapper}
                     onToggleQueue={handleToggleInQueueWrapper}
                     onTrash={handleTrashWrapper}
-                    onToggleTagVisibility={toggleTagVisibility}
-                    onUpdateTags={handleUpdateTags}
                     onTagClick={handleTagClick}
                     onNewsletterClick={handleNewsletterClick}
                     visibleTags={visibleTags}

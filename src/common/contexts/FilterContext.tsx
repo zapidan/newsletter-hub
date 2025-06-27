@@ -56,10 +56,10 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       timeRange: (params.time as TimeRange) || 'all',
       tagIds: (params.tags as string[]) || [],
     }),
-    [params]
+    [params.filter, params.source, params.time, params.tags]
   );
 
-  // Generate newsletter filter object
+  // Generate newsletter filter object with stable memoization
   const newsletterFilter = useMemo(() => {
     const filters: NewsletterFilter = {};
 
@@ -124,13 +124,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     }
 
     return filters;
-  }, [
-    filterState.filter,
-    filterState.sourceFilter,
-    filterState.timeRange,
-    filterState.tagIds.length, // Only depend on length, not the array itself
-    useLocalTagFiltering
-  ]);
+  }, [filterState, useLocalTagFiltering]);
 
   // Check if any filters are active (non-default)
   const hasActiveFilters = useMemo(() => {
@@ -140,7 +134,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       filterState.timeRange !== 'all' ||
       filterState.tagIds.length > 0
     );
-  }, [filterState]);
+  }, [filterState.filter, filterState.sourceFilter, filterState.timeRange, filterState.tagIds]);
 
   // Check if a specific filter is active
   const isFilterActive = useCallback(
@@ -158,7 +152,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
           return false;
       }
     },
-    [filterState]
+    [filterState.filter, filterState.sourceFilter, filterState.timeRange, filterState.tagIds]
   );
 
   // Only trigger onFilterChange when the newsletterFilter has actually changed

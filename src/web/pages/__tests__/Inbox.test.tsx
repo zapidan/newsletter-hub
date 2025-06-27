@@ -18,6 +18,7 @@ const {
   useInfiniteNewslettersMock,
   useReadingQueueMock,
   useSharedNewsletterActionsMock,
+  useNewslettersMock,
   MockInboxFilters,
 } = vi.hoisted(() => ({
   /* hooks */
@@ -25,6 +26,7 @@ const {
   useInfiniteNewslettersMock: vi.fn(),
   useReadingQueueMock: vi.fn(),
   useSharedNewsletterActionsMock: vi.fn(),
+  useNewslettersMock: vi.fn(),
 
   /* visual InboxFilters stub – must be **named** export[1] */
   MockInboxFilters: vi.fn(
@@ -94,6 +96,11 @@ vi.mock('@common/hooks/useReadingQueue', () => ({
 vi.mock('@common/hooks/useSharedNewsletterActions', () => ({
   __esModule: true,
   useSharedNewsletterActions: useSharedNewsletterActionsMock,
+}));
+
+vi.mock('@common/hooks/useNewsletters', () => ({
+  __esModule: true,
+  useNewsletters: useNewslettersMock,
 }));
 
 /* misc context & util stubs ------------------------------------------------ */
@@ -201,6 +208,21 @@ const mkInfiniteNewsletters = (newsletters = makeNewsletters()) => ({
 const mkReadingQueue = () => ({ readingQueue: [], removeFromQueue: vi.fn() });
 const mkSharedActions = () => ({ handleBulkMarkAsRead: vi.fn(), isNewsletterLoading: vi.fn() });
 
+const mkNewsletters = () => ({
+  markAsRead: vi.fn(),
+  markAsUnread: vi.fn(),
+  toggleLike: vi.fn(),
+  toggleArchive: vi.fn(),
+  deleteNewsletter: vi.fn(),
+  toggleInQueue: vi.fn(),
+  bulkMarkAsRead: vi.fn(),
+  bulkMarkAsUnread: vi.fn(),
+  bulkArchive: vi.fn(),
+  bulkUnarchive: vi.fn(),
+  bulkDeleteNewsletters: vi.fn(),
+  updateNewsletterTags: vi.fn(),
+});
+
 /* render helper ------------------------------------------------------------ */
 const renderInbox = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -225,6 +247,7 @@ describe('Inbox page', () => {
     useInfiniteNewslettersMock.mockReturnValue(mkInfiniteNewsletters());
     useReadingQueueMock.mockReturnValue(mkReadingQueue());
     useSharedNewsletterActionsMock.mockReturnValue(mkSharedActions());
+    useNewslettersMock.mockReturnValue(mkNewsletters());
   });
 
   afterEach(() => vi.clearAllMocks());

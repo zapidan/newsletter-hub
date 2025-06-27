@@ -71,6 +71,42 @@
 - Navigation to detail page works regardless of action success/failure
 - Filter parameters are preserved during navigation
 
+### 3. Navigation Context and Cache Filter Issues
+**Status**: ✅ **FIXED**
+
+#### Problem Description
+- Navigation arrows in newsletter detail view showed **all inbox items** instead of respecting current filter context
+- System was making unnecessary Supabase API calls instead of using cached data
+- Database errors due to invalid UUID values being passed to queries
+
+#### Root Cause Analysis
+1. **Filter Context Loss**: Navigation state wasn't preserving filter context when navigating from inbox to newsletter detail
+2. **Cache Key Mismatch**: Inconsistent filter key formats (snake_case vs camelCase) causing cache misses
+3. **UUID Validation Issues**: Invalid values like `"2"` or `"c"` reaching database queries
+
+#### Fixes Implemented
+1. **Enhanced Filter Context Preservation**:
+   - Modified navigation call in `src/web/pages/Inbox.tsx` to include filter context in state
+   - Updated `NewsletterNavigation` component to detect and use inbox filter context
+   - Added proper filter conversion from inbox format to newsletter filter format
+
+2. **Filter Normalization System** (`src/common/utils/newsletterUtils.ts`):
+   - Created comprehensive filter normalization utility
+   - Added UUID validation to prevent invalid values from reaching database
+   - Proper handling of single values vs arrays for UUID fields
+   - Consistent camelCase conversion for all filter keys
+
+3. **Cache Consistency Implementation**:
+   - Applied normalization to all newsletter query hooks
+   - Ensured consistent cache key generation across components
+   - Fixed query parameter building to use normalized filters
+
+#### Expected Behavior
+- Navigation respects current filter context (e.g., "liked" filter shows only liked newsletters)
+- Cache is used efficiently instead of unnecessary API calls
+- No UUID validation errors in database queries
+- Consistent filtering across all newsletter components
+
 ## Testing Procedures
 
 ### Multi-Tag Filtering Test
@@ -105,12 +141,29 @@
    - Verify URL includes newsletter ID
    - Verify back navigation preserves filters
 
+### Navigation Context Test
+1. **Setup**: Have newsletters with different filter states (liked, unread, etc.)
+2. **Filter context test**:
+   - Navigate to inbox with "liked" filter active
+   - Click on a liked newsletter to open detail view
+   - Use navigation arrows to move between newsletters
+   - Verify only liked newsletters appear in navigation
+3. **Cache usage test**:
+   - Monitor network requests in browser dev tools
+   - Navigate between newsletters multiple times
+   - Verify subsequent queries use cached data
+4. **UUID validation test**:
+   - Test with various filter combinations
+   - Verify no database errors occur
+   - Confirm invalid values are filtered out
+
 ## Verification Steps
 
 ### 1. Check Console Logs
 When testing, monitor the browser console for:
 - `🏷️ [getAll] Applying tag filter:` - Confirms tag filtering is running
 - `📰 [Newsletter Click]` - Confirms click handler execution
+- `🔍 DEBUG: Generated query key` - Confirms cache key generation
 - `✅` - Success indicators
 - `❌` - Error indicators
 
@@ -134,37 +187,49 @@ SELECT id, title, is_archived FROM newsletters WHERE id = 'newsletter_id';
 ### Files Modified
 1. `src/common/api/newsletterApi.ts` - Fixed tag filtering logic
 2. `src/common/hooks/useInboxFilters.ts` - Enhanced tag loading
-3. `src/web/pages/Inbox.tsx` - Improved newsletter click handling
+3. `src/web/pages/Inbox.tsx` - Improved newsletter click handling and navigation context
 4. `src/common/contexts/FilterContext.tsx` - Cleaned up debug logs
 5. `src/common/hooks/useUrlParams.ts` - Cleaned up debug logs
+6. `src/common/utils/newsletterUtils.ts` - Added filter normalization and UUID validation
+7. `src/common/hooks/infiniteScroll/useInfiniteNewsletters.ts` - Applied filter normalization
+8. `src/common/hooks/useNewsletterNavigation.ts` - Applied filter normalization
+9. `src/common/hooks/useNewsletters.ts` - Applied filter normalization
+10. `src/components/NewsletterDetail/NewsletterNavigation.tsx` - Added filter context detection
 
 ### Key Functions Changed
 - `newsletterApi.getAll()` - Tag filtering logic
 - `useInboxFilters()` - Tag loading and validation
-- `handleNewsletterClick()` - Error handling and logging
+- `handleNewsletterClick()` - Error handling, logging, and navigation context
+- `normalizeNewsletterFilter()` - New utility for filter normalization
+- `isValidUUID()` - New utility for UUID validation
 
 ## Rollback Plan
 If issues arise, revert commits:
 ```bash
 git revert 50b6741  # Main fix commit
 git revert 41e5725  # Debug commit (if needed)
+git revert <navigation-fix-commit>  # Navigation context fix
 ```
 
 ## Future Improvements
 1. **Remove debug logging** in production build
-2. **Add unit tests** for tag filtering logic
-3. **Add integration tests** for newsletter click behavior
+2. **Add unit tests** for tag filtering logic and filter normalization
+3. **Add integration tests** for newsletter click behavior and navigation context
 4. **Consider database-level tag filtering** for better performance
 5. **Add user feedback** for action success/failure
+6. **Add TypeScript interfaces** for filter objects to improve type safety
+7. **Monitor cache hit rates** to ensure optimal performance
 
 ## Performance Notes
 - Tag filtering is currently done post-query (JavaScript filtering)
 - For large datasets, consider implementing database-level filtering
 - Current approach is acceptable for typical newsletter volumes
+- Filter normalization improves cache efficiency and reduces API calls
+- UUID validation prevents unnecessary database errors
 
 ---
 
 **Fixed By**: Assistant  
-**Date**: 2024  
-**Commits**: 41e5725, 50b6741  
+**Date**: 2024-2025  
+**Commits**: 41e5725, 50b6741, <navigation-fix-commits>  
 **Status**: Ready for testing

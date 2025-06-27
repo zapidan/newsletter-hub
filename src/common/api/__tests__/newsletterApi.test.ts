@@ -3,7 +3,14 @@ import { vi } from 'vitest';
 
 // Hoisted mock for createQueryBuilder
 const { createMockNewsletter, createQueryBuilder, mockUser } = vi.hoisted(() => {
-  const mockUser = { id: 'user-1', email: 'user@example.com', user_metadata: { name: 'Test User' } }; // Removed Arabic word
+  const mockUser = {
+    id: 'user-1',
+    email: 'user@example.com',
+    user_metadata: { name: 'Test User' },
+    app_metadata: {},
+    aud: 'authenticated',
+    created_at: '2024-01-01T00:00:00Z',
+  };
   const createMockNewsletter = (overrides: Partial<NewsletterWithRelations> = {}): NewsletterWithRelations => ({
     id: 'newsletter-1',
     title: 'Test Newsletter',
@@ -45,10 +52,9 @@ const { createMockNewsletter, createQueryBuilder, mockUser } = vi.hoisted(() => 
     builder.order = vi.fn().mockReturnValue(builder);
     builder.range = vi.fn().mockReturnValue(builder);
     builder.limit = vi.fn().mockReturnValue(builder);
+    builder.group = vi.fn().mockReturnValue(builder);
     builder.single = vi.fn().mockResolvedValue({ data: null, error: null });
     builder.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-    // General then for `await query` on the builder instance.
-    // Tests will mock specific methods like .order or .range if those are terminal.
     builder.then = vi.fn();
     return builder;
   };
@@ -105,7 +111,8 @@ describe('newsletterApi', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(now));
     currentQueryBuilder = createQueryBuilder();
-    vi.mocked(supabaseClientModule.supabase.from).mockReturnValue(currentQueryBuilder);
+    // Always return the same builder for all .from calls
+    vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => currentQueryBuilder);
     vi.mocked(supabaseClientModule.requireAuth).mockResolvedValue(mockUser);
     vi.mocked(supabaseClientModule.handleSupabaseError).mockImplementation((error) => { throw error; });
     currentMockNewsletter = createMockNewsletter();
@@ -152,7 +159,7 @@ describe('newsletterApi', () => {
 
   describe('buildNewsletterQuery (via getAll)', () => {
     beforeEach(() => { // Mock the final resolution of the query chain for getAll
-      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled) => onFulfilled({ data: [], count: 0, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled: any) => onFulfilled({ data: [], count: 0, error: null }));
     });
     it('should apply limit and offset for pagination', async () => {
       await newsletterApi.getAll({ limit: 10, offset: 20 });
@@ -174,11 +181,11 @@ describe('newsletterApi', () => {
 
   describe('getAll', () => {
     beforeEach(() => { // Mock the final resolution of the query chain for getAll
-      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled) => onFulfilled({ data: [createMockNewsletter()], count: 1, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled: any) => onFulfilled({ data: [createMockNewsletter()], count: 1, error: null }));
     });
     it('should fetch all newsletters with default params', async () => {
       const mockData = [createMockNewsletter()];
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: mockData, count: mockData.length, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) => onFulfilled({ data: mockData, count: mockData.length, error: null }));
       const result = await newsletterApi.getAll();
       expect(result.data).toEqual(mockData);
     });
@@ -186,40 +193,39 @@ describe('newsletterApi', () => {
       const nls = (c: number) => Array(c).fill(null).map((_, i) => createMockNewsletter({ id: `nl${i}` }));
 
       // Scenario 1: No items
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: [], count: 0, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) => onFulfilled({ data: [], count: 0, error: null }));
       let res = await newsletterApi.getAll({ limit: 10, offset: 0 });
       expect(res).toMatchObject({ data: [], count: 0, page: 1, limit: 10, hasMore: false, nextPage: null, prevPage: null });
 
       // Scenario 2: Fewer items than limit
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: nls(5), count: 5, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) => onFulfilled({ data: nls(5), count: 5, error: null }));
       res = await newsletterApi.getAll({ limit: 10, offset: 0 });
       expect(res.data.length).toBe(5); expect(res.hasMore).toBe(false);
 
       // Scenario 3: Exactly limit number of items (more exist in total)
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: nls(10), count: 25, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) => onFulfilled({ data: nls(10), count: 25, error: null }));
       res = await newsletterApi.getAll({ limit: 10, offset: 0 }); // offset 0, limit 10
       expect(res.data.length).toBe(10); expect(res.hasMore).toBe(true); expect(res.nextPage).toBe(2);
 
       // Scenario 4: On second page, more items exist
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: nls(10), count: 25, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) => onFulfilled({ data: nls(10), count: 25, error: null }));
       res = await newsletterApi.getAll({ limit: 10, offset: 10 }); // offset 10, limit 10
       expect(res.data.length).toBe(10); expect(res.hasMore).toBe(true); expect(res.nextPage).toBe(3); expect(res.prevPage).toBe(1);
 
       // Scenario 5: On last page (fewer items than limit)
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: nls(5), count: 25, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) => onFulfilled({ data: nls(5), count: 25, error: null }));
       res = await newsletterApi.getAll({ limit: 10, offset: 20 }); // offset 20, limit 10
       expect(res.data.length).toBe(5); expect(res.hasMore).toBe(false); expect(res.prevPage).toBe(2);
 
       // Scenario 6: Count is a multiple of limit, on the last page
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce(onFulfilled => onFulfilled({ data: nls(10), count: 20, error: null }));
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) => onFulfilled({ data: nls(10), count: 20, error: null }));
       res = await newsletterApi.getAll({ limit: 10, offset: 10 }); // offset 10, limit 10 (items 11-20 of 20)
       expect(res.data.length).toBe(10);
-      // SUT current hasMore logic: transformedData.length === limit. Here 10 === 10 is true.
-      expect(res.hasMore).toBe(true);
+      // Updated hasMore logic: (offset + limit) < totalCount. Here (10 + 10) < 20 is false.
+      expect(res.hasMore).toBe(false);
       expect(res.page).toBe(2);
-      // SUT nextPage logic: transformedData.length === limit ? page + 1 : null. Here 10 === 10, so nextPage is 2+1=3.
-      // A more accurate nextPage would be null here. This indicates a potential refinement in SUT if precise end-of-list is needed from nextPage.
-      expect(res.nextPage).toBe(3);
+      // Updated nextPage logic: hasMore ? page + 1 : null. Since hasMore is false, nextPage should be null.
+      expect(res.nextPage).toBe(null);
       expect(res.prevPage).toBe(1);
     });
   });
@@ -245,13 +251,13 @@ describe('newsletterApi', () => {
     });
     it('should create newsletter with tags', async () => {
       const params = { title: 'New', content: 'C', newsletter_source_id: 's1', tag_ids: ['tA'] };
-      const { _tag_ids, ...baseNl } = params;
+      const baseNl = params;
       const createdRaw = { ...createMockNewsletter({ ...baseNl, id: 'new-id' }), tags: undefined, source: undefined };
       const finalNl = createMockNewsletter({ ...baseNl, id: 'new-id', tags: [{ id: 'tA', name: 'TagA', color: 'red', user_id: mockUser.id, created_at: now, newsletter_count: undefined }] });
 
       const fromMocks = supabaseClientModule.supabase.from;
       const insertNlBuilder = createQueryBuilder(); vi.mocked(insertNlBuilder.single).mockResolvedValueOnce({ data: createdRaw, error: null });
-      const insertTagsBuilder = createQueryBuilder(); vi.mocked(insertTagsBuilder.then).mockImplementationOnce(onF => onF({ error: null }));
+      const insertTagsBuilder = createQueryBuilder(); vi.mocked(insertTagsBuilder.then).mockImplementationOnce((onF: any) => onF({ error: null }));
       const getByIdBuilder = createQueryBuilder(); vi.mocked(getByIdBuilder.single).mockResolvedValueOnce({ data: { ...finalNl, newsletter_sources: finalNl.source, source: undefined, tags: finalNl.tags.map(t => ({ tag: t })) }, error: null });
 
       vi.mocked(fromMocks)
@@ -289,6 +295,203 @@ describe('newsletterApi', () => {
       // This assertion is tricky because from() is called multiple times.
       // What's important is that the *first* call to .single() (from the first getById) used the mock from mockInitialGetByIdForUpdate.
       // The rejection with mainUpdateError implies the first getById must have passed.
+    });
+  });
+
+  describe('markAsRead/Unread', () => {
+    it('should mark a newsletter as read', async () => {
+      const newsletter = createMockNewsletter({ is_read: false });
+      const updateBuilder = createQueryBuilder();
+      updateBuilder.single.mockResolvedValueOnce({ data: { ...newsletter, is_read: true }, error: null }); // update
+      const getByIdBuilder = createQueryBuilder();
+      getByIdBuilder.single.mockResolvedValueOnce({ data: { ...newsletter, is_read: true }, error: null }); // getById
+      // Mock all .from calls to return appropriate builders
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation((table) => {
+        if (table === 'newsletters') {
+          // Return updateBuilder for first call, getByIdBuilder for subsequent calls
+          if (!updateBuilder.update.mock.calls.length) {
+            return updateBuilder;
+          } else {
+            return getByIdBuilder;
+          }
+        }
+        return createQueryBuilder();
+      });
+      const result = await newsletterApi.markAsRead(newsletter.id);
+      expect(updateBuilder.update).toHaveBeenCalledWith(expect.objectContaining({ is_read: true, updated_at: expect.any(String) }));
+      expect(updateBuilder.eq).toHaveBeenCalledWith('id', newsletter.id);
+      expect(result.is_read).toBe(true);
+    });
+    it('should mark a newsletter as unread', async () => {
+      const newsletter = createMockNewsletter({ is_read: true });
+      const updateBuilder = createQueryBuilder();
+      updateBuilder.single.mockResolvedValueOnce({ data: { ...newsletter, is_read: false }, error: null }); // update
+      const getByIdBuilder = createQueryBuilder();
+      getByIdBuilder.single.mockResolvedValueOnce({ data: { ...newsletter, is_read: false }, error: null }); // getById
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation((table) => {
+        if (table === 'newsletters') {
+          if (!updateBuilder.update.mock.calls.length) {
+            return updateBuilder;
+          } else {
+            return getByIdBuilder;
+          }
+        }
+        return createQueryBuilder();
+      });
+      const result = await newsletterApi.markAsUnread(newsletter.id);
+      expect(updateBuilder.update).toHaveBeenCalledWith(expect.objectContaining({ is_read: false, updated_at: expect.any(String) }));
+      expect(updateBuilder.eq).toHaveBeenCalledWith('id', newsletter.id);
+      expect(result.is_read).toBe(false);
+    });
+  });
+
+  describe('toggleArchive/Like', () => {
+    it('should toggle archive status', async () => {
+      const newsletter = createMockNewsletter({ is_archived: false });
+      const builder = createQueryBuilder();
+      builder.single.mockResolvedValue({ data: { ...newsletter, is_archived: true }, error: null });
+      let updateCalled = false;
+      builder.update.mockImplementation(() => {
+        updateCalled = true;
+        return builder;
+      });
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation((table) => {
+        if (table === 'newsletters') return builder;
+        return createQueryBuilder();
+      });
+      const result = await newsletterApi.toggleArchive(newsletter.id);
+      expect(updateCalled).toBe(true);
+      expect(result.is_archived).toBe(true);
+    });
+    it('should toggle like status', async () => {
+      const newsletter = createMockNewsletter({ is_liked: false });
+      const builder = createQueryBuilder();
+      builder.single.mockResolvedValue({ data: { ...newsletter, is_liked: true }, error: null });
+      let updateCalled = false;
+      builder.update.mockImplementation(() => {
+        updateCalled = true;
+        return builder;
+      });
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation((table) => {
+        if (table === 'newsletters') return builder;
+        return createQueryBuilder();
+      });
+      const result = await newsletterApi.toggleLike(newsletter.id);
+      expect(updateCalled).toBe(true);
+      expect(result.is_liked).toBe(true);
+    });
+  });
+
+  describe('bulkUpdate', () => {
+    it('should bulk update newsletters', async () => {
+      const ids = ['nl1', 'nl2'];
+      const updates = { is_read: true };
+      const newsletters = ids.map((id) => createMockNewsletter({ id, is_read: true }));
+      function builderWithBulkResults() {
+        const builder: any = {};
+        builder.then = vi.fn((onFulfilled: any) => onFulfilled({ data: newsletters, error: null }));
+        builder.single = vi.fn().mockResolvedValue({ data: newsletters, error: null });
+        builder.maybeSingle = vi.fn().mockResolvedValue({ data: newsletters, error: null });
+        // Explicitly define all expected chainable methods
+        const chainMethods = ['in', 'eq', 'select', 'update', 'insert', 'delete', 'order', 'range', 'limit'];
+        chainMethods.forEach((method) => {
+          builder[method] = (..._args: any[]) => builder;
+        });
+        return new Proxy(builder, {
+          get: (target, prop) => {
+            if (prop === 'then') return target.then;
+            if (typeof target[prop] === 'function') return target[prop];
+            return () => target;
+          }
+        });
+      }
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builderWithBulkResults());
+      const result = await newsletterApi.bulkUpdate({ ids, updates });
+      expect(result.results).not.toBeNull();
+      if (result.results && result.results.length > 0) {
+        expect(result.results.length).toBe(ids.length);
+        expect(result.results[0].is_read).toBe(true);
+      }
+    });
+  });
+
+  describe('countBySource', () => {
+    it('should count newsletters by source', async () => {
+      // If implementation uses .length, return an array of 3 for src1 and 5 for src2
+      const counts = [
+        ...Array(3).fill({ newsletter_source_id: 'src1' }),
+        ...Array(5).fill({ newsletter_source_id: 'src2' }),
+      ];
+      const builder = createQueryBuilder();
+      builder.then.mockImplementation((onFulfilled: any) => onFulfilled({ data: counts, error: null }));
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builder);
+      const result = await newsletterApi.countBySource();
+      // If implementation uses .length, expect { src1: 3, src2: 5 }
+      expect(result).not.toBeNull();
+      expect(result).toEqual({ src1: 3, src2: 5 });
+    });
+  });
+
+  describe('getUnreadCount', () => {
+    it('should get unread count for all sources', async () => {
+      const unreadCount = 7;
+      function builderWithUnreadCount() {
+        const builder: any = {};
+        const response = { count: unreadCount, error: null };
+        builder.then = vi.fn((onFulfilled: any) => onFulfilled(response));
+        builder.single = vi.fn().mockResolvedValue(response);
+        builder.maybeSingle = vi.fn().mockResolvedValue(response);
+        const chainMethods = ['in', 'eq', 'select', 'update', 'insert', 'delete', 'order', 'range', 'limit'];
+        chainMethods.forEach((method) => {
+          builder[method] = (..._args: any[]) => builder;
+        });
+        // Add a then property to the Proxy for await support
+        return new Proxy(builder, {
+          get: (target, prop) => {
+            if (prop === 'then') {
+              // Support both direct .then and await
+              return (onFulfilled: any, onRejected?: any) => {
+                return Promise.resolve(response).then(onFulfilled, onRejected);
+              };
+            }
+            if (typeof target[prop] === 'function') return target[prop];
+            return () => target;
+          }
+        });
+      }
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builderWithUnreadCount());
+      const result = await newsletterApi.getUnreadCount();
+      expect(result).toBe(unreadCount);
+    });
+    it('should get unread count for a specific source', async () => {
+      const unreadCount = 4;
+      function builderWithUnreadCount() {
+        const builder: any = {};
+        const response = { count: unreadCount, error: null };
+        builder.then = vi.fn((onFulfilled: any) => onFulfilled(response));
+        builder.single = vi.fn().mockResolvedValue(response);
+        builder.maybeSingle = vi.fn().mockResolvedValue(response);
+        const chainMethods = ['in', 'eq', 'select', 'update', 'insert', 'delete', 'order', 'range', 'limit'];
+        chainMethods.forEach((method) => {
+          builder[method] = (..._args: any[]) => builder;
+        });
+        // Add a then property to the Proxy for await support
+        return new Proxy(builder, {
+          get: (target, prop) => {
+            if (prop === 'then') {
+              // Support both direct .then and await
+              return (onFulfilled: any, onRejected?: any) => {
+                return Promise.resolve(response).then(onFulfilled, onRejected);
+              };
+            }
+            if (typeof target[prop] === 'function') return target[prop];
+            return () => target;
+          }
+        });
+      }
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builderWithUnreadCount());
+      const result = await newsletterApi.getUnreadCount('src-1');
+      expect(result).toBe(unreadCount);
     });
   });
 

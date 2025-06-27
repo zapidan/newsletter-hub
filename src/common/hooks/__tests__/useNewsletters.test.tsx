@@ -17,7 +17,7 @@ vi.mock('@common/services', () => ({
     toggleArchive: vi.fn(),
     bulkArchive: vi.fn(),
     bulkUnarchive: vi.fn(),
-    delete: vi.fn(), // Was deleteNewsletter
+    delete: vi.fn().mockResolvedValue({ success: true }), // Was deleteNewsletter
     // createNewsletter: vi.fn(), // Not used by useNewsletters directly
     // updateNewsletter: vi.fn(), // Not used by useNewsletters directly
     update: vi.fn(), // For unarchive specific
@@ -46,6 +46,7 @@ const mockCacheManagerInstance = {
   clearReadingQueueCache: vi.fn(),
   warmCache: vi.fn(),
   queryClient: mockQueryClientInstance,
+  updateUnreadCountOptimistically: vi.fn(),
 }
 
 // Global variable to hold the current queryClient for the cache utils mock
@@ -401,7 +402,7 @@ describe('useNewsletters', () => {
 
   describe('delete operations', () => {
     it('deleteNewsletter invalidates queries', async () => {
-      mockNewsletterService.delete.mockResolvedValueOnce(true)
+      mockNewsletterService.delete.mockResolvedValueOnce({ success: true })
       const { invalidateForOperation } = await import('@common/utils/optimizedCacheInvalidation');
       const { result } = await setupHook()
       await act(async () => { await result.current.deleteNewsletter('nl-1') })
@@ -417,7 +418,7 @@ describe('useNewsletters', () => {
 
     it('bulk delete deletes each id then invalidates', async () => {
       const ids = ['nl-1', 'nl-2', 'nl-3']
-      mockNewsletterService.delete.mockResolvedValue(true)
+      mockNewsletterService.delete.mockResolvedValue({ success: true })
       const { invalidateForOperation } = await import('@common/utils/optimizedCacheInvalidation');
       const { result } = await setupHook()
       await act(async () => { await result.current.bulkDeleteNewsletters(ids) })
@@ -429,7 +430,7 @@ describe('useNewsletters', () => {
     it('bulk delete surfaces first error', async () => {
       mockNewsletterService.delete.mockImplementation(async (id: string) => {
         if (id === 'nl-1') throw new Error('fail')
-        return true
+        return { success: true }
       })
       const { result } = await setupHook()
       await expect(result.current.bulkDeleteNewsletters(['nl-1', 'nl-2'])).rejects.toThrow('fail')
