@@ -89,7 +89,6 @@ const Inbox: React.FC = memo(() => {
     debouncedTagIds,
     allTags,
     newsletterSources,
-    newsletterFilter,
     isLoadingSources,
     // Filter actions
     setFilter,
@@ -121,16 +120,7 @@ const Inbox: React.FC = memo(() => {
       sourceIds: contextNewsletterFilter.sourceIds ? [...contextNewsletterFilter.sourceIds] : undefined,
     };
   }, [
-    contextNewsletterFilter.isRead,
-    contextNewsletterFilter.isArchived,
-    contextNewsletterFilter.isLiked,
-    contextNewsletterFilter.search,
-    contextNewsletterFilter.dateFrom,
-    contextNewsletterFilter.dateTo,
-    contextNewsletterFilter.orderBy,
-    contextNewsletterFilter.ascending,
-    contextNewsletterFilter.tagIds,
-    contextNewsletterFilter.sourceIds,
+    contextNewsletterFilter,
   ]);
 
   // Newsletter data with infinite scroll
@@ -144,8 +134,8 @@ const Inbox: React.FC = memo(() => {
     refetch: refetchNewsletters,
     totalCount,
   } = useInfiniteNewsletters(stableNewsletterFilter, {
-    refetchOnWindowFocus: false,
-    staleTime: 0,
+    _refetchOnWindowFocus: false,
+    _staleTime: 0,
     pageSize: 25,
     debug: process.env.NODE_ENV === 'development',
   });
@@ -295,7 +285,7 @@ const Inbox: React.FC = memo(() => {
   const [tagUpdateError, setTagUpdateError] = useState<string | null>(null);
 
   // Action progress state to prevent refetching during actions
-  const [isActionInProgress, setIsActionInProgress] = useState(false);
+  const [_isActionInProgress, setIsActionInProgress] = useState(false);
 
   // Get selected tag objects for display
   const selectedTags = useMemo(() => {
@@ -818,9 +808,9 @@ const Inbox: React.FC = memo(() => {
             }}
             onUpdateTags={handleUpdateTagsWrapper}
             onToggleTagVisibility={toggleTagVisibility}
-            onTagClick={async (tag: Tag, e: React.MouseEvent) => handleTagClick(tag.id)}
-            onRemoveFromQueue={async (e: React.MouseEvent, newsletterId: string) =>
-              await handleRemoveFromQueue(e, newsletterId)
+            onTagClick={async (tag: Tag, _e: React.MouseEvent) => handleTagClick(tag.id)}
+            onRemoveFromQueue={async (_e: React.MouseEvent, newsletterId: string) =>
+              await handleRemoveFromQueue(_e, newsletterId)
             }
             onNewsletterClick={handleNewsletterClick}
             onMouseEnter={handleNewsletterMouseEnter}

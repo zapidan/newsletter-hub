@@ -9,8 +9,8 @@ import { queryKeyFactory } from '../../utils/queryKeyFactory';
 
 export interface UseInfiniteNewslettersOptions {
   enabled?: boolean;
-  refetchOnWindowFocus?: boolean;
-  staleTime?: number;
+  _refetchOnWindowFocus?: boolean;
+  _staleTime?: number;
   pageSize?: number;
   debug?: boolean;
 }
@@ -41,8 +41,8 @@ export const useInfiniteNewsletters = (
   const log = useLogger('useInfiniteNewsletters');
   const {
     enabled = true,
-    refetchOnWindowFocus = false,
-    staleTime = 30000, // 30 seconds
+    _refetchOnWindowFocus = false,
+    _staleTime = 30000, // 30 seconds
     pageSize = 20,
     debug = false,
   } = options;
@@ -72,7 +72,7 @@ export const useInfiniteNewsletters = (
     }
 
     // Track if the query key has changed
-    const hasChanged = lastQueryKeyRef.current !== keyString;
+    const _hasChanged = lastQueryKeyRef.current !== keyString;
     lastQueryKeyRef.current = keyString;
 
     return key;
@@ -109,16 +109,7 @@ export const useInfiniteNewsletters = (
 
     return params;
   }, [
-    filters.search,
-    filters.isRead,
-    filters.isArchived,
-    filters.isLiked,
-    filters.tagIds?.length, // Only depend on length, not the array itself
-    filters.sourceIds?.length, // Only depend on length, not the array itself
-    filters.dateFrom,
-    filters.dateTo,
-    filters.orderBy,
-    filters.ascending,
+    filters,
     pageSize,
     debug,
     log
@@ -297,7 +288,7 @@ export const useInfiniteNewsletters = (
     }
 
     return allNewsletters;
-  }, [data?.pages, debug, log]);
+  }, [data, debug, log]);
 
   // Calculate metadata
   const totalCount = data?.pages[0]?.count || 0;
