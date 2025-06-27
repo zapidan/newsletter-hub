@@ -180,7 +180,8 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       isLoading: loadingStates[newsletter.id] === "archive",
       className: isArchived ? "text-green-600 hover:bg-green-100" : undefined,
     },
-    {
+    // Only show trash icon for archived newsletters
+    ...(isArchived ? [{
       key: "trash",
       action: handleTrash,
       icon: <Trash size={14} />,
@@ -188,7 +189,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       variant: "danger" as const,
       isLoading: loadingStates[newsletter.id] === "trash",
       className: "text-red-600 hover:bg-red-100",
-    },
+    }] : []),
   ];
 
   return (
