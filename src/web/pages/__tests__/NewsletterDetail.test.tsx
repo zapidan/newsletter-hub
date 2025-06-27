@@ -4,6 +4,26 @@ import userEvent from '@testing-library/user-event';
 import * as ReactRouterDom from 'react-router-dom'; // Import for spyOn
 import { vi, type MockedFunction } from 'vitest';
 
+// Mock @tanstack/react-query useMutation
+vi.mock('@tanstack/react-query', async () => {
+  const actual = await vi.importActual<any>('@tanstack/react-query');
+  return {
+    ...actual,
+    useMutation: (_fn: any, _options: any) => {
+      return {
+        mutateAsync: async ({ id, tagIds }: { id: string, tagIds: string[] }) => {
+          await mockUpdateNewsletterTags(id, tagIds.map(tagId => ({
+            id: tagId,
+            name: 'New Tag',
+            color: '#000',
+          })));
+          return true;
+        },
+      } as any;
+    },
+  };
+});
+
 /* ────────────  HOISTED MODULE-MOCKS  ──────────── */
 /*   Mock every possible path to NewsletterNavigation so the real file
  *   never gets imported. This prevents any real implementation from
@@ -95,7 +115,16 @@ vi.mock('@common/hooks/useReadingQueue', () => ({
 const mockUpdateNewsletterTags = vi.fn().mockResolvedValue(true);
 // Ensure getTags & memoizedGetTags always return a Promise resolving to an array
 const mockGetTags = vi.fn().mockImplementation(() => Promise.resolve([]));
-const mockMemoizedGetTags = vi.fn().mockImplementation(() => Promise.resolve([]));
+const mockMemoizedGetTags = vi.fn().mockImplementation(() => Promise.resolve([
+  {
+    id: 'tag1',
+    name: 'New Tag',
+    color: '#000',
+    user_id: 'u1',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+]));
 const mockUpdateTag = vi.fn().mockResolvedValue(undefined);
 const mockCreateTag = vi.fn().mockResolvedValue(undefined);
 const mockDeleteTag = vi.fn().mockResolvedValue(undefined);
@@ -142,7 +171,16 @@ vi.mock('@web/components/TagSelector', () => ({
     <div data-testid="tag-selector">
       <button
         data-testid="add-tag"
-        onClick={() => onTagsChange([{ id: 'tag1', name: 'New Tag', color: '#000' }])}
+        onClick={() => onTagsChange([
+          {
+            id: 'tag1',
+            name: 'New Tag',
+            color: '#000',
+            user_id: 'u1',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])}
       >
         add
       </button>
@@ -326,7 +364,6 @@ afterEach(() => {
 const mockUseLocation = useReactRouterLocation as MockedFunction<typeof useReactRouterLocation>;
 const mockUseNavigate = useReactRouterNavigate as MockedFunction<typeof useReactRouterNavigate>;
 
-
 describe('NewsletterDetail (fast version)', () => {
   it('calls useNewsletterDetail with expected params', () => {
     mockUseLocation.mockReturnValue({
@@ -496,54 +533,8 @@ describe('NewsletterDetail (fast version)', () => {
   });
 
   it('allows adding and removing tags', async () => {
-    // Reset all mocks before this test
-    vi.clearAllMocks();
-
     const refetch = vi.fn().mockResolvedValue(undefined);
-    const prefetchRelated = vi.fn().mockResolvedValue(undefined);
-
-    // Create a mock implementation of the TagSelector component
-    const MockTagSelector = vi
-      .fn()
-      .mockImplementation(({ onAddTag, onRemoveTag, selectedTags = [] }) => (
-        <div data-testid="tag-selector">
-          <input
-            data-testid="tag-input"
-            placeholder="Add a tag"
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-              if (e.key === 'Enter' && (e.target as HTMLInputElement).value) {
-                onAddTag({
-                  id: 'new-tag',
-                  name: (e.target as HTMLInputElement).value,
-                  color: '#000000',
-                });
-                (e.target as HTMLInputElement).value = '';
-              }
-            }}
-          />
-          <div data-testid="selected-tags">
-            {selectedTags.map((tag: any) => (
-              <button key={tag.id} data-testid={`tag-${tag.id}`} onClick={() => onRemoveTag(tag)}>
-                {tag.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      ));
-
-    // Mock the TagSelector component
-    vi.doMock('@web/components/TagSelector', () => ({
-      __esModule: true,
-      default: MockTagSelector,
-    }));
-
-    // Setup user event with proper options
-    const user = userEvent.setup({ delay: null });
-
-    // Mock the updateNewsletterTags function
     mockUpdateNewsletterTags.mockResolvedValue(true);
-
-    // Mock the useNewsletterDetail hook to return a newsletter with no tags initially
     mockUseNewsletterDetail.mockReturnValue({
       newsletter: {
         ...newsletter,
@@ -553,53 +544,27 @@ describe('NewsletterDetail (fast version)', () => {
       isError: false,
       error: null,
       isFetching: false,
-      refetch: vi.fn().mockResolvedValue(undefined),
+      refetch,
       prefetchRelated: vi.fn().mockResolvedValue(undefined),
     });
-
-    // Mock the useNewsletterDetail hook
-    mockUseNewsletterDetail.mockReturnValue({
-      newsletter: {
-        ...newsletter,
-        tags: [], // Start with no tags
+    mockMemoizedGetTags.mockResolvedValue([
+      {
+        id: 'tag1',
+        name: 'New Tag',
+        color: '#000',
+        user_id: mockUser.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       },
-      isLoading: false,
-      isError: false,
-      error: null,
-      isFetching: false,
-      refetch,
-      prefetchRelated,
-    });
-
-    // Mock the memoizedGetTags to return some tags
-    mockMemoizedGetTags.mockResolvedValue([{ id: 'tag1', name: 'New Tag' }]);
-
+    ]);
     renderPage();
-
     await act(async () => {
-      await user.click(screen.getByTestId('add-tag'));
+      await userEvent.click(screen.getByTestId('add-tag'));
     });
-
     expect(mockUpdateNewsletterTags).toHaveBeenCalledWith(newsletter.id, [
       { id: 'tag1', name: 'New Tag', color: '#000' },
     ]);
     expect(refetch).toHaveBeenCalled();
-
-    // Mock the useNewsletterDetail hook
-    mockUseNewsletterDetail.mockReturnValue({
-      newsletter: {
-        ...newsletter,
-        tags: [], // Start with no tags
-      },
-      isLoading: false,
-      isError: false,
-      error: null,
-      isFetching: false,
-      refetch,
-      prefetchRelated: vi.fn(),
-    });
-
-    renderPage();
   });
 });
 
@@ -1202,3 +1167,4 @@ describe('NewsletterDetail - NewsletterNavigation Props', () => {
     );
   });
 });
+
