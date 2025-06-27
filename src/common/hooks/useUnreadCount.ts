@@ -1,8 +1,8 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { newsletterService } from '@common/services';
 import { AuthContext } from '@common/contexts/AuthContext';
-import { useContext, useEffect, useRef, useMemo, useCallback } from 'react';
+import { newsletterService } from '@common/services';
 import { useLogger } from '@common/utils/logger/useLogger';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 
 // Cache time constants (in milliseconds)
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes stale time
@@ -31,7 +31,10 @@ export const useUnreadCount = (sourceId?: string | null) => {
 
   // Single query key for all unread count data
   const queryKey = useMemo(() => {
-    return ['unreadCount', 'all', user?.id];
+    if (!user?.id) {
+      return ['unreadCount', 'all', null];
+    }
+    return ['unreadCount', 'all', user.id];
   }, [user?.id]);
 
   // Selector function to extract the needed count

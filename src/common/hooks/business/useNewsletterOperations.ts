@@ -1,5 +1,5 @@
 import { newsletterService } from "@common/services";
-import { NewsletterWithRelations } from "@common/types";
+import { NewsletterWithRelations, PaginatedResponse } from "@common/types";
 import { useLogger } from "@common/utils/logger";
 import { queryKeyFactory } from "@common/utils/queryKeyFactory";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -200,6 +200,43 @@ export function useNewsletterOperations(options: UseNewsletterOperationsOptions 
   // Toggle like mutation
   const toggleLikeMutation = useMutation({
     mutationFn: (id: string) => newsletterService.toggleLike(id),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ['newsletters', 'infinite'] });
+      const previousData = queryClient.getQueryData(['newsletters', 'infinite']);
+      queryClient.setQueriesData(
+        { queryKey: ['newsletters', 'infinite'] },
+        (oldData: any) => {
+          if (!oldData?.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: PaginatedResponse<NewsletterWithRelations>) => ({
+              ...page,
+              data: page.data.filter((nl: NewsletterWithRelations) => {
+                if (nl.id === id && nl.is_liked) return false;
+                return true;
+              })
+            }))
+          };
+        }
+      );
+      return { previousData };
+    },
+    onError: (err, id, context) => {
+      // Rollback on error
+      if (context?.previousData) {
+        queryClient.setQueryData(['newsletters', 'infinite'], context.previousData);
+      }
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      log.error("Failed to toggle newsletter like", {
+        component: "useNewsletterOperations",
+        action: "toggleLike",
+        error: err,
+      });
+      onError?.("toggleLike", errorMessage);
+      if (showToasts) {
+        toast.error("Failed to toggle like");
+      }
+    },
     onSuccess: async (result, id) => {
       if (result.success) {
         await invalidateRelatedQueries([id]);
@@ -215,23 +252,51 @@ export function useNewsletterOperations(options: UseNewsletterOperationsOptions 
         }
       }
     },
-    onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to toggle newsletter like", {
-        component: "useNewsletterOperations",
-        action: "toggleLike",
-        error,
-      });
-      onError?.("toggleLike", errorMessage);
-      if (showToasts) {
-        toast.error("Failed to toggle like");
-      }
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'infinite'] });
     },
   });
 
   // Toggle archive mutation
   const toggleArchiveMutation = useMutation({
     mutationFn: (id: string) => newsletterService.toggleArchive(id),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ['newsletters', 'infinite'] });
+      const previousData = queryClient.getQueryData(['newsletters', 'infinite']);
+      queryClient.setQueriesData(
+        { queryKey: ['newsletters', 'infinite'] },
+        (oldData: any) => {
+          if (!oldData?.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page: PaginatedResponse<NewsletterWithRelations>) => ({
+              ...page,
+              data: page.data.filter((nl: NewsletterWithRelations) => {
+                if (nl.id === id && !nl.is_archived) return false;
+                return true;
+              })
+            }))
+          };
+        }
+      );
+      return { previousData };
+    },
+    onError: (err, id, context) => {
+      // Rollback on error
+      if (context?.previousData) {
+        queryClient.setQueryData(['newsletters', 'infinite'], context.previousData);
+      }
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      log.error("Failed to toggle newsletter archive", {
+        component: "useNewsletterOperations",
+        action: "toggleArchive",
+        error: err,
+      });
+      onError?.("toggleArchive", errorMessage);
+      if (showToasts) {
+        toast.error("Failed to toggle archive");
+      }
+    },
     onSuccess: async (result, id) => {
       if (result.success) {
         await invalidateRelatedQueries([id]);
@@ -247,17 +312,8 @@ export function useNewsletterOperations(options: UseNewsletterOperationsOptions 
         }
       }
     },
-    onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      log.error("Failed to toggle newsletter archive", {
-        component: "useNewsletterOperations",
-        action: "toggleArchive",
-        error,
-      });
-      onError?.("toggleArchive", errorMessage);
-      if (showToasts) {
-        toast.error("Failed to toggle archive");
-      }
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['newsletters', 'infinite'] });
     },
   });
 

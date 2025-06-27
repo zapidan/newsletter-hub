@@ -1,5 +1,20 @@
 // Utility to normalize newsletter filter keys from snake_case to camelCase
+let lastInput: any = null;
+let lastOutput: any = null;
+
 export function normalizeNewsletterFilter(filter: any): any {
+  // Memoization: shallow compare with last input
+  if (lastInput && filter && Object.keys(filter).length === Object.keys(lastInput).length) {
+    let same = true;
+    for (const key in filter) {
+      if (filter[key] !== lastInput[key]) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return lastOutput;
+  }
+
   if (!filter) return filter;
 
   const mapping: Record<string, string> = {
@@ -18,9 +33,9 @@ export function normalizeNewsletterFilter(filter: any): any {
   const result: any = {};
 
   for (const key in filter) {
+    const value = filter[key];
     if (mapping[key]) {
       const newKey = mapping[key];
-      let value = filter[key];
 
       // Handle special cases for array fields
       if (newKey === 'sourceIds' && value !== undefined) {
@@ -58,6 +73,8 @@ export function normalizeNewsletterFilter(filter: any): any {
     }
   }
 
+  lastInput = filter;
+  lastOutput = result;
   return result;
 }
 

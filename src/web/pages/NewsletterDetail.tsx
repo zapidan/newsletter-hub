@@ -168,7 +168,7 @@ const NewsletterDetail = memo(() => {
     },
     {
       showToasts: false,
-      optimisticUpdates: true,
+      optimisticUpdates: false,
       onSuccess: () => {
         // Don't refetch here - let React Query handle cache updates
         // This prevents cascading refetches
@@ -348,6 +348,25 @@ const NewsletterDetail = memo(() => {
     markAsReadInProgress.current = false;
   }, [id]);
 
+  // Memoize mutations object to prevent unnecessary re-renders and infinite loops
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    updateNewsletterTags: updateNewsletterTagsForActions,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    updateNewsletterTagsForActions,
+  ]);
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -453,15 +472,7 @@ const NewsletterDetail = memo(() => {
                       newsletter={newsletter}
                       onNewsletterUpdate={handleNewsletterUpdate}
                       isFromReadingQueue={isFromReadingQueue}
-                      mutations={{
-                        markAsRead,
-                        markAsUnread,
-                        toggleLike,
-                        toggleArchive,
-                        deleteNewsletter,
-                        toggleInQueue,
-                        updateNewsletterTags: updateNewsletterTagsForActions,
-                      }}
+                      mutations={mutations}
                     />
                   )}
                 </div>
@@ -479,15 +490,7 @@ const NewsletterDetail = memo(() => {
                   showLabels={true}
                   showCounter={true}
                   className=""
-                  mutations={{
-                    markAsRead,
-                    markAsUnread,
-                    toggleLike,
-                    toggleArchive,
-                    deleteNewsletter,
-                    toggleInQueue,
-                    updateNewsletterTags: updateNewsletterTagsForActions,
-                  }}
+                  mutations={mutations}
                 />
               </div>
             )}

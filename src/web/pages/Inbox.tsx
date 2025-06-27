@@ -91,7 +91,6 @@ const Inbox: React.FC = () => {
     allTags,
     newsletterSources,
     isLoadingSources,
-    hasActiveFilters,
     // Filter actions
     setFilter,
     setSourceFilter,
@@ -154,7 +153,7 @@ const Inbox: React.FC = () => {
   // Loading states for bulk operations
   const bulkLoadingStates = useBulkLoadingStates();
 
-  // Get newsletter mutations from useNewsletters hook
+  // Get newsletter mutations from useNewsletters hook (new onMutate handlers)
   const {
     markAsRead,
     markAsUnread,
@@ -264,7 +263,7 @@ const Inbox: React.FC = () => {
     mutations,
     {
       showToasts: true,
-      optimisticUpdates: true,
+      optimisticUpdates: false,
       enableErrorHandling: true,
       enableLoadingStates: true,
       onSuccess: useCallback(() => {
@@ -577,7 +576,7 @@ const Inbox: React.FC = () => {
       setIsActionInProgress(true);
 
       try {
-        await newsletterActions.handleToggleLike(newsletter);
+        await toggleLike(newsletter.id);
         preserveFilterParams();
         // Dispatch event for unread count updates
         window.dispatchEvent(new CustomEvent('newsletter:like-status-changed'));
@@ -599,7 +598,7 @@ const Inbox: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [newsletterActions, filter, preserveFilterParams, refetchNewsletters, log]
+    [toggleLike, filter, preserveFilterParams, refetchNewsletters, log]
   );
 
   const handleToggleArchiveWrapper = useCallback(
@@ -607,7 +606,7 @@ const Inbox: React.FC = () => {
       setIsActionInProgress(true);
 
       try {
-        await newsletterActions.handleToggleArchive(newsletter);
+        await toggleArchive(newsletter.id);
         preserveFilterParams();
       } catch (error) {
         log.error(
@@ -623,7 +622,7 @@ const Inbox: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [newsletterActions, preserveFilterParams, filter, log]
+    [toggleArchive, preserveFilterParams, filter, log]
   );
 
   const handleToggleReadWrapper = useCallback(
@@ -631,7 +630,11 @@ const Inbox: React.FC = () => {
       setIsActionInProgress(true);
 
       try {
-        await newsletterActions.handleToggleRead(newsletter);
+        if (newsletter.is_read) {
+          await markAsUnread(newsletter.id); // Use direct mutation instead of newsletterActions
+        } else {
+          await markAsRead(newsletter.id); // Use direct mutation instead of newsletterActions
+        }
         preserveFilterParams();
       } catch (error) {
         log.error(
@@ -647,7 +650,7 @@ const Inbox: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [newsletterActions, preserveFilterParams, filter, log]
+    [markAsRead, markAsUnread, preserveFilterParams, filter, log]
   );
 
   const handleDeleteNewsletterWrapper = useCallback(

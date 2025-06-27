@@ -1,11 +1,11 @@
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
 import type { NewsletterMutations } from '@common/hooks/useSharedNewsletterActions';
-import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
-import type { NewsletterFilter } from '@common/types';
+import type { NewsletterFilter, NewsletterWithRelations } from '@common/types';
+import { getCacheManager } from '@common/utils/cacheUtils';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NewsletterNavigationProps {
@@ -140,20 +140,81 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     navigateToNext,
   } = useNewsletterNavigation(currentNewsletterId, navigationOptions);
 
-  const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions(
-    mutations,
-    {
-      showToasts: false, // Don't show toasts for auto-mark-as-read and auto-archive
-      optimisticUpdates: true,
+  // Navigation-specific handlers that use optimistic unread count updates
+  const handleNavigationMarkAsRead = useCallback(async (newsletterId: string) => {
+    if (!mutations?.markAsRead) {
+      throw new Error('markAsRead mutation not available');
     }
-  );
+
+    try {
+      // Use the mutation directly but with navigation-specific cache handling
+      await mutations.markAsRead(newsletterId);
+
+      // Use optimistic unread count update instead of cache invalidation
+      const cacheManager = getCacheManager();
+      cacheManager.updateUnreadCountOptimistically({
+        type: 'mark-read',
+        newsletterIds: [newsletterId],
+      });
+
+      log.debug('Navigation mark as read completed', {
+        action: 'navigation_mark_read',
+        metadata: { newsletterId },
+      });
+    } catch (error) {
+      log.error(
+        'Failed to mark newsletter as read during navigation',
+        {
+          action: 'navigation_mark_read_error',
+          metadata: { newsletterId },
+        },
+        error instanceof Error ? error : new Error(String(error))
+      );
+      throw error;
+    }
+  }, [mutations?.markAsRead, log]);
+
+  const handleNavigationToggleArchive = useCallback(async (newsletter: NewsletterWithRelations) => {
+    if (!mutations?.toggleArchive) {
+      throw new Error('toggleArchive mutation not available');
+    }
+
+    try {
+      await mutations.toggleArchive(newsletter.id);
+
+      log.debug('Navigation toggle archive completed', {
+        action: 'navigation_toggle_archive',
+        metadata: { newsletterId: newsletter.id },
+      });
+    } catch (error) {
+      log.error(
+        'Failed to toggle archive during navigation',
+        {
+          action: 'navigation_toggle_archive_error',
+          metadata: { newsletterId: newsletter.id },
+        },
+        error instanceof Error ? error : new Error(String(error))
+      );
+      throw error;
+    }
+  }, [mutations?.toggleArchive, log]);
+
+  // Track which newsletters have been auto-marked as read to prevent infinite loops
+  const autoMarkedRef = useRef<Set<string>>(new Set());
 
   // Auto-mark current newsletter as read when it loads (instantaneous)
   useEffect(() => {
-    if (autoMarkAsRead && currentNewsletter && !currentNewsletter.is_read && !disabled) {
+    if (
+      autoMarkAsRead &&
+      currentNewsletter &&
+      !currentNewsletter.is_read &&
+      !disabled &&
+      !autoMarkedRef.current.has(currentNewsletter.id)
+    ) {
+      autoMarkedRef.current.add(currentNewsletter.id);
       const markAsRead = async () => {
         try {
-          await handleMarkAsRead(currentNewsletter.id);
+          await handleNavigationMarkAsRead(currentNewsletter.id);
           log.debug('Auto-marked newsletter as read via navigation', {
             action: 'auto_mark_read_navigation',
             metadata: {
@@ -172,11 +233,9 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
           );
         }
       };
-
-      // Mark as read immediately without delay
       markAsRead();
     }
-  }, [currentNewsletter?.id, autoMarkAsRead, disabled]); // Stable deps only to avoid infinite loops
+  }, [currentNewsletter?.id, autoMarkAsRead, disabled, handleNavigationMarkAsRead, log]);
 
   const handlePrevious = useCallback(async () => {
     if (disabled || !hasPrevious) return;
@@ -185,10 +244,10 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     if (currentNewsletter && autoMarkAsRead && !isFromReadingQueue) {
       try {
         if (!currentNewsletter.is_read) {
-          await handleMarkAsRead(currentNewsletter.id);
+          await handleNavigationMarkAsRead(currentNewsletter.id);
         }
         if (!currentNewsletter.is_archived) {
-          await handleToggleArchive(currentNewsletter);
+          await handleNavigationToggleArchive(currentNewsletter);
         }
       } catch (error) {
         log.error(
@@ -261,8 +320,8 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     location.pathname,
     location.search,
     sourceId,
-    handleMarkAsRead,
-    handleToggleArchive,
+    handleNavigationMarkAsRead,
+    handleNavigationToggleArchive,
     log,
   ]);
 
@@ -273,10 +332,10 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     if (currentNewsletter && autoMarkAsRead && !isFromReadingQueue) {
       try {
         if (!currentNewsletter.is_read) {
-          await handleMarkAsRead(currentNewsletter.id);
+          await handleNavigationMarkAsRead(currentNewsletter.id);
         }
         if (!currentNewsletter.is_archived) {
-          await handleToggleArchive(currentNewsletter);
+          await handleNavigationToggleArchive(currentNewsletter);
         }
       } catch (error) {
         log.error(
@@ -349,8 +408,8 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     location.pathname,
     location.search,
     sourceId,
-    handleMarkAsRead,
-    handleToggleArchive,
+    handleNavigationMarkAsRead,
+    handleNavigationToggleArchive,
     log,
   ]);
 

@@ -368,6 +368,7 @@ const NewslettersPage: React.FC = () => {
     debug: true,
     refetchOnWindowFocus: false,
     staleTime: 0,
+    optimisticUpdates: false,
   });
 
   // Memoize mutations object to prevent unnecessary re-renders
@@ -459,8 +460,6 @@ const NewslettersPage: React.FC = () => {
 
   // Shared newsletter actions
   const {
-    handleMarkAsRead,
-    handleMarkAsUnread,
     handleToggleLike,
     handleToggleArchive,
     handleToggleRead,
@@ -471,7 +470,7 @@ const NewslettersPage: React.FC = () => {
     mutations,
     {
       showToasts: true,
-      optimisticUpdates: true,
+      optimisticUpdates: false,
       onSuccess: () => {
         // Success handled by shared handlers
       },
@@ -481,7 +480,7 @@ const NewslettersPage: React.FC = () => {
     }
   );
 
-  const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
+  const [visibleTags] = useState<Set<string>>(new Set());
   const [isActionInProgress, setIsActionInProgress] = useState(false);
 
   // Stable keys for newsletter rows to prevent unnecessary re-renders
@@ -774,23 +773,6 @@ const NewslettersPage: React.FC = () => {
       await handleDeleteNewsletter(id);
     },
     [handleDeleteNewsletter]
-  );
-
-  const toggleTagVisibility = useCallback(
-    (newsletterId: string, e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setVisibleTags((prev) => {
-        const newSet = new Set(prev);
-        if (newSet.has(newsletterId)) {
-          newSet.delete(newsletterId);
-        } else {
-          newSet.add(newsletterId);
-        }
-        return newSet;
-      });
-    },
-    [setVisibleTags]
   );
 
   // Handle newsletter click with proper navigation state

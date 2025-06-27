@@ -55,11 +55,15 @@ const CACHE_CONFIG = {
 // Utility function for safe predicate checks
 const createSafePredicate = (ids: string[] | undefined) => (query: any) => {
   if (!ids || !Array.isArray(ids)) {
-    return queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]);
+    return (
+      queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
+      queryKeyFactory.matchers.isNewsletterInfiniteKey(query.queryKey as unknown[])
+    );
   }
 
   return (
     queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
+    queryKeyFactory.matchers.isNewsletterInfiniteKey(query.queryKey as unknown[]) ||
     ids.some((id) =>
       queryKeyFactory.matchers.isNewsletterDetailKey(query.queryKey as unknown[], id)
     )
@@ -390,6 +394,7 @@ export const useNewsletters = (
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
+          queryKeyFactory.matchers.isNewsletterInfiniteKey(query.queryKey as unknown[]) ||
           queryKeyFactory.matchers.isNewsletterDetailKey(query.queryKey as unknown[], id),
       });
 
@@ -429,16 +434,10 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          // Only invalidate specific queries to prevent cascade
-          queryClient.invalidateQueries({
-            queryKey: queryKeyFactory.newsletters.detail(id),
-            refetchType: 'none', // Don't refetch automatically
-          });
-
-          // Only invalidate unread counts without refetching
-          queryClient.invalidateQueries({
-            queryKey: ['unreadCount'],
-            refetchType: 'none',
+          // Use optimistic unread count update instead of invalidation
+          cacheManager.updateUnreadCountOptimistically({
+            type: 'mark-read',
+            newsletterIds: [id],
           });
 
           // Notify other components about the read status change
@@ -471,6 +470,7 @@ export const useNewsletters = (
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
+          queryKeyFactory.matchers.isNewsletterInfiniteKey(query.queryKey as unknown[]) ||
           queryKeyFactory.matchers.isNewsletterDetailKey(query.queryKey as unknown[], id),
       });
 
@@ -509,7 +509,12 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          invalidateForOperation(queryClient, 'mark-unread', [id]);
+          // Use optimistic unread count update instead of invalidation
+          cacheManager.updateUnreadCountOptimistically({
+            type: 'mark-unread',
+            newsletterIds: [id],
+          });
+
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -588,7 +593,12 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          invalidateForOperation(queryClient, 'bulk-mark-read', ids);
+          // Use optimistic unread count update instead of invalidation
+          cacheManager.updateUnreadCountOptimistically({
+            type: 'bulk-mark-read',
+            newsletterIds: ids,
+          });
+
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -667,7 +677,12 @@ export const useNewsletters = (
       if (!error) {
         // Use setTimeout to batch invalidations
         setTimeout(() => {
-          invalidateForOperation(queryClient, 'bulk-mark-unread', ids);
+          // Use optimistic unread count update instead of invalidation
+          cacheManager.updateUnreadCountOptimistically({
+            type: 'bulk-mark-unread',
+            newsletterIds: ids,
+          });
+
           // Notify other components about the read status change
           window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
         }, 100);
@@ -685,6 +700,7 @@ export const useNewsletters = (
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
+          queryKeyFactory.matchers.isNewsletterInfiniteKey(query.queryKey as unknown[]) ||
           queryKeyFactory.matchers.isNewsletterDetailKey(query.queryKey as unknown[], id),
       });
 
@@ -698,6 +714,8 @@ export const useNewsletters = (
       const currentLikedState = currentNewsletter?.is_liked ?? false;
       const newLikedState = !currentLikedState;
 
+      console.log(`Optimistically toggling like for newsletter ${id}: ${currentLikedState} -> ${newLikedState}`);
+
       cacheManager.updateNewsletterInCache({
         id,
         updates: {
@@ -709,6 +727,7 @@ export const useNewsletters = (
       return { previousNewsletters };
     },
     onError: (_err, id, context) => {
+      console.log(`Error in toggleLike for newsletter ${id}, rolling back`);
       if (context?.previousNewsletters) {
         const newsletter = context.previousNewsletters.find((n) => n.id === id);
         if (newsletter) {
@@ -738,6 +757,7 @@ export const useNewsletters = (
       await cancelQueries({
         predicate: (query) =>
           queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
+          queryKeyFactory.matchers.isNewsletterInfiniteKey(query.queryKey as unknown[]) ||
           queryKeyFactory.matchers.isNewsletterDetailKey(query.queryKey as unknown[], id),
       });
 
@@ -764,17 +784,62 @@ export const useNewsletters = (
 
       if (shouldRemoveFromView) {
         // Remove the newsletter from the current filtered view immediately
-        cacheManager.queryClient.setQueryData(
-          queryKey,
-          (oldData: PaginatedResponse<NewsletterWithRelations>) => {
-            if (!oldData || !oldData.data || !Array.isArray(oldData.data)) return oldData;
+        // Handle both infinite queries and regular list queries
+        cacheManager.queryClient.setQueriesData(
+          {
+            predicate: (query) => {
+              const key = query.queryKey;
+              return (
+                Array.isArray(key) &&
+                key[0] === 'newsletters' &&
+                (key[1] === 'infinite' || key[1] === 'list')
+              );
+            },
+          },
+          (oldData: { pages: PaginatedResponse<NewsletterWithRelations>[] } | PaginatedResponse<NewsletterWithRelations> | undefined) => {
+            // Handle infinite query data structure
+            if (oldData && 'pages' in oldData && oldData.pages) {
+              let totalRemoved = 0;
+              const updatedData = {
+                ...oldData,
+                pages: oldData.pages.map((page) => {
+                  const filteredData = page.data.filter((newsletter: NewsletterWithRelations) => newsletter.id !== id);
+                  const removed = page.data.length - filteredData.length;
+                  totalRemoved += removed;
 
-            const filteredData = oldData.data.filter((n: NewsletterWithRelations) => n.id !== id);
-            return {
-              ...oldData,
-              data: filteredData,
-              count: Math.max(0, (oldData.count || 0) - 1),
-            };
+                  return {
+                    ...page,
+                    data: filteredData,
+                    count: Math.max(0, (page.count || 0) - removed),
+                  };
+                }),
+              };
+
+              // Log the removal for debugging
+              if (totalRemoved > 0) {
+                console.log(`Removed ${totalRemoved} archived newsletter(s) from infinite query cache`);
+              }
+
+              return updatedData;
+            }
+
+            // Handle regular list query data structure
+            if (oldData && 'data' in oldData && Array.isArray(oldData.data)) {
+              const filteredData = oldData.data.filter((newsletter: NewsletterWithRelations) => newsletter.id !== id);
+              const removed = oldData.data.length - filteredData.length;
+
+              if (removed > 0) {
+                console.log(`Removed ${removed} archived newsletter(s) from list query cache`);
+              }
+
+              return {
+                ...oldData,
+                data: filteredData,
+                count: Math.max(0, (oldData.count || 0) - removed),
+              };
+            }
+
+            return oldData;
           }
         );
       } else {
@@ -876,15 +941,63 @@ export const useNewsletters = (
           ? queryData
           : [];
 
-      cacheManager.batchUpdateNewsletters(
-        ids.map((id) => ({
-          id,
-          updates: {
-            is_archived: true,
-            updated_at: new Date().toISOString(),
+      // Determine if we should remove newsletters from the current view
+      const currentFilter = normalizedFilters;
+      const shouldRemoveFromView =
+        currentFilter.isArchived === false || currentFilter.isArchived === undefined; // Not in archived view
+
+      if (shouldRemoveFromView) {
+        // Remove archived newsletters from both infinite queries and regular list queries
+        cacheManager.queryClient.setQueriesData(
+          {
+            predicate: (query) => {
+              const key = query.queryKey;
+              return (
+                Array.isArray(key) &&
+                key[0] === 'newsletters' &&
+                (key[1] === 'infinite' || key[1] === 'list')
+              );
+            },
           },
-        }))
-      );
+          (oldData: { pages: PaginatedResponse<NewsletterWithRelations>[] } | undefined) => {
+            if (!oldData || !oldData.pages) return oldData;
+
+            let totalRemoved = 0;
+            const updatedData = {
+              ...oldData,
+              pages: oldData.pages.map((page) => {
+                const filteredData = page.data.filter((newsletter: NewsletterWithRelations) => !ids.includes(newsletter.id));
+                const removed = page.data.length - filteredData.length;
+                totalRemoved += removed;
+
+                return {
+                  ...page,
+                  data: filteredData,
+                  count: Math.max(0, (page.count || 0) - removed),
+                };
+              }),
+            };
+
+            // Log the removal for debugging
+            if (totalRemoved > 0) {
+              console.log(`Removed ${totalRemoved} archived newsletter(s) from infinite query cache`);
+            }
+
+            return updatedData;
+          }
+        );
+      } else {
+        // Update the newsletters' archived status in place
+        cacheManager.batchUpdateNewsletters(
+          ids.map((id) => ({
+            id,
+            updates: {
+              is_archived: true,
+              updated_at: new Date().toISOString(),
+            },
+          }))
+        );
+      }
 
       return { previousNewsletters };
     },
@@ -932,6 +1045,7 @@ export const useNewsletters = (
           ? queryData
           : [];
 
+      // For unarchive, we always update the status in place since we want to show unarchived newsletters
       cacheManager.batchUpdateNewsletters(
         ids.map((id) => ({
           id,

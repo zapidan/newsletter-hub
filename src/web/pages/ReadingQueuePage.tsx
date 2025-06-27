@@ -136,7 +136,7 @@ const ReadingQueuePage: React.FC = () => {
       mutations,
       {
         showToasts: true,
-        optimisticUpdates: true,
+        optimisticUpdates: false,
         onSuccess: () => {
           // Invalidate reading queue after successful actions
           if (cacheManager) {

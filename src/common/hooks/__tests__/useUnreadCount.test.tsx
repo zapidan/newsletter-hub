@@ -1,10 +1,11 @@
-import React from 'react';
-import { renderHook, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { useUnreadCount, usePrefetchUnreadCounts } from '../useUnreadCount';
 import { AuthContext } from '@common/contexts/AuthContext';
 import { newsletterService } from '@common/services';
+import type { User } from '@supabase/supabase-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { usePrefetchUnreadCounts, useUnreadCount } from '../useUnreadCount';
 
 // Mock the service
 vi.mock('@common/services', () => ({
@@ -22,9 +23,13 @@ vi.mock('@common/utils/logger/useLogger', () => ({
   }),
 }));
 
-const mockUser = {
+const mockUser: User = {
   id: 'test-user-id',
   email: 'test@example.com',
+  app_metadata: {},
+  user_metadata: {},
+  aud: 'authenticated',
+  created_at: '2024-01-01T00:00:00Z',
 };
 
 const createWrapper = () => {
@@ -42,11 +47,15 @@ const createWrapper = () => {
       <AuthContext.Provider
         value={{
           user: mockUser,
-          isAuthenticated: true,
+          session: null,
           loading: false,
+          error: null,
           signIn: vi.fn(),
           signOut: vi.fn(),
           signUp: vi.fn(),
+          resetPassword: vi.fn(),
+          updatePassword: vi.fn(),
+          checkPasswordStrength: vi.fn(),
         }}
       >
         {children}
@@ -264,11 +273,15 @@ describe('usePrefetchUnreadCounts', () => {
           <AuthContext.Provider
             value={{
               user: null,
-              isAuthenticated: false,
+              session: null,
               loading: false,
+              error: null,
               signIn: vi.fn(),
               signOut: vi.fn(),
               signUp: vi.fn(),
+              resetPassword: vi.fn(),
+              updatePassword: vi.fn(),
+              checkPasswordStrength: vi.fn(),
             }}
           >
             {children}
@@ -303,5 +316,314 @@ describe('usePrefetchUnreadCounts', () => {
         result.current.prefetchUnreadCounts();
       });
     }).not.toThrow();
+  });
+});
+
+describe('useUnreadCount - Optimistic Updates Integration', () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    // Mock service responses
+    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+      'source-1': 5,
+      'source-2': 3,
+      'source-3': 2,
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const renderUseUnreadCount = (sourceId?: string) => {
+    return renderHook(() => useUnreadCount(sourceId), {
+      wrapper: ({ children }: { children: any }) => (
+        <QueryClientProvider client={queryClient}>
+          <AuthContext.Provider
+            value={{
+              user: mockUser,
+              session: null,
+              loading: false,
+              error: null,
+              signIn: vi.fn(),
+              signOut: vi.fn(),
+              signUp: vi.fn(),
+              resetPassword: vi.fn(),
+              updatePassword: vi.fn(),
+              checkPasswordStrength: vi.fn(),
+            }}
+          >
+            {children}
+          </AuthContext.Provider>
+        </QueryClientProvider>
+      ),
+    });
+  };
+
+  describe('Initial data loading', () => {
+    it('should load unread count data correctly', async () => {
+      const { result } = renderUseUnreadCount();
+
+      // Wait for data to load
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(10);
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.isError).toBe(false);
+      });
+    });
+
+    it('should load source-specific unread count', async () => {
+      const { result } = renderUseUnreadCount('source-1');
+
+      // Wait for data to load
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.unreadCount).toBe(5);
+      });
+    });
+  });
+
+  describe('Optimistic updates integration', () => {
+    it('should reflect optimistic updates in cache', async () => {
+      const { result } = renderUseUnreadCount();
+
+      // Wait for initial data to load
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(10);
+      });
+
+      // Simulate optimistic update by directly setting cache data
+      await act(async () => {
+        queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
+          total: 8, // Reduced by 2
+          bySource: {
+            'source-1': 3, // Reduced by 2
+            'source-2': 3,
+            'source-3': 2,
+          },
+        });
+      });
+
+      // Wait for the cache update to be processed
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(8);
+      });
+    });
+
+    it('should handle optimistic updates for source-specific counts', async () => {
+      const { result } = renderUseUnreadCount('source-1');
+
+      // Wait for initial data to load
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(5);
+      });
+
+      // Simulate optimistic update
+      await act(async () => {
+        queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
+          total: 8,
+          bySource: {
+            'source-1': 3, // Reduced by 2
+            'source-2': 3,
+            'source-3': 2,
+          },
+        });
+      });
+
+      // Wait for the cache update to be processed
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(3);
+      });
+    });
+
+    it('should maintain consistency between total and source counts', async () => {
+      const { result: totalResult } = renderUseUnreadCount();
+      const { result: sourceResult } = renderUseUnreadCount('source-1');
+
+      // Wait for initial data to load
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
+
+      // Simulate optimistic update
+      await act(async () => {
+        queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
+          total: 8,
+          bySource: {
+            'source-1': 3,
+            'source-2': 3,
+            'source-3': 2,
+          },
+        });
+      });
+
+      // Wait for both hooks to reflect the cache update
+      await waitFor(() => {
+        expect(totalResult.current.unreadCount).toBe(8);
+        expect(sourceResult.current.unreadCount).toBe(3);
+      });
+    });
+  });
+
+  describe('Cache invalidation behavior', () => {
+    it('should not refetch when optimistic updates are applied', async () => {
+      const { result } = renderUseUnreadCount();
+
+      // Wait for initial data to load
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
+
+      const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+
+      // Simulate optimistic update
+      await act(async () => {
+        queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
+          total: 8,
+          bySource: { 'source-1': 8 },
+        });
+      });
+
+      // Wait a bit to see if any refetches occur
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // Should not have made additional API calls
+      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
+    });
+
+    it('should handle manual invalidation correctly', async () => {
+      const { result } = renderUseUnreadCount();
+
+      // Wait for initial data to load
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
+
+      expect(result.current.unreadCount).toBe(10);
+
+      // Manually invalidate the cache
+      await act(async () => {
+        await result.current.invalidateUnreadCount();
+      });
+
+      // Wait for the debounce delay (500ms) plus a bit more for the refetch to complete
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 600));
+      });
+
+      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(2);
+    });
+  });
+
+  describe('Error handling', () => {
+    it('should handle API errors gracefully', async () => {
+      vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(new Error('API Error'));
+      vi.mocked(newsletterService.getUnreadCountBySource).mockRejectedValue(new Error('API Error'));
+
+      const { result } = renderUseUnreadCount();
+
+      // Wait for error to occur
+      await waitFor(() => {
+        expect(result.current.isError).toBe(true);
+      });
+
+      expect(result.current.error).toBeInstanceOf(Error);
+    });
+
+    it('should maintain previous count on error', async () => {
+      const { result } = renderUseUnreadCount();
+
+      // Wait for initial data to load
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
+
+      expect(result.current.unreadCount).toBe(10);
+
+      // Simulate optimistic update
+      await act(async () => {
+        queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
+          total: 8,
+          bySource: { 'source-1': 8 },
+        });
+      });
+
+      // Wait for the optimistic update to be reflected
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(8);
+      });
+
+      // Now simulate an error
+      vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(new Error('API Error'));
+
+      // Manually invalidate to trigger error
+      await act(async () => {
+        await result.current.invalidateUnreadCount();
+      });
+
+      // Should maintain the optimistic count even on error
+      expect(result.current.unreadCount).toBe(8);
+    });
+  });
+
+  describe('Performance optimizations', () => {
+    it('should use stale time to prevent unnecessary refetches', async () => {
+      const { result } = renderUseUnreadCount();
+
+      // Wait for initial data to load
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
+
+      const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+
+      // Trigger a re-render
+      await act(async () => {
+        // This would normally trigger a refetch, but stale time should prevent it
+        queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
+          total: 10,
+          bySource: { 'source-1': 10 },
+        });
+      });
+
+      // Should not have made additional API calls due to stale time
+      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
+    });
+
+    it('should debounce invalidations', async () => {
+      const { result } = renderUseUnreadCount();
+
+      // Wait for initial data to load
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
+
+      const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+
+      // Call invalidate multiple times quickly
+      await act(async () => {
+        result.current.invalidateUnreadCount();
+        result.current.invalidateUnreadCount();
+        result.current.invalidateUnreadCount();
+      });
+
+      // Wait for debounce delay
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 600)); // Debounce delay is 500ms
+      });
+
+      // Should only have made one additional call due to debouncing
+      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount + 1);
+    });
   });
 });

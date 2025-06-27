@@ -68,7 +68,8 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   } = useSharedNewsletterActions(
     mutations,
     {
-      showToasts: false, optimisticUpdates: true,
+      showToasts: false,
+      optimisticUpdates: false,
       onSuccess: (updatedNl) => { if (updatedNl) onNewsletterUpdate(updatedNl); },
       onError: (error) => log.error('Newsletter action failed', { action: 'newsletter_action', metadata: { newsletterId: newsletter.id } }, error),
     }
@@ -153,7 +154,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     setIsLiking(true);
     try {
       await handleToggleLike(localNewsletter, {
-        optimisticUpdates: true,
+        optimisticUpdates: false,
         showToasts: true,
         onSuccess: (updatedNewsletter) => {
           if (updatedNewsletter) {

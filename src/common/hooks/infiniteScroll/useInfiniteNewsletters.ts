@@ -57,6 +57,22 @@ export const useInfiniteNewsletters = (
   // Track if currently fetching to prevent multiple simultaneous requests
   const isFetchingRef = useRef(false);
 
+  // Throttle debug logging to prevent excessive logs during rapid updates
+  const lastDebugLogRef = useRef<Record<string, number>>({});
+  const DEBUG_THROTTLE_MS = 100; // Only log debug messages every 100ms
+
+  const throttledDebug = useCallback((action: string, message: string, metadata?: any) => {
+    if (!debug) return;
+
+    const now = Date.now();
+    const lastLog = lastDebugLogRef.current[action] || 0;
+
+    if (now - lastLog > DEBUG_THROTTLE_MS) {
+      log.debug(message, { action, metadata });
+      lastDebugLogRef.current[action] = now;
+    }
+  }, [debug, log]);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -73,18 +89,25 @@ export const useInfiniteNewsletters = (
   // Generate query key with normalized filters
   const queryKey = useMemo(() => {
     const key = queryKeyFactory.newsletters.infinite(normalizedFilters);
-    if (debug) {
-      log.debug('Generated query key', {
-        action: 'query_key_generated',
-        metadata: {
-          originalFilters: JSON.stringify(filters),
-          normalizedFilters: JSON.stringify(normalizedFilters),
-          queryKey: JSON.stringify(key),
-        },
-      });
-    }
+    throttledDebug('query_key_generated', 'Generated query key', {
+      originalFilters: JSON.stringify(filters),
+      normalizedFilters: JSON.stringify(normalizedFilters),
+      queryKey: JSON.stringify(key),
+    });
     return key;
-  }, [normalizedFilters, debug, log]);
+  }, [
+    normalizedFilters.search,
+    normalizedFilters.isRead,
+    normalizedFilters.isArchived,
+    normalizedFilters.isLiked,
+    normalizedFilters.tagIds,
+    normalizedFilters.sourceIds,
+    normalizedFilters.dateFrom,
+    normalizedFilters.dateTo,
+    normalizedFilters.orderBy,
+    normalizedFilters.ascending,
+    throttledDebug
+  ]);
 
   // Build API query parameters from normalized filters - memoize to prevent unnecessary re-renders
   const baseQueryParams = useMemo(() => {
@@ -105,38 +128,36 @@ export const useInfiniteNewsletters = (
       includeSource: true,
     };
 
-    if (debug) {
-      log.debug('Base query params built', {
-        action: 'base_query_params_built',
-        metadata: {
-          params: JSON.stringify(params),
-          filters: JSON.stringify(normalizedFilters),
-        },
-      });
-    }
+    throttledDebug('base_query_params_built', 'Base query params built', {
+      params: JSON.stringify(params),
+      filters: JSON.stringify(normalizedFilters),
+    });
 
     return params;
   }, [
-    normalizedFilters,
+    normalizedFilters.search,
+    normalizedFilters.isRead,
+    normalizedFilters.isArchived,
+    normalizedFilters.isLiked,
+    normalizedFilters.tagIds,
+    normalizedFilters.sourceIds,
+    normalizedFilters.dateFrom,
+    normalizedFilters.dateTo,
+    normalizedFilters.orderBy,
+    normalizedFilters.ascending,
     pageSize,
-    debug,
-    log
+    throttledDebug
   ]);
 
   // Debug: Log enabled condition
   useEffect(() => {
-    if (debug) {
-      log.debug('Enabled condition check', {
-        action: 'enabled_condition_check',
-        metadata: {
-          enabled,
-          hasUser: !!user,
-          userId: user?.id,
-          enabledCondition: enabled && !!user,
-        },
-      });
-    }
-  }, [debug, enabled, user, log]);
+    throttledDebug('enabled_condition_check', 'Enabled condition check', {
+      enabled,
+      hasUser: !!user,
+      userId: user?.id,
+      enabledCondition: enabled && !!user,
+    });
+  }, [enabled, user?.id, throttledDebug]);
 
   // Infinite query for newsletters
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
@@ -145,27 +166,17 @@ export const useInfiniteNewsletters = (
       queryFn: async ({ pageParam = 0 }) => {
         // Prevent multiple simultaneous requests
         if (isFetchingRef.current) {
-          if (debug) {
-            log.debug('Skipping fetch - already fetching', {
-              action: 'skip_fetch_already_fetching',
-              metadata: { pageParam },
-            });
-          }
+          throttledDebug('skip_fetch_already_fetching', 'Skipping fetch - already fetching', { pageParam });
           return { data: [], count: 0, hasMore: false };
         }
 
         isFetchingRef.current = true;
 
-        if (debug) {
-          log.debug('Fetching newsletters page', {
-            action: 'fetch_page',
-            metadata: {
-              page: pageParam / pageSize + 1,
-              offset: pageParam,
-              filters: JSON.stringify(normalizedFilters),
-            },
-          });
-        }
+        throttledDebug('fetch_page', 'Fetching newsletters page', {
+          page: pageParam / pageSize + 1,
+          offset: pageParam,
+          filters: JSON.stringify(normalizedFilters),
+        });
 
         const queryParams = {
           ...baseQueryParams,
@@ -175,32 +186,22 @@ export const useInfiniteNewsletters = (
         try {
           const result = await newsletterService.getAll(queryParams);
 
-          if (debug) {
-            log.debug('Newsletters fetched successfully', {
-              action: 'fetch_page_success',
-              metadata: {
-                count: result.data.length,
-                total: result.count,
-                hasMore: result.hasMore,
-                page: pageParam / pageSize + 1,
-                resultKeys: Object.keys(result),
-                resultDataKeys: result.data ? Object.keys(result.data[0] || {}) : [],
-              },
-            });
-          }
+          throttledDebug('fetch_page_success', 'Newsletters fetched successfully', {
+            count: result.data.length,
+            total: result.count,
+            hasMore: result.hasMore,
+            page: pageParam / pageSize + 1,
+            resultKeys: Object.keys(result),
+            resultDataKeys: result.data ? Object.keys(result.data[0] || {}) : [],
+          });
 
           return result;
         } catch (err) {
-          if (debug) {
-            log.error(
-              'Failed to fetch newsletters',
-              {
-                action: 'fetch_page_error',
-                metadata: { pageParam, pageSize, filters: JSON.stringify(normalizedFilters) },
-              },
-              err instanceof Error ? err : new Error(String(err))
-            );
-          }
+          throttledDebug('fetch_page_error', 'Failed to fetch newsletters', {
+            pageParam,
+            pageSize,
+            filters: JSON.stringify(normalizedFilters)
+          });
           throw err;
         } finally {
           isFetchingRef.current = false;
@@ -240,9 +241,12 @@ export const useInfiniteNewsletters = (
       retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
     });
 
-  // Debug: Log query state
+  // Debug: Log query state - optimized to reduce re-renders
   useEffect(() => {
     if (debug) {
+      const pagesCount = data?.pages?.length || 0;
+      const totalNewsletters = data?.pages?.reduce((sum, page) => sum + page.data.length, 0) || 0;
+
       log.debug('Query state updated', {
         action: 'query_state_updated',
         metadata: {
@@ -252,15 +256,15 @@ export const useInfiniteNewsletters = (
           isLoading,
           hasError: !!error,
           hasData: !!data,
-          pagesCount: data?.pages?.length || 0,
-          totalNewsletters: data?.pages?.reduce((sum, page) => sum + page.data.length, 0) || 0,
+          pagesCount,
+          totalNewsletters,
           hasNextPage,
           isFetchingNextPage,
           queryKey: JSON.stringify(queryKey),
         },
       });
     }
-  }, [debug, enabled, user, isLoading, error, data, hasNextPage, isFetchingNextPage, log, queryKey]);
+  }, [debug, enabled, user?.id, isLoading, error, hasNextPage, isFetchingNextPage, log, queryKey, data?.pages?.length]);
 
   // Flatten all pages into a single array of newsletters
   const newsletters = useMemo(() => {
@@ -294,15 +298,19 @@ export const useInfiniteNewsletters = (
     }
 
     return allNewsletters;
-  }, [data, debug, log]);
+  }, [data?.pages?.length, debug, log]);
 
   // Calculate metadata
   const totalCount = data?.pages[0]?.count || 0;
   const pageCount = Math.ceil(totalCount / pageSize);
 
-  // Debug logging for hasNextPage calculation
+  // Debug logging for hasNextPage calculation - optimized to reduce re-renders
   useEffect(() => {
     if (debug) {
+      const pagesLength = data?.pages?.length || 0;
+      const lastPageHasMore = data?.pages?.[data.pages.length - 1]?.hasMore;
+      const lastPageDataLength = data?.pages?.[data.pages.length - 1]?.data?.length || 0;
+
       log.debug('hasNextPage calculation', {
         action: 'has_next_page_calculation',
         metadata: {
@@ -312,13 +320,13 @@ export const useInfiniteNewsletters = (
           pageCount,
           currentPage,
           isFetchingNextPage,
-          pages: data?.pages?.length || 0,
-          lastPageHasMore: data?.pages?.[data.pages.length - 1]?.hasMore,
-          lastPageDataLength: data?.pages?.[data.pages.length - 1]?.data?.length || 0,
+          pages: pagesLength,
+          lastPageHasMore,
+          lastPageDataLength,
         },
       });
     }
-  }, [hasNextPage, totalCount, newsletters.length, pageCount, currentPage, isFetchingNextPage, data?.pages, debug, log]);
+  }, [hasNextPage, totalCount, newsletters.length, pageCount, currentPage, isFetchingNextPage, debug, log, data?.pages?.length]);
 
   // Update current page when data changes
   useMemo(() => {
@@ -328,7 +336,7 @@ export const useInfiniteNewsletters = (
         setCurrentPage(newCurrentPage);
       }
     }
-  }, [data?.pages, currentPage]);
+  }, [data?.pages?.length, currentPage]);
 
   // Enhanced fetch next page with error handling
   const handleFetchNextPage = useCallback(() => {
@@ -370,7 +378,7 @@ export const useInfiniteNewsletters = (
 
     setCurrentPage(1);
     return refetch();
-  }, [refetch, debug, normalizedFilters, newsletters.length, log]);
+  }, [refetch, debug, normalizedFilters.search, normalizedFilters.isRead, normalizedFilters.isArchived, normalizedFilters.isLiked, normalizedFilters.tagIds, normalizedFilters.sourceIds, normalizedFilters.dateFrom, normalizedFilters.dateTo, normalizedFilters.orderBy, normalizedFilters.ascending, newsletters.length, log]);
 
   return {
     newsletters,
