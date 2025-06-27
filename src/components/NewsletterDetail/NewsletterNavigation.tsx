@@ -127,7 +127,6 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
       // Mark as read immediately without delay
       markAsRead();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentNewsletter?.id, autoMarkAsRead, disabled]); // Stable deps only to avoid infinite loops
 
   const handlePrevious = useCallback(async () => {
