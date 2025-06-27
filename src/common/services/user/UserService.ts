@@ -1,8 +1,21 @@
 import { NotFoundError, ValidationError } from '../../api/errorHandling';
 import { userApi } from '../../api/userApi';
 import { User } from '../../types';
-import { UpdateUserParams as ApiUpdateUserParams, CreateUserParams } from '../../types/api';
 import { BaseService } from '../base/BaseService';
+
+// Define the missing types locally
+interface CreateUserParams {
+  email: string;
+  name: string;
+  avatar_url?: string;
+}
+
+interface ApiUpdateUserParams {
+  id: string;
+  full_name?: string;
+  avatar_url?: string;
+  email_alias?: string;
+}
 
 interface UserProfile {
   id: string;
@@ -36,7 +49,7 @@ interface EmailAliasResult {
   error?: string;
 }
 
-interface UpdateUserParams {
+export interface UpdateUserParams {
   full_name?: string;
   avatar_url?: string;
   email_alias?: string;
@@ -74,7 +87,7 @@ export class UserService extends BaseService {
   /**
    * Get user by ID
    */
-  async getUser(id: string): Promise<User | null> {
+  async getUser(id: string): Promise<UserProfile | null> {
     if (!id || typeof id !== 'string' || id.trim() === '') {
       throw new ValidationError('User ID is required');
     }
@@ -91,7 +104,7 @@ export class UserService extends BaseService {
   /**
    * Get current authenticated user
    */
-  async getCurrentUser(): Promise<User | null> {
+  async getCurrentUser(): Promise<UserProfile | null> {
     return this.withRetry(async () => {
       const user = await userApi.getCurrentUser();
       return user;
@@ -119,7 +132,7 @@ export class UserService extends BaseService {
       const user = await this.withRetry(() => userApi.create(sanitizedParams), 'createUser');
       return {
         success: true,
-        user,
+        profile: user,
       };
     } catch (error) {
       return {
@@ -145,13 +158,13 @@ export class UserService extends BaseService {
 
     try {
       const user = await this.withRetry(
-        () => userApi.update({ id, ...sanitizedUpdates }),
+        () => userApi.update(sanitizedUpdates),
         'updateUser'
       );
 
       return {
         success: true,
-        user: user,
+        profile: user,
       };
     } catch (error) {
       return {
@@ -437,19 +450,13 @@ export class UserService extends BaseService {
   async searchUsers(
     query: string,
     options: { limit?: number; offset?: number } = {}
-  ): Promise<User[]> {
-    if (!query || typeof query !== 'string' || query.trim() === '') {
+  ): Promise<UserProfile[]> {
+    if (!query || typeof query !== 'string') {
       throw new ValidationError('Search query is required');
     }
 
-    const sanitizedQuery = query.trim();
-
-    if (sanitizedQuery.length < 2) {
-      throw new ValidationError('Search query must be at least 2 characters');
-    }
-
     return this.withRetry(async () => {
-      return await userApi.searchUsers(sanitizedQuery, options);
+      return await userApi.searchUsers(query, options);
     }, 'searchUsers');
   }
 
@@ -507,31 +514,28 @@ export class UserService extends BaseService {
   async bulkUpdate(
     updates: Array<{ id: string; updates: UpdateUserParams }>
   ): Promise<UserOperationResult> {
-    if (!updates || !Array.isArray(updates)) {
-      throw new ValidationError('Updates array is required');
+    if (!Array.isArray(updates)) {
+      throw new ValidationError('Updates must be an array');
     }
 
     if (updates.length === 0) {
       throw new ValidationError('Updates array cannot be empty');
     }
 
-    const bulkParams = { users: updates };
-
     try {
-      const result = await this.withRetry(() => userApi.bulkUpdate(bulkParams), 'bulkUpdate');
+      const result = await this.withRetry(
+        () => userApi.bulkUpdate(updates),
+        'bulkUpdate'
+      );
 
       return {
         success: true,
-        users: Array.isArray(result) ? result : result.users || [],
-        ...result,
+        data: result,
       };
     } catch (error) {
       return {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message.replace(/^Error during \w+: /, '')
-            : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -677,17 +681,17 @@ export class UserService extends BaseService {
    * Validate API update parameters
    */
   private validateApiUpdateParams(params: ApiUpdateUserParams): void {
-    if (params.name !== undefined) {
-      if (typeof params.name !== 'string') {
+    if (params.full_name !== undefined) {
+      if (typeof params.full_name !== 'string') {
         throw new ValidationError('Name must be a string');
       }
-      if (params.name.length < 2 || params.name.length > 100) {
+      if (params.full_name.length < 2 || params.full_name.length > 100) {
         throw new ValidationError('Name must be between 2 and 100 characters');
       }
     }
 
-    if (params.email !== undefined) {
-      this.validateEmail(params.email);
+    if (params.email_alias !== undefined) {
+      this.validateEmail(params.email_alias);
     }
 
     if (params.avatar_url !== undefined) {
@@ -705,18 +709,21 @@ export class UserService extends BaseService {
    * Sanitize API update parameters
    */
   private sanitizeApiUpdateParams(params: ApiUpdateUserParams): ApiUpdateUserParams {
-    const sanitized: ApiUpdateUserParams = { ...params };
+    // Destructure to exclude id and name fields, then sanitize the remaining fields
+    const { id: _id, name: _name, ...rest } = params as any;
+    const sanitized: ApiUpdateUserParams = { ...rest };
 
-    if (sanitized.email !== undefined) {
+    if ('email' in sanitized && typeof sanitized.email === 'string') {
       sanitized.email = sanitized.email.trim().toLowerCase();
     }
-
-    if (sanitized.name !== undefined) {
-      sanitized.name = sanitized.name.trim();
+    if ('full_name' in sanitized && typeof (sanitized as any).full_name === 'string') {
+      sanitized.full_name = (sanitized as any).full_name.trim();
     }
-
-    if (sanitized.avatar_url !== undefined) {
+    if ('avatar_url' in sanitized && typeof sanitized.avatar_url === 'string') {
       sanitized.avatar_url = sanitized.avatar_url.trim();
+    }
+    if ('email_alias' in sanitized && typeof sanitized.email_alias === 'string') {
+      sanitized.email_alias = sanitized.email_alias.trim().toLowerCase();
     }
 
     return sanitized;

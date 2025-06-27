@@ -1,8 +1,9 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { vi } from 'vitest';
-import { BrowserRouter as Router } from 'react-router-dom';
 import { AuthContext } from '@common/contexts/AuthContext';
+import * as useEmailAliasModule from '@common/hooks/useEmailAlias';
 import type { User } from '@supabase/supabase-js';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { BrowserRouter as Router } from 'react-router-dom';
+import { vi } from 'vitest';
 import Sidebar from '../Sidebar';
 
 // Mock the hooks
@@ -42,33 +43,26 @@ vi.mock('lucide-react', () => ({
   Newspaper: () => <div data-testid="newspaper-icon">Sources</div>,
   Bookmark: () => <div data-testid="bookmark-icon">Reading Queue</div>,
   CalendarDays: () => <div data-testid="calendar-days-icon">Calendar</div>,
+  UserCircle: () => <div data-testid="user-circle-icon">User</div>,
 }));
 
 // Mock framer-motion for testing
-vi.mock('framer-motion', () => ({
-  motion: {
-    aside: ({ 
-      children, 
-      className, 
-      initial: _initial, 
-      animate: _animate, 
-      transition: _transition 
-    }: { 
-      children: React.ReactNode; 
-      className?: string;
-      initial?: unknown;
-      animate?: unknown;
-      transition?: unknown;
-    }) => (
-      <aside className={className} data-testid="motion-aside">
-        {children}
-      </aside>
-    ),
-    div: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-      <div className={className}>{children}</div>
-    ),
-  },
-}));
+vi.mock('framer-motion', () => {
+  return {
+    motion: {
+      aside: ({ children, className, ...props }) => (
+        <aside className={className} data-testid="motion-aside" {...props}>{children}</aside>
+      ),
+      div: ({ children, className, ...props }) => (
+        <div className={className} {...props}>{children}</div>
+      ),
+      span: ({ children, className, ...props }) => (
+        <span className={className} {...props}>{children}</span>
+      ),
+    },
+    AnimatePresence: ({ children }) => <>{children}</>,
+  };
+});
 
 // Mock window object
 const mockWindowLocation = (pathname: string) => {
@@ -80,12 +74,12 @@ const mockWindowLocation = (pathname: string) => {
     replace: vi.fn(),
     reload: vi.fn(),
   };
-  
-  // @ts-expect-error - We're intentionally modifying the global location for testing
-  delete window.location;
-  // @ts-expect-error - We're intentionally modifying the global location for testing
-  window.location = location;
-  
+
+  Object.defineProperty(window, 'location', {
+    writable: true,
+    value: location,
+  });
+
   return location;
 };
 
@@ -152,7 +146,7 @@ describe('Sidebar', () => {
 
   const renderSidebar = (pathname = '/inbox') => {
     mockWindowLocation(pathname);
-    
+
     return render(
       <Router>
         <AuthContext.Provider value={mockAuthContext}>
@@ -187,106 +181,168 @@ describe('Sidebar', () => {
 
   it('shows the unread count badge when there are unread items', () => {
     renderSidebar();
-    
+
     // Find the Inbox nav link by its href
     const inboxLinks = screen.getAllByText('Inbox');
     const inboxNavLink = inboxLinks.find(
       (element) => element.closest('a')?.getAttribute('href') === '/inbox'
     )?.closest('a');
-    
+
     expect(inboxNavLink).toBeInTheDocument();
-    
+
     // The badge with the unread count should be present within the Inbox link
     const badge = within(inboxNavLink!).getByText('5');
     expect(badge).toBeInTheDocument();
   });
 
-  it('toggles the mobile menu when menu button is clicked', () => {
-    renderSidebar();
-    
-    // Menu button should be visible
-    const menuButton = screen.getByTestId('menu-icon');
-    fireEvent.click(menuButton);
-    
-    // The menu should now be open
-    const closeButton = screen.getByTestId('close-icon');
-    expect(closeButton).toBeInTheDocument();
-  });
-
   it('copies email alias to clipboard when copy button is clicked', async () => {
     renderSidebar();
-    
+
     // Find the copy button
     const copyButton = screen.getByTestId('copy-icon').closest('button');
-    
+
     // Initial state check
-    expect(copyButton).toHaveAttribute('title', 'Copy to clipboard');
-    
+    expect(copyButton).toHaveAttribute('title', 'Copy email');
+
     // Click the copy button
     fireEvent.click(copyButton!);
-    
+
     // Verify clipboard was called with the email alias
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('test-alias@example.com');
-    
+
     // Wait for the copied state to be set
     await waitFor(() => {
       // The button's title should change to 'Copied!'
       expect(copyButton).toHaveAttribute('title', 'Copied!');
-      
+
       // The check icon should be visible
       const checkIcon = within(copyButton!).getByTestId('check-icon');
       expect(checkIcon).toBeInTheDocument();
     });
-    
+
     // Wait for the copied state to reset
     await waitFor(() => {
-      expect(copyButton).toHaveAttribute('title', 'Copy to clipboard');
+      expect(copyButton).toHaveAttribute('title', 'Copy email');
     }, { timeout: 3000, interval: 100 });
   });
 
   it('displays the user email in the footer', () => {
     renderSidebar();
-    
+
     // The email is displayed in the footer section
     const emailElement = screen.getByText('test@example.com');
     expect(emailElement).toBeInTheDocument();
     expect(emailElement).toHaveClass('font-medium', 'text-slate-700', 'truncate', 'text-sm');
   });
-  
+
   // Note: Sign out functionality is not implemented in the Sidebar component
   // It should be tested in the component where it's actually implemented
-  
+
   it('highlights the active route', () => {
     renderSidebar('/inbox');
-    
+
     // Find the Inbox nav link by its href
     const inboxLinks = screen.getAllByText('Inbox');
     const inboxNavLink = inboxLinks.find(
       (element) => element.closest('a')?.getAttribute('href') === '/inbox'
     )?.closest('a');
-    
+
     expect(inboxNavLink).toHaveClass('active');
   });
-  
+
   it('refreshes the inbox when clicking on the inbox link while already on the inbox page', () => {
     const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
-    
+
     renderSidebar('/inbox');
-    
+
     // Find and click the Inbox link by finding the nav link with href="/inbox"
     const inboxLinks = screen.getAllByText('Inbox');
     const inboxNavLink = inboxLinks.find(
-      (element) => 
+      (element) =>
         element.closest('a')?.getAttribute('href') === '/inbox'
     )?.closest('a');
-    
+
     expect(inboxNavLink).toBeInTheDocument();
     fireEvent.click(inboxNavLink!);
-    
+
     // Verify the refresh events were dispatched
     expect(dispatchEventSpy).toHaveBeenCalledWith(expect.any(Event));
-    
+
     // Clean up
     dispatchEventSpy.mockRestore();
+  });
+
+  it('has correct accessibility attributes', () => {
+    renderSidebar();
+    // Sidebar aside should have aria-label and role complementary
+    const aside = screen.getByRole('complementary', { name: /main navigation/i });
+    expect(aside).toBeInTheDocument();
+    // Unread badge should have aria-live and aria-atomic
+    const badge = screen.queryByText('5');
+    if (badge) {
+      expect(badge).toHaveAttribute('aria-live', 'polite');
+      expect(badge).toHaveAttribute('aria-atomic', 'true');
+    }
+  });
+
+  it('shows loading state for email alias', () => {
+    useEmailAliasModule.useEmailAlias.mockReturnValueOnce({ emailAlias: null, loading: true });
+    renderSidebar();
+    expect(screen.getByText(/loading email/i)).toBeInTheDocument();
+  });
+
+  it('handles empty email alias gracefully', () => {
+    useEmailAliasModule.useEmailAlias.mockReturnValueOnce({ emailAlias: null, loading: false });
+    renderSidebar();
+    expect(screen.queryByTestId('mail-icon')).not.toBeInTheDocument();
+  });
+
+  it('disables copy button when copied is true', async () => {
+    renderSidebar();
+    const copyButton = screen.getByTestId('copy-icon').closest('button');
+    fireEvent.click(copyButton!);
+    await waitFor(() => {
+      expect(copyButton).toBeDisabled();
+    });
+  });
+
+  it('shows alert and logs error if clipboard write fails', async () => {
+    (navigator.clipboard.writeText as any).mockRejectedValueOnce(new Error('fail'));
+    window.alert = vi.fn();
+    renderSidebar();
+    const copyButton = screen.getByTestId('copy-icon').closest('button');
+    fireEvent.click(copyButton!);
+    await waitFor(() => {
+      expect(window.alert).toHaveBeenCalledWith('Failed to copy email to clipboard');
+    });
+  });
+
+  it.each([
+    ['/inbox', 'Inbox'],
+    ['/queue', 'Reading Queue'],
+    ['/daily', 'Daily Summary'],
+    ['/search', 'Search'],
+    ['/trending', 'Trending Topics'],
+    ['/tags', 'Tags'],
+    ['/newsletters', 'Newsletter Sources'],
+    ['/profile', 'Profile'],
+    ['/settings', 'Settings'],
+  ])('highlights the correct nav link for %s', (route, label) => {
+    renderSidebar(route);
+    const link = screen.getAllByText(label).find(e => e.closest('a'))?.closest('a');
+    expect(link).toHaveClass('active');
+  });
+
+  it('renders nothing or fallback if no user in context', () => {
+    mockWindowLocation('/inbox');
+    render(
+      <Router>
+        <AuthContext.Provider value={{ ...mockAuthContext, user: null }}>
+          <Sidebar />
+        </AuthContext.Provider>
+      </Router>
+    );
+    // Should not crash, may render nothing or fallback
+    expect(screen.queryByText('Newsletter Hub')).not.toBeNull();
   });
 });

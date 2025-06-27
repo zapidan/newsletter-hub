@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
+import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
-import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useLogger } from '@common/utils/logger/useLogger';
+import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface NewsletterNavigationProps {
   currentNewsletterId: string;
@@ -334,10 +334,9 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         disabled={disabled || !hasPrevious || isLoading}
         className={`
           flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
-          ${
-            hasPrevious && !disabled && !isLoading
-              ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200'
-              : 'text-gray-400 cursor-not-allowed'
+          ${hasPrevious && !disabled && !isLoading
+            ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200'
+            : 'text-gray-400 cursor-not-allowed'
           }
         `}
         title={hasPrevious ? 'Previous newsletter (← or J)' : 'No previous newsletter'}
@@ -379,10 +378,9 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
         disabled={disabled || !hasNext || isLoading}
         className={`
           flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
-          ${
-            hasNext && !disabled && !isLoading
-              ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200'
-              : 'text-gray-400 cursor-not-allowed'
+          ${hasNext && !disabled && !isLoading
+            ? 'text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200'
+            : 'text-gray-400 cursor-not-allowed'
           }
         `}
         title={hasNext ? 'Next newsletter (→ or K)' : 'No next newsletter'}

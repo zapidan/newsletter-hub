@@ -1,6 +1,6 @@
 import { useAuth } from '@common/contexts/AuthContext';
-import { motion } from "framer-motion";
-import { ReactNode, useState, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ReactNode, useCallback, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
@@ -19,20 +19,40 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, []);
 
   // Don't show sidebar on login page or if user is not authenticated
-  const showSidebarNavigation = user && !loading && !location.pathname.startsWith('/login');
+  const showSidebar = user && !loading && !location.pathname.startsWith('/login');
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50/30">
-      {showSidebarNavigation && (
-        <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
+      {/* Sidebar - Always render, but only toggle on mobile */}
+      {showSidebar && (
+        <>
+          {/* Mobile backdrop - darker and more blurred, disables background interaction */}
+          <AnimatePresence>
+            {isSidebarOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden pointer-events-auto"
+                onClick={toggleSidebar}
+                aria-hidden="true"
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Sidebar component */}
+          <Sidebar
+            isOpen={isSidebarOpen}
+            onToggle={toggleSidebar}
+          />
+        </>
       )}
-      <div className={`flex flex-col ${showSidebarNavigation ? 'flex-1' : 'w-full'} overflow-hidden`}>
-        <Header
-          isSidebarOpen={isSidebarOpen}
-          toggleSidebar={toggleSidebar}
-          showMenuButton={showSidebarNavigation}
-        />
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
+
+      {/* Main content area */}
+      <div className={`flex flex-col flex-1 overflow-hidden ${isSidebarOpen ? 'pointer-events-none md:pointer-events-auto' : ''}`}>
+        <Header onMenuToggle={toggleSidebar} />
+        <main className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -42,7 +62,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               ease: [0.4, 0, 0.2, 1],
               delay: 0.1,
             }}
-            className="max-w-7xl mx-auto space-y-6"
+            className="max-w-7xl mx-auto space-y-4 md:space-y-6"
           >
             {children || <Outlet />}
           </motion.div>

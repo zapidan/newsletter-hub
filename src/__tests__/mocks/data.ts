@@ -1,10 +1,11 @@
 // Mock data for testing
 import {
   Newsletter,
-  User,
-  NewsletterSourceGroup,
-  Tag,
   NewsletterSource,
+  NewsletterSourceGroup,
+  NewsletterWithRelations,
+  Tag,
+  User
 } from "@common/types";
 
 export const mockUsers: User[] = [
@@ -114,6 +115,63 @@ export const mockSources: NewsletterSource[] = [
     user_id: "user-1",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
+  },
+];
+
+export const mockNewslettersWithRelations: NewsletterWithRelations[] = [
+  {
+    id: '1',
+    title: 'Test Newsletter 1',
+    content: 'This is a test newsletter',
+    summary: 'Test summary',
+    image_url: 'https://example.com/image.jpg',
+    received_at: '2023-01-01T00:00:00Z',
+    updated_at: '2023-01-01T00:00:00Z',
+    is_read: false,
+    is_liked: false,
+    is_archived: false,
+    user_id: 'user-1',
+    newsletter_source_id: 'source-1',
+    source_id: 'source-1',
+    source: {
+      id: 'source-1',
+      name: 'Test Source',
+      from: 'test@example.com',
+      user_id: 'user-1',
+      created_at: '2023-01-01T00:00:00Z',
+      updated_at: '2023-01-01T00:00:00Z',
+      is_archived: false
+    },
+    tags: [],
+    word_count: 100,
+    estimated_read_time: 1
+  },
+  {
+    id: '2',
+    title: 'Test Newsletter 2',
+    content: 'Another test newsletter',
+    summary: 'Test summary',
+    image_url: 'https://example.com/image.jpg',
+    received_at: '2023-01-02T00:00:00Z',
+    updated_at: '2023-01-02T00:00:00Z',
+    is_read: true,
+    is_liked: false,
+    is_archived: false,
+    user_id: 'user-1',
+    newsletter_source_id: 'source-2',
+    source_id: 'source-2',
+    source: {
+      id: 'source-2',
+      name: 'Test Source 2',
+      from: 'test2@example.com',
+      user_id: 'user-1',
+      created_at: '2023-01-02T00:00:00Z',
+      updated_at: '2023-01-02T00:00:00Z',
+      is_archived: false
+    },
+    tags: [],
+    word_count: 100,
+    estimated_read_time: 1
   },
 ];
 

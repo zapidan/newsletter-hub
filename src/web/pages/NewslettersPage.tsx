@@ -1171,7 +1171,7 @@ const NewslettersPage: React.FC = () => {
             <div className="fixed inset-0 bg-gray-400 bg-opacity-40 z-40 pointer-events-auto transition-opacity" />
           )}
           {!isLoadingSources && !isErrorSources && newsletterSources.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-2 relative z-50">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-2 relative">
               {newsletterSources.map((source: NewsletterSource) => {
                 const isEditing = editModalSourceId === source.id;
                 const isDeleting = deleteConfirmId === source.id;

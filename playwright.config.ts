@@ -70,13 +70,40 @@ export default defineConfig({
     },
   },
 
-  /* Configure projects for major browsers */
+  /* Configure projects for major browsers and viewports */
   projects: [
     {
-      name: 'chromium',
+      name: 'chromium-desktop',
       use: {
         ...devices['Desktop Chrome'],
         // Custom browser launch options
+        launchOptions: {
+          headless: process.env.HEADLESS !== 'false',
+        },
+      },
+    },
+    {
+      name: 'chromium-tablet',
+      use: {
+        ...devices['iPad Pro 11 landscape'],
+        launchOptions: {
+          headless: process.env.HEADLESS !== 'false',
+        },
+      },
+    },
+    {
+      name: 'chromium-mobile',
+      use: {
+        ...devices['iPhone 14'],
+        launchOptions: {
+          headless: process.env.HEADLESS !== 'false',
+        },
+      },
+    },
+    {
+      name: 'chromium-mobile-landscape',
+      use: {
+        ...devices['iPhone 14 landscape'],
         launchOptions: {
           headless: process.env.HEADLESS !== 'false',
         },
@@ -89,7 +116,7 @@ export default defineConfig({
     command: `VITE_SUPABASE_URL=${testEnv.VITE_SUPABASE_URL} VITE_SUPABASE_ANON_KEY=${testEnv.VITE_SUPABASE_ANON_KEY} VITE_USE_MOCK_API=${testEnv.VITE_USE_MOCK_API} NODE_ENV=${testEnv.NODE_ENV} npm run dev`,
     port: 5174,
     timeout: 60 * 1000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
     env: {
       ...process.env,
       ...testEnv,

@@ -33,6 +33,8 @@ export default tseslint.config(
       "src/web/pages/__mocks__/*",
       "src/web/services/__tests__/**/*",
       "src/web/hooks/__tests__/**/*",
+      "src/common/services/__tests__/**/*",
+      "src/common/services/__mocks__/*",
       "src/web/lib/__tests__/**/*",
       "src/web/components/__tests__/**/*",
       "src/web/pages/__tests__/**/*",

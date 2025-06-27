@@ -2,7 +2,7 @@ import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import type { NewsletterWithRelations } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
-import { Archive, ArchiveX, Bookmark as BookmarkIcon, Heart, Trash2 as TrashIcon } from 'lucide-react'; // Changed Trash to Trash2
+import { Archive, ArchiveX, Bookmark as BookmarkIcon, Eye, EyeOff, Heart, MoreHorizontal, Trash2 as TrashIcon } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
@@ -12,7 +12,7 @@ interface NewsletterDetailActionsProps {
   isFromReadingQueue?: boolean;
 }
 
-// A smaller, reusable button component for this context
+// Action Button Component
 const DetailActionButton: React.FC<{
   onClick: () => void;
   disabled?: boolean;
@@ -21,19 +21,35 @@ const DetailActionButton: React.FC<{
   icon?: React.ReactNode;
   text: string;
   isLoading?: boolean;
-}> = ({ onClick, disabled, className, ariaLabel, icon, text, isLoading }) => (
+  variant?: "primary" | "secondary" | "danger";
+}> = ({ onClick, disabled, className, ariaLabel, icon, text, isLoading, variant = "secondary" }) => (
   <button
     onClick={onClick}
     disabled={disabled || isLoading}
-    className={`flex items-center justify-center px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${className} mb-2 sm:mb-0`}
+    className={`
+      flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium 
+      transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed
+      focus:outline-none focus:ring-2 focus:ring-offset-1
+      ${className}
+      ${variant === "primary" ? "focus:ring-blue-500" : variant === "danger" ? "focus:ring-red-500" : "focus:ring-gray-500"}
+    `}
     aria-label={ariaLabel}
+    {...(ariaLabel === 'Mark as read' ? { 'data-testid': 'mark-as-read-btn' } : {})}
   >
-    {isLoading && <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
-    {icon && !isLoading && <span className="mr-1.5">{icon}</span>}
-    <span>{text}</span>
+    {isLoading && (
+      <div className="w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full animate-spin" />
+    )}
+    {/* Desktop: icon + text */}
+    <span className="hidden sm:inline-flex items-center">
+      {icon && !isLoading && <span className="mr-2">{icon}</span>}
+      {text}
+    </span>
+    {/* Mobile: icon only */}
+    <span className="inline-flex sm:hidden items-center">
+      {icon && !isLoading && icon}
+    </span>
   </button>
 );
-
 
 export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = ({
   newsletter,
@@ -45,7 +61,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   const {
     handleMarkAsRead, handleMarkAsUnread, handleToggleLike, handleToggleArchive,
     handleDeleteNewsletter, handleToggleInQueue, isMarkingAsRead, isMarkingAsUnread,
-    isDeletingNewsletter: isDeletingShared, // Renamed to avoid conflict
+    isDeletingNewsletter,
   } = useSharedNewsletterActions({
     showToasts: false, optimisticUpdates: true,
     onSuccess: (updatedNl) => { if (updatedNl) onNewsletterUpdate(updatedNl); },
@@ -57,7 +73,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   const [isTogglingQueue, setIsTogglingQueue] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [isTogglingReadStatus, setIsTogglingReadStatus] = useState(false);
-  const [isDeletingLocal, setIsDeletingLocal] = useState(false); // Local deleting state
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const [isInQueue, setIsInQueue] = useState<boolean>(isFromReadingQueue);
   const [isCheckingQueue, setIsCheckingQueue] = useState(false);
@@ -102,141 +118,298 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     }
     checkDebounceRef.current = setTimeout(checkQueueStatus, 250);
     return () => { mounted = false; clearTimeout(timeoutId); if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current); };
-  }, [newsletter?.id, checkIsInQueue, isFromReadingQueue, log, localNewsletter?.id]);
+  }, [newsletter?.id]);
 
-  const createActionHandler = (actionName: string, stateSetter: React.Dispatch<React.SetStateAction<boolean>>, actionFn: () => Promise<any>, optimisticUpdate?: Partial<NewsletterWithRelations>) => async () => {
-    if (!localNewsletter?.id) return;
-    stateSetter(true);
-    if (optimisticUpdate) {
-      const updatedOptimistic = { ...localNewsletter, ...optimisticUpdate };
-      setLocalNewsletter(updatedOptimistic);
-      onNewsletterUpdate(updatedOptimistic);
-    }
+  const handleToggleReadStatus = useCallback(async () => {
+    if (!localNewsletter?.id || isTogglingReadStatus) return;
+    setIsTogglingReadStatus(true);
+    const optimisticNewsletter = { ...localNewsletter, is_read: !localNewsletter.is_read };
+    setLocalNewsletter(optimisticNewsletter);
+    onNewsletterUpdate(optimisticNewsletter);
     try {
-      const result = await actionFn();
-      // If actionFn returns an updated newsletter (like from useSharedNewsletterActions), use it
-      if (result && typeof result === 'object' && 'id' in result) {
-         setLocalNewsletter(result as NewsletterWithRelations);
-         onNewsletterUpdate(result as NewsletterWithRelations);
-      } else if (optimisticUpdate && actionName !== 'delete') {
-        // For actions that don't return the full object but succeeded, ensure local matches optimistic
-         setLocalNewsletter(prev => ({...prev, ...optimisticUpdate}));
-         onNewsletterUpdate({...localNewsletter, ...optimisticUpdate});
+      if (localNewsletter.is_read) {
+        await handleMarkAsUnread(localNewsletter.id);
+      } else {
+        await handleMarkAsRead(localNewsletter.id);
       }
     } catch (error) {
-      log.error(`Failed to ${actionName}`, { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
-      setLocalNewsletter(newsletter); // Revert on error
+      log.error('Failed to toggle read status', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
+      setLocalNewsletter(newsletter);
       onNewsletterUpdate(newsletter);
-      toast.error(`Failed to ${actionName.replace(/([A-Z])/g, ' $1').toLowerCase()}`);
+      toast.error('Failed to update read status');
     } finally {
-      stateSetter(false);
+      setIsTogglingReadStatus(false);
     }
-  };
+  }, [localNewsletter, isTogglingReadStatus, handleMarkAsRead, handleMarkAsUnread, onNewsletterUpdate, newsletter, log]);
 
-  const toggleReadHandler = createActionHandler('toggle read status', setIsTogglingReadStatus, () => localNewsletter.is_read ? handleMarkAsUnread(localNewsletter.id) : handleMarkAsRead(localNewsletter.id), { is_read: !localNewsletter.is_read });
-  const toggleLikeHandler = createActionHandler('toggle like', setIsLiking, () => handleToggleLike(localNewsletter, { optimisticUpdates: true, showToasts: true, onSuccess: (updNl) => { if(updNl) setLocalNewsletter(updNl); onNewsletterUpdate(updNl); } }), { is_liked: !localNewsletter.is_liked });
-  const toggleQueueHandler = createActionHandler('toggle queue', setIsTogglingQueue, () => handleToggleInQueue(localNewsletter, isInQueue), {}); // Optimistic update handled by setIsInQueue
+  const handleToggleLikeAction = useCallback(async () => {
+    if (!localNewsletter?.id || isLiking) return;
+    setIsLiking(true);
+    try {
+      await handleToggleLike(localNewsletter, {
+        optimisticUpdates: true,
+        showToasts: true,
+        onSuccess: (updatedNewsletter) => {
+          if (updatedNewsletter) {
+            setLocalNewsletter(updatedNewsletter);
+            onNewsletterUpdate(updatedNewsletter);
+          }
+        },
+      });
+    } catch (error) {
+      log.error('Failed to update like status', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
+      toast.error('Failed to update like status');
+    } finally {
+      setIsLiking(false);
+    }
+  }, [localNewsletter, isLiking, handleToggleLike, newsletter, onNewsletterUpdate, log]);
 
-  // Special handling for queue optimistic update as it relies on `isInQueue` state
-   const handleOptimisticToggleQueue = async () => {
+  const handleToggleQueue = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingQueue) return;
     setIsTogglingQueue(true);
     const previousQueueStatus = isInQueue;
-    setIsInQueue(!previousQueueStatus); // Optimistic UI update
+    const newQueueStatus = !isInQueue;
+    setIsInQueue(newQueueStatus);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       await handleToggleInQueue(localNewsletter, previousQueueStatus);
+      clearTimeout(timeoutId);
     } catch (error) {
-      log.error('Failed to toggle reading queue', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
-      setIsInQueue(previousQueueStatus); // Revert
-      toast.error('Failed to update reading queue');
+      if (controller.signal.aborted) {
+        log.error('Toggle queue operation timed out', { metadata: { newsletterId: newsletter.id } }, new Error('Operation timed out'));
+        toast.error('Operation timed out. Please try again.');
+      } else {
+        log.error('Failed to toggle reading queue', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
+        toast.error('Failed to update reading queue');
+      }
+      setIsInQueue(previousQueueStatus);
     } finally {
+      clearTimeout(timeoutId);
       setIsTogglingQueue(false);
     }
-  };
+  }, [localNewsletter, isTogglingQueue, isInQueue, handleToggleInQueue, newsletter.id, log]);
 
-  const archiveHandler = createActionHandler('archive', setIsArchiving, () => handleToggleArchive(localNewsletter), { is_archived: true });
-  const unarchiveHandler = createActionHandler('unarchive', setIsArchiving, () => handleToggleArchive(localNewsletter), { is_archived: false });
+  const handleArchive = useCallback(async () => {
+    if (!localNewsletter?.id || isArchiving || localNewsletter.is_archived) return;
+    setIsArchiving(true);
+    const optimisticNewsletter = { ...localNewsletter, is_archived: true };
+    setLocalNewsletter(optimisticNewsletter);
+    onNewsletterUpdate(optimisticNewsletter);
+    try {
+      await handleToggleArchive(localNewsletter);
+    } catch (error) {
+      log.error('Failed to archive newsletter', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
+      setLocalNewsletter(newsletter);
+      onNewsletterUpdate(newsletter);
+      toast.error('Failed to archive newsletter');
+    } finally {
+      setIsArchiving(false);
+    }
+  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter, log]);
 
-  const trashHandler = async () => {
-    if (!localNewsletter?.id || isDeletingLocal || isDeletingShared) return;
+  const handleUnarchive = useCallback(async () => {
+    if (!localNewsletter?.id || isArchiving || !localNewsletter.is_archived) return;
+    setIsArchiving(true);
+    const optimisticNewsletter = { ...localNewsletter, is_archived: false };
+    setLocalNewsletter(optimisticNewsletter);
+    onNewsletterUpdate(optimisticNewsletter);
+    try {
+      await handleToggleArchive(localNewsletter);
+    } catch (error) {
+      log.error('Failed to unarchive newsletter', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
+      setLocalNewsletter(newsletter);
+      onNewsletterUpdate(newsletter);
+      toast.error('Failed to unarchive newsletter');
+    } finally {
+      setIsArchiving(false);
+    }
+  }, [localNewsletter, isArchiving, handleToggleArchive, onNewsletterUpdate, newsletter, log]);
+
+  const handleTrash = useCallback(async () => {
+    if (!localNewsletter?.id) return;
     if (!window.confirm('Are you sure? This action is final and cannot be undone.')) return;
-    setIsDeletingLocal(true);
     try {
       await handleDeleteNewsletter(localNewsletter.id);
-      toast.success("Newsletter deleted.");
-      // Navigate back after deletion
-      if (isFromReadingQueue) window.location.href = '/queue';
-      else window.location.href = '/inbox?filter=archived';
+      if (isFromReadingQueue) {
+        window.location.href = '/reading-queue';
+      } else {
+        window.location.href = '/inbox?filter=archived';
+      }
     } catch (error) {
       log.error('Failed to delete newsletter', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
       toast.error('Failed to delete newsletter');
-    } finally {
-      setIsDeletingLocal(false);
     }
-  };
+  }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue, log, newsletter.id]);
 
-  const effectiveIsDeleting = isDeletingLocal || isDeletingShared;
+  // Primary actions (always visible)
+  const primaryActions = [
+    {
+      key: "read",
+      onClick: handleToggleReadStatus,
+      disabled: isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread,
+      isLoading: isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread,
+      className: localNewsletter?.is_read ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+      ariaLabel: localNewsletter?.is_read ? 'Mark as unread' : 'Mark as read',
+      icon: localNewsletter?.is_read ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />,
+      text: localNewsletter?.is_read ? 'Mark Unread' : 'Mark Read',
+      variant: "primary" as const,
+    },
+    {
+      key: "like",
+      onClick: handleToggleLikeAction,
+      disabled: isLiking,
+      isLoading: isLiking,
+      className: localNewsletter?.is_liked ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+      ariaLabel: localNewsletter?.is_liked ? 'Unlike' : 'Like',
+      icon: <Heart className={`w-4 h-4 ${localNewsletter?.is_liked ? 'fill-red-500' : 'fill-none'}`} stroke="currentColor" />,
+      text: localNewsletter?.is_liked ? 'Liked' : 'Like',
+      variant: "secondary" as const,
+    },
+  ];
+
+  // Secondary actions (in more menu on mobile)
+  const secondaryActions = [
+    {
+      key: "queue",
+      onClick: handleToggleQueue,
+      disabled: isTogglingQueue || isCheckingQueue,
+      isLoading: isTogglingQueue || isCheckingQueue,
+      className: isInQueue ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+      ariaLabel: isInQueue ? 'Remove from queue' : 'Add to queue',
+      icon: <BookmarkIcon className={`w-4 h-4 ${isInQueue ? 'fill-yellow-500' : 'fill-none'}`} stroke="currentColor" />,
+      text: isCheckingQueue ? 'Checking...' : isInQueue ? 'Saved' : 'Save',
+      variant: "secondary" as const,
+    },
+    ...(!localNewsletter?.is_archived ? [{
+      key: "archive",
+      onClick: handleArchive,
+      disabled: isArchiving,
+      isLoading: isArchiving,
+      className: "bg-amber-100 text-amber-700 hover:bg-amber-200",
+      ariaLabel: "Archive newsletter",
+      icon: <Archive className="w-4 h-4" />,
+      text: "Archive",
+      variant: "secondary" as const,
+    }] : [{
+      key: "unarchive",
+      onClick: handleUnarchive,
+      disabled: isArchiving,
+      isLoading: isArchiving,
+      className: "bg-blue-100 text-blue-700 hover:bg-blue-200",
+      ariaLabel: "Unarchive newsletter",
+      icon: <ArchiveX className="w-4 h-4" />,
+      text: "Unarchive",
+      variant: "secondary" as const,
+    }, {
+      key: "trash",
+      onClick: handleTrash,
+      disabled: isDeletingNewsletter,
+      isLoading: isDeletingNewsletter,
+      className: "bg-red-100 text-red-700 hover:bg-red-200",
+      ariaLabel: "Delete newsletter permanently",
+      icon: <TrashIcon className="w-4 h-4" />,
+      text: "Delete",
+      variant: "danger" as const,
+    }]),
+  ];
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <DetailActionButton
-        onClick={toggleReadHandler}
-        disabled={isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread}
-        isLoading={isTogglingReadStatus || isMarkingAsRead || isMarkingAsUnread}
-        className={localNewsletter?.is_read ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-purple-100 text-purple-700 hover:bg-purple-200'}
-        ariaLabel={localNewsletter?.is_read ? 'Mark as unread' : 'Mark as read'}
-        text={localNewsletter?.is_read ? 'Mark Unread' : 'Mark Read'}
-      />
-      <DetailActionButton
-        onClick={toggleLikeHandler}
-        disabled={isLiking}
-        isLoading={isLiking}
-        className={localNewsletter?.is_liked ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
-        ariaLabel={localNewsletter?.is_liked ? 'Unlike' : 'Like'}
-        icon={<Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${localNewsletter?.is_liked ? 'fill-red-500' : 'fill-none'}`} stroke="currentColor" />}
-        text={localNewsletter?.is_liked ? 'Liked' : 'Like'}
-      />
-      <DetailActionButton
-        onClick={handleOptimisticToggleQueue}
-        disabled={isTogglingQueue || isCheckingQueue}
-        isLoading={isTogglingQueue || isCheckingQueue}
-        className={isInQueue ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
-        ariaLabel={isInQueue ? 'Remove from queue' : 'Add to queue'}
-        icon={!(isTogglingQueue || isCheckingQueue) ? <BookmarkIcon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isInQueue ? 'fill-yellow-500' : 'fill-none'}`} stroke="currentColor" /> : undefined}
-        text={isCheckingQueue ? 'Checking...' : isInQueue ? 'Saved' : 'Save'}
-      />
-      {!localNewsletter?.is_archived ? (
+      {/* Primary Actions - Desktop */}
+      <div className="hidden sm:flex items-center gap-2">
+        {primaryActions.map((action) => (
+          <DetailActionButton
+            key={action.key}
+            onClick={action.onClick}
+            disabled={action.disabled}
+            isLoading={action.isLoading}
+            className={action.className}
+            ariaLabel={action.ariaLabel}
+            icon={action.icon}
+            text={action.text}
+            variant={action.variant}
+          />
+        ))}
+      </div>
+      {/* Primary Actions - Mobile */}
+      <div className="flex sm:hidden items-center gap-2">
+        {primaryActions.map((action) => (
+          <DetailActionButton
+            key={action.key}
+            onClick={action.onClick}
+            disabled={action.disabled}
+            isLoading={action.isLoading}
+            className={action.className}
+            ariaLabel={action.ariaLabel}
+            icon={action.icon}
+            text={action.text}
+            variant={action.variant}
+          />
+        ))}
+      </div>
+      {/* Secondary Actions - Show on desktop, hide in more menu on mobile */}
+      <div className="hidden sm:flex items-center gap-2">
+        {secondaryActions.map((action) => (
+          <DetailActionButton
+            key={action.key}
+            onClick={action.onClick}
+            disabled={action.disabled}
+            isLoading={action.isLoading}
+            className={action.className}
+            ariaLabel={action.ariaLabel}
+            icon={action.icon}
+            text={action.text}
+            variant={action.variant}
+          />
+        ))}
+      </div>
+      {/* More Menu for Mobile */}
+      <div className="sm:hidden relative">
         <DetailActionButton
-          onClick={archiveHandler}
-          disabled={isArchiving}
-          isLoading={isArchiving}
-          className="bg-amber-100 text-amber-700 hover:bg-amber-200"
-          ariaLabel="Archive newsletter"
-          icon={<Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-          text="Archive"
+          onClick={() => setShowMoreMenu(!showMoreMenu)}
+          disabled={false}
+          className="bg-gray-100 text-gray-700 hover:bg-gray-200"
+          ariaLabel="More actions"
+          icon={<MoreHorizontal className="w-4 h-4" />}
+          text="More"
+          variant="secondary"
         />
-      ) : (
-        <>
-          <DetailActionButton
-            onClick={unarchiveHandler}
-            disabled={isArchiving}
-            isLoading={isArchiving}
-            className="bg-blue-100 text-blue-700 hover:bg-blue-200"
-            ariaLabel="Unarchive newsletter"
-            icon={<ArchiveX className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-            text="Unarchive"
-          />
-          <DetailActionButton
-            onClick={trashHandler}
-            disabled={effectiveIsDeleting}
-            isLoading={effectiveIsDeleting}
-            className="bg-red-100 text-red-700 hover:bg-red-200"
-            ariaLabel="Delete newsletter permanently"
-            icon={<TrashIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-            text="Delete"
-          />
-        </>
-      )}
+        {showMoreMenu && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setShowMoreMenu(false)}
+            />
+            {/* Dropdown Menu */}
+            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1">
+              {secondaryActions.map((action) => (
+                <button
+                  key={action.key}
+                  onClick={() => {
+                    action.onClick();
+                    setShowMoreMenu(false);
+                  }}
+                  disabled={action.disabled}
+                  className={`
+                    w-full text-left px-3 py-2 text-sm flex items-center gap-2
+                    hover:bg-gray-50 transition-colors disabled:opacity-50
+                    ${action.className.replace('hover:', '')}
+                  `}
+                >
+                  {action.isLoading ? (
+                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <span className="w-4 h-4">{action.icon}</span>
+                  )}
+                  {action.text}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
