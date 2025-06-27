@@ -12,18 +12,23 @@ export interface NewsletterSourceWithCount extends NewsletterSource {
 interface InboxFiltersProps {
   filter: FilterType;
   sourceFilter: string | null;
+  groupFilter?: string | null;
   timeRange: TimeRange;
   newsletterSources: NewsletterSourceWithCount[];
+  newsletterGroups?: { id: string; name: string; count?: number }[];
   onFilterChange: (filter: FilterType) => void;
   onSourceFilterChange: (sourceId: string | null) => void;
+  onGroupFilterChange?: (groupId: string | null) => void;
   onTimeRangeChange: (range: TimeRange) => void;
   isLoading?: boolean;
   isLoadingSources?: boolean;
+  isLoadingGroups?: boolean;
   disabled?: boolean;
   className?: string;
   compact?: boolean;
   showTimeFilter?: boolean;
   showSourceFilter?: boolean;
+  showGroupFilter?: boolean;
   showFilterCounts?: boolean;
   onSelectClick?: () => void;
 }
@@ -213,6 +218,118 @@ const SourceFilterDropdown: FC<{
   },
 );
 
+// Group Filter Dropdown Component
+const GroupFilterDropdown: FC<{
+  groups: { id: string; name: string; count?: number }[];
+  selectedGroupId: string | null;
+  onGroupSelect: (groupId: string | null) => void;
+  isLoading?: boolean;
+  disabled?: boolean;
+  compact?: boolean;
+  showCounts?: boolean;
+}> = memo(
+  ({
+    groups,
+    selectedGroupId,
+    onGroupSelect,
+    isLoading = false,
+    disabled = false,
+    compact = false,
+    showCounts = false,
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectedGroup = selectedGroupId
+      ? groups.find((g) => g.id === selectedGroupId)
+      : null;
+    const handleToggle = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!disabled && !isLoading) {
+        setIsOpen(!isOpen);
+      }
+    };
+    const handleSelect = (groupId: string | null, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onGroupSelect(groupId);
+      setIsOpen(false);
+    };
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled || isLoading}
+          className={`
+            flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg
+            ${compact ? "px-2 py-1 text-xs min-w-[120px]" : "px-3 py-1.5 text-sm min-w-[140px]"}
+            text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
+            focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
+            disabled:opacity-50 disabled:cursor-not-allowed
+            ${disabled || isLoading ? "bg-gray-50" : "hover:bg-gray-50"}
+          `}
+          aria-label="Filter by group"
+          aria-expanded={isOpen}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="truncate">
+              {selectedGroup ? selectedGroup.name : "All Groups"}
+            </span>
+            {selectedGroup &&
+              showCounts &&
+              selectedGroup.count !== undefined &&
+              selectedGroup.count > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  {selectedGroup.count}
+                </span>
+              )}
+          </div>
+          <ChevronDown
+            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""}`}
+          />
+        </button>
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+            <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-50 border border-gray-200 max-h-60 overflow-y-auto">
+              <div className="py-1">
+                <button
+                  type="button"
+                  onClick={(e) => handleSelect(null, e)}
+                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedGroupId
+                    ? "bg-blue-50 text-blue-800 font-medium"
+                    : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                >
+                  <span>All Groups</span>
+                </button>
+                {groups.map((group) => (
+                  <button
+                    key={group.id}
+                    type="button"
+                    onClick={(e) => handleSelect(group.id, e)}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedGroupId === group.id
+                      ? "bg-blue-50 text-blue-800 font-medium"
+                      : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                  >
+                    <span className="truncate pr-2">{group.name}</span>
+                    {showCounts && group.count !== undefined && group.count > 0 && (
+                      <span className="bg-blue-100 text-blue-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        {group.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  },
+);
+
 // Filter Button Component
 const FilterButton: FC<{
   option: (typeof FILTER_OPTIONS)[0];
@@ -277,25 +394,37 @@ const FilterButton: FC<{
   },
 );
 
+// Utility to check if a filter is selected (not null, undefined, or empty string)
+function isFilterSelected(val: string | null | undefined): boolean {
+  return val !== null && val !== undefined && val !== '';
+}
+
 export const InboxFilters: FC<InboxFiltersProps> = memo(
   ({
     filter,
     sourceFilter,
+    groupFilter = null,
     timeRange,
     newsletterSources,
+    newsletterGroups = [],
     onFilterChange,
     onSourceFilterChange,
+    onGroupFilterChange = () => { },
     onTimeRangeChange,
     isLoading = false,
     isLoadingSources = false,
+    isLoadingGroups = false,
     disabled = false,
     className = "",
     compact = false,
     showTimeFilter = true,
     showSourceFilter = true,
+    showGroupFilter = true,
     showFilterCounts = false,
     onSelectClick,
   }) => {
+    // Only one of source or group can be selected at a time
+    // If groupFilter is set, sourceFilter is ignored and vice versa
     return (
       <div className={`w-full ${className}`}>
         {/* Mobile: Multi-row layout */}
@@ -324,7 +453,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
               showCount={showFilterCounts}
             />
           </div>
-          {/* Row 2: Time, Source, Select (mobile only) */}
+          {/* Row 2: Time, Source, Group, Select (mobile only) */}
           <div className="flex flex-wrap items-center gap-2 justify-center mt-2">
             {showTimeFilter && (
               <TimeFilterDropdown
@@ -337,10 +466,21 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
-                selectedSourceId={sourceFilter}
+                selectedSourceId={isFilterSelected(groupFilter) ? null : sourceFilter}
                 onSourceSelect={onSourceFilterChange}
                 isLoading={isLoadingSources}
-                disabled={disabled || isLoading}
+                disabled={disabled || isLoading || isFilterSelected(groupFilter)}
+                compact={compact}
+                showCounts={showFilterCounts}
+              />
+            )}
+            {showGroupFilter && (
+              <GroupFilterDropdown
+                groups={newsletterGroups}
+                selectedGroupId={groupFilter}
+                onGroupSelect={onGroupFilterChange}
+                isLoading={isLoadingGroups}
+                disabled={disabled || isLoading || isFilterSelected(sourceFilter)}
                 compact={compact}
                 showCounts={showFilterCounts}
               />
@@ -392,21 +532,30 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
             />
           </div>
 
-          {/* Right side: Source filter + Select button */}
+          {/* Right side: Source filter + Group filter + Select button */}
           <div className="flex items-center gap-x-3">
-            {/* Source filter */}
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
-                selectedSourceId={sourceFilter}
+                selectedSourceId={isFilterSelected(groupFilter) ? null : sourceFilter}
                 onSourceSelect={onSourceFilterChange}
                 isLoading={isLoadingSources}
-                disabled={disabled || isLoading}
+                disabled={disabled || isLoading || isFilterSelected(groupFilter)}
                 compact={compact}
                 showCounts={showFilterCounts}
               />
             )}
-            {/* Select button */}
+            {showGroupFilter && (
+              <GroupFilterDropdown
+                groups={newsletterGroups}
+                selectedGroupId={groupFilter}
+                onGroupSelect={onGroupFilterChange}
+                isLoading={isLoadingGroups}
+                disabled={disabled || isLoading || isFilterSelected(sourceFilter)}
+                compact={compact}
+                showCounts={showFilterCounts}
+              />
+            )}
             <button
               type="button"
               className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"

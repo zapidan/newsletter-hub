@@ -8,18 +8,27 @@ const mockNewsletterSources: NewsletterSourceWithCount[] = [
   { id: 'source2', name: 'Design Daily', count: 5, user_id: 'user1', from: 'design@example.com', created_at: '', updated_at: '', is_archived: false },
 ];
 
+const mockNewsletterGroups = [
+  { id: 'group1', name: 'Work', count: 3 },
+  { id: 'group2', name: 'Personal', count: 2 },
+];
+
 describe('InboxFilters', () => {
   const mockOnFilterChange = vi.fn();
   const mockOnSourceFilterChange = vi.fn();
+  const mockOnGroupFilterChange = vi.fn();
   const mockOnTimeRangeChange = vi.fn();
 
   const defaultProps = {
     filter: 'all' as FilterType,
     sourceFilter: null,
+    groupFilter: null,
     timeRange: 'all' as TimeRange,
     newsletterSources: mockNewsletterSources,
+    newsletterGroups: mockNewsletterGroups,
     onFilterChange: mockOnFilterChange,
     onSourceFilterChange: mockOnSourceFilterChange,
+    onGroupFilterChange: mockOnGroupFilterChange,
     onTimeRangeChange: mockOnTimeRangeChange,
   };
 
@@ -115,5 +124,52 @@ describe('InboxFilters', () => {
 
     const designDailyOption = screen.getByText('Design Daily').closest('button');
     expect(designDailyOption).toHaveTextContent('5');
+  });
+
+  test('renders group filter dropdown', () => {
+    render(<InboxFilters {...defaultProps} />);
+    expect(screen.getAllByLabelText('Filter by group').length).toBeGreaterThan(0);
+  });
+
+  test('opens group filter dropdown and calls onGroupFilterChange', () => {
+    render(<InboxFilters {...defaultProps} />);
+    const groupButtons = screen.getAllByLabelText('Filter by group');
+    fireEvent.click(groupButtons[0]);
+    expect(screen.getByText('Work')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Work'));
+    expect(mockOnGroupFilterChange).toHaveBeenCalledWith('group1');
+  });
+
+  test('selects "All Groups" from dropdown', () => {
+    render(<InboxFilters {...defaultProps} groupFilter="group1" />);
+    const groupButtons = screen.getAllByLabelText('Filter by group');
+    fireEvent.click(groupButtons[0]);
+    expect(screen.getByText('All Groups')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('All Groups'));
+    expect(mockOnGroupFilterChange).toHaveBeenCalledWith(null);
+  });
+
+  test('group filter is enabled when no source is selected, and disabled when source is selected', () => {
+    // Enabled when no source is selected
+    render(<InboxFilters {...defaultProps} groupFilter={null} sourceFilter={null} />);
+    const groupButtons = screen.getAllByLabelText('Filter by group').filter(btn => btn.offsetParent !== null);
+    groupButtons.forEach(btn => expect(btn).not.toBeDisabled());
+
+    // Disabled when source is selected
+    render(<InboxFilters {...defaultProps} groupFilter={null} sourceFilter="source1" />);
+    const groupButtons2 = screen.getAllByLabelText('Filter by group').filter(btn => btn.offsetParent !== null);
+    groupButtons2.forEach(btn => expect(btn).toBeDisabled());
+  });
+
+  test('source filter is enabled when no group is selected, and disabled when group is selected', () => {
+    // Enabled when no group is selected
+    render(<InboxFilters {...defaultProps} groupFilter={null} sourceFilter={null} />);
+    const sourceButtons = screen.getAllByLabelText('Filter by newsletter source').filter(btn => btn.offsetParent !== null);
+    sourceButtons.forEach(btn => expect(btn).not.toBeDisabled());
+
+    // Disabled when group is selected
+    render(<InboxFilters {...defaultProps} groupFilter="group1" sourceFilter={null} />);
+    const sourceButtons2 = screen.getAllByLabelText('Filter by newsletter source').filter(btn => btn.offsetParent !== null);
+    sourceButtons2.forEach(btn => expect(btn).toBeDisabled());
   });
 });

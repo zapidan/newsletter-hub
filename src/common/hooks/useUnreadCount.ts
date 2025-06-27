@@ -150,8 +150,8 @@ export const useUnreadCount = (sourceId?: string | null) => {
 
       // Single invalidation for all unread count data
       queryClient.invalidateQueries({
-        queryKey: ['unreadCount', 'all'],
-        exact: false,
+        queryKey,
+        exact: true,
         refetchType: 'active', // Only refetch active queries
       });
     }, DEBOUNCE_DELAY);

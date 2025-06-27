@@ -516,12 +516,12 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
         await result.current.invalidateUnreadCount();
       });
 
-      // Wait for the debounce delay (500ms) plus a bit more for the refetch to complete
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 600));
+      // Wait for the unreadCount to be updated after invalidation
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(10);
       });
 
-      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(2);
+      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(1);
     });
   });
 
