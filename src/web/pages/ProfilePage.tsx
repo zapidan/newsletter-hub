@@ -1,19 +1,17 @@
-import { useState } from 'react';
 import { AuthContext } from '@common/contexts/AuthContext';
-import { useContext } from 'react';
 import { useEmailAlias } from '@common/hooks/useEmailAlias';
 import { Button } from '@web/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@web/components/ui/card';
 import { Input } from '@web/components/ui/input';
 import { Label } from '@web/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@web/components/ui/card';
-import { Copy, Check, RefreshCw } from 'lucide-react';
+import { Check, Copy, RefreshCw } from 'lucide-react';
+import { useContext, useState } from 'react';
 
 export default function ProfilePage() {
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const { emailAlias, loading, error, copyToClipboard } = useEmailAlias();
   const [copied, setCopied] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleCopy = async () => {
     const success = await copyToClipboard();
@@ -23,20 +21,11 @@ export default function ProfilePage() {
     }
   };
 
-  const refreshAlias = async () => {
-    // This would be implemented to generate a new email alias
-    // For now, we'll just show a loading state
-    setIsRefreshing(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsRefreshing(false);
-  };
-
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Profile Settings</h1>
-        
+
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>Your Information</CardTitle>
@@ -60,29 +49,8 @@ export default function ProfilePage() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="newsletter-email">Newsletter Email</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={refreshAlias}
-                  disabled={isRefreshing || loading}
-                  className="text-sm flex items-center gap-2"
-                >
-                  {isRefreshing ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4" />
-                      Generate New
-                    </>
-                  )}
-                </Button>
-              </div>
-              
+              <Label htmlFor="newsletter-email">Newsletter Email</Label>
+
               {loading ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <RefreshCw className="h-4 w-4 animate-spin" />
@@ -99,7 +67,7 @@ export default function ProfilePage() {
                       id="newsletter-email"
                       value={emailAlias}
                       readOnly
-                      className="font-mono text-sm"
+                      className="font-mono text-sm bg-slate-50"
                     />
                     <Button
                       type="button"
@@ -119,30 +87,10 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : null}
-              
+
               <p className="text-sm text-muted-foreground">
                 Use this email to subscribe to newsletters. They'll appear in your inbox.
               </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Settings</CardTitle>
-            <CardDescription>
-              Manage your account preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Delete Account</h3>
-              <p className="text-sm text-muted-foreground">
-                Permanently delete your account and all associated data. This action cannot be undone.
-              </p>
-              <Button variant="destructive" className="mt-2">
-                Delete Account
-              </Button>
             </div>
           </CardContent>
         </Card>

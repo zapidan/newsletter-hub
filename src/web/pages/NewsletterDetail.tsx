@@ -410,16 +410,17 @@ const NewsletterDetail = memo(() => {
                 <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
               )}
             </div>
-          </div>
-          {/* Sidebar */}
-          <div className="lg:w-80 flex-shrink-0">
+
+            {/* Context & Insights - Moved below newsletter content */}
             <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
               <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
               <div className="text-sm text-gray-600">
                 {/* Intentionally left empty as per requirements */}
               </div>
             </div>
-
+          </div>
+          {/* Sidebar */}
+          <div className="lg:w-80 flex-shrink-0">
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
               <div className="flex flex-wrap gap-2">

@@ -51,7 +51,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Main content area */}
       <div className={`flex flex-col flex-1 overflow-hidden ${isSidebarOpen ? 'pointer-events-none md:pointer-events-auto' : ''}`}>
-        <Header onMenuToggle={toggleSidebar} />
+        {user && <Header onMenuToggle={toggleSidebar} />}
         <main className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}

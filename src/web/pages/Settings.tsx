@@ -4,8 +4,6 @@ import { useNewsletterSources } from "@common/hooks/useNewsletterSources";
 import { useLogger } from "@common/utils/logger/useLogger";
 import { motion } from "framer-motion";
 import {
-  AlertTriangle,
-  Bell,
   CheckCircle,
   ChevronRight,
   Clipboard,
@@ -13,10 +11,9 @@ import {
   LogOut,
   Mail,
   RefreshCw,
-  Trash2,
   UserCircle,
   Volume2,
-  XCircle,
+  XCircle
 } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
@@ -30,11 +27,19 @@ const Settings = () => {
   } = useEmailAlias();
   const log = useLogger();
   const [activeTab, setActiveTab] = useState("account");
-  const [notificationEmail, setNotificationEmail] = useState(true);
-  const [notificationBrowser, setNotificationBrowser] = useState(false);
   const [voiceType, setVoiceType] = useState("neutral");
   const [voiceSpeed, setVoiceSpeed] = useState("1.0");
   const [copied, setCopied] = useState(false);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(
+    null,
+  );
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
 
   // Fetch newsletter sources with counts
   const { newsletterSources, isLoadingSources, setSourceArchiveStatus } =
@@ -57,15 +62,38 @@ const Settings = () => {
     }
   };
 
-  // Password change state
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(
-    null,
-  );
-  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
+  const handleCopyEmailAlias = async () => {
+    if (!emailAlias) return;
+
+    try {
+      await navigator.clipboard.writeText(emailAlias);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      log.error(
+        "Failed to copy email to clipboard",
+        {
+          action: "copy_email",
+          metadata: { userId: user?.id },
+        },
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
+  };
+
+  // Generate new email alias functionality moved to ProfilePage
+
+  const tabs = [
+    { id: "account", label: "Account", icon: <UserCircle size={18} /> },
+    { id: "newsletters", label: "Newsletters", icon: <Mail size={18} /> },
+    { id: "tts", label: "Text-to-Speech", icon: <Volume2 size={18} /> },
+    { id: "security", label: "Security", icon: <Lock size={18} /> },
+  ];
+
+  // Handle tab changes
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+  };
 
   const handlePasswordChange = async (e: FormEvent) => {
     e.preventDefault();
@@ -212,40 +240,6 @@ const Settings = () => {
     }
   };
 
-  const handleCopyEmailAlias = async () => {
-    if (!emailAlias) return;
-
-    try {
-      await navigator.clipboard.writeText(emailAlias);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      log.error(
-        "Failed to copy email to clipboard",
-        {
-          action: "copy_email",
-          metadata: { userId: user?.id },
-        },
-        err instanceof Error ? err : new Error(String(err)),
-      );
-    }
-  };
-
-  // Generate new email alias functionality moved to ProfilePage
-
-  const tabs = [
-    { id: "account", label: "Account", icon: <UserCircle size={18} /> },
-    { id: "newsletters", label: "Newsletters", icon: <Mail size={18} /> },
-    { id: "notifications", label: "Notifications", icon: <Bell size={18} /> },
-    { id: "tts", label: "Text-to-Speech", icon: <Volume2 size={18} /> },
-    { id: "security", label: "Security", icon: <Lock size={18} /> },
-  ];
-
-  // Handle tab changes
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId);
-  };
-
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -381,18 +375,6 @@ const Settings = () => {
                         ) : null}
                       </div>
                     </div>
-
-                    <div className="border-t border-neutral-200 pt-6">
-                      <h4 className="font-medium mb-4">Delete Account</h4>
-                      <p className="text-sm text-neutral-600 mb-4">
-                        Permanently delete your account and all your data. This
-                        action cannot be undone.
-                      </p>
-                      <button className="flex items-center px-4 py-2 rounded-md border border-error-500 text-error-600 hover:bg-error-50 transition-colors">
-                        <Trash2 size={16} className="mr-2" />
-                        <span>Delete Account</span>
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}
@@ -503,144 +485,6 @@ const Settings = () => {
                 </div>
               )}
 
-              {activeTab === "notifications" && (
-                <div>
-                  <h3 className="text-xl font-semibold mb-6">
-                    Notification Settings
-                  </h3>
-
-                  <div className="space-y-6">
-                    <div>
-                      <h4 className="font-medium mb-4">
-                        Notification Channels
-                      </h4>
-
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <label
-                              htmlFor="notification-email"
-                              className="text-sm font-medium text-neutral-700"
-                            >
-                              Email Notifications
-                            </label>
-                            <p className="text-xs text-neutral-500 mt-1">
-                              Receive notifications about new newsletters via
-                              email
-                            </p>
-                          </div>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="notification-email"
-                              className="sr-only"
-                              checked={notificationEmail}
-                              onChange={() =>
-                                setNotificationEmail(!notificationEmail)
-                              }
-                            />
-                            <span
-                              className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${notificationEmail
-                                ? "translate-x-5"
-                                : "translate-x-0"
-                                }`}
-                            ></span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <label
-                              htmlFor="notification-browser"
-                              className="text-sm font-medium text-neutral-700"
-                            >
-                              Browser Notifications
-                            </label>
-                            <p className="text-xs text-neutral-500 mt-1">
-                              Show desktop notifications when new newsletters
-                              arrive
-                            </p>
-                          </div>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="notification-browser"
-                              className="sr-only"
-                              checked={notificationBrowser}
-                              onChange={() =>
-                                setNotificationBrowser(!notificationBrowser)
-                              }
-                            />
-                            <span
-                              className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${notificationBrowser
-                                ? "translate-x-5"
-                                : "translate-x-0"
-                                }`}
-                            ></span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-neutral-200 pt-6">
-                      <h4 className="font-medium mb-4">
-                        Notification Preferences
-                      </h4>
-
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-neutral-700 mb-1">
-                            Email Digest Frequency
-                          </label>
-                          <select className="input-field">
-                            <option>Immediately</option>
-                            <option>Daily digest</option>
-                            <option>Weekly digest</option>
-                            <option>Never</option>
-                          </select>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="notify-summaries"
-                            className="text-sm text-neutral-700"
-                          >
-                            Notify when AI summaries are ready
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="notify-summaries"
-                              className="sr-only"
-                              defaultChecked={true}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-5"></span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="notify-trending"
-                            className="text-sm text-neutral-700"
-                          >
-                            Weekly trending topics report
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="notify-trending"
-                              className="sr-only"
-                              defaultChecked={true}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-5"></span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {activeTab === "tts" && (
                 <div>
                   <h3 className="text-xl font-semibold mb-6">
@@ -649,98 +493,37 @@ const Settings = () => {
 
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">
                         Voice Type
                       </label>
                       <select
-                        className="input-field"
                         value={voiceType}
                         onChange={(e) => setVoiceType(e.target.value)}
+                        className="input-field"
                       >
                         <option value="neutral">Neutral</option>
                         <option value="friendly">Friendly</option>
                         <option value="professional">Professional</option>
-                        <option value="news">News Anchor</option>
+                        <option value="casual">Casual</option>
                       </select>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        Select the voice style for newsletter narration
-                      </p>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1">
-                        Speaking Speed
+                      <label className="block text-sm font-medium text-neutral-700 mb-2">
+                        Reading Speed
                       </label>
                       <select
-                        className="input-field"
                         value={voiceSpeed}
                         onChange={(e) => setVoiceSpeed(e.target.value)}
+                        className="input-field"
                       >
+                        <option value="0.5">Slow (0.5x)</option>
                         <option value="0.75">Slow (0.75x)</option>
                         <option value="1.0">Normal (1.0x)</option>
                         <option value="1.25">Fast (1.25x)</option>
-                        <option value="1.5">Very Fast (1.5x)</option>
+                        <option value="1.5">Fast (1.5x)</option>
+                        <option value="2.0">Very Fast (2.0x)</option>
                       </select>
-                    </div>
-
-                    <div className="border-t border-neutral-200 pt-6">
-                      <h4 className="font-medium mb-4">Additional Options</h4>
-
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="skip-metadata"
-                            className="text-sm text-neutral-700"
-                          >
-                            Skip headers and metadata
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="skip-metadata"
-                              className="sr-only"
-                              defaultChecked={true}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-5"></span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="read-summaries"
-                            className="text-sm text-neutral-700"
-                          >
-                            Prefer AI summaries over full content
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="read-summaries"
-                              className="sr-only"
-                              defaultChecked={false}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-0"></span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <label
-                            htmlFor="auto-play"
-                            className="text-sm text-neutral-700"
-                          >
-                            Auto-play when opening newsletter
-                          </label>
-                          <div className="relative inline-block w-10 h-5 rounded-full bg-neutral-300">
-                            <input
-                              type="checkbox"
-                              id="auto-play"
-                              className="sr-only"
-                              defaultChecked={false}
-                            />
-                            <span className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform translate-x-0"></span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -851,30 +634,6 @@ const Settings = () => {
                         </button>
                       </div>
                     </form>
-
-                    <div className="border-t border-neutral-200 pt-6">
-                      <h4 className="font-medium mb-4">Security Options</h4>
-
-                      <div className="p-4 bg-warning-50 border border-warning-500 rounded-md mb-4 flex items-start">
-                        <AlertTriangle
-                          size={20}
-                          className="text-warning-500 mr-3 flex-shrink-0 mt-0.5"
-                        />
-                        <div>
-                          <p className="text-sm text-warning-700 font-medium">
-                            Two-factor authentication is not enabled
-                          </p>
-                          <p className="text-xs text-warning-600 mt-1">
-                            We strongly recommend enabling two-factor
-                            authentication to secure your account.
-                          </p>
-                        </div>
-                      </div>
-
-                      <button className="btn-secondary flex items-center">
-                        <span>Enable two-factor authentication</span>
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}

@@ -1,6 +1,6 @@
 import { useAuth } from "@common/contexts/AuthContext";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Menu, Search, User } from "lucide-react";
+import { Menu, Search, User } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -76,14 +76,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
               />
             </form>
           )}
-
-          <button
-            className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 hover:text-slate-800 relative"
-            aria-label="Notifications"
-          >
-            <Bell size={18} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full shadow-sm"></span>
-          </button>
 
           <div className="relative">
             <button
