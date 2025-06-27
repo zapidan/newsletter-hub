@@ -1,7 +1,7 @@
 import { useInboxUrlParams } from '@common/hooks/useUrlParams';
 import type { NewsletterFilter } from '@common/types/cache';
 import type { TimeRange } from '@web/components/TimeFilter';
-import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 
 export interface FilterState {
   filter: 'all' | 'unread' | 'liked' | 'archived';
@@ -45,6 +45,9 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 }) => {
   const { params, updateParams, resetParams } = useInboxUrlParams();
 
+  // Track last filter state to prevent unnecessary updates
+  const lastNewsletterFilterRef = useRef<string>('');
+
   // Extract filter state from URL params
   const filterState: FilterState = useMemo(
     () => ({
@@ -86,7 +89,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
     // Handle tag filter (only include in server filter if not using local filtering)
     if (!useLocalTagFiltering && filterState.tagIds.length > 0) {
-      filters.tagIds = filterState.tagIds;
+      filters.tagIds = [...filterState.tagIds]; // Create a new array to ensure stability
     }
 
     // Handle time range filter
@@ -121,7 +124,13 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     }
 
     return filters;
-  }, [filterState, useLocalTagFiltering]);
+  }, [
+    filterState.filter,
+    filterState.sourceFilter,
+    filterState.timeRange,
+    filterState.tagIds.length, // Only depend on length, not the array itself
+    useLocalTagFiltering
+  ]);
 
   // Check if any filters are active (non-default)
   const hasActiveFilters = useMemo(() => {
@@ -151,6 +160,17 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     },
     [filterState]
   );
+
+  // Only trigger onFilterChange when the newsletterFilter has actually changed
+  useEffect(() => {
+    if (onFilterChange) {
+      const currentFilterString = JSON.stringify(newsletterFilter);
+      if (lastNewsletterFilterRef.current !== currentFilterString) {
+        lastNewsletterFilterRef.current = currentFilterString;
+        onFilterChange(filterState, newsletterFilter);
+      }
+    }
+  }, [newsletterFilter, filterState, onFilterChange]);
 
   // Action creators
   const setFilter = useCallback(
@@ -231,13 +251,6 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     },
     [updateParams]
   );
-
-  // Notify parent of filter changes
-  useEffect(() => {
-    if (onFilterChange) {
-      onFilterChange(filterState, newsletterFilter);
-    }
-  }, [filterState, newsletterFilter, onFilterChange]);
 
   const contextValue: FilterContextType = {
     // State

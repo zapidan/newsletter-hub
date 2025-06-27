@@ -3,12 +3,12 @@
  *
  * Integration-style tests for the Inbox page.
  */
+import { ToastProvider } from '@common/contexts/ToastContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ToastProvider } from '@common/contexts/ToastContext';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /* ------------------------------------------------------------------ */
 /*                       HOISTED  STUBS & COMPONENTS                  */
@@ -135,6 +135,27 @@ const makeNewsletters = (n = 5) =>
   Array.from({ length: n }, (_, i) => ({
     id: `nl-${i}`,
     title: `Newsletter ${i}`,
+    content: `Content for newsletter ${i}`,
+    summary: `Summary for newsletter ${i}`,
+    image_url: '',
+    received_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    is_read: false,
+    is_liked: false,
+    is_archived: false,
+    user_id: 'user-1',
+    newsletter_source_id: `source-${i}`,
+    source: {
+      id: `source-${i}`,
+      name: `Source ${i}`,
+      from: `source${i}@example.com`,
+      user_id: 'user-1',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    tags: [],
+    word_count: 100,
+    estimated_read_time: 1,
   }));
 
 const mkInboxFilters = () => ({
@@ -145,6 +166,18 @@ const mkInboxFilters = () => ({
   allTags: [],
   newsletterSources: [],
   isLoadingSources: false,
+  newsletterFilter: {
+    isRead: false,
+    isArchived: false,
+    isLiked: false,
+    tagIds: [],
+    sourceIds: [],
+    search: '',
+    dateFrom: undefined,
+    dateTo: undefined,
+    orderBy: undefined,
+    ascending: undefined,
+  },
   /* actions */
   setFilter: vi.fn(),
   setSourceFilter: vi.fn(),
@@ -170,7 +203,7 @@ const mkSharedActions = () => ({ handleBulkMarkAsRead: vi.fn(), isNewsletterLoad
 
 /* render helper ------------------------------------------------------------ */
 const renderInbox = () => {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, cacheTime: 0 } } });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
@@ -235,7 +268,7 @@ describe('Inbox page', () => {
     expect(filters.setSourceFilter).toHaveBeenCalledWith('source-1');
   });
 
-  it('loads more newsletters when “Load More” is clicked', async () => {
+  it('loads more newsletters when "Load More" is clicked', async () => {
     const inf = mkInfiniteNewsletters();
     inf.hasNextPage = true;
     useInfiniteNewslettersMock.mockReturnValue(inf);
