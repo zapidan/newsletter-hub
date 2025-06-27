@@ -45,15 +45,9 @@ const SearchInput: React.FC<{
   onQueryChange,
   onSearch,
   onClear,
-  showSuggestions,
-  suggestions,
-  recentSearches,
-  onSuggestionClick,
-  onRemoveRecentSearch,
   onShowSuggestions,
   onHideSuggestions,
   inputRef,
-  suggestionsRef,
 }) => {
     const { handleKeyDown } = useSearchKeyboard(onSearch, onHideSuggestions);
 
