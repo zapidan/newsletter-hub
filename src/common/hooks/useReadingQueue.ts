@@ -1,5 +1,5 @@
-import { newsletterService, readingQueueService } from '@common/services';
 import { AuthContext } from '@common/contexts/AuthContext';
+import { newsletterService, readingQueueService } from '@common/services';
 import type { ReadingQueueItem } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { updateNewsletterTags } from '@common/utils/tagUtils';
@@ -193,6 +193,7 @@ export const useReadingQueue = () => {
   // Remove from reading queue
   const removeFromQueue = useMutation({
     mutationFn: async (queueItemId: string) => {
+      if (!user?.id) throw new Error('User not authenticated');
       startTimer('removeFromQueue');
       try {
         return await readingQueueService.remove(queueItemId);

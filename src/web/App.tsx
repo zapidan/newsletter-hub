@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { CacheInitializer } from '@common/components/CacheInitializer';
 import { Layout } from '@common/components/layout';
 import { ProtectedRoute } from '@common/components/ProtectedRoute';

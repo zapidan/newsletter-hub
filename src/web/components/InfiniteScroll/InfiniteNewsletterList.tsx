@@ -1,7 +1,7 @@
-import React, { useMemo } from "react";
-import { NewsletterWithRelations, Tag } from "../../../common/types";
+import React from "react";
 import { useInfiniteScroll } from "../../../common/hooks/infiniteScroll/useInfiniteScroll";
-import NewsletterRow from "../NewsletterRow";
+import { NewsletterWithRelations, Tag } from "../../../common/types";
+import NewsletterRowContainer from '../NewsletterRowContainer';
 import { LoadingSentinel } from "./LoadingSentinel";
 
 export interface InfiniteNewsletterListProps {
@@ -21,17 +21,18 @@ export interface InfiniteNewsletterListProps {
   visibleTags?: Set<string>;
 
   // Newsletter row actions
-  onRowClick?: (newsletter: NewsletterWithRelations) => void;
-  onToggleSelect?: (id: string) => void;
+  onNewsletterClick: (newsletter: NewsletterWithRelations) => void;
+  onRowClick?: (newsletter: NewsletterWithRelations, e: React.MouseEvent) => void;
+  onToggleSelect?: (id: string) => Promise<void>;
   onToggleLike: (newsletter: NewsletterWithRelations) => Promise<void>;
-  onToggleArchive?: (id: string) => void;
-  onToggleRead?: (id: string) => void;
-  onTrash?: (id: string) => void;
-  onToggleQueue?: (newsletterId: string) => void;
-  onUpdateTags?: (newsletterId: string, tagIds: string[]) => void;
-  onToggleTagVisibility?: (id: string, e: React.MouseEvent) => void;
-  onTagClick?: (tag: Tag) => void;
-  onRemoveFromQueue?: (e: React.MouseEvent, newsletterId: string) => void;
+  onToggleArchive?: (id: string) => Promise<void>;
+  onToggleRead?: (id: string) => Promise<void>;
+  onTrash?: (id: string) => Promise<void>;
+  onToggleQueue?: (newsletterId: string) => Promise<void>;
+  onUpdateTags?: (newsletterId: string, tagIds: string[]) => Promise<void>;
+  onToggleTagVisibility?: (id: string, e: React.MouseEvent) => Promise<void>;
+  onTagClick?: (tag: Tag, e: React.MouseEvent) => Promise<void>;
+  onRemoveFromQueue?: (e: React.MouseEvent, newsletterId: string) => Promise<void>;
   onMouseEnter?: (newsletter: NewsletterWithRelations) => void;
 
   // Loading states
@@ -76,6 +77,7 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
   visibleTags = new Set(),
 
   // Newsletter row actions
+  onNewsletterClick,
   onRowClick,
   onToggleSelect,
   onToggleLike,
@@ -117,52 +119,6 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
     isFetchingNextPage: isLoadingMore,
     onLoadMore,
   });
-
-  // Memoize newsletter row actions to prevent unnecessary re-renders
-  const createNewsletterActions = useMemo(() => {
-    return (newsletter: NewsletterWithRelations) => ({
-      onToggleSelect: onToggleSelect
-        ? () => onToggleSelect(newsletter.id)
-        : undefined,
-      onToggleLike: onToggleLike
-        ? () => onToggleLike(newsletter)
-        : async () => {},
-      onToggleArchive: onToggleArchive
-        ? async () => onToggleArchive(newsletter.id)
-        : async () => {},
-      onToggleRead: onToggleRead
-        ? async () => onToggleRead(newsletter.id)
-        : async () => {},
-      onTrash: onTrash ? () => onTrash(newsletter.id) : () => {},
-      onToggleQueue: onToggleQueue
-        ? async () => onToggleQueue(newsletter.id)
-        : async () => {},
-      onUpdateTags: onUpdateTags
-        ? (newsletterId: string, tagIds: string[]) =>
-            onUpdateTags(newsletterId, tagIds)
-        : () => {},
-      onToggleTagVisibility: onToggleTagVisibility || (() => {}),
-      onTagClick: onTagClick
-        ? (tag: Tag, _e: React.MouseEvent) => onTagClick(tag)
-        : () => {},
-      onRemoveFromQueue: onRemoveFromQueue,
-      onRowClick: onRowClick ? () => onRowClick(newsletter) : undefined,
-      onMouseEnter: onMouseEnter ? () => onMouseEnter(newsletter) : undefined,
-    });
-  }, [
-    onToggleSelect,
-    onToggleLike,
-    onToggleArchive,
-    onToggleRead,
-    onTrash,
-    onToggleQueue,
-    onUpdateTags,
-    onToggleTagVisibility,
-    onTagClick,
-    onRemoveFromQueue,
-    onRowClick,
-    onMouseEnter,
-  ]);
 
   // Initial loading state
   if (isLoading && newsletters.length === 0) {
@@ -249,7 +205,7 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
   }
 
   return (
-    <div className={`${className}`}>
+    <div className={`p-0 sm:p-0 ${className}`}>
       {/* Newsletter List */}
       <div className="space-y-0 divide-y divide-gray-100">
         {newsletters.map((newsletter) => {
@@ -257,31 +213,37 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
             (item) => item.newsletter_id === newsletter.id,
           );
 
-          const actions = createNewsletterActions(newsletter);
-
           return (
-            <NewsletterRow
+            <NewsletterRowContainer
               key={newsletter.id}
+              data-testid={`newsletter-row-${newsletter.id}`}
               newsletter={newsletter}
               isSelected={isSelecting && selectedIds.has(newsletter.id)}
+              onToggleSelect={onToggleSelect ? (id) => onToggleSelect(id) : async () => Promise.resolve()}
+              onToggleLike={onToggleLike ? () => onToggleLike(newsletter) : async () => Promise.resolve()}
+              onToggleArchive={onToggleArchive ? () => onToggleArchive(newsletter.id) : async () => Promise.resolve()}
+              onToggleRead={onToggleRead ? () => onToggleRead(newsletter.id) : async () => Promise.resolve()}
+              onTrash={onTrash ? (id) => onTrash(id) : async () => Promise.resolve()}
+              onToggleQueue={onToggleQueue ? () => onToggleQueue(newsletter.id) : async () => Promise.resolve()}
+              onUpdateTags={onUpdateTags ? (tagIds) => onUpdateTags(newsletter.id, tagIds) : async () => Promise.resolve()}
+              onToggleTagVisibility={onToggleTagVisibility ? (_e) => onToggleTagVisibility(newsletter.id, _e) : async () => Promise.resolve()}
+              onTagClick={onTagClick ? (tag, _e) => onTagClick(tag, _e) : async () => Promise.resolve()}
+              onRemoveFromQueue={onRemoveFromQueue}
+              onNewsletterClick={onNewsletterClick}
+              onRowClick={onRowClick}
+              onMouseEnter={onMouseEnter ? () => onMouseEnter(newsletter) : undefined}
+              isInReadingQueue={isInQueue}
               showCheckbox={showCheckbox || isSelecting}
               showTags={showTags}
-              isInReadingQueue={isInQueue}
-              readingQueue={readingQueue}
               visibleTags={visibleTags}
-              isDeletingNewsletter={
-                isDeletingNewsletter
-                  ? isDeletingNewsletter(newsletter.id)
-                  : false
-              }
+              readingQueue={readingQueue}
+              isDeletingNewsletter={isDeletingNewsletter ? isDeletingNewsletter(newsletter.id) : false}
               loadingStates={loadingStates}
               errorTogglingLike={errorTogglingLike}
-              isUpdatingTags={
-                isUpdatingTags ? isUpdatingTags(newsletter.id) : false
-              }
+              isUpdatingTags={isUpdatingTags ? isUpdatingTags(newsletter.id) : false}
               tagUpdateError={tagUpdateError}
               onDismissTagError={onDismissTagError}
-              {...actions}
+              className=""
             />
           );
         })}

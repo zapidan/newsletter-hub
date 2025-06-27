@@ -1,22 +1,22 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Mail } from 'lucide-react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import { InboxFilters, NewsletterSourceWithCount } from '@web/components/InboxFilters';
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
+import { InboxFilters, NewsletterSourceWithCount } from '@web/components/InboxFilters';
 
 import LoadingScreen from '@common/components/common/LoadingScreen';
 import { InfiniteNewsletterList } from '@web/components/InfiniteScroll';
 
 import { useInfiniteNewsletters } from '@common/hooks/infiniteScroll';
-import { useReadingQueue } from '@common/hooks/useReadingQueue';
-import { useInboxFilters } from '@common/hooks/useInboxFilters';
-import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useErrorHandling } from '@common/hooks/useErrorHandling';
+import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useBulkLoadingStates } from '@common/hooks/useLoadingStates';
+import { useReadingQueue } from '@common/hooks/useReadingQueue';
+import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 
-import { useToast } from '@common/contexts/ToastContext';
 import { useAuth } from '@common/contexts';
+import { useToast } from '@common/contexts/ToastContext';
 import { useLogger } from '@common/utils/logger/useLogger';
 import SelectedTagsDisplay from '@web/components/SelectedTagsDisplay';
 
@@ -680,12 +680,15 @@ const Inbox: React.FC = memo(() => {
   const showArchived = filter === 'archived';
 
   return (
-    <div className="p-6 bg-neutral-50 min-h-screen">
+    <div className="px-0 sm:px-6 py-6 bg-neutral-50 min-h-screen">
       {/* Header */}
       <div className="flex flex-col space-y-4 mb-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col w-full">
+          <div className="flex justify-between items-center w-full">
+            <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
+          </div>
+          {/* Filters below title */}
+          <div className="mt-2 w-full">
             <InboxFilters
               filter={filter}
               sourceFilter={sourceFilter}
@@ -696,15 +699,8 @@ const Inbox: React.FC = memo(() => {
               onTimeRangeChange={setTimeRange}
               isLoadingSources={isLoadingSources}
               showFilterCounts={true}
+              onSelectClick={() => setIsSelecting(true)}
             />
-            {!isSelecting && (
-              <button
-                onClick={() => setIsSelecting(true)}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                Select
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -738,7 +734,7 @@ const Inbox: React.FC = memo(() => {
       />
 
       {/* Newsletter List with Infinite Scroll */}
-      <div className={`${selectedTags.length > 0 ? 'pt-2' : 'pt-6'} px-6 pb-6 overflow-auto`}>
+      <div className={`${selectedTags.length > 0 ? 'pt-2' : 'pt-6'} pb-6 overflow-auto sm:px-6 px-0`}>
         {isLoadingNewsletters && rawNewsletters.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
@@ -784,7 +780,7 @@ const Inbox: React.FC = memo(() => {
             onRemoveFromQueue={(e: React.MouseEvent, newsletterId: string) =>
               handleRemoveFromQueue(e, newsletterId)
             }
-            onRowClick={handleNewsletterClick}
+            onNewsletterClick={handleNewsletterClick}
             onMouseEnter={handleNewsletterMouseEnter}
             // Loading states
             isDeletingNewsletter={(id: string) =>

@@ -1,6 +1,6 @@
 import { NewsletterWithRelations, Tag } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
-import { Loader2, Tag as TagIcon } from "lucide-react";
+import { ExternalLink, Loader2, Tag as TagIcon } from "lucide-react";
 import React, { useCallback } from "react";
 import NewsletterActions from "./NewsletterActions";
 import TagSelector from "./TagSelector";
@@ -15,7 +15,6 @@ interface NewsletterRowProps {
   onTrash: (id: string) => void;
   onToggleQueue: (newsletterId: string) => Promise<void>;
   onToggleTagVisibility: (id: string, e: React.MouseEvent) => void;
-  onUpdateTags: (newsletterId: string, tagIds: string[]) => void;
   onTagClick: (tag: Tag, e: React.MouseEvent) => void;
   onRemoveFromQueue?: (e: React.MouseEvent, id: string) => void;
   onNewsletterClick?: (newsletter: NewsletterWithRelations) => void;
@@ -27,6 +26,11 @@ interface NewsletterRowProps {
   isInReadingQueue: boolean;
   showCheckbox?: boolean;
   showTags?: boolean;
+  showSource?: boolean;
+  showDate?: boolean;
+  showActions?: boolean;
+  compact?: boolean;
+  className?: string;
   visibleTags: Set<string>;
   readingQueue: Array<{ newsletter_id: string }>;
   isDeletingNewsletter: boolean;
@@ -36,6 +40,27 @@ interface NewsletterRowProps {
   tagUpdateError?: string | null;
   onDismissTagError?: () => void;
 }
+
+// Source color mapping for visual distinction
+const getSourceColor = (sourceName: string) => {
+  const colors = [
+    "bg-blue-100 text-blue-700 border-blue-200",
+    "bg-green-100 text-green-700 border-green-200",
+    "bg-purple-100 text-purple-700 border-purple-200",
+    "bg-orange-100 text-orange-700 border-orange-200",
+    "bg-pink-100 text-pink-700 border-pink-200",
+    "bg-indigo-100 text-indigo-700 border-indigo-200",
+    "bg-teal-100 text-teal-700 border-teal-200",
+    "bg-amber-100 text-amber-700 border-amber-200",
+  ];
+
+  const hash = sourceName.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+
+  return colors[Math.abs(hash) % colors.length];
+};
 
 const NewsletterRow: React.FC<NewsletterRowProps> = ({
   newsletter,
@@ -47,13 +72,18 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   onTrash,
   onToggleQueue,
   onToggleTagVisibility,
-  onUpdateTags,
   onTagClick,
   onNewsletterClick,
   onRowClick,
   onMouseEnter,
   isInReadingQueue = false,
   showCheckbox = false,
+  showTags = true,
+  showSource = true,
+  showDate = true,
+  showActions = true,
+  compact = false,
+  className = "",
   visibleTags,
   loadingStates = {},
   errorTogglingLike,
@@ -61,221 +91,255 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
   tagUpdateError,
   onDismissTagError,
 }) => {
-  const log = useLogger();
-  const handleRowClick = (e: React.MouseEvent) => {
-    // Only proceed if the click wasn't on a button or link
-    const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("a")) {
-      return;
-    }
+  const _log = useLogger("NewsletterRow");
 
-    if (onRowClick) {
-      onRowClick(newsletter, e);
-    } else if (onNewsletterClick) {
-      onNewsletterClick(newsletter);
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      // Prevent click if the target is a button or link
+      if (
+        (e.target as HTMLElement).closest('button, a, input, [role="checkbox"]')
+      ) {
+        return;
+      }
+      if (onNewsletterClick) {
+        onNewsletterClick(newsletter);
+      }
+      if (onRowClick) {
+        onRowClick(newsletter, e);
+      }
+    },
+    [newsletter, onRowClick, onNewsletterClick]
+  );
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+    if (diffInHours < 24) {
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } else if (diffInHours < 48) {
+      return "Yesterday";
+    } else if (diffInHours < 168) {
+      return date.toLocaleDateString([], { weekday: "short" });
+    } else {
+      return date.toLocaleDateString([], { month: "short", day: "numeric" });
     }
   };
 
-  const handleTagClick = useCallback(
-    (tag: Tag, e: React.MouseEvent) => {
-      e.stopPropagation();
-      onTagClick(tag, e);
-    },
-    [onTagClick],
-  );
-
-  const handleUpdateTags = useCallback(
-    (tagIds: string[]) => {
-      onUpdateTags(newsletter.id, tagIds);
-    },
-    [onUpdateTags, newsletter.id],
-  );
-
-  const handleMouseEnter = useCallback(() => {
-    if (onMouseEnter) {
-      onMouseEnter(newsletter);
-    }
-  }, [onMouseEnter, newsletter]);
+  const isRead = newsletter.is_read;
+  const _isLiked = newsletter.is_liked;
+  const _isArchived = newsletter.is_archived;
+  const hasTags = newsletter.tags && newsletter.tags.length > 0;
 
   return (
     <div
-      role="listitem"
       data-testid={`newsletter-row-main-${newsletter.id}`}
-      onClick={handleRowClick}
-      onMouseEnter={handleMouseEnter}
-      className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${!newsletter.is_read
-          ? "bg-blue-50/60 border-l-3 border-blue-500 hover:bg-blue-100/50"
-          : "bg-white hover:bg-neutral-50"
-        } ${isSelected ? "ring-2 ring-primary-400" : ""} border border-neutral-200`}
+      className={`
+        group relative bg-white rounded-xl border border-slate-200/60 shadow-sm
+        hover:shadow-md hover:border-slate-300/60 transition-all duration-200
+        ${isSelected ? "ring-2 ring-blue-500 ring-primary-400 ring-offset-2" : ""}
+        ${isRead ? "" : "bg-blue-50/60"}
+        ${className}
+      `}
+      onClick={handleClick}
+      role="listitem"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (onNewsletterClick) {
+            onNewsletterClick(newsletter);
+          }
+        }
+      }}
+      aria-label={`${newsletter.title} from ${newsletter.source?.name || "Unknown source"}`}
+      onMouseEnter={() => onMouseEnter && onMouseEnter(newsletter)}
     >
+      {/* Selection Checkbox */}
       {showCheckbox && onToggleSelect && (
-        <div className="flex items-center h-5 mr-4 mt-1">
-          <div
-            className={`flex items-center justify-center h-5 w-5 rounded border ${isSelected ? 'bg-blue-50 border-blue-400' : 'border-gray-300 bg-white'} transition-colors`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSelect(newsletter.id);
-            }}
+        <div className="absolute top-3 left-3 z-10">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => { e.stopPropagation(); onToggleSelect(newsletter.id); }}
+            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            onClick={(e) => e.stopPropagation()}
             title="Select newsletter"
-          >
-            {isSelected && (
-              <svg className="h-3.5 w-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            )}
-          </div>
+            aria-label="Select newsletter"
+          />
         </div>
       )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-3 mb-1">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-base truncate">
-                  {newsletter.title || "No subject"}
-                </div>
-                <div className="text-sm text-gray-500 truncate">
-                  {newsletter.source?.name || "Unknown Source"}
-                  {newsletter.source?.from && (
-                    <span className="text-gray-400 ml-2">
-                      • {newsletter.source.from}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {/* Action buttons moved to upper right */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Tag visibility toggle */}
-                <button
-                  type="button"
-                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  onClick={(e) => {
-                    log.debug("Tag icon clicked", {
-                      action: "toggle_tag_visibility",
-                      metadata: {
-                        newsletterId: newsletter.id,
-                        isUpdatingTags,
-                      },
-                    });
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!isUpdatingTags) {
-                      onToggleTagVisibility(newsletter.id, e);
-                    }
-                  }}
-                  disabled={isUpdatingTags}
-                  title={
-                    isUpdatingTags
-                      ? "Updating tags..."
-                      : visibleTags.has(newsletter.id)
-                        ? "Hide tags"
-                        : "Edit tags"
-                  }
-                >
-                  {isUpdatingTags ? (
-                    <Loader2
-                      size={14}
-                      className="animate-spin text-primary-600"
-                    />
-                  ) : (
-                    <TagIcon
-                      size={14}
-                      className={`${visibleTags.has(newsletter.id)
-                          ? "text-primary-600"
-                          : "text-gray-500"
-                        } hover:text-primary-600`}
-                    />
-                  )}
-                  {visibleTags.has(newsletter.id) && !isUpdatingTags && (
-                    <span className="sr-only">(Active)</span>
-                  )}
-                </button>
 
-                {/* Newsletter Actions Component */}
-                <NewsletterActions
-                  newsletter={newsletter}
-                  onToggleLike={onToggleLike}
-                  onToggleArchive={onToggleArchive}
-                  onToggleRead={onToggleRead}
-                  onTrash={onTrash}
-                  onToggleQueue={onToggleQueue}
-                  loadingStates={loadingStates}
-                  errorTogglingLike={errorTogglingLike}
-                  isInReadingQueue={isInReadingQueue}
-                  compact={true}
-                />
-              </div>
-            </div>
-            <div className="text-sm text-gray-700 mb-2 line-clamp-2">
-              {newsletter.summary}
-            </div>
+      <div className={`p-4 ${showCheckbox ? "pl-12" : ""}`}>
+        {/* Header Row - Source and Date */}
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {showSource && newsletter.source && (
+              <span
+                className={`
+                  inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border
+                  ${getSourceColor(newsletter.source.name)}
+                  flex-shrink-0
+                `}
+              >
+                {newsletter.source.name}
+              </span>
+            )}
 
-            {/* Tags display */}
-            {visibleTags.has(newsletter.id) && (
-              <div className="w-full mt-2" onClick={(e) => e.stopPropagation()}>
-                {tagUpdateError && (
-                  <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md">
-                    <p className="text-sm text-red-600">{tagUpdateError}</p>
-                    {onDismissTagError && (
-                      <button
-                        type="button"
-                        className="text-xs text-red-500 hover:text-red-700 underline mt-1"
-                        onClick={onDismissTagError}
-                      >
-                        Dismiss
-                      </button>
-                    )}
-                  </div>
-                )}
-                <TagSelector
-                  selectedTags={newsletter.tags || []}
-                  onTagsChange={(newTags) => {
-                    const tagIds = newTags.map((tag) => tag.id);
-                    handleUpdateTags(tagIds);
-                  }}
-                  onTagClick={handleTagClick}
-                  onTagDeleted={() => {
-                    // Refresh handled by parent
-                  }}
-                  className="mt-1"
-                  disabled={isUpdatingTags}
-                />
-                {isUpdatingTags && (
-                  <div className="flex items-center mt-2 text-sm text-gray-500">
-                    <Loader2 size={14} className="animate-spin mr-2" />
-                    Updating tags...
-                  </div>
+            {/* Read/Unread indicator */}
+            <div
+              className={`
+                w-2 h-2 rounded-full flex-shrink-0
+                ${isRead ? "bg-gray-300" : "bg-blue-500"}
+              `}
+              aria-label={isRead ? "Read" : "Unread"}
+            />
+          </div>
+
+          {showDate && (
+            <time
+              dateTime={newsletter.received_at}
+              className="text-xs text-gray-500 flex-shrink-0"
+            >
+              {formatDate(newsletter.received_at)}
+            </time>
+          )}
+        </div>
+
+        {/* Title Row */}
+        <div className="mb-3">
+          <h3
+            data-testid="newsletter-title"
+            className={`
+              font-medium leading-tight text-slate-800 group-hover:text-slate-900 transition-colors
+              ${compact ? "text-sm" : "text-base"}
+              ${isRead ? "font-normal" : "font-semibold"}
+              line-clamp-2
+            `}
+          >
+            {newsletter.title}
+          </h3>
+          {newsletter.summary && (
+            <div className="text-xs text-gray-600 mt-1 line-clamp-2">{newsletter.summary}</div>
+          )}
+        </div>
+
+        {/* Tags Row */}
+        {showTags && hasTags && (
+          <div className="hidden sm:flex flex-wrap items-center gap-1 mb-3">
+            {newsletter.tags?.slice(0, 3).map((tag: Tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                onClick={e => { e.stopPropagation(); if (onTagClick) { onTagClick(tag, e); } }}
+                tabIndex={0}
+                aria-label={`Filter by tag ${tag.name}`}
+              >
+                <TagIcon className="w-3 h-3 mr-1" />
+                {tag.name}
+              </button>
+            ))}
+            {newsletter.tags && newsletter.tags.length > 3 && (
+              <span className="text-xs text-gray-500">
+                +{newsletter.tags.length - 3} more
+              </span>
+            )}
+            {/* Tag visibility toggle button */}
+            <button
+              title="Edit tags"
+              className="ml-2 p-1 rounded hover:bg-blue-100 focus:outline-none"
+              onClick={e => { e.stopPropagation(); if (onToggleTagVisibility) { onToggleTagVisibility(newsletter.id, e); } }}
+              aria-label="Edit tags"
+            >
+              <TagIcon className="w-4 h-4" />
+            </button>
+            <span className="ml-2 text-xs text-gray-500">{newsletter.estimated_read_time} min read</span>
+          </div>
+        )}
+
+        {/* Tag Selector - Only on mobile */}
+        {showTags && (
+          <div className="sm:hidden flex flex-shrink-0 mb-2" onClick={e => e.stopPropagation()}>
+            <TagSelector
+              selectedTags={newsletter.tags || []}
+              onTagsChange={() => { }}
+              onTagClick={onTagClick}
+              onTagDeleted={() => { }}
+              className=""
+              disabled={false}
+            />
+          </div>
+        )}
+
+        {/* Tag update error and loading spinner */}
+        {visibleTags.has(newsletter.id) && (
+          <>
+            {tagUpdateError && (
+              <div className="bg-red-100 text-red-700 px-2 py-1 rounded flex items-center gap-2 mb-2">
+                <span>{tagUpdateError}</span>
+                {onDismissTagError && (
+                  <button onClick={() => onDismissTagError()} className="ml-2 text-xs underline">Dismiss</button>
                 )}
               </div>
             )}
-
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex flex-wrap gap-1">
-                {newsletter.tags?.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer"
-                    style={{
-                      backgroundColor: `${tag.color}20`,
-                      color: tag.color,
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleTagClick(tag, e);
-                    }}
-                  >
-                    {tag.name}
-                  </span>
-                ))}
+            {isUpdatingTags && (
+              <div className="flex items-center gap-2 text-blue-600 mb-2" title="Updating tags...">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Updating tags...</span>
               </div>
-              <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
-                {new Date(newsletter.received_at).toLocaleDateString()} ·{" "}
-                {newsletter.estimated_read_time} min read
-              </span>
+            )}
+          </>
+        )}
+
+        {/* Actions Row */}
+        {showActions && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <NewsletterActions
+                newsletter={newsletter}
+                onToggleLike={onToggleLike}
+                onToggleArchive={onToggleArchive}
+                onToggleRead={onToggleRead}
+                onTrash={onTrash}
+                onToggleQueue={onToggleQueue}
+                loadingStates={loadingStates}
+                _errorTogglingLike={errorTogglingLike}
+                isInReadingQueue={isInReadingQueue}
+                compact={true}
+              />
+            </div>
+
+            {/* External Link */}
+            {newsletter.content && (
+              <a
+                href={newsletter.content}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`
+                  p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50
+                  transition-all duration-200 flex-shrink-0
+                  ${compact ? "p-1" : "p-1.5"}
+                `}
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Open newsletter in new tab"
+              >
+                <ExternalLink className={compact ? "w-3 h-3" : "w-4 h-4"} />
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Loading State */}
+        {Object.keys(loadingStates).length > 0 && (
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-xl flex items-center justify-center">
+            <div className="flex items-center gap-2 text-blue-600">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm font-medium">Updating...</span>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

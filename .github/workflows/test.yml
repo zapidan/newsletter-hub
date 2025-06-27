@@ -25,6 +25,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Clean workspace
+        run: |
+          echo "Cleaning workspace..."
+          rm -rf node_modules
+          rm -rf mobile-app/node_modules
+          echo "Workspace cleaned"
+
       - name: Detect changes
         uses: dorny/paths-filter@v2
         id: changes
@@ -70,11 +77,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Run ESLint
-        run: pnpm lint
+        run: pnpm lint:ci
 
       - name: Run TypeScript check
         run: pnpm type-check
@@ -92,6 +96,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Clean workspace
+        run: |
+          echo "Cleaning workspace..."
+          rm -rf node_modules
+          rm -rf mobile-app/node_modules
+          echo "Workspace cleaned"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
@@ -103,9 +114,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Build main application
         run: pnpm build

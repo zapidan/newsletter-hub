@@ -10,7 +10,6 @@ import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
-import NewsletterNavigation from '../../components/NewsletterDetail/NewsletterNavigation';
 
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
@@ -41,16 +40,6 @@ const NewsletterDetail = memo(() => {
         !document.referrer.includes('reading-queue'))
     );
   }, [location.state]);
-
-  // Extract source ID from location if we're in a source context
-  const sourceId = useMemo(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const sourceFromQuery = searchParams.get('source');
-    const sourceFromPath = location.pathname.split('/sources/')[1]?.split('/')[0];
-    const sourceFromState = location.state?.sourceId;
-
-    return sourceFromQuery || sourceFromPath || sourceFromState || undefined;
-  }, [location.search, location.pathname, location.state]);
 
   // Helper function to get the correct back button text
   const getBackButtonText = useCallback(() => {
@@ -321,149 +310,135 @@ const NewsletterDetail = memo(() => {
 
   // Add key to force remount when ID changes
   return (
-    <div key={`newsletter-${id}`} className="max-w-6xl w-full mx-auto px-4 py-8">
-      <button
-        onClick={handleBack}
-        className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {getBackButtonText()}
-      </button>
-
-      {/* Newsletter Navigation */}
-      {id && (
-        <div className="mb-6">
-          <NewsletterNavigation
-            currentNewsletterId={id}
-            className="bg-white rounded-xl shadow-sm p-4"
-            showLabels={true}
-            showCounter={true}
-            autoMarkAsRead={false} // Let the detail page handle auto-marking
-            isFromReadingQueue={isFromReadingQueue}
-            sourceId={sourceId}
-          />
-        </div>
-      )}
-
-      <div className="flex flex-col lg:flex-row gap-6">
-        {' '}
-        {/* Main Content */}
-        <div className="flex-1">
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            {/* Tags and Action Buttons Row */}
-            <div className="flex items-center justify-between mb-4">
-              {/* Tags Section */}
-              <div className="flex-1">
-                <TagSelector
-                  key={tagSelectorKey}
-                  selectedTags={tagsForUI}
-                  onTagsChange={async (newTags: Tag[]) => {
-                    if (!id) return;
-                    try {
-                      const ok = await updateNewsletterTags(id, newTags);
-                      if (ok) {
-                        await refetch();
-                        setTagSelectorKey((k) => k + 1);
-                      }
-                    } catch (error) {
-                      log.error(
-                        'Failed to update tags',
-                        {
-                          action: 'update_tags',
-                          metadata: { newsletterId: id },
-                        },
-                        error instanceof Error ? error : new Error(String(error))
-                      );
-                    }
-                  }}
-                  onTagDeleted={async () => {
-                    if (!id) return;
-                    try {
-                      const ok = await updateNewsletterTags(id, []);
-                      if (ok) {
-                        await refetch();
-                        setTagSelectorKey((k) => k + 1);
-                      }
-                    } catch (error) {
-                      log.error(
-                        'Failed to delete tag',
-                        {
-                          action: 'delete_tag',
-                          metadata: { newsletterId: id },
-                        },
-                        error instanceof Error ? error : new Error(String(error))
-                      );
-                    }
-                  }}
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="ml-4">
-                {newsletter && (
-                  <NewsletterDetailActions
-                    newsletter={newsletter}
-                    onNewsletterUpdate={handleNewsletterUpdate}
-                    isFromReadingQueue={isFromReadingQueue}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Newsletter Content */}
-          <div className="prose max-w-none mb-6">
-            {newsletter?.received_at && (
-              <div className="text-sm text-gray-500 mb-6">
-                <div>
-                  {new Date(newsletter.received_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </div>
-                {newsletter.estimated_read_time > 0 && (
-                  <div className="mt-1 text-gray-400">
-                    {newsletter.estimated_read_time} min read •{' '}
-                    {newsletter.word_count.toLocaleString()} words
-                  </div>
-                )}
-              </div>
-            )}
-            {newsletter?.content && (
-              <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
-            )}
-          </div>
-        </div>
-        {/* Sidebar */}
-        <div className="lg:w-80 flex-shrink-0">
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
-            <div className="text-sm text-gray-600">
-              {/* Intentionally left empty as per requirements */}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { id: '1', name: 'Tech News', count: 5 },
-                { id: '2', name: 'AI', count: 8 },
-                { id: '3', name: 'Product', count: 3 },
-                { id: '4', name: 'Industry', count: 6 },
-              ].map((topic) => (
-                <button
-                  key={topic.id}
-                  onClick={() => navigate(`/inbox?topic=${topic.name.toLowerCase()}`)}
-                  className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full flex items-center gap-1.5"
+    <div data-testid="newsletter-detail" className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Main content */}
+          <div className="flex-1">
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <div className="mb-6">
+                <h1
+                  data-testid="newsletter-detail-title"
+                  className="text-2xl font-bold text-gray-900 mb-4"
                 >
-                  <span>{topic.name}</span>
-                  <span className="text-xs text-gray-500">{topic.count}</span>
-                </button>
-              ))}
+                  {newsletter?.title}
+                </h1>
+              </div>
+              {/* Tags and Action Buttons Row */}
+              <div className="flex items-center justify-between mb-4">
+                {/* Tags Section */}
+                <div className="flex-1">
+                  <TagSelector
+                    key={tagSelectorKey}
+                    selectedTags={tagsForUI}
+                    onTagsChange={async (newTags: Tag[]) => {
+                      if (!id) return;
+                      try {
+                        const ok = await updateNewsletterTags(id, newTags);
+                        if (ok) {
+                          await refetch();
+                          setTagSelectorKey((k) => k + 1);
+                        }
+                      } catch (error) {
+                        log.error(
+                          'Failed to update tags',
+                          {
+                            action: 'update_tags',
+                            metadata: { newsletterId: id },
+                          },
+                          error instanceof Error ? error : new Error(String(error))
+                        );
+                      }
+                    }}
+                    onTagDeleted={async () => {
+                      if (!id) return;
+                      try {
+                        const ok = await updateNewsletterTags(id, []);
+                        if (ok) {
+                          await refetch();
+                          setTagSelectorKey((k) => k + 1);
+                        }
+                      } catch (error) {
+                        log.error(
+                          'Failed to delete tag',
+                          {
+                            action: 'delete_tag',
+                            metadata: { newsletterId: id },
+                          },
+                          error instanceof Error ? error : new Error(String(error))
+                        );
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="ml-4">
+                  {newsletter && (
+                    <NewsletterDetailActions
+                      newsletter={newsletter}
+                      onNewsletterUpdate={handleNewsletterUpdate}
+                      isFromReadingQueue={isFromReadingQueue}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Newsletter Content */}
+            <div className="prose max-w-none mb-6">
+              {newsletter?.received_at && (
+                <div className="text-sm text-gray-500 mb-6">
+                  <div>
+                    {new Date(newsletter.received_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                  {newsletter.estimated_read_time > 0 && (
+                    <div className="mt-1 text-gray-400">
+                      {newsletter.estimated_read_time} min read •{' '}
+                      {newsletter.word_count.toLocaleString()} words
+                    </div>
+                  )}
+                </div>
+              )}
+              {newsletter?.content && (
+                <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
+              )}
+            </div>
+          </div>
+          {/* Sidebar */}
+          <div className="lg:w-80 flex-shrink-0">
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
+              <div className="text-sm text-gray-600">
+                {/* Intentionally left empty as per requirements */}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: '1', name: 'Tech News', count: 5 },
+                  { id: '2', name: 'AI', count: 8 },
+                  { id: '3', name: 'Product', count: 3 },
+                  { id: '4', name: 'Industry', count: 6 },
+                ].map((topic) => (
+                  <button
+                    key={topic.id}
+                    onClick={() => navigate(`/inbox?topic=${topic.name.toLowerCase()}`)}
+                    className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full flex items-center gap-1.5"
+                  >
+                    <span>{topic.name}</span>
+                    <span className="text-xs text-gray-500">{topic.count}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

@@ -1171,7 +1171,7 @@ const NewslettersPage: React.FC = () => {
             <div className="fixed inset-0 bg-gray-400 bg-opacity-40 z-40 pointer-events-auto transition-opacity" />
           )}
           {!isLoadingSources && !isErrorSources && newsletterSources.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-2 relative z-50">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-2 relative">
               {newsletterSources.map((source: NewsletterSource) => {
                 const isEditing = editModalSourceId === source.id;
                 const isDeleting = deleteConfirmId === source.id;
@@ -1250,36 +1250,36 @@ const NewslettersPage: React.FC = () => {
                     )}
                     <div className="flex-1 flex flex-col items-center justify-center pt-2 pb-4">
                       <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${selectedSourceId === source.id
+                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mb-2 sm:mb-3 ${selectedSourceId === source.id
                           ? 'bg-blue-200'
                           : 'bg-gray-100'
                           }`}
                       >
                         <span
-                          className={`text-lg font-bold ${selectedSourceId === source.id ? 'text-blue-800' : 'text-gray-600'
+                          className={`text-base sm:text-lg font-bold ${selectedSourceId === source.id ? 'text-blue-800' : 'text-gray-600'
                             }`}
                         >
                           {source.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <h3
-                        className={`font-medium text-xs truncate mb-1 max-w-full px-2 ${selectedSourceId === source.id ? 'text-blue-900' : 'text-neutral-900'
+                        className={`font-medium text-sm sm:text-sm truncate mb-0.5 max-w-full px-1 ${selectedSourceId === source.id ? 'text-blue-900' : 'text-neutral-900'
                           }`}
                         title={source.name}
                       >
                         {source.name}
                       </h3>
                       <p
-                        className={`text-xs truncate max-w-full ${selectedSourceId === source.id ? 'text-blue-700' : 'text-neutral-500'
+                        className={`text-xs sm:text-xs truncate max-w-full px-1 ${selectedSourceId === source.id ? 'text-blue-700' : 'text-neutral-500'
                           }`}
                         title={source.from}
                       >
                         {source.from}
                       </p>
                     </div>
-                    <div className="flex justify-center flex-col gap-1">
+                    <div className="flex justify-center flex-col gap-0.5 sm:gap-1 mt-2">
                       {isLoadingSources ? (
-                        <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-4 sm:h-5 w-16 bg-gray-200 rounded animate-pulse" />
                       ) : (
                         <>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">

@@ -270,8 +270,8 @@ const Settings = () => {
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
                   className={`btn w-full justify-start gap-3 mb-1 ${activeTab === tab.id
-                      ? "btn-primary text-white"
-                      : "btn-ghost text-slate-700 hover:bg-slate-50"
+                    ? "btn-primary text-white"
+                    : "btn-ghost text-slate-700 hover:bg-slate-50"
                     }`}
                 >
                   {tab.icon}
@@ -425,23 +425,25 @@ const Settings = () => {
                           No newsletter sources found.
                         </div>
                       ) : (
-                        <ul className="divide-y divide-gray-200">
+                        <ul className="divide-y divide-gray-200 w-full">
                           {newsletterSources.map((source) => (
                             <li
                               key={source.id}
-                              className="px-4 py-3 hover:bg-gray-50"
+                              className="px-2 sm:px-4 py-3 hover:bg-gray-50 w-full"
                             >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center">
-                                  <span className="text-sm font-medium text-gray-900">
-                                    {source.name}
-                                  </span>
-                                  {source.from && (
-                                    <span className="ml-2 text-xs text-gray-500">
-                                      ({source.from})
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full gap-2">
+                                <div className="flex flex-col w-full">
+                                  <div className="flex items-center">
+                                    <span className="text-sm font-medium text-gray-900 break-all">
+                                      {source.name}
                                     </span>
-                                  )}
-                                  <div className="ml-2 flex items-center gap-2">
+                                    {source.from && (
+                                      <span className="ml-2 text-xs text-gray-500 break-all">
+                                        ({source.from})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-row flex-wrap gap-2 mt-1">
                                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
                                       {source.newsletter_count || 0}{" "}
                                       {(source.newsletter_count || 0) === 1
@@ -450,8 +452,8 @@ const Settings = () => {
                                     </span>
                                     <span
                                       className={`text-xs px-2 py-0.5 rounded-full ${(source.unread_count || 0) > 0
-                                          ? "bg-orange-100 text-orange-800"
-                                          : "bg-gray-100 text-gray-600"
+                                        ? "bg-orange-100 text-orange-800"
+                                        : "bg-gray-100 text-gray-600"
                                         }`}
                                     >
                                       {(source.unread_count || 0) > 0
@@ -464,8 +466,8 @@ const Settings = () => {
                                   <button
                                     type="button"
                                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${source.is_archived
-                                        ? "bg-gray-200"
-                                        : "bg-blue-600"
+                                      ? "bg-gray-200"
+                                      : "bg-blue-600"
                                       }`}
                                     role="switch"
                                     aria-checked={!source.is_archived}
@@ -485,8 +487,8 @@ const Settings = () => {
                                     <span
                                       aria-hidden="true"
                                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${source.is_archived
-                                          ? "translate-x-0"
-                                          : "translate-x-5"
+                                        ? "translate-x-0"
+                                        : "translate-x-5"
                                         }`}
                                     />
                                   </button>
@@ -539,8 +541,8 @@ const Settings = () => {
                             />
                             <span
                               className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${notificationEmail
-                                  ? "translate-x-5"
-                                  : "translate-x-0"
+                                ? "translate-x-5"
+                                : "translate-x-0"
                                 }`}
                             ></span>
                           </div>
@@ -571,8 +573,8 @@ const Settings = () => {
                             />
                             <span
                               className={`absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 transform ${notificationBrowser
-                                  ? "translate-x-5"
-                                  : "translate-x-0"
+                                ? "translate-x-5"
+                                : "translate-x-0"
                                 }`}
                             ></span>
                           </div>

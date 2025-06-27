@@ -1,8 +1,8 @@
-import React, { useCallback } from "react";
-import { Tag as TagIcon, Loader2 } from "lucide-react";
 import { NewsletterWithRelations, Tag } from "@common/types";
-import TagSelector from "./TagSelector";
+import { Loader2, Tag as TagIcon } from "lucide-react";
+import React, { useCallback } from "react";
 import NewsletterActions from "./NewsletterActions";
+import TagSelector from "./TagSelector";
 
 interface NewsletterRowPresentationProps {
   newsletter: NewsletterWithRelations;
@@ -69,7 +69,6 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
       if (target.closest("button") || target.closest("a")) {
         return;
       }
-
       if (onRowClick) {
         onRowClick(newsletter, e);
       } else if (onNewsletterClick) {
@@ -123,11 +122,12 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
     <div
       onClick={handleRowClick}
       onMouseEnter={handleMouseEnter}
-      className={`rounded-lg p-4 flex items-start cursor-pointer transition-all duration-200 ${
-        !newsletter.is_read
-          ? "bg-blue-50/60 border-l-3 border-blue-500 hover:bg-blue-100/50"
-          : "bg-white hover:bg-neutral-50"
-      } ${isSelected ? "ring-2 ring-primary-400" : ""} border border-neutral-200 ${className || ""}`}
+      className={`w-full px-0 mx-0 flex items-start cursor-pointer transition-all duration-200
+        ${!newsletter.is_read ? "bg-blue-50/60 border-l-3 border-blue-500 hover:bg-blue-100/50" : "bg-white hover:bg-neutral-50"}
+        ${isSelected ? "ring-2 ring-primary-400" : ""}
+        border border-neutral-200
+        sm:rounded-lg sm:p-4
+        ${className || ""}`}
     >
       {showCheckbox && onToggleSelect && (
         <input
@@ -141,11 +141,6 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-3 mb-1">
-          <img
-            src={newsletter.image_url || "/newsletter-icon.svg"}
-            alt={newsletter.title}
-            className="w-10 h-10 rounded object-cover bg-gray-100 flex-shrink-0 mt-1"
-          />
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
@@ -166,9 +161,8 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                 {/* Tag visibility toggle */}
                 <button
                   type="button"
-                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${
-                    isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
+                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
                   onClick={handleToggleTagVisibility}
                   disabled={isUpdatingTags}
                   title={
@@ -187,11 +181,10 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                   ) : (
                     <TagIcon
                       size={14}
-                      className={`${
-                        visibleTags.has(newsletter.id)
-                          ? "text-primary-600"
-                          : "text-gray-500"
-                      } hover:text-primary-600`}
+                      className={`${visibleTags.has(newsletter.id)
+                        ? "text-primary-600"
+                        : "text-gray-500"
+                        } hover:text-primary-600`}
                     />
                   )}
                   {visibleTags.has(newsletter.id) && !isUpdatingTags && (

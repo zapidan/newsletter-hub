@@ -1,5 +1,5 @@
-import { FC } from 'react';
 import { Archive, ArchiveX, Trash } from 'lucide-react';
+import { FC } from 'react';
 
 type BulkSelectionActionsProps = {
   selectedCount: number;
@@ -33,10 +33,10 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
   onCancel,
 }) => (
   <div className="w-full bg-blue-50 px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
+      <div className="flex flex-wrap items-center gap-3 justify-center w-full sm:w-auto">
         <span className="text-sm text-gray-700">{selectedCount} selected</span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 justify-center">
           <button
             onClick={onSelectAll}
             className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
@@ -58,15 +58,15 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
           </button>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <button 
+      <div className="flex flex-wrap items-center gap-2 justify-center w-full sm:w-auto mt-2 sm:mt-0">
+        <button
           onClick={onMarkAsRead}
           disabled={selectedCount === 0}
           className="px-3 py-1 bg-green-100 text-gray-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
         >
           Mark as Read
         </button>
-        <button 
+        <button
           onClick={onMarkAsUnread}
           disabled={selectedCount === 0}
           className="px-3 py-1 bg-blue-100 text-gray-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
@@ -75,7 +75,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
         </button>
         {showArchived ? (
           <>
-            <button 
+            <button
               onClick={onUnarchive}
               disabled={selectedCount === 0 || isBulkActionLoading}
               className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1"
@@ -94,7 +94,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
             </button>
           </>
         ) : (
-          <button 
+          <button
             onClick={onArchive}
             disabled={selectedCount === 0 || isBulkActionLoading}
             className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1"
@@ -103,7 +103,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
             <span>Archive</span>
           </button>
         )}
-        <button 
+        <button
           onClick={onCancel}
           className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded text-sm ml-2"
         >

@@ -1,14 +1,14 @@
+import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query';
 import React from 'react';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useTags } from '../useTags';
-import { tagService } from '@common/services';
 import { AuthContext } from '@common/contexts/AuthContext';
+import { useTags } from '@common/hooks/useTags';
+import { tagService } from '@common/services';
+import { Tag, TagCreate, TagUpdate } from '@common/types';
 import * as cacheUtils from '@common/utils/cacheUtils';
 import { queryKeyFactory } from '@common/utils/queryKeyFactory';
-import { Tag, TagCreate, TagUpdate } from '@common/types';
 
 // Mocks
 vi.mock('@common/services', async () => ({
@@ -39,7 +39,6 @@ vi.mock('@common/utils/cacheUtils', async (importOriginal) => {
   return {
     getCacheManagerSafe: vi.fn(() => mockCacheManagerInstance),
     invalidateQueries: vi.fn(),
-    queryKeyFactory: actual.queryKeyFactory,
     getQueriesData: vi.fn(() => []),
     getQueryData: vi.fn(),
     getQueryState: vi.fn(),
@@ -59,10 +58,10 @@ describe('useTags', () => {
 
   const wrapperFactory = (client: QueryClient, user: any = mockUser) =>
     ({ children }: { children: React.ReactNode }) => (
-    <AuthContext.Provider value={{ user, session: null, isLoading: false, signIn: vi.fn(), signOut: vi.fn(), refreshSession: vi.fn() } as any}>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    </AuthContext.Provider>
-  );
+      <AuthContext.Provider value={{ user, session: null, isLoading: false, signIn: vi.fn(), signOut: vi.fn(), refreshSession: vi.fn() } as any}>
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      </AuthContext.Provider>
+    );
 
   beforeEach(() => {
     queryClient = new QueryClient({
@@ -82,34 +81,55 @@ describe('useTags', () => {
   });
 
   // Skipping these due to persistent issues with result.current.tags being undefined
-  describe.skip('Fetching Tags (useQuery)', () => {
+  describe('Fetching Tags (useQuery)', () => {
     it('should fetch tags successfully when user is authenticated', async () => {
       mockTagService.getAll.mockResolvedValue([mockTag1, mockTag2]);
       const { result } = renderHook(() => useTags(), { wrapper: wrapperFactory(queryClient, mockUser) });
-      await waitFor(() => expect(result.current.tags).not.toBeUndefined());
-      expect(result.current.tags).toEqual([mockTag1, mockTag2]);
+
+      // Wait for the query to complete and getTags to be available
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+        expect(result.current.getTags).toBeDefined();
+      });
+
+      const tags = await result.current.getTags();
+      expect(tags).toEqual([mockTag1, mockTag2]);
       expect(result.current.loading).toBe(false);
     });
 
     it('should have tags as empty array if user is not authenticated (query disabled)', async () => {
       const { result } = renderHook(() => useTags(), { wrapper: wrapperFactory(queryClient, null) });
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(result.current.tags).toEqual([]);
+
+      // Wait for the query to complete
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+        expect(result.current.getTags).toBeDefined();
+      });
+
+      const tags = await result.current.getTags();
+      expect(tags).toEqual([]);
     });
 
     it('should have tags as empty array and set error when fetching tags fails', async () => {
       const mockError = new Error('Failed to fetch tags');
       mockTagService.getAll.mockRejectedValue(mockError);
       const { result } = renderHook(() => useTags(), { wrapper: wrapperFactory(queryClient, mockUser) });
-      await waitFor(() => expect(result.current.error).toBe(mockError.message));
-      expect(result.current.tags).toEqual([]);
+
+      // Wait for the error to be set
+      await waitFor(() => {
+        expect(result.current.error).toBe(mockError.message);
+        expect(result.current.getTags).toBeDefined();
+      });
+
+      const tags = await result.current.getTags();
+      expect(tags).toEqual([]);
     });
   });
 
   describe('createTag Mutation', () => {
     it('should create a tag successfully and trigger cache updates', async () => {
       const newTagData: TagCreate = { name: 'New Tag', color: '#0000ff' };
-      const createdTag: Tag = { ...newTagData, id: 't3', user_id: mockUser.id, created_at: new Date().toISOString() };
+      const createdTag: Tag = { ...newTagData, id: 't3', user_id: mockUser.id, created_at: new Date().toISOString(), color: '#0000ff' };
       mockTagService.create.mockResolvedValue(createdTag);
       const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData');
       mockTagService.getAll.mockResolvedValueOnce([]); // For initial load
@@ -152,7 +172,7 @@ describe('useTags', () => {
       mockTagService.update.mockResolvedValue(updatedTag);
       const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData');
       mockTagService.getAll.mockResolvedValueOnce([mockTag1, mockTag2]);
-       queryClient.setQueryData(queryKeyFactory.newsletters.tags(), [mockTag1, mockTag2]);
+      queryClient.setQueryData(queryKeyFactory.newsletters.tags(), [mockTag1, mockTag2]);
 
 
       const { result } = renderHook(() => useTags(), { wrapper: wrapperFactory(queryClient, mockUser) });

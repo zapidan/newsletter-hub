@@ -1,6 +1,6 @@
-import { FC, memo, useState } from "react";
-import { Archive, Filter, Clock, Building2, ChevronDown } from "lucide-react";
 import type { NewsletterSource } from "@common/types";
+import { Archive, Building2, ChevronDown, Clock, Filter } from "lucide-react";
+import { FC, memo, useState } from "react";
 
 export type FilterType = "all" | "unread" | "liked" | "archived";
 export type TimeRange = "all" | "day" | "2days" | "week" | "month";
@@ -25,6 +25,7 @@ interface InboxFiltersProps {
   showTimeFilter?: boolean;
   showSourceFilter?: boolean;
   showFilterCounts?: boolean;
+  onSelectClick?: () => void;
 }
 
 const TIME_RANGE_OPTIONS = [
@@ -158,9 +159,8 @@ const SourceFilterDropdown: FC<{
               )}
           </div>
           <ChevronDown
-            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${
-              isOpen ? "transform rotate-180" : ""
-            }`}
+            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""
+              }`}
           />
         </button>
 
@@ -177,11 +177,10 @@ const SourceFilterDropdown: FC<{
                 <button
                   type="button"
                   onClick={(e) => handleSelect(null, e)}
-                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${
-                    !selectedSourceId
-                      ? "bg-blue-50 text-blue-800 font-medium"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
+                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedSourceId
+                    ? "bg-blue-50 text-blue-800 font-medium"
+                    : "text-gray-700 hover:bg-gray-100"
+                    }`}
                 >
                   <span>All Sources</span>
                 </button>
@@ -190,11 +189,10 @@ const SourceFilterDropdown: FC<{
                     key={source.id}
                     type="button"
                     onClick={(e) => handleSelect(source.id, e)}
-                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${
-                      selectedSourceId === source.id
-                        ? "bg-blue-50 text-blue-800 font-medium"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedSourceId === source.id
+                      ? "bg-blue-50 text-blue-800 font-medium"
+                      : "text-gray-700 hover:bg-gray-100"
+                      }`}
                   >
                     <span className="truncate pr-2">{source.name}</span>
                     {showCounts &&
@@ -244,11 +242,10 @@ const FilterButton: FC<{
         ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}
         rounded-full transition-all duration-200 font-medium
         flex items-center gap-1.5 min-w-0 relative
-        ${
-          isActive
+        ${isActive
             ? "bg-primary-600 text-white shadow-sm hover:bg-primary-700 focus:bg-primary-700"
             : "text-gray-600 hover:bg-gray-100 hover:text-gray-800 focus:bg-gray-100"
-        }
+          }
         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1
         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent
         ${disabled ? "" : "active:scale-95"}
@@ -297,27 +294,15 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
     showTimeFilter = true,
     showSourceFilter = true,
     showFilterCounts = false,
+    onSelectClick,
   }) => {
     return (
-      <div className={`flex flex-col gap-2 ${className}`}>
-        <div className="flex items-center gap-1 flex-wrap">
-          {/* Time Filter */}
-          {showTimeFilter && (
-            <TimeFilterDropdown
-              selectedRange={timeRange}
-              onChange={onTimeRangeChange}
-              disabled={disabled || isLoading}
-              compact={compact}
-            />
-          )}
-
-          {/* Status Filter Buttons */}
-          <div
-            className="flex items-center gap-1"
-            role="group"
-            aria-label="Status filters"
-          >
-            {FILTER_OPTIONS.map((option) => (
+      <div className={`w-full ${className}`}>
+        {/* Mobile: Multi-row layout */}
+        <div className="sm:hidden">
+          {/* Row 1: Status filters (All, Unread, Liked, Archived) */}
+          <div className="flex flex-wrap items-center gap-1 justify-center">
+            {FILTER_OPTIONS.filter(opt => opt.value !== 'archived').map((option) => (
               <FilterButton
                 key={option.value}
                 option={option}
@@ -328,32 +313,108 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
                 showCount={showFilterCounts}
               />
             ))}
-          </div>
-
-          {/* Source Filter */}
-          {showSourceFilter && (
-            <SourceFilterDropdown
-              sources={newsletterSources}
-              selectedSourceId={sourceFilter}
-              onSourceSelect={onSourceFilterChange}
-              isLoading={isLoadingSources}
+            {/* Archived at the end of row 1 on mobile */}
+            <FilterButton
+              key="archived"
+              option={FILTER_OPTIONS.find(opt => opt.value === 'archived')!}
+              isActive={filter === 'archived'}
+              onClick={() => onFilterChange('archived')}
               disabled={disabled || isLoading}
               compact={compact}
-              showCounts={showFilterCounts}
+              showCount={showFilterCounts}
             />
-          )}
-
-          {/* Loading Indicator */}
-          {isLoading && (
-            <div className="flex items-center gap-2 text-gray-500">
-              <div
-                className={`animate-spin rounded-full border-2 border-gray-300 border-t-primary-600 ${compact ? "h-3 w-3" : "h-4 w-4"}`}
+          </div>
+          {/* Row 2: Time, Source, Select (mobile only) */}
+          <div className="flex flex-wrap items-center gap-2 justify-center mt-2">
+            {showTimeFilter && (
+              <TimeFilterDropdown
+                selectedRange={timeRange}
+                onChange={onTimeRangeChange}
+                disabled={disabled || isLoading}
+                compact={compact}
               />
-              <span className={compact ? "text-xs" : "text-sm"}>
-                Updating...
-              </span>
-            </div>
-          )}
+            )}
+            {showSourceFilter && (
+              <SourceFilterDropdown
+                sources={newsletterSources}
+                selectedSourceId={sourceFilter}
+                onSourceSelect={onSourceFilterChange}
+                isLoading={isLoadingSources}
+                disabled={disabled || isLoading}
+                compact={compact}
+                showCounts={showFilterCounts}
+              />
+            )}
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              onClick={onSelectClick}
+            >
+              Select
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop: Single row layout with all filters */}
+        <div className="hidden sm:flex flex-row items-center gap-x-3 w-full justify-between">
+          {/* Left side: Status filters + Time filter */}
+          <div className="flex items-center gap-x-3">
+            {/* Time filter - at the left, before status filters */}
+            {showTimeFilter && (
+              <TimeFilterDropdown
+                selectedRange={timeRange}
+                onChange={onTimeRangeChange}
+                disabled={disabled || isLoading}
+                compact={compact}
+              />
+            )}
+            {/* Status filters */}
+            {FILTER_OPTIONS.filter(opt => opt.value !== 'archived').map((option) => (
+              <FilterButton
+                key={option.value}
+                option={option}
+                isActive={filter === option.value}
+                onClick={() => onFilterChange(option.value)}
+                disabled={disabled || isLoading}
+                compact={compact}
+                showCount={showFilterCounts}
+              />
+            ))}
+            {/* Archived filter */}
+            <FilterButton
+              key="archived"
+              option={FILTER_OPTIONS.find(opt => opt.value === 'archived')!}
+              isActive={filter === 'archived'}
+              onClick={() => onFilterChange('archived')}
+              disabled={disabled || isLoading}
+              compact={compact}
+              showCount={showFilterCounts}
+            />
+          </div>
+
+          {/* Right side: Source filter + Select button */}
+          <div className="flex items-center gap-x-3">
+            {/* Source filter */}
+            {showSourceFilter && (
+              <SourceFilterDropdown
+                sources={newsletterSources}
+                selectedSourceId={sourceFilter}
+                onSourceSelect={onSourceFilterChange}
+                isLoading={isLoadingSources}
+                disabled={disabled || isLoading}
+                compact={compact}
+                showCounts={showFilterCounts}
+              />
+            )}
+            {/* Select button */}
+            <button
+              type="button"
+              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              onClick={onSelectClick}
+            >
+              Select
+            </button>
+          </div>
         </div>
       </div>
     );
