@@ -13,6 +13,7 @@ import { useErrorHandling } from '@common/hooks/useErrorHandling';
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useBulkLoadingStates } from '@common/hooks/useLoadingStates';
 import { useNewsletters } from '@common/hooks/useNewsletters';
+import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 
@@ -100,29 +101,60 @@ const Inbox: React.FC = () => {
     handleTagClick,
   } = useInboxFilters();
 
-  // Create sources with unread counts for the filter dropdown
-  const sourcesWithUnreadCounts = useMemo(() => {
-    return newsletterSources.map(
-      (source): NewsletterSourceWithCount => ({
-        ...source,
-        count: source.unread_count || 0,
-      })
-    );
-  }, [newsletterSources]);
+  // Group filter state
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
+
+  // When group is selected, clear source filter; when source is selected, clear group filter
+  const handleSourceFilterChange = useCallback((sourceId: string | null) => {
+    setGroupFilter(null);
+    setSourceFilter(sourceId);
+  }, [setSourceFilter]);
+
+  const handleGroupFilterChange = useCallback((groupId: string | null) => {
+    setSourceFilter(null);
+    setGroupFilter(groupId);
+  }, [setSourceFilter]);
+
+  // Prepare group dropdown data
+  const groupsForDropdown = useMemo(() =>
+    newsletterGroups.map(g => ({
+      id: g.id,
+      name: g.name,
+      count:
+        g.sources?.reduce((sum, s) => {
+          const source = newsletterSources.find(ns => ns.id === s.id);
+          return sum + (source?.unread_count || 0);
+        }, 0) || 0,
+    })),
+    [newsletterGroups, newsletterSources]
+  );
+
+  // Compute source IDs for the selected group
+  const selectedGroupSourceIds = useMemo(() => {
+    if (!groupFilter) return undefined;
+    const group = newsletterGroups.find(g => g.id === groupFilter);
+    return group?.sources?.map(s => s.id) || [];
+  }, [groupFilter, newsletterGroups]);
 
   // Newsletter filter from context
   const { newsletterFilter: contextNewsletterFilter } = useInboxFilters();
 
   // Stabilize the newsletter filter to prevent unnecessary re-renders
   const stableNewsletterFilter = useMemo(() => {
-    return {
+    let filterObj = {
       ...contextNewsletterFilter,
       tagIds: contextNewsletterFilter.tagIds ? [...contextNewsletterFilter.tagIds] : undefined,
       sourceIds: contextNewsletterFilter.sourceIds ? [...contextNewsletterFilter.sourceIds] : undefined,
     };
-  }, [
-    contextNewsletterFilter,
-  ]);
+    if (groupFilter && selectedGroupSourceIds) {
+      filterObj = {
+        ...filterObj,
+        sourceIds: selectedGroupSourceIds,
+      };
+    }
+    return filterObj;
+  }, [contextNewsletterFilter, groupFilter, selectedGroupSourceIds]);
 
   // Newsletter data with infinite scroll
   const {
@@ -227,6 +259,18 @@ const Inbox: React.FC = () => {
       }
     }
 
+    if (groupFilter) {
+      if (params.get('group') !== groupFilter) {
+        params.set('group', groupFilter);
+        hasChanges = true;
+      }
+    } else {
+      if (params.has('group')) {
+        params.delete('group');
+        hasChanges = true;
+      }
+    }
+
     if (timeRange !== 'all') {
       if (params.get('time') !== timeRange) {
         params.set('time', timeRange);
@@ -256,7 +300,7 @@ const Inbox: React.FC = () => {
       const newUrl = `${window.location.pathname}?${params.toString()}`;
       window.history.replaceState({}, '', newUrl);
     }
-  }, [filter, sourceFilter, timeRange, debouncedTagIds]);
+  }, [filter, sourceFilter, groupFilter, timeRange, debouncedTagIds]);
 
   // Shared newsletter actions with our enhanced version
   const newsletterActions = useSharedNewsletterActions(
@@ -730,6 +774,16 @@ const Inbox: React.FC = () => {
     }
   }, [cacheManager, user?.id]);
 
+  // Create sources with unread counts for the filter dropdown
+  const sourcesWithUnreadCounts = useMemo(() => {
+    return newsletterSources.map(
+      (source): NewsletterSourceWithCount => ({
+        ...source,
+        count: source.unread_count || 0,
+      })
+    );
+  }, [newsletterSources]);
+
   // Loading state
   if (isLoadingNewsletters && rawNewsletters.length === 0) {
     return <LoadingScreen />;
@@ -755,12 +809,16 @@ const Inbox: React.FC = () => {
             <InboxFilters
               filter={filter}
               sourceFilter={sourceFilter}
+              groupFilter={groupFilter}
               timeRange={timeRange}
               newsletterSources={sourcesWithUnreadCounts}
+              newsletterGroups={groupsForDropdown}
               onFilterChange={setFilter}
-              onSourceFilterChange={setSourceFilter}
+              onSourceFilterChange={handleSourceFilterChange}
+              onGroupFilterChange={handleGroupFilterChange}
               onTimeRangeChange={setTimeRange}
               isLoadingSources={isLoadingSources}
+              isLoadingGroups={isLoadingGroups}
               showFilterCounts={true}
               onSelectClick={() => setIsSelecting(true)}
             />
