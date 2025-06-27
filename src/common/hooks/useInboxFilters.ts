@@ -78,6 +78,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
 
   // Refs for debouncing
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastFilterStateRef = useRef<string>('');
 
   // Hooks - memoize getTags to prevent infinite loops
   const { getTags } = useTags();
@@ -114,16 +115,20 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     debounceTimeoutRef.current = setTimeout(() => {
       setDebouncedTagIds([...pendingTagUpdates]);
 
-      // Update the actual filter state after debounce - prevent circular updates
+      // Only update the actual filter state if there's a real change and we're not in a circular update
       const pendingStr = pendingTagUpdates.join(',');
       const currentStr = tagIds.join(',');
-      if (pendingStr !== currentStr && !isUpdatingTagsRef.current) {
+      const currentFilterState = JSON.stringify({ filter, sourceFilter, timeRange, tagIds });
+
+      // Check if the filter state has actually changed
+      if (pendingStr !== currentStr && !isUpdatingTagsRef.current && lastFilterStateRef.current !== currentFilterState) {
         isUpdatingTagsRef.current = true;
+        lastFilterStateRef.current = currentFilterState;
         stableSetTagIds(pendingTagUpdates);
-        // Reset flag after a brief delay
+        // Reset flag after a longer delay to prevent rapid updates
         setTimeout(() => {
           isUpdatingTagsRef.current = false;
-        }, 100);
+        }, 500);
       }
     }, debounceMs);
 
@@ -132,7 +137,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
         clearTimeout(debounceTimeoutRef.current);
       }
     };
-  }, [pendingTagUpdates, debounceMs, tagIds, stableSetTagIds]);
+  }, [pendingTagUpdates, debounceMs, tagIds, stableSetTagIds, filter, sourceFilter, timeRange]);
 
   // Load tags if enabled
   const [isLoadingTags, setIsLoadingTags] = useState(false);

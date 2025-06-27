@@ -34,6 +34,8 @@ export const useInfiniteScroll = ({
 
   // Track if we've already triggered a load to prevent duplicate calls
   const loadTriggeredRef = useRef(false);
+  const lastLoadTimeRef = useRef(0);
+  const minimumLoadInterval = 500; // Minimum time between loads in ms
 
   const handleIntersection = useCallback(
     (entries: IntersectionObserverEntry[]) => {
@@ -48,21 +50,50 @@ export const useInfiniteScroll = ({
       // 3. We're not already fetching
       // 4. We haven't already triggered a load for this intersection
       // 5. Infinite scroll is enabled
+      // 6. Enough time has passed since last load
+      const now = Date.now();
+      const timeSinceLastLoad = now - lastLoadTimeRef.current;
+
+      // Debug logging for development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('InfiniteScroll Debug:', {
+          isCurrentlyIntersecting,
+          hasNextPage,
+          isFetchingNextPage,
+          loadTriggered: loadTriggeredRef.current,
+          enabled,
+          timeSinceLastLoad,
+          minimumLoadInterval,
+          shouldTrigger: isCurrentlyIntersecting && hasNextPage && !isFetchingNextPage && !loadTriggeredRef.current && enabled && timeSinceLastLoad >= minimumLoadInterval,
+        });
+      }
+
       if (
         isCurrentlyIntersecting &&
         hasNextPage &&
         !isFetchingNextPage &&
         !loadTriggeredRef.current &&
         enabled &&
-        onLoadMore
+        onLoadMore &&
+        timeSinceLastLoad >= minimumLoadInterval
       ) {
         loadTriggeredRef.current = true;
+        lastLoadTimeRef.current = now;
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('InfiniteScroll: Triggering load more');
+        }
+
         onLoadMore();
       }
 
       // Reset load trigger when element is no longer intersecting
       if (!isCurrentlyIntersecting) {
         loadTriggeredRef.current = false;
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('InfiniteScroll: Reset load trigger (no longer intersecting)');
+        }
       }
 
       // Update end state when there are no more pages
@@ -91,10 +122,19 @@ export const useInfiniteScroll = ({
     };
   }, [handleIntersection, threshold, rootMargin, enabled]);
 
-  // Reset states when dependencies change
+  // Update hasReachedEnd state when dependencies change
   useEffect(() => {
-    loadTriggeredRef.current = false;
     setHasReachedEnd(!hasNextPage && !isFetchingNextPage);
+
+    // Only reset loadTriggeredRef when we're done fetching AND there are no more pages
+    // This prevents the problematic reset that was causing the infinite loop
+    if (!isFetchingNextPage && !hasNextPage) {
+      loadTriggeredRef.current = false;
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('InfiniteScroll: Reset load trigger (no more pages and not fetching)');
+      }
+    }
   }, [hasNextPage, isFetchingNextPage]);
 
   return {

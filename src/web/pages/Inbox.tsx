@@ -1,5 +1,5 @@
 import { Mail } from 'lucide-react';
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
@@ -89,7 +89,6 @@ const Inbox: React.FC = memo(() => {
     debouncedTagIds,
     allTags,
     newsletterSources,
-    newsletterFilter,
     isLoadingSources,
     // Filter actions
     setFilter,
@@ -110,6 +109,20 @@ const Inbox: React.FC = memo(() => {
     );
   }, [newsletterSources]);
 
+  // Newsletter filter from context
+  const { newsletterFilter: contextNewsletterFilter } = useInboxFilters();
+
+  // Stabilize the newsletter filter to prevent unnecessary re-renders
+  const stableNewsletterFilter = useMemo(() => {
+    return {
+      ...contextNewsletterFilter,
+      tagIds: contextNewsletterFilter.tagIds ? [...contextNewsletterFilter.tagIds] : undefined,
+      sourceIds: contextNewsletterFilter.sourceIds ? [...contextNewsletterFilter.sourceIds] : undefined,
+    };
+  }, [
+    contextNewsletterFilter,
+  ]);
+
   // Newsletter data with infinite scroll
   const {
     newsletters: rawNewsletters,
@@ -120,12 +133,62 @@ const Inbox: React.FC = memo(() => {
     fetchNextPage,
     refetch: refetchNewsletters,
     totalCount,
-  } = useInfiniteNewsletters(newsletterFilter, {
-    refetchOnWindowFocus: false,
-    staleTime: 0,
+  } = useInfiniteNewsletters(stableNewsletterFilter, {
+    _refetchOnWindowFocus: false,
+    _staleTime: 0,
     pageSize: 25,
     debug: process.env.NODE_ENV === 'development',
   });
+
+  // Debug: Log newsletter data only when it changes significantly
+  const lastDebugStateRef = useRef<string>('');
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const currentState = JSON.stringify({
+        rawNewslettersCount: rawNewsletters.length,
+        isLoadingNewsletters,
+        errorNewsletters: errorNewsletters?.message,
+        totalCount,
+        hasNextPage,
+      });
+
+      // Only log if the state has actually changed
+      if (lastDebugStateRef.current !== currentState) {
+        lastDebugStateRef.current = currentState;
+        console.log('Newsletter Debug:', {
+          newsletterFilter: stableNewsletterFilter,
+          rawNewslettersCount: rawNewsletters.length,
+          isLoadingNewsletters,
+          errorNewsletters: errorNewsletters?.message,
+          totalCount,
+          hasNextPage,
+          user: user?.id,
+          isAuthenticated: !!user,
+          rawNewsletters: rawNewsletters.slice(0, 3).map(n => ({ id: n.id, title: n.title })), // Show first 3 newsletters
+        });
+      }
+    }
+  }, [stableNewsletterFilter, rawNewsletters.length, isLoadingNewsletters, errorNewsletters, totalCount, hasNextPage, user, rawNewsletters]);
+
+  // Additional debugging for newsletter data
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Newsletter Data Debug:', {
+        rawNewslettersLength: rawNewsletters.length,
+        rawNewslettersType: typeof rawNewsletters,
+        isArray: Array.isArray(rawNewsletters),
+        firstNewsletter: rawNewsletters[0],
+        allNewsletters: rawNewsletters.map(n => ({ id: n.id, title: n.title })),
+        isLoadingNewsletters,
+        errorNewsletters: errorNewsletters?.message,
+        totalCount,
+        hasNextPage,
+        user: user?.id,
+        isAuthenticated: !!user,
+      });
+    }
+  }, [rawNewsletters, isLoadingNewsletters, errorNewsletters, totalCount, hasNextPage, user]);
 
   // Reading queue
   const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
@@ -222,40 +285,7 @@ const Inbox: React.FC = memo(() => {
   const [tagUpdateError, setTagUpdateError] = useState<string | null>(null);
 
   // Action progress state to prevent refetching during actions
-  const [isActionInProgress, setIsActionInProgress] = useState(false);
-
-  // Force refetch when filters change to ensure fresh data (but not during actions)
-  useEffect(() => {
-    // Skip refetch if action is in progress to preserve optimistic updates
-    if (isActionInProgress) {
-      log.debug('Skipping refetch - action in progress', {
-        action: 'filter_change_refetch',
-        metadata: { isActionInProgress },
-      });
-      return;
-    }
-
-    log.debug('Filter changed, refetching newsletters', {
-      action: 'filter_change_refetch',
-      metadata: {
-        filter,
-        sourceFilter,
-        timeRange,
-        tagIds: debouncedTagIds,
-      },
-    });
-
-    refetchNewsletters();
-  }, [
-    filter,
-    sourceFilter,
-    timeRange,
-    debouncedTagIds,
-    newsletterFilter,
-    refetchNewsletters,
-    isActionInProgress,
-    log,
-  ]);
+  const [_isActionInProgress, setIsActionInProgress] = useState(false);
 
   // Get selected tag objects for display
   const selectedTags = useMemo(() => {
@@ -483,7 +513,7 @@ const Inbox: React.FC = memo(() => {
   );
 
   // Tag visibility toggle handler
-  const toggleTagVisibility = useCallback((id: string, e: React.MouseEvent) => {
+  const toggleTagVisibility = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setVisibleTags((prev: Set<string>) => {
       const newVisibleTags = new Set(prev);
@@ -758,27 +788,29 @@ const Inbox: React.FC = memo(() => {
             readingQueue={readingQueue}
             visibleTags={visibleTags}
             // Newsletter row actions
-            onToggleSelect={toggleSelect}
+            onToggleSelect={async (id: string) => { toggleSelect(id); }}
             onToggleLike={handleToggleLikeWrapper}
-            onToggleArchive={(id: string) => {
+            onToggleArchive={async (id: string) => {
               const newsletter = rawNewsletters.find((n) => n.id === id);
-              if (newsletter) handleToggleArchiveWrapper(newsletter);
+              if (newsletter) await handleToggleArchiveWrapper(newsletter);
             }}
-            onToggleRead={(id: string) => {
+            onToggleRead={async (id: string) => {
               const newsletter = rawNewsletters.find((n) => n.id === id);
-              if (newsletter) handleToggleReadWrapper(newsletter);
+              if (newsletter) await handleToggleReadWrapper(newsletter);
             }}
-            onTrash={handleDeleteNewsletterWrapper}
-            onToggleQueue={(newsletterId: string) => {
+            onTrash={async (id: string) => {
+              await handleDeleteNewsletterWrapper(id);
+            }}
+            onToggleQueue={async (newsletterId: string) => {
               const newsletter = rawNewsletters.find((n) => n.id === newsletterId);
               const isInQueue = readingQueue.some((item) => item.newsletter_id === newsletterId);
-              if (newsletter) handleToggleQueueWrapper(newsletter, isInQueue);
+              if (newsletter) await handleToggleQueueWrapper(newsletter, isInQueue);
             }}
             onUpdateTags={handleUpdateTagsWrapper}
             onToggleTagVisibility={toggleTagVisibility}
-            onTagClick={(tag: Tag) => handleTagClick(tag.id)}
-            onRemoveFromQueue={(e: React.MouseEvent, newsletterId: string) =>
-              handleRemoveFromQueue(e, newsletterId)
+            onTagClick={async (tag: Tag, _e: React.MouseEvent) => handleTagClick(tag.id)}
+            onRemoveFromQueue={async (_e: React.MouseEvent, newsletterId: string) =>
+              await handleRemoveFromQueue(_e, newsletterId)
             }
             onNewsletterClick={handleNewsletterClick}
             onMouseEnter={handleNewsletterMouseEnter}
