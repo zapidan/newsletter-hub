@@ -2,6 +2,7 @@ import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useNewsletterNavigation } from '@common/hooks/useNewsletterNavigation';
 import type { NewsletterMutations } from '@common/hooks/useSharedNewsletterActions';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import type { NewsletterFilter } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { ChevronLeft, ChevronRight, Loader } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo } from 'react';
@@ -47,6 +48,17 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     const isSourceContext =
       sourceId || location.pathname.includes('/sources/') || location.search.includes('source=');
 
+    // Check if we're coming from inbox with specific filter context
+    const isFromInboxWithFilter = location.state?.fromInbox && location.state?.currentFilter;
+
+    console.log('🔍 DEBUG: NewsletterNavigation context detection', {
+      isReadingQueueContext,
+      isSourceContext,
+      isFromInboxWithFilter,
+      locationState: location.state,
+      currentFilter: location.state?.currentFilter,
+    });
+
     if (isReadingQueueContext) {
       return {
         enabled: !disabled,
@@ -70,6 +82,36 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
       };
     }
 
+    // Use filter context from inbox if available
+    if (isFromInboxWithFilter) {
+      // Convert inbox filter state to NewsletterFilter format
+      const inboxFilter: NewsletterFilter = {
+        // Convert filter string to boolean properties
+        is_read: location.state.currentFilter === 'unread' ? false : undefined,
+        is_archived: location.state.currentFilter === 'archived' ? true : undefined,
+        is_liked: location.state.currentFilter === 'liked' ? true : undefined,
+        // Add source filter if present
+        source_id: location.state.sourceFilter || undefined,
+        // Add tag IDs if present
+        tag_ids: location.state.tagIds && location.state.tagIds.length > 0 ? location.state.tagIds : undefined,
+        // Add date range if present
+        start_date: location.state.timeRange && location.state.timeRange !== 'all' ? location.state.timeRange : undefined,
+        end_date: location.state.timeRange && location.state.timeRange !== 'all' ? location.state.timeRange : undefined,
+      };
+
+      console.log('🔍 DEBUG: Using inbox filter context', {
+        originalFilter: location.state.currentFilter,
+        convertedFilter: inboxFilter,
+      });
+
+      return {
+        enabled: !disabled,
+        preloadAdjacent: true,
+        debug: process.env.NODE_ENV === 'development',
+        overrideFilter: inboxFilter,
+      };
+    }
+
     // Default to current inbox filters
     return {
       enabled: !disabled,
@@ -83,6 +125,7 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
     sourceId,
     location.pathname,
     location.search,
+    location.state,
     newsletterFilter,
   ]);
 
@@ -192,6 +235,12 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
           fromReadingQueue: isFromReadingQueue,
           fromNewsletterSources: !!sourceId,
           sourceId: sourceId,
+          // Preserve original inbox filter context if it exists
+          fromInbox: location.state?.fromInbox || false,
+          currentFilter: location.state?.currentFilter,
+          sourceFilter: location.state?.sourceFilter,
+          timeRange: location.state?.timeRange,
+          tagIds: location.state?.tagIds,
           context: isFromReadingQueue
             ? 'reading_queue'
             : sourceId
@@ -274,6 +323,12 @@ export const NewsletterNavigation: React.FC<NewsletterNavigationProps> = ({
           fromReadingQueue: isFromReadingQueue,
           fromNewsletterSources: !!sourceId,
           sourceId: sourceId,
+          // Preserve original inbox filter context if it exists
+          fromInbox: location.state?.fromInbox || false,
+          currentFilter: location.state?.currentFilter,
+          sourceFilter: location.state?.sourceFilter,
+          timeRange: location.state?.timeRange,
+          tagIds: location.state?.tagIds,
           context: isFromReadingQueue
             ? 'reading_queue'
             : sourceId

@@ -20,6 +20,7 @@ const NewsletterDetail = memo(() => {
   const log = useLogger();
   const navigate = useNavigate();
   const location = useLocation();
+
   // Check if we came from the reading queue using multiple indicators
   const isFromReadingQueue = useMemo(() => {
     return (
@@ -30,30 +31,14 @@ const NewsletterDetail = memo(() => {
     );
   }, [location.state]);
 
-  // Check if we came from newsletter sources page
-  const isFromNewsletterSources = useMemo(() => {
-    return (
-      location.state?.fromNewsletterSources === true ||
-      location.state?.from === '/newsletters' ||
-      (typeof location.state?.from === 'string' &&
-        location.state.from.includes('/newsletters') &&
-        !location.state.from.includes('reading-queue')) ||
-      (typeof document.referrer === 'string' &&
-        document.referrer.includes('/newsletters') &&
-        !document.referrer.includes('reading-queue'))
-    );
-  }, [location.state]);
-
   // Helper function to get the correct back button text
   const getBackButtonText = useCallback(() => {
     if (isFromReadingQueue) {
       return 'Back to Reading Queue';
-    } else if (isFromNewsletterSources) {
-      return 'Back to Newsletter Sources';
     } else {
       return 'Back to Inbox';
     }
-  }, [isFromReadingQueue, isFromNewsletterSources]);
+  }, [isFromReadingQueue]);
 
   const handleBack = useCallback(() => {
     log.debug('Navigation state for back action', {
@@ -64,28 +49,17 @@ const NewsletterDetail = memo(() => {
       },
     });
 
-    // Check multiple indicators to determine where we came from
+    // Check if we came from reading queue
     const fromReadingQueue =
       location.state?.fromReadingQueue === true ||
       location.state?.from === '/reading-queue' ||
       (typeof document.referrer === 'string' && document.referrer.includes('reading-queue')) ||
       (typeof location.state?.from === 'string' && location.state.from.includes('reading-queue'));
 
-    const fromNewsletterSources =
-      location.state?.fromNewsletterSources === true ||
-      location.state?.from === '/newsletters' ||
-      (typeof document.referrer === 'string' &&
-        document.referrer.includes('/newsletters') &&
-        !document.referrer.includes('reading-queue')) ||
-      (typeof location.state?.from === 'string' &&
-        location.state.from.includes('/newsletters') &&
-        !location.state.from.includes('reading-queue'));
-
     log.debug('Determined navigation context', {
       action: 'navigate_back',
       metadata: {
         fromReadingQueue,
-        fromNewsletterSources,
       },
     });
 
@@ -93,30 +67,13 @@ const NewsletterDetail = memo(() => {
     let targetRoute = '/inbox';
     if (fromReadingQueue) {
       targetRoute = '/queue';
-    } else if (fromNewsletterSources) {
-      targetRoute = '/newsletters';
     }
 
-    // Use window.history to go back first, then navigate if needed
-    if (window.history.length > 1) {
-      // If we have history, go back
-      window.history.back();
-      // Then navigate to the correct route if needed (as a fallback)
-      setTimeout(() => {
-        if (window.location.pathname === '/newsletters/' + id) {
-          // If we're still on the same page, force navigation
-          navigate(targetRoute, {
-            replace: true,
-          });
-        }
-      }, 100);
-    } else {
-      // If no history, navigate directly
-      navigate(targetRoute, {
-        replace: true,
-      });
-    }
-  }, [navigate, location.state, id, log]);
+    // Navigate directly to the target route
+    navigate(targetRoute, {
+      replace: true,
+    });
+  }, [navigate, location.state, log]);
 
   useTags();
 
@@ -244,11 +201,11 @@ const NewsletterDetail = memo(() => {
       return location.state.sourceId;
     }
     // Fallback to newsletter source ID if coming from newsletter sources
-    if (isFromNewsletterSources && newsletter?.source?.id) {
+    if (isFromReadingQueue && newsletter?.source?.id) {
       return newsletter.source.id;
     }
     return undefined;
-  }, [location.state?.sourceId, isFromNewsletterSources, newsletter?.source?.id]);
+  }, [location.state?.sourceId, isFromReadingQueue, newsletter?.source?.id]);
 
   const [hasAutoMarkedAsRead, setHasAutoMarkedAsRead] = useState(false);
   const [hasAutoArchived, setHasAutoArchived] = useState(false);
@@ -420,6 +377,15 @@ const NewsletterDetail = memo(() => {
   return (
     <div data-testid="newsletter-detail" className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Back Button */}
+        <button
+          onClick={handleBack}
+          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {getBackButtonText()}
+        </button>
+
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Main content */}
           <div className="flex-1">

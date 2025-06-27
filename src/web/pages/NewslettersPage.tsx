@@ -367,8 +367,37 @@ const NewslettersPage: React.FC = () => {
   } = useNewsletters(newsletterFilter, {
     debug: true,
     refetchOnWindowFocus: false,
-    staleTime: 30000, // Use 30 second stale time to prevent excessive refetches
+    staleTime: 0,
   });
+
+  // Memoize mutations object to prevent unnecessary re-renders
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  ]);
 
   // Stable newsletter list with preserved order
   const [stableNewsletters, setStableNewsletters] = useState<NewsletterWithRelations[]>([]);
@@ -428,8 +457,10 @@ const NewslettersPage: React.FC = () => {
 
   const fetchedNewsletters = filteredNewsletters;
 
-  // Shared newsletter action handlers
+  // Shared newsletter actions
   const {
+    handleMarkAsRead,
+    handleMarkAsUnread,
     handleToggleLike,
     handleToggleArchive,
     handleToggleRead,
@@ -437,20 +468,7 @@ const NewslettersPage: React.FC = () => {
     handleToggleInQueue,
     isUpdatingTags,
   } = useSharedNewsletterActions(
-    {
-      markAsRead,
-      markAsUnread,
-      toggleLike,
-      toggleArchive,
-      deleteNewsletter,
-      toggleInQueue,
-      bulkMarkAsRead,
-      bulkMarkAsUnread,
-      bulkArchive,
-      bulkUnarchive,
-      bulkDeleteNewsletters,
-      updateNewsletterTags,
-    },
+    mutations,
     {
       showToasts: true,
       optimisticUpdates: true,
@@ -814,7 +832,6 @@ const NewslettersPage: React.FC = () => {
         // Navigate to the newsletter detail with source context
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
-            fromNewsletterSources: true,
             from: '/newsletters',
             sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
           },
@@ -831,7 +848,6 @@ const NewslettersPage: React.FC = () => {
         // Still navigate even if other actions fail
         navigate(`/newsletters/${newsletter.id}`, {
           state: {
-            fromNewsletterSources: true,
             from: '/newsletters',
             sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
           },
@@ -1383,7 +1399,6 @@ const NewslettersPage: React.FC = () => {
                     onToggleRead={handleToggleReadWrapper}
                     onToggleQueue={handleToggleInQueueWrapper}
                     onTrash={handleTrashWrapper}
-                    onToggleTagVisibility={toggleTagVisibility}
                     onTagClick={handleTagClick}
                     onNewsletterClick={handleNewsletterClick}
                     visibleTags={visibleTags}

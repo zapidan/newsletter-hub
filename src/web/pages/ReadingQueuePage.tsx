@@ -28,7 +28,7 @@ import { useReadingQueueCacheOptimizer } from '@common/hooks/useReadingQueueCach
 import { newsletterService } from '@common/services';
 import { getCacheManager } from '@common/utils/cacheUtils';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp } from 'lucide-react';
 
 const ReadingQueuePage: React.FC = () => {
   const navigate = useNavigate();
@@ -111,18 +111,29 @@ const ReadingQueuePage: React.FC = () => {
     await updateTagsMutation.mutateAsync({ id, tagIds });
   }, [updateTagsMutation]);
 
+  // Memoize mutations object to prevent unnecessary re-renders
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue: toggleInQueueForActions,
+    updateNewsletterTags,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueueForActions,
+    updateNewsletterTags,
+  ]);
+
   // Use shared newsletter actions for consistent cache management
   const { handleMarkAsRead, handleMarkAsUnread, handleToggleLike, handleToggleArchive } =
     useSharedNewsletterActions(
-      {
-        markAsRead,
-        markAsUnread,
-        toggleLike,
-        toggleArchive,
-        deleteNewsletter,
-        toggleInQueue: toggleInQueueForActions,
-        updateNewsletterTags,
-      },
+      mutations,
       {
         showToasts: true,
         optimisticUpdates: true,
@@ -616,6 +627,15 @@ const ReadingQueuePage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate('/inbox')}
+        className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Inbox
+      </button>
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Reading Queue</h1>
         <div className="flex items-center space-x-4">

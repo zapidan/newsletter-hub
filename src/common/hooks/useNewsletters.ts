@@ -10,8 +10,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useLogger } from '@common/utils/logger/useLogger';
-import { newsletterService, readingQueueService } from '../services';
+import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useAuth } from '../contexts/AuthContext';
+import { newsletterService, readingQueueService } from '../services';
 import { NewsletterWithRelations, ReadingQueueItem } from '../types';
 import { PaginatedResponse } from '../types/api';
 import type { NewsletterFilter } from '../types/cache';
@@ -170,8 +171,11 @@ export const useNewsletters = (
     }
   }, [log]);
 
-  // Generate query key with filters
-  const queryKey = useMemo(() => queryKeyFactory.newsletters.list(filters), [filters]);
+  // Normalize filters to camelCase for query and cache
+  const normalizedFilters = useMemo(() => normalizeNewsletterFilter(filters), [filters]);
+
+  // Generate query key with normalized filters
+  const queryKey = useMemo(() => queryKeyFactory.newsletters.list(normalizedFilters), [normalizedFilters]);
 
   // Define proper type for query parameters
   interface NewsletterQueryParams {
@@ -192,21 +196,21 @@ export const useNewsletters = (
     includeSource?: boolean;
   }
 
-  // Build API query parameters from filters with proper typing
+  // Build API query parameters from normalized filters with proper typing
   const queryParams = useMemo<NewsletterQueryParams>(() => {
     const params: NewsletterQueryParams = {
-      search: filters.search,
-      isRead: filters.isRead,
-      isArchived: filters.isArchived,
-      isLiked: filters.isLiked,
-      tagIds: filters.tagIds,
-      sourceIds: filters.sourceIds,
-      dateFrom: filters.dateFrom,
-      dateTo: filters.dateTo,
-      limit: filters.limit || 50,
-      offset: filters.offset || 0,
-      orderBy: filters.orderBy || 'received_at',
-      ascending: filters.ascending ?? false,
+      search: normalizedFilters.search,
+      isRead: normalizedFilters.isRead,
+      isArchived: normalizedFilters.isArchived,
+      isLiked: normalizedFilters.isLiked,
+      tagIds: normalizedFilters.tagIds,
+      sourceIds: normalizedFilters.sourceIds,
+      dateFrom: normalizedFilters.dateFrom,
+      dateTo: normalizedFilters.dateTo,
+      limit: normalizedFilters.limit || 50,
+      offset: normalizedFilters.offset || 0,
+      orderBy: normalizedFilters.orderBy || 'received_at',
+      ascending: normalizedFilters.ascending ?? false,
       includeRelations: true,
       includeTags: true,
       includeSource: true,
@@ -214,10 +218,10 @@ export const useNewsletters = (
 
     // Validate source IDs in development
     if (process.env.NODE_ENV === 'development') {
-      const sourceIds = filters.sourceIds;
+      const sourceIds: string[] | undefined = normalizedFilters.sourceIds;
       if (sourceIds && sourceIds.length > 0) {
         const validSourceIds = sourceIds.filter(
-          (id): id is string => typeof id === 'string' && id.length > 0
+          (id: string): id is string => typeof id === 'string' && id.length > 0
         );
         if (validSourceIds.length !== sourceIds.length) {
           log.warn('Invalid source IDs detected', {
@@ -232,7 +236,7 @@ export const useNewsletters = (
     }
 
     return params;
-  }, [filters, log]);
+  }, [normalizedFilters, log]);
 
   // Track query key changes to prevent unnecessary re-fetches
   const previousQueryKeyRef = useRef<string>('');
@@ -753,7 +757,7 @@ export const useNewsletters = (
       const newArchivedState = !newsletter.is_archived;
 
       // Determine if we should remove the newsletter from the current view
-      const currentFilter = filters;
+      const currentFilter = normalizedFilters;
       const shouldRemoveFromView =
         newArchivedState && // Newsletter is being archived
         (currentFilter.isArchived === false || currentFilter.isArchived === undefined); // And we're not in archived view

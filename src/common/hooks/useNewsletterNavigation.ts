@@ -1,4 +1,5 @@
 import { useLogger } from '@common/utils/logger/useLogger';
+import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { NewsletterFilter, NewsletterWithRelations } from '../types';
@@ -67,6 +68,10 @@ export const useNewsletterNavigation = (
   const contextualFilter: NewsletterFilter = useMemo(() => {
     // Use override filter if provided
     if (overrideFilter) {
+      console.log('🔍 DEBUG: useNewsletterNavigation using overrideFilter', {
+        overrideFilter,
+        currentNewsletterId,
+      });
       return {
         ...overrideFilter,
         orderBy: 'received_at',
@@ -114,6 +119,10 @@ export const useNewsletterNavigation = (
     }
 
     // Default to current inbox filters
+    console.log('🔍 DEBUG: useNewsletterNavigation using default newsletterFilter', {
+      newsletterFilter,
+      currentNewsletterId,
+    });
     return {
       ...newsletterFilter,
       order_by: 'received_at',
@@ -128,6 +137,9 @@ export const useNewsletterNavigation = (
     newsletterFilter,
   ]);
 
+  // Normalize contextualFilter before passing to useInfiniteNewsletters
+  const normalizedContextualFilter = useMemo(() => normalizeNewsletterFilter(contextualFilter), [contextualFilter]);
+
   // Handle reading queue context separately
   const isUsingReadingQueue = contextualFilter.search === 'reading_queue';
 
@@ -137,7 +149,7 @@ export const useNewsletterNavigation = (
     return readingQueue.map((item) => item.newsletter).filter(Boolean);
   }, [isUsingReadingQueue, readingQueue]);
 
-  // Fetch newsletters using contextual filters (skip if using reading queue)
+  // Fetch newsletters using normalized contextual filters (skip if using reading queue)
   const {
     newsletters: fetchedNewsletters,
     isLoading,
@@ -145,9 +157,8 @@ export const useNewsletterNavigation = (
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useInfiniteNewsletters(contextualFilter, {
+  } = useInfiniteNewsletters(normalizedContextualFilter, {
     enabled: enabled && !!currentNewsletterId && !isUsingReadingQueue &&
-      // Only enable if we're actually on a detail page and need navigation
       (window.location.pathname.includes('/newsletters/') &&
         window.location.pathname.split('/').length > 2),
     pageSize: 50, // Larger page size for better navigation experience

@@ -82,12 +82,12 @@ const SearchFilters: React.FC<{
   sources: NewsletterSource[];
   selectedSources: string[];
   readStatus: "all" | "read" | "unread";
-  archivedStatus: string;
+  archivedStatus: "all" | "archived" | "active";
   dateFrom: string;
   dateTo: string;
   onToggleSource: (sourceId: string) => void;
   onReadStatusChange: (status: "all" | "read" | "unread") => void;
-  onArchivedStatusChange: (status: string) => void;
+  onArchivedStatusChange: (status: "all" | "archived" | "active") => void;
   onDateFromChange: (date: string) => void;
   onDateToChange: (date: string) => void;
   onClearFilters: () => void;
@@ -158,7 +158,7 @@ const SearchFilters: React.FC<{
             </label>
             <select
               value={readStatus}
-              onChange={(e) => onReadStatusChange(e.target.value)}
+              onChange={(e) => onReadStatusChange(e.target.value as "all" | "read" | "unread")}
               className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
             >
               <option value="all">All newsletters</option>
@@ -174,7 +174,7 @@ const SearchFilters: React.FC<{
             </label>
             <select
               value={archivedStatus}
-              onChange={(e) => onArchivedStatusChange(e.target.value)}
+              onChange={(e) => onArchivedStatusChange(e.target.value as "all" | "archived" | "active")}
               className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
             >
               <option value="active">Active only</option>

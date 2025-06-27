@@ -1,4 +1,5 @@
 import { useLogger } from '@common/utils/logger/useLogger';
+import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -66,23 +67,39 @@ export const useInfiniteNewsletters = (
   // Determine if query should run
   const shouldRunQuery = enabled && !!user;
 
-  // Generate query key with filters
-  const queryKey = useMemo(() => queryKeyFactory.newsletters.infinite(filters), [filters]);
+  // Normalize filters to camelCase for query and cache
+  const normalizedFilters = useMemo(() => normalizeNewsletterFilter(filters), [filters]);
 
-  // Build API query parameters from filters - memoize to prevent unnecessary re-renders
+  // Generate query key with normalized filters
+  const queryKey = useMemo(() => {
+    const key = queryKeyFactory.newsletters.infinite(normalizedFilters);
+    if (debug) {
+      log.debug('Generated query key', {
+        action: 'query_key_generated',
+        metadata: {
+          originalFilters: JSON.stringify(filters),
+          normalizedFilters: JSON.stringify(normalizedFilters),
+          queryKey: JSON.stringify(key),
+        },
+      });
+    }
+    return key;
+  }, [normalizedFilters, debug, log]);
+
+  // Build API query parameters from normalized filters - memoize to prevent unnecessary re-renders
   const baseQueryParams = useMemo(() => {
     const params = {
-      search: filters.search,
-      isRead: filters.isRead,
-      isArchived: filters.isArchived,
-      isLiked: filters.isLiked,
-      tagIds: filters.tagIds ? [...filters.tagIds] : undefined, // Create a new array to ensure stability
-      sourceIds: filters.sourceIds ? [...filters.sourceIds] : undefined, // Create a new array to ensure stability
-      dateFrom: filters.dateFrom,
-      dateTo: filters.dateTo,
+      search: normalizedFilters.search,
+      isRead: normalizedFilters.isRead,
+      isArchived: normalizedFilters.isArchived,
+      isLiked: normalizedFilters.isLiked,
+      tagIds: normalizedFilters.tagIds ? [...normalizedFilters.tagIds] : undefined, // Create a new array to ensure stability
+      sourceIds: normalizedFilters.sourceIds ? [...normalizedFilters.sourceIds] : undefined, // Create a new array to ensure stability
+      dateFrom: normalizedFilters.dateFrom,
+      dateTo: normalizedFilters.dateTo,
       limit: pageSize,
-      orderBy: filters.orderBy || 'received_at',
-      ascending: filters.ascending ?? false,
+      orderBy: normalizedFilters.orderBy || 'received_at',
+      ascending: normalizedFilters.ascending ?? false,
       includeRelations: true,
       includeTags: true,
       includeSource: true,
@@ -93,14 +110,14 @@ export const useInfiniteNewsletters = (
         action: 'base_query_params_built',
         metadata: {
           params: JSON.stringify(params),
-          filters: JSON.stringify(filters),
+          filters: JSON.stringify(normalizedFilters),
         },
       });
     }
 
     return params;
   }, [
-    filters,
+    normalizedFilters,
     pageSize,
     debug,
     log
@@ -145,7 +162,7 @@ export const useInfiniteNewsletters = (
             metadata: {
               page: pageParam / pageSize + 1,
               offset: pageParam,
-              filters: JSON.stringify(filters),
+              filters: JSON.stringify(normalizedFilters),
             },
           });
         }
@@ -179,7 +196,7 @@ export const useInfiniteNewsletters = (
               'Failed to fetch newsletters',
               {
                 action: 'fetch_page_error',
-                metadata: { pageParam, pageSize, filters: JSON.stringify(filters) },
+                metadata: { pageParam, pageSize, filters: JSON.stringify(normalizedFilters) },
               },
               err instanceof Error ? err : new Error(String(err))
             );
@@ -345,7 +362,7 @@ export const useInfiniteNewsletters = (
       log.debug('Refetching newsletters', {
         action: 'refetch_newsletters',
         metadata: {
-          filters: JSON.stringify(filters),
+          filters: JSON.stringify(normalizedFilters),
           currentCount: newsletters.length,
         },
       });
@@ -353,7 +370,7 @@ export const useInfiniteNewsletters = (
 
     setCurrentPage(1);
     return refetch();
-  }, [refetch, debug, filters, newsletters.length, log]);
+  }, [refetch, debug, normalizedFilters, newsletters.length, log]);
 
   return {
     newsletters,

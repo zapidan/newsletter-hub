@@ -76,7 +76,7 @@ const ErrorState: React.FC<{
 ));
 
 // Main Inbox component - now focused primarily on rendering
-const Inbox: React.FC = memo(() => {
+const Inbox: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showError } = useToast();
@@ -91,6 +91,7 @@ const Inbox: React.FC = memo(() => {
     allTags,
     newsletterSources,
     isLoadingSources,
+    hasActiveFilters,
     // Filter actions
     setFilter,
     setSourceFilter,
@@ -169,6 +170,35 @@ const Inbox: React.FC = memo(() => {
     updateNewsletterTags,
   } = useNewsletters();
 
+  // Memoize mutations object to prevent unnecessary re-renders
+  const mutations = useMemo(() => ({
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  }), [
+    markAsRead,
+    markAsUnread,
+    toggleLike,
+    toggleArchive,
+    deleteNewsletter,
+    toggleInQueue,
+    bulkMarkAsRead,
+    bulkMarkAsUnread,
+    bulkArchive,
+    bulkUnarchive,
+    bulkDeleteNewsletters,
+    updateNewsletterTags,
+  ]);
+
   // Helper function to preserve URL parameters after actions
   const preserveFilterParams = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
@@ -231,20 +261,7 @@ const Inbox: React.FC = memo(() => {
 
   // Shared newsletter actions with our enhanced version
   const newsletterActions = useSharedNewsletterActions(
-    {
-      markAsRead,
-      markAsUnread,
-      toggleLike,
-      toggleArchive,
-      deleteNewsletter,
-      toggleInQueue,
-      bulkMarkAsRead,
-      bulkMarkAsUnread,
-      bulkArchive,
-      bulkUnarchive,
-      bulkDeleteNewsletters,
-      updateNewsletterTags,
-    },
+    mutations,
     {
       showToasts: true,
       optimisticUpdates: true,
@@ -406,6 +423,29 @@ const Inbox: React.FC = memo(() => {
     async (newsletter: NewsletterWithRelations) => {
       setIsActionInProgress(true);
 
+      // Navigate immediately to avoid async issues
+      const targetPath = `/newsletters/${newsletter.id}`;
+      log.debug('Navigating to newsletter detail immediately', {
+        action: 'navigate_to_detail',
+        metadata: {
+          newsletterId: newsletter.id,
+          targetPath,
+          currentPath: window.location.pathname,
+        },
+      });
+
+      navigate(targetPath, {
+        state: {
+          from: '/inbox',
+          fromInbox: true,
+          currentFilter: filter,
+          sourceFilter: sourceFilter,
+          timeRange: timeRange,
+          tagIds: debouncedTagIds,
+        },
+      });
+
+      // Perform actions after navigation (they will continue in background)
       try {
         // Perform optimistic updates simultaneously for better UX
         const actions = [];
@@ -413,20 +453,24 @@ const Inbox: React.FC = memo(() => {
         // Mark as read if unread (optimistic)
         if (!newsletter.is_read) {
           actions.push(
-            newsletterActions.handleMarkAsRead(newsletter.id, {
-              optimisticUpdates: true,
-              showToasts: false, // Don't show toast for auto-actions
-            })
+            newsletterActions.handleMarkAsRead(newsletter.id)
           );
         }
 
         // Archive the newsletter when opened from the inbox (optimistic)
-        if (!newsletter.is_archived) {
+        // But only if we're not in a filtered view that would hide it
+        const shouldArchive = !newsletter.is_archived && (
+          // Don't auto-archive if we're viewing archived newsletters
+          filter !== 'archived' &&
+          // Don't auto-archive if we're on a filter that would hide this newsletter
+          // when it gets archived (like 'unread' for read newsletters, 'liked' for unliked newsletters)
+          !(filter === 'unread' && newsletter.is_read) &&
+          !(filter === 'liked' && !newsletter.is_liked)
+        );
+
+        if (shouldArchive) {
           actions.push(
-            newsletterActions.handleToggleArchive(newsletter, {
-              optimisticUpdates: true,
-              showToasts: false, // Don't show toast for auto-actions
-            })
+            newsletterActions.handleToggleArchive(newsletter)
           );
         }
 
@@ -434,6 +478,14 @@ const Inbox: React.FC = memo(() => {
         if (actions.length > 0) {
           try {
             await Promise.allSettled(actions);
+            log.debug('Newsletter actions completed successfully', {
+              action: 'newsletter_actions_completed',
+              metadata: {
+                newsletterId: newsletter.id,
+                actionsCount: actions.length,
+                shouldArchive,
+              },
+            });
           } catch (actionError) {
             log.error(
               'Some newsletter actions failed during click',
@@ -442,19 +494,16 @@ const Inbox: React.FC = memo(() => {
                 metadata: {
                   newsletterId: newsletter.id,
                   actionsCount: actions.length,
+                  shouldArchive,
                 },
               },
               actionError instanceof Error ? actionError : new Error(String(actionError))
             );
-            // Continue with navigation even if actions fail
           }
         }
 
-        // Preserve filter parameters before navigation
+        // Preserve filter parameters after navigation
         preserveFilterParams();
-
-        // Navigate to the newsletter detail
-        navigate(`/newsletters/${newsletter.id}`);
       } catch (error) {
         log.error(
           'Unexpected error in newsletter click handler',
@@ -464,13 +513,11 @@ const Inbox: React.FC = memo(() => {
           },
           error instanceof Error ? error : new Error(String(error))
         );
-        // Still navigate even if other actions fail
-        navigate(`/newsletters/${newsletter.id}`);
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [navigate, newsletterActions, preserveFilterParams, log]
+    [navigate, newsletterActions, preserveFilterParams, log, filter, sourceFilter, timeRange, debouncedTagIds]
   );
 
   const handleRemoveFromQueue = useCallback(
@@ -815,7 +862,7 @@ const Inbox: React.FC = memo(() => {
       </div>
     </div>
   );
-});
+};
 
 Inbox.displayName = 'Inbox';
 
