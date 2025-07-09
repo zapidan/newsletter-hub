@@ -235,14 +235,15 @@ const Inbox: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     let hasChanges = false;
 
-    if (filter !== 'all') {
-      if (params.get('filter') !== filter) {
-        params.set('filter', filter);
+    // 'unread' is the default. If current filter is 'unread', remove param. Otherwise, set it.
+    if (filter === 'unread') {
+      if (params.has('filter')) {
+        params.delete('filter');
         hasChanges = true;
       }
     } else {
-      if (params.has('filter')) {
-        params.delete('filter');
+      if (params.get('filter') !== filter) {
+        params.set('filter', filter);
         hasChanges = true;
       }
     }

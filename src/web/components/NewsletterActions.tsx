@@ -144,11 +144,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     {
       key: "read",
       action: handleToggleRead,
-      icon: isRead ? <EyeOff size={14} /> : <Eye size={14} />,
+      icon: isRead ? <EyeOff size={14} /> : <Eye size={14} className="text-gray-700" />,
       label: isRead ? "Mark as unread" : "Mark as read",
       variant: "primary" as const,
       isLoading: loadingStates[newsletter.id] === "read",
-      className: !isRead ? "text-blue-600 hover:bg-blue-100" : undefined,
+      className: undefined, // Remove blue color for unread
     },
     {
       key: "like",

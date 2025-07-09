@@ -20,7 +20,7 @@ describe('InboxFilters', () => {
   const mockOnTimeRangeChange = vi.fn();
 
   const defaultProps = {
-    filter: 'all' as FilterType,
+    filter: 'unread' as FilterType, // Changed default from 'all' to 'unread'
     sourceFilter: null,
     groupFilter: null,
     timeRange: 'all' as TimeRange,
@@ -39,7 +39,7 @@ describe('InboxFilters', () => {
   test('renders correctly with default props', () => {
     render(<InboxFilters {...defaultProps} />);
     expect(screen.getAllByLabelText('Filter by time range').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: /Filter by all newsletters/i }).length).toBeGreaterThan(0);
+    // Removed 'All' button check
     expect(screen.getAllByRole('button', { name: /Filter by unread newsletters/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Filter by liked newsletters/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Filter by archived newsletters/i }).length).toBeGreaterThan(0);
