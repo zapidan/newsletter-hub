@@ -158,11 +158,10 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
               </div>
               {/* Action buttons moved to upper right */}
               <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Tag visibility toggle */}
+                {/* Tag visibility toggle - only show on desktop */}
                 <button
                   type="button"
-                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
+                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""} hidden sm:inline-flex`}
                   onClick={handleToggleTagVisibility}
                   disabled={isUpdatingTags}
                   title={
@@ -201,9 +200,10 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                   onTrash={onTrash}
                   onToggleQueue={onToggleQueue}
                   loadingStates={loadingStates}
-                  errorTogglingLike={errorTogglingLike}
+                  _errorTogglingLike={errorTogglingLike}
                   isInReadingQueue={isInReadingQueue}
                   compact={true}
+                  onToggleTagVisibility={onToggleTagVisibility}
                 />
               </div>
             </div>

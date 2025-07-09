@@ -1,6 +1,6 @@
 import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
 import type { NewsletterSource } from "@common/types";
-import { Archive, Building2, ChevronDown, Clock, Eye, Heart } from "lucide-react";
+import { Archive, Building2, ChevronDown, Clock, Eye, EyeOff, Heart } from "lucide-react";
 import { FC, memo, useState } from "react";
 
 export type FilterType = InboxFilterType; // Use the shared type
@@ -43,7 +43,8 @@ const TIME_RANGE_OPTIONS = [
 ];
 
 const FILTER_OPTIONS = [
-  { value: "unread" as const, label: "Unread", icon: Eye },
+  { value: "unread" as const, label: "Unread", icon: EyeOff },
+  { value: "read" as const, label: "Read", icon: Eye },
   { value: "liked" as const, label: "Liked", icon: Heart },
   { value: "archived" as const, label: "Archived", icon: Archive },
 ];
