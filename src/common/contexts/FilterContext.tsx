@@ -2,9 +2,10 @@ import { useInboxUrlParams } from '@common/hooks/useUrlParams';
 import type { NewsletterFilter } from '@common/types/cache';
 import type { TimeRange } from '@web/components/TimeFilter';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import type { InboxFilterType } from '../hooks/useInboxFilters'; // Import the shared type
 
 export interface FilterState {
-  filter: 'all' | 'unread' | 'liked' | 'archived';
+  filter: InboxFilterType;
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
@@ -49,14 +50,18 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   const lastNewsletterFilterRef = useRef<string>('');
 
   // Extract filter state from URL params
+  const validFilters = ['unread', 'liked', 'archived'];
+  const filterValue = (params.filter as FilterState['filter']);
+  const filter: FilterState['filter'] = validFilters.includes(filterValue) ? filterValue : 'unread';
+
   const filterState: FilterState = useMemo(
     () => ({
-      filter: (params.filter as FilterState['filter']) || 'all',
+      filter,
       sourceFilter: (params.source as string) || null,
       timeRange: (params.time as TimeRange) || 'all',
       tagIds: (params.tags as string[]) || [],
     }),
-    [params.filter, params.source, params.time, params.tags]
+    [filter, params.source, params.time, params.tags]
   );
 
   // Generate newsletter filter object with stable memoization
@@ -66,6 +71,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     // Handle status filter
     switch (filterState.filter) {
       case 'unread':
+      default: // 'unread' is the new default
         filters.isRead = false;
         filters.isArchived = false;
         break;
@@ -75,10 +81,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
         break;
       case 'archived':
         filters.isArchived = true;
-        break;
-      case 'all':
-      default:
-        filters.isArchived = false;
+        // No isRead filter for archived, show all archived
         break;
     }
 
@@ -128,8 +131,9 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
   // Check if any filters are active (non-default)
   const hasActiveFilters = useMemo(() => {
+    // 'unread' is the default for status. Active if not 'unread' or other filters are set.
     return (
-      filterState.filter !== 'all' ||
+      filterState.filter !== 'unread' ||
       filterState.sourceFilter !== null ||
       filterState.timeRange !== 'all' ||
       filterState.tagIds.length > 0
@@ -141,11 +145,12 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     (filterName: keyof FilterState): boolean => {
       switch (filterName) {
         case 'filter':
-          return filterState.filter !== 'all';
+          // 'unread' is the default. Active if it's 'liked' or 'archived'.
+          return filterState.filter !== 'unread';
         case 'sourceFilter':
           return filterState.sourceFilter !== null;
         case 'timeRange':
-          return filterState.timeRange !== 'all';
+          return filterState.timeRange !== 'all'; // 'all' time is default
         case 'tagIds':
           return filterState.tagIds.length > 0;
         default:

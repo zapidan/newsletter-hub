@@ -14,7 +14,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 // Lazy load page components
 const InboxPage = lazy(() => import('@web/pages/Inbox'));
 const NewsletterDetailPage = lazy(() => import('@web/pages/NewsletterDetail'));
-const NewslettersPage = lazy(() => import('@web/pages/NewslettersPage'));
+const NewsletterGroupsPage = lazy(() => import('@web/pages/NewsletterGroupsPage'));
 const TrendingTopicsPage = lazy(() => import('@web/pages/TrendingTopics'));
 const SearchPage = lazy(() => import('@web/pages/Search'));
 const TagsPage = lazy(() => import('@web/pages/TagsPage'));
@@ -196,7 +196,7 @@ const App: React.FC = () => {
                       path="/newsletters"
                       element={
                         <ProtectedRoute>
-                          <NewslettersPage />
+                          <NewsletterGroupsPage />
                         </ProtectedRoute>
                       }
                     />

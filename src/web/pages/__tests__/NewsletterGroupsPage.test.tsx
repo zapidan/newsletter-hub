@@ -92,7 +92,7 @@ const createTestWrapper = () => {
   );
 };
 
-describe('NewslettersPage Logic', () => {
+describe('NewsletterGroupsPage Logic', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 

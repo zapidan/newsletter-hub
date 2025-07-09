@@ -1,8 +1,9 @@
+import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
 import type { NewsletterSource } from "@common/types";
-import { Archive, Building2, ChevronDown, Clock, Filter } from "lucide-react";
+import { Archive, Building2, ChevronDown, Clock, Eye, Heart } from "lucide-react";
 import { FC, memo, useState } from "react";
 
-export type FilterType = "all" | "unread" | "liked" | "archived";
+export type FilterType = InboxFilterType; // Use the shared type
 export type TimeRange = "all" | "day" | "2days" | "week" | "month";
 
 export interface NewsletterSourceWithCount extends NewsletterSource {
@@ -42,9 +43,8 @@ const TIME_RANGE_OPTIONS = [
 ];
 
 const FILTER_OPTIONS = [
-  { value: "all" as const, label: "All", icon: Filter },
-  { value: "unread" as const, label: "Unread", icon: Filter },
-  { value: "liked" as const, label: "Liked", icon: Filter },
+  { value: "unread" as const, label: "Unread", icon: Eye },
+  { value: "liked" as const, label: "Liked", icon: Heart },
   { value: "archived" as const, label: "Archived", icon: Archive },
 ];
 
@@ -370,12 +370,10 @@ const FilterButton: FC<{
         aria-pressed={isActive}
         aria-label={`Filter by ${option.label.toLowerCase()} newsletters`}
       >
-        {option.value === "archived" && (
-          <Icon
-            className={compact ? "h-3 w-3" : "h-4 w-4"}
-            aria-hidden="true"
-          />
-        )}
+        <Icon
+          className={compact ? "h-3 w-3" : "h-4 w-4"}
+          aria-hidden="true"
+        />
         <span className="truncate">{option.label}</span>
         {showCount && count !== undefined && count > 0 && (
           <span
@@ -431,27 +429,19 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
         <div className="sm:hidden">
           {/* Row 1: Status filters (All, Unread, Liked, Archived) */}
           <div className="flex flex-wrap items-center gap-1 justify-center">
-            {FILTER_OPTIONS.filter(opt => opt.value !== 'archived').map((option) => (
-              <FilterButton
-                key={option.value}
-                option={option}
-                isActive={filter === option.value}
-                onClick={() => onFilterChange(option.value)}
-                disabled={disabled || isLoading}
-                compact={compact}
-                showCount={showFilterCounts}
-              />
-            ))}
-            {/* Archived at the end of row 1 on mobile */}
-            <FilterButton
-              key="archived"
-              option={FILTER_OPTIONS.find(opt => opt.value === 'archived')!}
-              isActive={filter === 'archived'}
-              onClick={() => onFilterChange('archived')}
-              disabled={disabled || isLoading}
-              compact={compact}
-              showCount={showFilterCounts}
-            />
+            {FILTER_OPTIONS.map((option) => {
+              return (
+                <FilterButton
+                  key={option.value}
+                  option={option}
+                  isActive={filter === option.value}
+                  onClick={() => onFilterChange(option.value)}
+                  disabled={disabled || isLoading}
+                  compact={compact}
+                  showCount={showFilterCounts}
+                />
+              );
+            })}
           </div>
           {/* Row 2: Time, Source, Group, Select (mobile only) */}
           <div className="flex flex-wrap items-center gap-2 justify-center mt-2">
@@ -509,7 +499,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
               />
             )}
             {/* Status filters */}
-            {FILTER_OPTIONS.filter(opt => opt.value !== 'archived').map((option) => (
+            {FILTER_OPTIONS.map((option) => (
               <FilterButton
                 key={option.value}
                 option={option}
@@ -520,16 +510,6 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
                 showCount={showFilterCounts}
               />
             ))}
-            {/* Archived filter */}
-            <FilterButton
-              key="archived"
-              option={FILTER_OPTIONS.find(opt => opt.value === 'archived')!}
-              isActive={filter === 'archived'}
-              onClick={() => onFilterChange('archived')}
-              disabled={disabled || isLoading}
-              compact={compact}
-              showCount={showFilterCounts}
-            />
           </div>
 
           {/* Right side: Source filter + Group filter + Select button */}

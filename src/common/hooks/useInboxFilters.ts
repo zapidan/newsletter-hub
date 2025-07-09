@@ -6,8 +6,10 @@ import type { TimeRange } from '@web/components/TimeFilter';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNewsletterSources } from './useNewsletterSources';
 
+export type InboxFilterType = 'unread' | 'liked' | 'archived';
+
 export interface InboxFiltersState {
-  filter: 'all' | 'unread' | 'liked' | 'archived';
+  filter: InboxFilterType;
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
@@ -18,7 +20,7 @@ export interface InboxFiltersState {
 }
 
 export interface InboxFiltersActions {
-  setFilter: (filter: 'all' | 'unread' | 'liked' | 'archived') => void;
+  setFilter: (filter: InboxFilterType) => void;
   setSourceFilter: (sourceId: string | null) => void;
   setTimeRange: (range: TimeRange) => void;
   setTagIds: (tagIds: string[]) => void;
@@ -317,7 +319,8 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     (filterName: keyof InboxFiltersState): boolean => {
       switch (filterName) {
         case 'filter':
-          return filter !== 'all';
+          // 'unread' is the default. Active if filter is 'liked' or 'archived'.
+          return filter !== 'unread';
         case 'sourceFilter':
           return sourceFilter !== null;
         case 'timeRange':
@@ -335,8 +338,11 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
 
   // Enhanced hasActiveFilters that considers debounced state
   const enhancedHasActiveFilters = useMemo(() => {
+    // 'unread' is the default. A filter is active if it's not 'unread' OR if other filters are set.
+    // Or, more simply, if any filter is different from its default state.
+    // Default for filter is 'unread', sourceFilter is null, timeRange is 'all', tags are empty.
     return (
-      filter !== 'all' ||
+      filter !== 'unread' || // Active if status filter is not 'unread'
       sourceFilter !== null ||
       timeRange !== 'all' ||
       debouncedTagIds.length > 0 ||
