@@ -6,7 +6,7 @@ import type { TimeRange } from '@web/components/TimeFilter';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNewsletterSources } from './useNewsletterSources';
 
-export type InboxFilterType = 'unread' | 'liked' | 'archived';
+export type InboxFilterType = 'unread' | 'read' | 'liked' | 'archived';
 
 export interface InboxFiltersState {
   filter: InboxFilterType;

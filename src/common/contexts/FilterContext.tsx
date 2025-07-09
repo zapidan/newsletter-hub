@@ -50,7 +50,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   const lastNewsletterFilterRef = useRef<string>('');
 
   // Extract filter state from URL params
-  const validFilters = ['unread', 'liked', 'archived'];
+  const validFilters = ['unread', 'read', 'liked', 'archived'];
   const filterValue = (params.filter as FilterState['filter']);
   const filter: FilterState['filter'] = validFilters.includes(filterValue) ? filterValue : 'unread';
 
@@ -73,6 +73,10 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       case 'unread':
       default: // 'unread' is the new default
         filters.isRead = false;
+        filters.isArchived = false;
+        break;
+      case 'read':
+        filters.isRead = true;
         filters.isArchived = false;
         break;
       case 'liked':

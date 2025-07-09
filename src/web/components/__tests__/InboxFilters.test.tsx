@@ -41,6 +41,7 @@ describe('InboxFilters', () => {
     expect(screen.getAllByLabelText('Filter by time range').length).toBeGreaterThan(0);
     // Removed 'All' button check
     expect(screen.getAllByRole('button', { name: /Filter by unread newsletters/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Filter by read newsletters/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Filter by liked newsletters/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Filter by archived newsletters/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByLabelText('Filter by newsletter source').length).toBeGreaterThan(0);
@@ -51,6 +52,13 @@ describe('InboxFilters', () => {
     const unreadButtons = screen.getAllByRole('button', { name: /Filter by unread newsletters/i });
     fireEvent.click(unreadButtons[0]); // Click the first unread button
     expect(mockOnFilterChange).toHaveBeenCalledWith('unread');
+  });
+
+  test('calls onFilterChange when the read filter button is clicked', () => {
+    render(<InboxFilters {...defaultProps} />);
+    const readButtons = screen.getAllByRole('button', { name: /Filter by read newsletters/i });
+    fireEvent.click(readButtons[0]);
+    expect(mockOnFilterChange).toHaveBeenCalledWith('read');
   });
 
   test('calls onTimeRangeChange when time range is changed', () => {

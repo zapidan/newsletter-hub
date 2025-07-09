@@ -9,7 +9,7 @@ import {
   EyeOff,
   Heart,
   MoreHorizontal,
-  Trash,
+  Trash
 } from "lucide-react";
 import React, { useState } from "react";
 
@@ -20,6 +20,7 @@ interface NewsletterActionsProps {
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
   onToggleQueue?: (newsletterId: string) => Promise<void>;
+  onToggleTagVisibility?: (e: React.MouseEvent) => void;
   loadingStates?: Record<string, string>;
   _errorTogglingLike?: Error | null;
   isInReadingQueue?: boolean;
@@ -88,6 +89,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   onToggleRead,
   onTrash,
   onToggleQueue,
+  onToggleTagVisibility,
   loadingStates = {},
   _errorTogglingLike,
   isInReadingQueue = false,
@@ -129,6 +131,12 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     }
   };
 
+  const handleToggleTagVisibility = (e: React.MouseEvent) => {
+    if (onToggleTagVisibility) {
+      onToggleTagVisibility(e);
+    }
+  };
+
   const handleTrash = () => {
     onTrash(newsletter.id);
   };
@@ -139,29 +147,8 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   const isLoading = Object.keys(loadingStates).length > 0;
   const size = compact ? "sm" : "md";
 
-  // On mobile, show primary actions and a more menu for secondary actions
+  // On mobile, show archive, queue, like as primary actions; move read and tag to more menu
   const primaryActions = [
-    {
-      key: "read",
-      action: handleToggleRead,
-      icon: isRead ? <EyeOff size={14} /> : <Eye size={14} className="text-gray-700" />,
-      label: isRead ? "Mark as unread" : "Mark as read",
-      variant: "primary" as const,
-      isLoading: loadingStates[newsletter.id] === "read",
-      className: undefined, // Remove blue color for unread
-    },
-    {
-      key: "like",
-      action: handleToggleLike,
-      icon: <Heart size={14} className={isLiked ? "fill-red-500 text-red-500" : "text-gray-700"} />,
-      label: isLiked ? "Unlike" : "Like",
-      variant: "secondary" as const,
-      _isActive: isLiked,
-      isLoading: loadingStates[newsletter.id] === "like",
-    },
-  ];
-
-  const secondaryActions = [
     ...(onToggleQueue ? [{
       key: "queue",
       action: handleToggleQueue,
@@ -180,6 +167,29 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       isLoading: loadingStates[newsletter.id] === "archive",
       className: isArchived ? "text-green-600 hover:bg-green-100" : undefined,
     },
+    {
+      key: "like",
+      action: handleToggleLike,
+      icon: <Heart size={14} className={isLiked ? "fill-red-500 text-red-500" : "text-gray-700"} />,
+      label: isLiked ? "Unlike" : "Like",
+      variant: "secondary" as const,
+      _isActive: isLiked,
+      isLoading: loadingStates[newsletter.id] === "like",
+    },
+  ];
+
+  // In secondaryActions, ensure all actions are () => void
+  const secondaryActions = [
+    {
+      key: "read",
+      action: () => { handleToggleRead(); },
+      icon: isRead ? <EyeOff size={14} /> : <Eye size={14} className="text-gray-700" />,
+      label: isRead ? "Mark as unread" : "Mark as read",
+      variant: "primary" as const,
+      isLoading: loadingStates[newsletter.id] === "read",
+      className: undefined,
+    },
+    // Remove tags action from the more menu
     // Only show trash icon for archived newsletters
     ...(isArchived ? [{
       key: "trash",
@@ -218,7 +228,6 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             onClick={action.action}
             disabled={isLoading}
             isLoading={action.isLoading}
-            _isActive={action._isActive}
             icon={action.icon}
             label={action.label}
             variant={action.variant}
