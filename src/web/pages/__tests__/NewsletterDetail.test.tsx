@@ -589,6 +589,88 @@ describe('NewsletterDetail (fast version)', () => {
   });
 });
 
+describe('NewsletterDetail (source and group display)', () => {
+  it('renders newsletter source and source group', async () => {
+    mockUseNewsletterDetail.mockReturnValue({
+      newsletter: {
+        id: 'nl-1',
+        title: 'Test Newsletter',
+        content: '<p>Test content</p>',
+        summary: '',
+        image_url: '',
+        received_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_read: false,
+        is_liked: false,
+        is_archived: false,
+        user_id: 'u1',
+        newsletter_source_id: 'source-1',
+        source: {
+          id: 'source-1',
+          name: 'Test Source',
+          from: 'test@example.com',
+          user_id: 'u1',
+          created_at: '',
+          updated_at: '',
+        },
+        tags: [],
+        word_count: 100,
+        estimated_read_time: 1,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+      prefetchRelated: vi.fn(),
+    });
+    renderPage();
+    expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('Source: Test Source');
+    expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('test@example.com');
+    expect(await screen.findByTestId('newsletter-source-group')).toHaveTextContent('Source Group: None');
+  });
+
+  it('renders None if no group found', async () => {
+    mockUseNewsletterDetail.mockReturnValue({
+      newsletter: {
+        id: 'nl-2',
+        title: 'No Group Newsletter',
+        content: '<p>Test content</p>',
+        summary: '',
+        image_url: '',
+        received_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_read: false,
+        is_liked: false,
+        is_archived: false,
+        user_id: 'u1',
+        newsletter_source_id: 'source-2',
+        source: {
+          id: 'source-2',
+          name: 'Other Source',
+          from: 'other@example.com',
+          user_id: 'u1',
+          created_at: '',
+          updated_at: '',
+        },
+        tags: [],
+        word_count: 100,
+        estimated_read_time: 1,
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+      prefetchRelated: vi.fn(),
+    });
+    renderPage();
+    expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('Source: Other Source');
+    expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('other@example.com');
+    expect(await screen.findByTestId('newsletter-source-group')).toHaveTextContent('Source Group: None');
+  });
+});
+
 describe('API Call Verification', () => {
   beforeEach(() => {
     // Reset all mocks before each test
