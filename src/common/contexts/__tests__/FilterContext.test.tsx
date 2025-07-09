@@ -22,9 +22,11 @@ import {
 /* ────────────────────────────────────────────────────────────── *
  *  Reactive mock for `useInboxUrlParams`
  * ────────────────────────────────────────────────────────────── */
+import { InboxFilterType } from '@common/hooks/useInboxFilters'; // Import the type
+
 // Mock implementation state
 interface MockParams {
-  filter?: 'all' | 'unread' | 'liked' | 'archived';
+  filter?: InboxFilterType;
   source?: string | null;
   time?: 'all' | 'day' | 'week' | 'month';
   tags?: string | string[];
@@ -38,13 +40,13 @@ const mockUpdateParams = vi.fn((updates: MockParams) => {
 });
 
 const mockResetParams = vi.fn(() => {
-  mockParams = {};
-  return {};
+  mockParams = { filter: 'unread' }; // Reset to new default
+  return { filter: 'unread' };
 });
 
 // Track the current mock state for assertions
 interface MockState {
-  filter: 'all' | 'unread' | 'liked' | 'archived';
+  filter: InboxFilterType;
   sourceFilter: string | null;
   timeRange: 'all' | 'day' | 'week' | 'month';
   tagIds: string[];
@@ -52,28 +54,37 @@ interface MockState {
 }
 
 let currentMockState: MockState = {
-  filter: 'all',
+  filter: 'unread', // Initial default
   sourceFilter: null,
   timeRange: 'all',
   tagIds: [],
-  hasActiveFilters: false,
+  hasActiveFilters: false, // Correctly false for default 'unread'
 };
 
 // Helper to update the mock state
 const updateMockState = (updates: Partial<MockState>) => {
-  currentMockState = { ...currentMockState, ...updates };
+  // Ensure filter defaults to 'unread' if not specified in updates
+  const newFilter = updates.filter === undefined && currentMockState.filter === undefined
+    ? 'unread'
+    : updates.filter !== undefined ? updates.filter : currentMockState.filter;
+
+  currentMockState = {
+    ...currentMockState,
+    ...updates,
+    filter: newFilter // Apply new default logic
+  };
+
   currentMockState.hasActiveFilters =
-    currentMockState.filter !== 'all' ||
+    currentMockState.filter !== 'unread' || // Active if not 'unread'
     currentMockState.sourceFilter !== null ||
     currentMockState.timeRange !== 'all' ||
     currentMockState.tagIds.length > 0;
 
   // Sync mockParams with current state
   mockParams = {
-    filter: currentMockState.filter !== 'all' ? currentMockState.filter : undefined,
+    filter: currentMockState.filter !== 'unread' ? currentMockState.filter : undefined,
     source: currentMockState.sourceFilter || undefined,
     time: currentMockState.timeRange !== 'all' ? currentMockState.timeRange : undefined,
-    // keep it an array so FilterProvider receives string[]
     tags: currentMockState.tagIds.length > 0 ? currentMockState.tagIds : undefined,
   };
 };
@@ -100,12 +111,12 @@ vi.mock('@common/hooks/useUrlParams', () => {
     const resetParams = () => {
       mockResetParams();
       updateMockState({
-        filter: 'all',
+        filter: 'unread', // Ensure mock state also resets to 'unread'
         sourceFilter: null,
         timeRange: 'all',
         tagIds: [],
       });
-      setParams({});
+      setParams({ filter: undefined }); // URL param for filter removed/undefined for default
     };
 
     // Mock setInitialParams
@@ -149,13 +160,16 @@ const defaultWrapper = createWrapper();
 describe('FilterContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset to new defaults
     updateMockState({
-      filter: 'all',
+      filter: 'unread',
       sourceFilter: null,
       timeRange: 'all',
       tagIds: [],
+      hasActiveFilters: false, // Explicitly set for clarity
     });
-    mockParams = {};
+    // mockParams should reflect default state (filter undefined)
+    mockParams = { filter: undefined, source: undefined, time: undefined, tags: undefined };
     mockUpdateParams.mockClear();
     mockResetParams.mockClear();
   });
@@ -164,7 +178,7 @@ describe('FilterContext', () => {
   it('provides initial filter state', () => {
     const { result } = renderHook(() => useFilters(), { wrapper: defaultWrapper });
 
-    expect(result.current.filter).toBe('all');
+    expect(result.current.filter).toBe('unread'); // Changed from 'all'
     expect(result.current.sourceFilter).toBeNull();
     expect(result.current.timeRange).toBe('all');
     expect(result.current.tagIds).toEqual([]);
@@ -204,25 +218,35 @@ describe('FilterContext', () => {
 
   /* ---------------------------------------------------------- */
   it('updates status filter from URL params', () => {
-    const wrapper = createWrapper({ filter: 'unread' });
+    const wrapper = createWrapper({ filter: 'unread' }); // Initializing with 'unread'
     const { result } = renderHook(() => useFilters(), { wrapper });
 
     expect(result.current.filter).toBe('unread');
-    expect(result.current.hasActiveFilters).toBe(true);
-    expect(mockUpdateParams).not.toHaveBeenCalled();
+    // If 'unread' is the default, and no other filters are set, hasActiveFilters should be false.
+    expect(result.current.hasActiveFilters).toBe(false);
+    expect(mockUpdateParams).not.toHaveBeenCalled(); // Correct, as it's initialized via wrapper
   });
 
   /* ---------------------------------------------------------- */
   it('updates status filter via action', () => {
-    const { result } = renderHook(() => useFilters(), { wrapper: defaultWrapper });
+    const { result } = renderHook(() => useFilters(), { wrapper: defaultWrapper }); // Starts with 'unread' (default)
 
+    // Setting to 'liked' (a non-default filter)
+    act(() => {
+      result.current.setFilter('liked');
+    });
+
+    expect(result.current.filter).toBe('liked');
+    expect(result.current.hasActiveFilters).toBe(true); // 'liked' is an active filter
+    expect(mockUpdateParams).toHaveBeenCalledWith({ filter: 'liked' });
+
+    // Setting back to 'unread' (the default)
     act(() => {
       result.current.setFilter('unread');
     });
-
     expect(result.current.filter).toBe('unread');
-    expect(result.current.hasActiveFilters).toBe(true);
-    expect(mockUpdateParams).toHaveBeenCalledWith({ filter: 'unread' });
+    expect(result.current.hasActiveFilters).toBe(false); // Back to default, no other filters active
+    expect(mockUpdateParams).toHaveBeenCalledWith({ filter: 'unread' }); // This will actually result in filter:undefined in URL
   });
 
   /* ---------------------------------------------------------- */
@@ -238,7 +262,7 @@ describe('FilterContext', () => {
 
     act(() => result.current.resetFilters());
 
-    expect(result.current.filter).toBe('all');
+    expect(result.current.filter).toBe('unread'); // Changed from 'all'
     expect(result.current.sourceFilter).toBeNull();
     expect(result.current.timeRange).toBe('all');
     expect(result.current.tagIds).toEqual([]);
@@ -320,7 +344,7 @@ describe('FilterContext', () => {
 
     act(() => result.current.filters.resetFilters());
 
-    expect(result.current.filters.filter).toBe('all');
+    expect(result.current.filters.filter).toBe('unread'); // Changed from 'all'
     expect(result.current.filters.sourceFilter).toBeNull();
     expect(result.current.filters.timeRange).toBe('all');
     expect(result.current.filters.tagIds).toEqual([]);
@@ -361,13 +385,13 @@ describe('FilterContext', () => {
       { wrapper: defaultWrapper },
     );
 
-    act(() => result.current.statusFilter.setFilter('unread'));
+    act(() => result.current.statusFilter.setFilter('unread')); // Set to default
     expect(result.current.filters.filter).toBe('unread');
-    expect(mockUpdateParams).toHaveBeenCalledWith({ filter: 'unread' });
+    expect(mockUpdateParams).toHaveBeenCalledWith({ filter: 'unread' }); // Will result in filter:undefined in URL
 
-    act(() => result.current.statusFilter.setFilter('all'));
-    expect(result.current.filters.filter).toBe('all');
-    expect(mockUpdateParams).toHaveBeenCalledWith({ filter: 'all' });
+    act(() => result.current.statusFilter.setFilter('liked')); // Set to non-default
+    expect(result.current.filters.filter).toBe('liked');
+    expect(mockUpdateParams).toHaveBeenCalledWith({ filter: 'liked' });
   });
 
   /* ---------------------------------------------------------- */
@@ -409,12 +433,14 @@ describe('FilterContext', () => {
       expect(result.current.newsletterFilter.isArchived).toBe(true);
     });
 
-    it('should correctly derive newsletterFilter for status "all"', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'all' }) });
-      expect(result.current.newsletterFilter.isArchived).toBe(false);
-      expect(result.current.newsletterFilter.isRead).toBeUndefined();
-      expect(result.current.newsletterFilter.isLiked).toBeUndefined();
-    });
+    // This test is no longer valid as "all" is not a filter state.
+    // The default behavior (equivalent to old "all" but with isRead: false) is tested by "unread".
+    // it('should correctly derive newsletterFilter for status "all"', () => {
+    //   const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'all' }) });
+    //   expect(result.current.newsletterFilter.isArchived).toBe(false);
+    //   expect(result.current.newsletterFilter.isRead).toBeUndefined();
+    //   expect(result.current.newsletterFilter.isLiked).toBeUndefined();
+    // });
 
     it('should include sourceIds in newsletterFilter if sourceFilter is set', () => {
       const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ source: 'src-123' }) });
@@ -485,22 +511,32 @@ describe('FilterContext', () => {
   });
 
   describe('hasActiveFilters and isFilterActive', () => {
-    it('should correctly report no active filters initially', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: defaultWrapper });
-      expect(result.current.hasActiveFilters).toBe(false);
-      expect(result.current.isFilterActive('filter')).toBe(false);
+    it('should correctly report no active filters initially (when filter is "unread")', () => {
+      const { result } = renderHook(() => useFilters(), { wrapper: defaultWrapper }); // defaultWrapper initializes with 'unread'
+      expect(result.current.hasActiveFilters).toBe(false); // 'unread' is default, so not active by itself
+      expect(result.current.isFilterActive('filter')).toBe(false); // 'filter' itself is not a deviation from default
       expect(result.current.isFilterActive('sourceFilter')).toBe(false);
       expect(result.current.isFilterActive('timeRange')).toBe(false);
       expect(result.current.isFilterActive('tagIds')).toBe(false);
     });
 
     it('should correctly report active filters when set', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'unread', tags: ['tag1']}) });
+      // Test with a non-default status filter
+      let { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'liked', tags: ['tag1']}) });
       expect(result.current.hasActiveFilters).toBe(true);
-      expect(result.current.isFilterActive('filter')).toBe(true);
-      expect(result.current.isFilterActive('sourceFilter')).toBe(false);
-      expect(result.current.isFilterActive('timeRange')).toBe(false);
+      expect(result.current.isFilterActive('filter')).toBe(true); // 'liked' is a deviation
       expect(result.current.isFilterActive('tagIds')).toBe(true);
+
+      // Test with default status filter ('unread') but other active filters
+      ({ result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'unread', source: 'src-1' }) }));
+      expect(result.current.hasActiveFilters).toBe(true);
+      expect(result.current.isFilterActive('filter')).toBe(false); // 'unread' status is default
+      expect(result.current.isFilterActive('sourceFilter')).toBe(true);
+
+      ({ result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'unread', time: 'day' }) }));
+      expect(result.current.hasActiveFilters).toBe(true);
+      expect(result.current.isFilterActive('filter')).toBe(false);
+      expect(result.current.isFilterActive('timeRange')).toBe(true);
     });
   });
 
@@ -557,13 +593,25 @@ describe('FilterContext', () => {
       const { result } = renderHook(() => useFilters(), { wrapper });
 
       act(() => {
-        result.current.setFilter('unread');
+        result.current.setFilter('unread'); // Setting to current default
       });
+      // onFilterChange is called on mount (1).
+      // Setting to the same default 'unread' might not cause newsletterFilter string to change,
+      // thus not triggering the callback again.
+      // So, expecting 1 call initially after setting to default.
+      expect(mockOnFilterChange).toHaveBeenCalledTimes(1);
+      let lastCallArgs = mockOnFilterChange.mock.calls[0]; // First call (mount)
+      expect(lastCallArgs[0].filter).toBe('unread');
+      expect(lastCallArgs[1].isRead).toBe(false);
 
-      expect(mockOnFilterChange).toHaveBeenCalledTimes(2); // Once on mount, once on change
-      const lastCallArgs = mockOnFilterChange.mock.calls[mockOnFilterChange.mock.calls.length - 1];
-      expect(lastCallArgs[0].filter).toBe('unread'); // filterState
-      expect(lastCallArgs[1].isRead).toBe(false); // newsletterFilter
+      act(() => {
+        result.current.setFilter('liked'); // Setting to a different filter
+      });
+      // Now it should be called again because 'liked' changes newsletterFilter. Total 2 calls.
+      expect(mockOnFilterChange).toHaveBeenCalledTimes(2);
+      lastCallArgs = mockOnFilterChange.mock.calls[1]; // Second call
+      expect(lastCallArgs[0].filter).toBe('liked');
+      expect(lastCallArgs[1].isLiked).toBe(true);
     });
   });
 });

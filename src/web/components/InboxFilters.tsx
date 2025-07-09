@@ -1,8 +1,9 @@
 import type { NewsletterSource } from "@common/types";
 import { Archive, Building2, ChevronDown, Clock, Filter } from "lucide-react";
 import { FC, memo, useState } from "react";
+import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
 
-export type FilterType = "all" | "unread" | "liked" | "archived";
+export type FilterType = InboxFilterType; // Use the shared type
 export type TimeRange = "all" | "day" | "2days" | "week" | "month";
 
 export interface NewsletterSourceWithCount extends NewsletterSource {
@@ -42,7 +43,6 @@ const TIME_RANGE_OPTIONS = [
 ];
 
 const FILTER_OPTIONS = [
-  { value: "all" as const, label: "All", icon: Filter },
   { value: "unread" as const, label: "Unread", icon: Filter },
   { value: "liked" as const, label: "Liked", icon: Filter },
   { value: "archived" as const, label: "Archived", icon: Archive },

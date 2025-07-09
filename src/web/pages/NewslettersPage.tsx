@@ -8,7 +8,7 @@ import {
   useNewsletterSourceGroups,
   useNewsletterSources,
   useReadingQueue,
-  useTags,
+  // useTags, // Removed as individual newsletters and their tag filters are not shown
 } from '@common/hooks';
 import { useLogger } from '@common/utils/logger/useLogger';
 
@@ -17,13 +17,13 @@ import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterAct
 import {
   NewsletterSource,
   NewsletterSourceGroup,
-  NewsletterWithRelations,
-  Tag,
+  // NewsletterWithRelations, // Removed as individual newsletters are not shown
+  // Tag, // Removed as individual newsletters and their tags are not shown
 } from '@common/types';
 import { getCacheManager, prefetchQuery } from '@common/utils/cacheUtils';
 import { queryKeyFactory } from '@common/utils/queryKeyFactory';
 import { CreateSourceGroupModal } from '@web/components/CreateSourceGroupModal';
-import NewsletterRow from '@web/components/NewsletterRow';
+// import NewsletterRow from '@web/components/NewsletterRow'; // Removed as individual newsletters are not shown
 import { SourceGroupCard } from '@web/components/SourceGroupCard';
 import { AlertTriangle, ArrowLeft, Check, FolderPlus, Loader2, X } from 'lucide-react';
 
@@ -152,26 +152,25 @@ const NewslettersPage: React.FC = () => {
   // State for selected source and groups
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
-  const [allTags, setAllTags] = useState<Tag[]>([]);
+  // const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set()); // Removed as individual newsletters are not shown
+  // const [allTags, setAllTags] = useState<Tag[]>([]); // Removed as individual newsletters are not shown
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<NewsletterSourceGroup | null>(null);
 
-  // Fetch tags
-  const { getTags } = useTags();
-
-  useEffect(() => {
-    const fetchTags = async () => {
-      try {
-        const tags = await getTags();
-        setAllTags(tags || []);
-      } catch (error) {
-        log.error('Failed to fetch tags', { error });
-        setAllTags([]);
-      }
-    };
-    fetchTags();
-  }, [getTags, log]);
+  // Fetch tags - No longer needed here as tags were for filtering individual newsletters
+  // const { getTags } = useTags();
+  // useEffect(() => {
+  //   const fetchTags = async () => {
+  //     try {
+  //       const tags = await getTags();
+  //       setAllTags(tags || []);
+  //     } catch (error) {
+  //       log.error('Failed to fetch tags', { error });
+  //       setAllTags([]);
+  //     }
+  //   };
+  //   fetchTags();
+  // }, [getTags, log]);
 
   // Reset source selection when group is selected and vice versa
   useEffect(() => {
@@ -309,71 +308,66 @@ const NewslettersPage: React.FC = () => {
 
   const cancelDelete = () => setDeleteConfirmId(null);
 
-  const { readingQueue } = useReadingQueue();
+  const { readingQueue: _readingQueue } = useReadingQueue(); // Renamed as it's not directly used for row display
 
   // Ref to track filter changes - must be outside useMemo
   const prevFilterKeyRef = React.useRef<string>();
 
   // Build newsletter filter with stable reference to prevent unnecessary refetches
+  // This filter is for the useNewsletters hook, which is now only used for bulkArchive.
+  // If other functionalities of useNewsletters were needed, this would be kept.
+  // For now, it's simplified as its primary consumer (newsletter list) is gone.
   const newsletterFilter = useMemo(() => {
     const filter = {
-      isArchived: false, // Explicitly exclude archived newsletters
+      isArchived: false,
       sourceIds: selectedSourceId
         ? [selectedSourceId]
         : selectedGroupId
           ? selectedGroupSourceIds
           : undefined,
     };
-
-    // Only log when filter actually changes to reduce log spam
     const filterKey = JSON.stringify(filter);
-
     if (prevFilterKeyRef.current !== filterKey) {
-      log.debug('Newsletter filter built', {
+      log.debug('Newsletter filter built for potential operations (e.g., bulk archive)', {
         action: 'build_newsletter_filter',
-        metadata: {
-          selectedSourceId,
-          selectedGroupId,
-          selectedGroupSourceIds,
-          filter,
-        },
+        metadata: { selectedSourceId, selectedGroupId, selectedGroupSourceIds, filter },
       });
       prevFilterKeyRef.current = filterKey;
     }
-
     return filter;
   }, [selectedSourceId, selectedGroupId, selectedGroupSourceIds, log]);
 
   const {
-    newsletters: rawNewsletters = [],
-    isLoadingNewsletters,
-    isErrorNewsletters,
-    errorNewsletters,
-    errorTogglingLike,
-    bulkArchive,
-    refetchNewsletters,
+    // newsletters: rawNewsletters = [], // No longer displaying individual newsletters
+    // isLoadingNewsletters, // No longer displaying individual newsletters
+    // isErrorNewsletters, // No longer displaying individual newsletters
+    errorNewsletters, // Still potentially relevant if useNewsletters hook itself errors
+    // errorTogglingLike, // Actions for individual newsletters removed
+    bulkArchive, // Retained for source deletion logic
+    // refetchNewsletters, // No longer displaying individual newsletters that would need refetching here
     // Extract mutations to pass to useSharedNewsletterActions
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
-    bulkMarkAsRead,
-    bulkMarkAsUnread,
-    bulkUnarchive,
-    bulkDeleteNewsletters,
-    updateNewsletterTags,
-  } = useNewsletters(newsletterFilter, {
+    markAsRead, // Actions for individual newsletters removed
+    markAsUnread, // Actions for individual newsletters removed
+    toggleLike, // Actions for individual newsletters removed
+    toggleArchive, // Actions for individual newsletters removed
+    deleteNewsletter, // Actions for individual newsletters removed
+    toggleInQueue, // Actions for individual newsletters removed
+    bulkMarkAsRead, // Actions for individual newsletters removed
+    bulkMarkAsUnread, // Actions for individual newsletters removed
+    bulkUnarchive, // Actions for individual newsletters removed
+    bulkDeleteNewsletters, // Actions for individual newsletters removed
+    updateNewsletterTags, // Actions for individual newsletters removed
+  } = useNewsletters(newsletterFilter, { // Hook is still called, but many of its return values are unused
     debug: true,
     refetchOnWindowFocus: false,
-    staleTime: 0,
+    staleTime: 0, // Kept to ensure hook behaves as before if other parts rely on it
     optimisticUpdates: false,
   });
 
   // Memoize mutations object to prevent unnecessary re-renders
+  // This is now simplified as many actions are no longer used on this page.
   const mutations = useMemo(() => ({
-    markAsRead,
+    markAsRead, // Kept in case any other part of useSharedNewsletterActions needs it
     markAsUnread,
     toggleLike,
     toggleArchive,
@@ -381,143 +375,43 @@ const NewslettersPage: React.FC = () => {
     toggleInQueue,
     bulkMarkAsRead,
     bulkMarkAsUnread,
-    bulkArchive,
+    bulkArchive, // This one is used
     bulkUnarchive,
     bulkDeleteNewsletters,
     updateNewsletterTags,
   }), [
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
-    bulkMarkAsRead,
-    bulkMarkAsUnread,
-    bulkArchive,
-    bulkUnarchive,
-    bulkDeleteNewsletters,
-    updateNewsletterTags,
+    markAsRead, markAsUnread, toggleLike, toggleArchive, deleteNewsletter,
+    toggleInQueue, bulkMarkAsRead, bulkMarkAsUnread, bulkArchive,
+    bulkUnarchive, bulkDeleteNewsletters, updateNewsletterTags,
   ]);
 
-  // Stable newsletter list with preserved order
-  const [stableNewsletters, setStableNewsletters] = useState<NewsletterWithRelations[]>([]);
-
-  // Update stable newsletter list while preserving order
-  useEffect(() => {
-    if (rawNewsletters.length === 0 && !isLoadingNewsletters) {
-      setStableNewsletters([]);
-      return;
-    }
-
-    if (rawNewsletters.length > 0) {
-      setStableNewsletters((prevStable) => {
-        const updatedNewsletters: NewsletterWithRelations[] = [];
-
-        // First, add existing newsletters in their current order
-        const existingIds = new Set(rawNewsletters.map((n) => n.id));
-
-        // Keep existing newsletters in their current order
-        prevStable.forEach((newsletter) => {
-          if (existingIds.has(newsletter.id)) {
-            const updated = rawNewsletters.find((n) => n.id === newsletter.id);
-            if (updated) {
-              updatedNewsletters.push(updated);
-            }
-          }
-        });
-
-        // Add new newsletters at the end
-        rawNewsletters.forEach((newsletter) => {
-          if (!updatedNewsletters.find((n) => n.id === newsletter.id)) {
-            updatedNewsletters.push(newsletter);
-          }
-        });
-        return updatedNewsletters;
-      });
-    }
-  }, [rawNewsletters, isLoadingNewsletters]);
-
-  // Apply local tag filtering
-  const filteredNewsletters = useMemo(() => {
-    if (selectedTagIds.size === 0) {
-      return stableNewsletters;
-    }
-
-    return stableNewsletters.filter((newsletter) => {
-      if (!newsletter.tags || newsletter.tags.length === 0) {
-        return false;
-      }
-
-      // Newsletter must have ALL selected tags (AND logic)
-      return Array.from(selectedTagIds).every((tagId) =>
-        newsletter.tags?.some((tag) => tag.id === tagId)
-      );
-    });
-  }, [stableNewsletters, selectedTagIds]);
-
-  const fetchedNewsletters = filteredNewsletters;
-
-  // Shared newsletter actions
-  const {
-    handleToggleLike,
-    handleToggleArchive,
-    handleToggleRead,
-    handleDeleteNewsletter,
-    handleToggleInQueue,
-    isUpdatingTags,
-  } = useSharedNewsletterActions(
+  // Shared newsletter actions hook - primarily for bulkArchive now
+  useSharedNewsletterActions( // Result not assigned as specific actions aren't called directly here
     mutations,
     {
       showToasts: true,
       optimisticUpdates: false,
-      onSuccess: () => {
-        // Success handled by shared handlers
-      },
-      onError: (error) => {
-        toast.error(error.message);
-      },
+      onSuccess: () => {/* Success handled by shared handlers */},
+      onError: (error) => { toast.error(error.message); },
     }
   );
 
-  const [visibleTags] = useState<Set<string>>(new Set());
-  const [isActionInProgress, setIsActionInProgress] = useState(false);
+  const [isActionInProgress, _setIsActionInProgress] = useState(false); // setIsActionInProgress might be unused now
 
-  // Stable keys for newsletter rows to prevent unnecessary re-renders
-  const [stableKeys, setStableKeys] = useState<Map<string, string>>(new Map());
+  // Debug newsletters data - This section is no longer needed as individual newsletters are not fetched/displayed.
+  // useEffect(() => {
+  //   log.debug('Fetched newsletters updated', {
+  //     action: 'newsletters_data_update',
+  //     metadata: {
+  //       count: fetchedNewsletters.length,
+  //       selectedSourceId,
+  //       selectedGroupId,
+  //       newsletterIds: fetchedNewsletters.map((n) => n.id),
+  //     },
+  //   });
+  // }, [fetchedNewsletters, selectedSourceId, selectedGroupId, log]);
 
-  // Generate stable keys for newsletters
-  const newsletterIds = useMemo(
-    () => fetchedNewsletters.map((n) => n.id).join(','),
-    [fetchedNewsletters]
-  );
-  useEffect(() => {
-    setStableKeys((prev) => {
-      const newKeys = new Map(prev);
-      fetchedNewsletters.forEach((newsletter) => {
-        if (!newKeys.has(newsletter.id)) {
-          newKeys.set(newsletter.id, `${newsletter.id}-${Date.now()}`);
-        }
-      });
-      return newKeys;
-    });
-  }, [newsletterIds, fetchedNewsletters]);
-
-  // Debug newsletters data
-  // Debug fetched newsletters and trigger refetch on filter changes
-  useEffect(() => {
-    log.debug('Fetched newsletters updated', {
-      action: 'newsletters_data_update',
-      metadata: {
-        count: fetchedNewsletters.length,
-        selectedSourceId,
-        selectedGroupId,
-        newsletterIds: fetchedNewsletters.map((n) => n.id),
-      },
-    });
-  }, [fetchedNewsletters, selectedSourceId, selectedGroupId, log]);
-
-  // Refetch when source or group filter changes (but not for tag changes)
+  // Refetch when source or group filter changes - This is only for the list of newsletters, which is removed.
   useEffect(() => {
     // Skip refetch if action is in progress to preserve optimistic updates
     if (isActionInProgress) {
@@ -529,318 +423,64 @@ const NewslettersPage: React.FC = () => {
     }
 
     // Only refetch for source/group changes, not tag changes
-    log.debug('Source/Group filter changed, refetching newsletters', {
-      action: 'source_filter_change_refetch',
-      metadata: {
-        selectedSourceId,
-        selectedGroupId,
-        selectedGroupSourceIds,
-      },
-    });
-    refetchNewsletters();
+    // No longer refetching individual newsletters here.
+    // log.debug('Source/Group filter changed, refetching newsletters', {
+    //   action: 'source_filter_change_refetch',
+    //   metadata: {
+    //     selectedSourceId,
+    //     selectedGroupId,
+    //     selectedGroupSourceIds,
+    //   },
+    // });
+    // refetchNewsletters(); // This was for the list of newsletters, now removed.
   }, [
     selectedSourceId,
     selectedGroupId,
-    selectedGroupSourceIds,
-    refetchNewsletters,
+    // selectedGroupSourceIds, // This is still used for filtering sources if a group is selected, but not for fetching newsletters
+    // refetchNewsletters, // Removed
     isActionInProgress,
     log,
   ]);
 
-  const handleTagClick = useCallback(
-    (tag: Tag, e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+  // handleTagClick is no longer needed as individual newsletters and their tags are not displayed.
+  // const handleTagClick = useCallback(
+  //   (tag: Tag, e: React.MouseEvent) => {
+  //     e.preventDefault();
+  //     e.stopPropagation();
+  //
+  //     setSelectedTagIds((prev) => {
+  //       const newSet = new Set(prev);
+  //       if (newSet.has(tag.id)) {
+  //         newSet.delete(tag.id);
+  //       } else {
+  //         newSet.add(tag.id);
+  //       }
+  //       return newSet;
+  //     });
+  //
+  //     log.debug('Tag filter toggled', {
+  //       action: 'toggle_tag_filter',
+  //       metadata: {
+  //         tagId: tag.id,
+  //         tagName: tag.name,
+  //         isSelected: !selectedTagIds.has(tag.id),
+  //       },
+  //     });
+  //   },
+  //   [selectedTagIds, log]
+  // );
 
-      setSelectedTagIds((prev) => {
-        const newSet = new Set(prev);
-        if (newSet.has(tag.id)) {
-          newSet.delete(tag.id);
-        } else {
-          newSet.add(tag.id);
-        }
-        return newSet;
-      });
+  // Newsletter action wrappers are no longer needed as individual newsletters are not displayed.
+  // const handleToggleLikeWrapper = ...
+  // const handleToggleArchiveWrapper = ...
+  // const handleToggleReadWrapper = ...
+  // const handleToggleInQueueWrapper = ...
+  // const handleTrashWrapper = ...
+  // const handleNewsletterClick = ...
 
-      log.debug('Tag filter toggled', {
-        action: 'toggle_tag_filter',
-        metadata: {
-          tagId: tag.id,
-          tagName: tag.name,
-          isSelected: !selectedTagIds.has(tag.id),
-        },
-      });
-    },
-    [selectedTagIds, log]
-  );
-
-  // Newsletter action wrapper handlers with optimistic updates
-  const handleToggleLikeWrapper = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      setIsActionInProgress(true);
-
-      // Optimistic update for immediate feedback
-      setStableNewsletters((prev) => {
-        const updated = [...prev];
-        const index = updated.findIndex((n) => n.id === newsletter.id);
-        if (index > -1) {
-          updated[index] = {
-            ...updated[index],
-            is_liked: !updated[index].is_liked,
-          };
-        }
-        return updated;
-      });
-
-      try {
-        await handleToggleLike(newsletter);
-        toast.success(newsletter.is_liked ? 'Newsletter unliked' : 'Newsletter liked');
-      } catch (error) {
-        // Revert optimistic update on error
-        setStableNewsletters((prev) => {
-          const updated = [...prev];
-          const index = updated.findIndex((n) => n.id === newsletter.id);
-          if (index > -1) {
-            updated[index] = {
-              ...updated[index],
-              is_liked: !updated[index].is_liked,
-            };
-          }
-          return updated;
-        });
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
-      }
-    },
-    [handleToggleLike]
-  );
-
-  const handleToggleSelect = useCallback(async () => {
-    // Implementation
-  }, []);
-
-  const handleToggleArchiveWrapper = useCallback(
-    async (id: string) => {
-      setIsActionInProgress(true);
-
-      const newsletter = fetchedNewsletters.find((n) => n.id === id);
-      if (!newsletter) {
-        setIsActionInProgress(false);
-        return;
-      }
-
-      const isCurrentlyArchived = newsletter.is_archived;
-      const willBeArchived = !isCurrentlyArchived;
-
-      // Optimistic update - remove from current view since this page shows non-archived
-      if (willBeArchived) {
-        // Archiving - remove from list since this page shows non-archived
-        setStableNewsletters((prev) => prev.filter((n) => n.id !== id));
-      } else {
-        // Unarchiving - newsletter should appear if it matches current filters
-        // For now, just update the status
-        setStableNewsletters((prev) => {
-          const updated = [...prev];
-          const index = updated.findIndex((n) => n.id === id);
-          if (index > -1) {
-            updated[index] = {
-              ...updated[index],
-              is_archived: false,
-            };
-          }
-          return updated;
-        });
-      }
-
-      try {
-        await handleToggleArchive(newsletter);
-        const successMessage = willBeArchived ? 'Newsletter archived' : 'Newsletter unarchived';
-        toast.success(successMessage);
-      } catch (error) {
-        // Revert optimistic update on error
-        if (willBeArchived) {
-          // Restore newsletter to list if archive failed
-          setStableNewsletters((prev) => [newsletter, ...prev]);
-        } else {
-          // Revert unarchive
-          setStableNewsletters((prev) => {
-            const updated = [...prev];
-            const index = updated.findIndex((n) => n.id === id);
-            if (index > -1) {
-              updated[index] = {
-                ...updated[index],
-                is_archived: true,
-              };
-            }
-            return updated;
-          });
-        }
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
-      }
-    },
-    [handleToggleArchive, fetchedNewsletters]
-  );
-
-  const handleToggleReadWrapper = useCallback(
-    async (id: string) => {
-      setIsActionInProgress(true);
-
-      const newsletter = fetchedNewsletters.find((n) => n.id === id);
-      if (!newsletter) {
-        setIsActionInProgress(false);
-        return;
-      }
-
-      // Optimistic update for immediate feedback
-      setStableNewsletters((prev) => {
-        const updated = [...prev];
-        const index = updated.findIndex((n) => n.id === id);
-        if (index > -1) {
-          updated[index] = {
-            ...updated[index],
-            is_read: !updated[index].is_read,
-          };
-        }
-        return updated;
-      });
-
-      try {
-        await handleToggleRead(newsletter);
-        toast.success(newsletter.is_read ? 'Marked as unread' : 'Marked as read');
-      } catch (error) {
-        // Revert optimistic update on error
-        setStableNewsletters((prev) => {
-          const updated = [...prev];
-          const index = updated.findIndex((n) => n.id === id);
-          if (index > -1) {
-            updated[index] = {
-              ...updated[index],
-              is_read: !updated[index].is_read,
-            };
-          }
-          return updated;
-        });
-        throw error;
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
-      }
-    },
-    [handleToggleRead, fetchedNewsletters]
-  );
-
-  const handleToggleInQueueWrapper = useCallback(
-    async (newsletterId: string) => {
-      setIsActionInProgress(true);
-
-      const newsletter = fetchedNewsletters.find((n) => n.id === newsletterId);
-      if (!newsletter) {
-        setIsActionInProgress(false);
-        return;
-      }
-
-      // Check current queue status using actual reading queue data
-      const isCurrentlyInQueue = readingQueue.some((item) => item.newsletter_id === newsletterId);
-
-      try {
-        await handleToggleInQueue(newsletter, isCurrentlyInQueue);
-        toast.success(isCurrentlyInQueue ? 'Removed from queue' : 'Added to queue');
-      } catch (error) {
-        log.error(
-          'Failed to toggle queue status',
-          {
-            action: 'toggle_queue',
-            metadata: { newsletterId },
-          },
-          error instanceof Error ? error : new Error(String(error))
-        );
-        toast.error('Failed to update queue status');
-      } finally {
-        setTimeout(() => setIsActionInProgress(false), 100);
-      }
-    },
-    [handleToggleInQueue, fetchedNewsletters, readingQueue, log]
-  );
-
-  const handleTrashWrapper = useCallback(
-    async (id: string) => {
-      if (!window.confirm('Are you sure? This action is final and cannot be undone.')) {
-        return;
-      }
-
-      await handleDeleteNewsletter(id);
-    },
-    [handleDeleteNewsletter]
-  );
-
-  // Handle newsletter click with proper navigation state
-  const handleNewsletterClick = useCallback(
-    async (newsletter: NewsletterWithRelations) => {
-      try {
-        // Mark as read if unread
-        if (!newsletter.is_read) {
-          try {
-            await handleToggleRead(newsletter);
-          } catch (readError) {
-            log.error(
-              'Failed to mark newsletter as read',
-              {
-                action: 'mark_as_read',
-                metadata: { newsletterId: newsletter.id },
-              },
-              readError instanceof Error ? readError : new Error(String(readError))
-            );
-          }
-        }
-
-        // Archive the newsletter when opened from sources
-        if (!newsletter.is_archived) {
-          try {
-            await handleToggleArchive(newsletter);
-          } catch (archiveError) {
-            log.error(
-              'Failed to archive newsletter',
-              {
-                action: 'archive_newsletter',
-                metadata: { newsletterId: newsletter.id },
-              },
-              archiveError instanceof Error ? archiveError : new Error(String(archiveError))
-            );
-          }
-        }
-
-        // Navigate to the newsletter detail with source context
-        navigate(`/newsletters/${newsletter.id}`, {
-          state: {
-            from: '/newsletters',
-            sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
-          },
-        });
-      } catch (error) {
-        log.error(
-          'Unexpected error in newsletter click handler',
-          {
-            action: 'newsletter_click',
-            metadata: { newsletterId: newsletter.id },
-          },
-          error instanceof Error ? error : new Error(String(error))
-        );
-        // Still navigate even if other actions fail
-        navigate(`/newsletters/${newsletter.id}`, {
-          state: {
-            from: '/newsletters',
-            sourceId: newsletter.source?.id || newsletter.newsletter_source_id,
-          },
-        });
-      }
-    },
-    [navigate, handleToggleRead, handleToggleArchive, log]
-  );
 
   useEffect(() => {
-    if (errorNewsletters) {
+    if (errorNewsletters) { // This error is for the useNewsletters hook which is now minimal
       log.error(
         'Failed to load newsletters',
         {
@@ -1306,8 +946,8 @@ const NewslettersPage: React.FC = () => {
           )}
         </section>
 
-        {/* Newsletters for selected source or group */}
-        {(selectedSourceId || selectedGroupId) && (
+        {/* Newsletters for selected source or group - THIS ENTIRE SECTION IS REMOVED */}
+        {/* {(selectedSourceId || selectedGroupId) && (
           <section className="mt-12">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-neutral-900">
@@ -1315,7 +955,6 @@ const NewslettersPage: React.FC = () => {
               </h3>
             </div>
 
-            {/* Tag Filter Display */}
             {selectedTagIds.size > 0 && (
               <div className="mb-4 p-3 bg-blue-50 rounded-lg">
                 <div className="flex items-center justify-between">
@@ -1397,7 +1036,7 @@ const NewslettersPage: React.FC = () => {
               </div>
             )}
           </section>
-        )}
+        )} */}
         {/* Create/Edit Group Modal */}
         <CreateSourceGroupModal
           isOpen={isGroupModalOpen}
