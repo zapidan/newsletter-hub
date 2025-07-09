@@ -1,6 +1,7 @@
 import LoadingScreen from '@common/components/common/LoadingScreen';
 import { useAuth } from '@common/contexts/AuthContext';
 import { useNewsletterDetail } from '@common/hooks/useNewsletterDetail';
+import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useTags } from '@common/hooks/useTags';
 import { newsletterService } from '@common/services';
@@ -367,6 +368,13 @@ const NewsletterDetail = memo(() => {
     updateNewsletterTagsForActions,
   ]);
 
+  const { groups = [] } = useNewsletterSourceGroups();
+  // Find the group for the newsletter's source
+  const sourceGroup = useMemo(() => {
+    if (!newsletter?.source?.id) return undefined;
+    return groups.find(group => group.sources?.some(s => s.id === newsletter.source!.id));
+  }, [newsletter?.source?.id, groups]);
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -416,6 +424,20 @@ const NewsletterDetail = memo(() => {
                 >
                   {newsletter?.title}
                 </h1>
+                {/* Newsletter Source and Group */}
+                <div className="mb-2">
+                  <div data-testid="newsletter-source" className="text-sm text-gray-600">
+                    <span className="font-medium">Source:</span>{' '}
+                    {newsletter?.source?.name || 'Unknown'}
+                    {newsletter?.source?.from && (
+                      <span className="ml-2 text-gray-400">({newsletter.source.from})</span>
+                    )}
+                  </div>
+                  <div data-testid="newsletter-source-group" className="text-sm text-gray-600 mt-1">
+                    <span className="font-medium">Source Group:</span>{' '}
+                    {sourceGroup ? sourceGroup.name : 'None'}
+                  </div>
+                </div>
               </div>
               {/* Tags and Action Buttons Row */}
               <div className="flex items-center justify-between mb-4">
