@@ -206,7 +206,7 @@ export const CreateSourceGroupModal = ({
                 </div>
               </div>
 
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white max-h-60 overflow-y-auto">
                 {filteredSources.length > 0 ? (
                   <ul className="divide-y divide-gray-100">
                     {filteredSources.map((source) => (
