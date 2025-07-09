@@ -180,7 +180,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     { to: "/search", icon: <Search size={20} />, label: "Search" },
     { to: "/trending", icon: <TrendingUp size={20} />, label: "Trending Topics" },
     { to: "/tags", icon: <Tag size={20} />, label: "Tags" },
-    { to: "/newsletters", icon: <Newspaper size={20} />, label: "Newsletter Sources" },
+    { to: "/newsletters", icon: <Newspaper size={20} />, label: "Newsletter Groups" },
   ];
 
   const bottomLinks = [

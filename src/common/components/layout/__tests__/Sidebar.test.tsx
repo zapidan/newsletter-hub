@@ -165,7 +165,7 @@ describe('Sidebar', () => {
       { text: 'Discover', href: '/trending' },
       { text: 'Reading Queue', href: '/queue' },
       { text: 'Tags', href: '/tags' },
-      { text: 'Newsletter Sources', href: '/newsletters' },
+      { text: 'Newsletter Groups', href: '/newsletters' },
       { text: 'Settings', href: '/settings' },
     ];
 
@@ -324,7 +324,7 @@ describe('Sidebar', () => {
     ['/search', 'Search'],
     ['/trending', 'Trending Topics'],
     ['/tags', 'Tags'],
-    ['/newsletters', 'Newsletter Sources'],
+    ['/newsletters', 'Newsletter Groups'],
     ['/profile', 'Profile'],
     ['/settings', 'Settings'],
   ])('highlights the correct nav link for %s', (route, label) => {
