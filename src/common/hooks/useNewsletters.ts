@@ -179,7 +179,10 @@ export const useNewsletters = (
   const normalizedFilters = useMemo(() => normalizeNewsletterFilter(filters), [filters]);
 
   // Generate query key with normalized filters
-  const queryKey = useMemo(() => queryKeyFactory.newsletters.list(normalizedFilters), [normalizedFilters]);
+  const queryKey = useMemo(
+    () => queryKeyFactory.newsletters.list(normalizedFilters),
+    [normalizedFilters]
+  );
 
   // Define proper type for query parameters
   interface NewsletterQueryParams {
@@ -714,7 +717,9 @@ export const useNewsletters = (
       const currentLikedState = currentNewsletter?.is_liked ?? false;
       const newLikedState = !currentLikedState;
 
-      console.log(`Optimistically toggling like for newsletter ${id}: ${currentLikedState} -> ${newLikedState}`);
+      console.log(
+        `Optimistically toggling like for newsletter ${id}: ${currentLikedState} -> ${newLikedState}`
+      );
 
       cacheManager.updateNewsletterInCache({
         id,
@@ -796,14 +801,21 @@ export const useNewsletters = (
               );
             },
           },
-          (oldData: { pages: PaginatedResponse<NewsletterWithRelations>[] } | PaginatedResponse<NewsletterWithRelations> | undefined) => {
+          (
+            oldData:
+              | { pages: PaginatedResponse<NewsletterWithRelations>[] }
+              | PaginatedResponse<NewsletterWithRelations>
+              | undefined
+          ) => {
             // Handle infinite query data structure
             if (oldData && 'pages' in oldData && oldData.pages) {
               let totalRemoved = 0;
               const updatedData = {
                 ...oldData,
                 pages: oldData.pages.map((page) => {
-                  const filteredData = page.data.filter((newsletter: NewsletterWithRelations) => newsletter.id !== id);
+                  const filteredData = page.data.filter(
+                    (newsletter: NewsletterWithRelations) => newsletter.id !== id
+                  );
                   const removed = page.data.length - filteredData.length;
                   totalRemoved += removed;
 
@@ -817,7 +829,9 @@ export const useNewsletters = (
 
               // Log the removal for debugging
               if (totalRemoved > 0) {
-                console.log(`Removed ${totalRemoved} archived newsletter(s) from infinite query cache`);
+                console.log(
+                  `Removed ${totalRemoved} archived newsletter(s) from infinite query cache`
+                );
               }
 
               return updatedData;
@@ -825,7 +839,9 @@ export const useNewsletters = (
 
             // Handle regular list query data structure
             if (oldData && 'data' in oldData && Array.isArray(oldData.data)) {
-              const filteredData = oldData.data.filter((newsletter: NewsletterWithRelations) => newsletter.id !== id);
+              const filteredData = oldData.data.filter(
+                (newsletter: NewsletterWithRelations) => newsletter.id !== id
+              );
               const removed = oldData.data.length - filteredData.length;
 
               if (removed > 0) {
@@ -966,7 +982,9 @@ export const useNewsletters = (
             const updatedData = {
               ...oldData,
               pages: oldData.pages.map((page) => {
-                const filteredData = page.data.filter((newsletter: NewsletterWithRelations) => !ids.includes(newsletter.id));
+                const filteredData = page.data.filter(
+                  (newsletter: NewsletterWithRelations) => !ids.includes(newsletter.id)
+                );
                 const removed = page.data.length - filteredData.length;
                 totalRemoved += removed;
 
@@ -980,7 +998,9 @@ export const useNewsletters = (
 
             // Log the removal for debugging
             if (totalRemoved > 0) {
-              console.log(`Removed ${totalRemoved} archived newsletter(s) from infinite query cache`);
+              console.log(
+                `Removed ${totalRemoved} archived newsletter(s) from infinite query cache`
+              );
             }
 
             return updatedData;

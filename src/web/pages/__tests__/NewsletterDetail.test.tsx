@@ -34,6 +34,11 @@ vi.mock('../../../components/NewsletterDetail/NewsletterNavigation', () => ({
   )),
 }));
 
+/* Mock NavigationArrows so it can be spied on in tests */
+vi.mock('../../../components/NewsletterDetail/NavigationArrows', () => ({
+  default: vi.fn(() => <div data-testid="mock-navigation-arrows" />),
+}));
+
 /* 1️⃣  Stub react-modal so it never touches the real DOM   */
 vi.mock('react-modal', () => ({
   // eslint-disable-next-line react/display-name
@@ -257,7 +262,7 @@ import { AuthContext } from '@common/contexts/AuthContext';
 import { FilterProvider } from '@common/contexts/FilterContext';
 import { ToastProvider } from '@common/contexts/ToastContext';
 import type { NewsletterWithRelations } from '@common/types';
-import * as NewsletterNavigationModule from '../../../components/NewsletterDetail/NewsletterNavigation';
+import * as NewsletterNavigationModule from '../../../components/NewsletterDetail/NavigationArrows';
 import NewsletterDetail from '../NewsletterDetail';
 
 /* browser-api stubs missing from jsdom */
@@ -1142,22 +1147,15 @@ describe('NewsletterDetail - NewsletterNavigation Props', () => {
 
     renderPage();
 
-    // Check that NewsletterNavigation is rendered with correct props
-    expect(screen.getByTestId('newsletter-detail')).toBeInTheDocument();
-
-    // The NewsletterNavigation component should be rendered with the correct props
-    // We can verify this by checking that the navigation component is present
-    // and that it receives the correct context information
+    // Check that NavigationArrows is rendered with correct navigation props
     expect(NewsletterNavigationModule.default).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentNewsletterId: currentId,
-        isFromReadingQueue: true,
-        sourceId: 'source-xyz',
-        autoMarkAsRead: true,
-        showLabels: true,
-        showCounter: true,
+        hasNext: false,
+        hasPrevious: false,
+        onNext: expect.any(Function),
+        onPrevious: expect.any(Function),
       }),
-      expect.anything()
+      {}
     );
   });
 
@@ -1206,14 +1204,13 @@ describe('NewsletterDetail - NewsletterNavigation Props', () => {
 
     expect(NewsletterNavigationModule.default).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentNewsletterId: currentId,
-        isFromReadingQueue: false,
-        sourceId: 'source-abc',
-        autoMarkAsRead: true,
-        showLabels: true,
-        showCounter: true,
+        hasNext: false,
+        hasPrevious: false,
+        isLoading: false,
+        onNext: expect.any(Function),
+        onPrevious: expect.any(Function),
       }),
-      expect.anything()
+      {}
     );
   });
 
@@ -1262,14 +1259,13 @@ describe('NewsletterDetail - NewsletterNavigation Props', () => {
 
     expect(NewsletterNavigationModule.default).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentNewsletterId: currentId,
-        isFromReadingQueue: false,
-        sourceId: undefined, // No source context from inbox
-        autoMarkAsRead: true,
-        showLabels: true,
-        showCounter: true,
+        hasNext: false,
+        hasPrevious: false,
+        isLoading: false,
+        onNext: expect.any(Function),
+        onPrevious: expect.any(Function),
       }),
-      expect.anything()
+      {}
     );
   });
 });

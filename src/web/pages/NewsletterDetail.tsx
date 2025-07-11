@@ -11,9 +11,10 @@ import { useMutation } from '@tanstack/react-query';
 import TagSelector from '@web/components/TagSelector';
 import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
-import NewsletterNavigation from '../../components/NewsletterDetail/NewsletterNavigation';
+import NavigationArrows from '../../components/NewsletterDetail/NavigationArrows';
+import { useSimpleNewsletterNavigation } from '@common/hooks/useSimpleNewsletterNavigation';
 
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
@@ -21,6 +22,7 @@ const NewsletterDetail = memo(() => {
   const log = useLogger();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   // Check if we came from the reading queue using multiple indicators
   const isFromReadingQueue = useMemo(() => {
@@ -109,53 +111,77 @@ const NewsletterDetail = memo(() => {
   });
 
   // Create wrapper functions to convert NewsletterOperationResult to boolean
-  const markAsRead = useCallback(async (id: string) => {
-    const result = await markAsReadMutation.mutateAsync(id);
-    return result.success;
-  }, [markAsReadMutation]);
+  const markAsRead = useCallback(
+    async (id: string) => {
+      const result = await markAsReadMutation.mutateAsync(id);
+      return result.success;
+    },
+    [markAsReadMutation]
+  );
 
-  const markAsUnread = useCallback(async (id: string) => {
-    const result = await markAsUnreadMutation.mutateAsync(id);
-    return result.success;
-  }, [markAsUnreadMutation]);
+  const markAsUnread = useCallback(
+    async (id: string) => {
+      const result = await markAsUnreadMutation.mutateAsync(id);
+      return result.success;
+    },
+    [markAsUnreadMutation]
+  );
 
-  const toggleLike = useCallback(async (id: string) => {
-    const result = await toggleLikeMutation.mutateAsync(id);
-    return result.success;
-  }, [toggleLikeMutation]);
+  const toggleLike = useCallback(
+    async (id: string) => {
+      const result = await toggleLikeMutation.mutateAsync(id);
+      return result.success;
+    },
+    [toggleLikeMutation]
+  );
 
-  const toggleArchive = useCallback(async (id: string) => {
-    const result = await toggleArchiveMutation.mutateAsync(id);
-    return result.success;
-  }, [toggleArchiveMutation]);
+  const toggleArchive = useCallback(
+    async (id: string) => {
+      const result = await toggleArchiveMutation.mutateAsync(id);
+      return result.success;
+    },
+    [toggleArchiveMutation]
+  );
 
-  const deleteNewsletter = useCallback(async (id: string) => {
-    const result = await deleteNewsletterMutation.mutateAsync(id);
-    return result.success;
-  }, [deleteNewsletterMutation]);
+  const deleteNewsletter = useCallback(
+    async (id: string) => {
+      const result = await deleteNewsletterMutation.mutateAsync(id);
+      return result.success;
+    },
+    [deleteNewsletterMutation]
+  );
 
   // Create a toggleInQueue function that combines addToQueue and removeFromQueue
-  const toggleInQueue = useCallback(async (id: string) => {
-    // This is a simplified version - in practice you'd need to check if the newsletter is in queue
-    // For now, we'll just use addToQueue as a fallback
-    const result = await addToQueueMutation.mutateAsync(id);
-    return result.success;
-  }, [addToQueueMutation]);
+  const toggleInQueue = useCallback(
+    async (id: string) => {
+      // This is a simplified version - in practice you'd need to check if the newsletter is in queue
+      // For now, we'll just use addToQueue as a fallback
+      const result = await addToQueueMutation.mutateAsync(id);
+      return result.success;
+    },
+    [addToQueueMutation]
+  );
 
   // Create a wrapper for updateNewsletterTags to match the expected signature for useSharedNewsletterActions
-  const updateNewsletterTagsForActions = useCallback(async (id: string, tagIds: string[]) => {
-    await updateTagsMutation.mutateAsync({ id, tagIds });
-  }, [updateTagsMutation]);
+  const updateNewsletterTagsForActions = useCallback(
+    async (id: string, tagIds: string[]) => {
+      await updateTagsMutation.mutateAsync({ id, tagIds });
+    },
+    [updateTagsMutation]
+  );
 
   // Create a wrapper for updateNewsletterTags that returns boolean for TagSelector
-  const updateNewsletterTagsForSelector = useCallback(async (id: string, tagIds: string[]) => {
-    try {
-      await updateTagsMutation.mutateAsync({ id, tagIds });
-      return true;
-    } catch (_error) {
-      return false;
-    }
-  }, [updateTagsMutation]);
+  const updateNewsletterTagsForSelector = useCallback(
+    async (id: string, tagIds: string[]) => {
+      try {
+        await updateTagsMutation.mutateAsync({ id, tagIds });
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    },
+    [updateTagsMutation]
+  );
 
   const { handleMarkAsRead, handleToggleArchive } = useSharedNewsletterActions(
     {
@@ -350,30 +376,70 @@ const NewsletterDetail = memo(() => {
   }, [id]);
 
   // Memoize mutations object to prevent unnecessary re-renders and infinite loops
-  const mutations = useMemo(() => ({
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
-    updateNewsletterTags: updateNewsletterTagsForActions,
-  }), [
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
-    updateNewsletterTagsForActions,
-  ]);
+  const mutations = useMemo(
+    () => ({
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      updateNewsletterTags: updateNewsletterTagsForActions,
+    }),
+    [
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      updateNewsletterTagsForActions,
+    ]
+  );
 
   const { groups = [] } = useNewsletterSourceGroups();
   // Find the group for the newsletter's source
   const sourceGroup = useMemo(() => {
     if (!newsletter?.source?.id) return undefined;
-    return groups.find(group => group.sources?.some(s => s.id === newsletter.source!.id));
-  }, [newsletter?.source?.id, groups]);
+    return groups.find((group) => group.sources?.some((s) => s.id === newsletter.source!.id));
+  }, [newsletter?.source, groups]);
+
+  // Get navigation filter from location state or URL params
+  const navigationFilter = useMemo(() => {
+    // Prefer URL params over location state for filter
+    const filterParam = searchParams.get('filter') || location.state?.currentFilter;
+    const sourceParam = searchParams.get('source') || location.state?.sourceFilter;
+    const tagsParam = searchParams.get('tags');
+
+    if (filterParam) {
+      // Convert filter string to NewsletterFilter format
+      const filter: Partial<import('@common/types/cache').NewsletterFilter> = {};
+      if (filterParam === 'unread') {
+        filter.isRead = false;
+        filter.isArchived = false;
+      }
+      if (filterParam === 'archived') filter.isArchived = true;
+      if (filterParam === 'liked') {
+        filter.isLiked = true;
+        // Don't set isArchived for liked filter - show all liked newsletters
+      }
+      if (sourceParam) filter.sourceIds = [sourceParam];
+      if (tagsParam) {
+        filter.tagIds = tagsParam.split(',').filter(Boolean);
+      } else if (location.state?.tagIds?.length > 0) {
+        filter.tagIds = location.state.tagIds;
+      }
+      return filter;
+    }
+    return {};
+  }, [location.state, searchParams]);
+
+  // Setup navigation
+  const navigation = useSimpleNewsletterNavigation(id || '', {
+    isReadingQueue: isFromReadingQueue,
+    filter: navigationFilter,
+    sourceId: sourceId,
+  });
 
   if (loading) {
     return <LoadingScreen />;
@@ -449,7 +515,10 @@ const NewsletterDetail = memo(() => {
                     onTagsChange={async (newTags: Tag[]) => {
                       if (!id) return;
                       try {
-                        const ok = await updateNewsletterTagsForSelector(id, newTags.map(t => t.id));
+                        const ok = await updateNewsletterTagsForSelector(
+                          id,
+                          newTags.map((t) => t.id)
+                        );
                         if (ok) {
                           await refetch();
                           setTagSelectorKey((k) => k + 1);
@@ -501,18 +570,15 @@ const NewsletterDetail = memo(() => {
               </div>
             </div>
 
-            {/* Newsletter Navigation */}
+            {/* Top Navigation Arrows */}
             {newsletter && (
-              <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-                <NewsletterNavigation
-                  currentNewsletterId={newsletter.id}
-                  isFromReadingQueue={isFromReadingQueue}
-                  sourceId={sourceId}
-                  autoMarkAsRead={true}
-                  showLabels={true}
-                  showCounter={true}
-                  className=""
-                  mutations={mutations}
+              <div className="mb-4">
+                <NavigationArrows
+                  onPrevious={navigation.navigateToPrevious}
+                  onNext={navigation.navigateToNext}
+                  hasPrevious={navigation.hasPrevious}
+                  hasNext={navigation.hasNext}
+                  isLoading={navigation.isLoading}
                 />
               </div>
             )}
@@ -550,6 +616,19 @@ const NewsletterDetail = memo(() => {
                 {/* Intentionally left empty as per requirements */}
               </div>
             </div>
+
+            {/* Bottom Navigation Arrows */}
+            {newsletter && (
+              <div className="mt-6">
+                <NavigationArrows
+                  onPrevious={navigation.navigateToPrevious}
+                  onNext={navigation.navigateToNext}
+                  hasPrevious={navigation.hasPrevious}
+                  hasNext={navigation.hasNext}
+                  isLoading={navigation.isLoading}
+                />
+              </div>
+            )}
           </div>
           {/* Sidebar */}
           <div className="lg:w-80 flex-shrink-0">

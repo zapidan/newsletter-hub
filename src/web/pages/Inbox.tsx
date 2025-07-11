@@ -106,35 +106,42 @@ const Inbox: React.FC = () => {
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
 
   // When group is selected, clear source filter; when source is selected, clear group filter
-  const handleSourceFilterChange = useCallback((sourceId: string | null) => {
-    setGroupFilter(null);
-    setSourceFilter(sourceId);
-  }, [setSourceFilter]);
+  const handleSourceFilterChange = useCallback(
+    (sourceId: string | null) => {
+      setGroupFilter(null);
+      setSourceFilter(sourceId);
+    },
+    [setSourceFilter]
+  );
 
-  const handleGroupFilterChange = useCallback((groupId: string | null) => {
-    setSourceFilter(null);
-    setGroupFilter(groupId);
-  }, [setSourceFilter]);
+  const handleGroupFilterChange = useCallback(
+    (groupId: string | null) => {
+      setSourceFilter(null);
+      setGroupFilter(groupId);
+    },
+    [setSourceFilter]
+  );
 
   // Prepare group dropdown data
-  const groupsForDropdown = useMemo(() =>
-    newsletterGroups.map(g => ({
-      id: g.id,
-      name: g.name,
-      count:
-        g.sources?.reduce((sum, s) => {
-          const source = newsletterSources.find(ns => ns.id === s.id);
-          return sum + (source?.unread_count || 0);
-        }, 0) || 0,
-    })),
+  const groupsForDropdown = useMemo(
+    () =>
+      newsletterGroups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        count:
+          g.sources?.reduce((sum, s) => {
+            const source = newsletterSources.find((ns) => ns.id === s.id);
+            return sum + (source?.unread_count || 0);
+          }, 0) || 0,
+      })),
     [newsletterGroups, newsletterSources]
   );
 
   // Compute source IDs for the selected group
   const selectedGroupSourceIds = useMemo(() => {
     if (!groupFilter) return undefined;
-    const group = newsletterGroups.find(g => g.id === groupFilter);
-    return group?.sources?.map(s => s.id) || [];
+    const group = newsletterGroups.find((g) => g.id === groupFilter);
+    return group?.sources?.map((s) => s.id) || [];
   }, [groupFilter, newsletterGroups]);
 
   // Newsletter filter from context
@@ -145,7 +152,9 @@ const Inbox: React.FC = () => {
     let filterObj = {
       ...contextNewsletterFilter,
       tagIds: contextNewsletterFilter.tagIds ? [...contextNewsletterFilter.tagIds] : undefined,
-      sourceIds: contextNewsletterFilter.sourceIds ? [...contextNewsletterFilter.sourceIds] : undefined,
+      sourceIds: contextNewsletterFilter.sourceIds
+        ? [...contextNewsletterFilter.sourceIds]
+        : undefined,
     };
     if (groupFilter && selectedGroupSourceIds) {
       filterObj = {
@@ -202,33 +211,36 @@ const Inbox: React.FC = () => {
   } = useNewsletters();
 
   // Memoize mutations object to prevent unnecessary re-renders
-  const mutations = useMemo(() => ({
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
-    bulkMarkAsRead,
-    bulkMarkAsUnread,
-    bulkArchive,
-    bulkUnarchive,
-    bulkDeleteNewsletters,
-    updateNewsletterTags,
-  }), [
-    markAsRead,
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
-    bulkMarkAsRead,
-    bulkMarkAsUnread,
-    bulkArchive,
-    bulkUnarchive,
-    bulkDeleteNewsletters,
-    updateNewsletterTags,
-  ]);
+  const mutations = useMemo(
+    () => ({
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      bulkMarkAsRead,
+      bulkMarkAsUnread,
+      bulkArchive,
+      bulkUnarchive,
+      bulkDeleteNewsletters,
+      updateNewsletterTags,
+    }),
+    [
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      bulkMarkAsRead,
+      bulkMarkAsUnread,
+      bulkArchive,
+      bulkUnarchive,
+      bulkDeleteNewsletters,
+      updateNewsletterTags,
+    ]
+  );
 
   // Helper function to preserve URL parameters after actions
   const preserveFilterParams = useCallback(() => {
@@ -304,19 +316,16 @@ const Inbox: React.FC = () => {
   }, [filter, sourceFilter, groupFilter, timeRange, debouncedTagIds]);
 
   // Shared newsletter actions with our enhanced version
-  const newsletterActions = useSharedNewsletterActions(
-    mutations,
-    {
-      showToasts: true,
-      optimisticUpdates: false,
-      enableErrorHandling: true,
-      enableLoadingStates: true,
-      onSuccess: useCallback(() => {
-        // Trigger any additional success handling
-      }, []),
-      onError: handleError,
-    }
-  );
+  const newsletterActions = useSharedNewsletterActions(mutations, {
+    showToasts: true,
+    optimisticUpdates: false,
+    enableErrorHandling: true,
+    enableLoadingStates: true,
+    onSuccess: useCallback(() => {
+      // Trigger any additional success handling
+    }, []),
+    onError: handleError,
+  });
 
   // Selection state (local to component since it's UI-only)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -468,13 +477,37 @@ const Inbox: React.FC = () => {
       setIsActionInProgress(true);
 
       // Navigate immediately to avoid async issues
-      const targetPath = `/newsletters/${newsletter.id}`;
+      // Build URL with query parameters to preserve filter context
+      const params = new URLSearchParams();
+      if (filter && filter !== 'unread') {
+        params.set('filter', filter);
+      } else if (filter === 'unread') {
+        // Explicitly set unread filter in URL for navigation
+        params.set('filter', 'unread');
+      }
+      if (sourceFilter) {
+        params.set('source', sourceFilter);
+      }
+      if (groupFilter) {
+        params.set('group', groupFilter);
+      }
+      if (timeRange && timeRange !== 'all') {
+        params.set('time', timeRange);
+      }
+      if (debouncedTagIds && debouncedTagIds.length > 0) {
+        params.set('tags', debouncedTagIds.join(','));
+      }
+
+      const queryString = params.toString();
+      const targetPath = `/newsletters/${newsletter.id}${queryString ? `?${queryString}` : ''}`;
+
       log.debug('Navigating to newsletter detail immediately', {
         action: 'navigate_to_detail',
         metadata: {
           newsletterId: newsletter.id,
           targetPath,
           currentPath: window.location.pathname,
+          queryString,
         },
       });
 
@@ -496,26 +529,22 @@ const Inbox: React.FC = () => {
 
         // Mark as read if unread (optimistic)
         if (!newsletter.is_read) {
-          actions.push(
-            newsletterActions.handleMarkAsRead(newsletter.id)
-          );
+          actions.push(newsletterActions.handleMarkAsRead(newsletter.id));
         }
 
         // Archive the newsletter when opened from the inbox (optimistic)
         // But only if we're not in a filtered view that would hide it
-        const shouldArchive = !newsletter.is_archived && (
+        const shouldArchive =
+          !newsletter.is_archived &&
           // Don't auto-archive if we're viewing archived newsletters
           filter !== 'archived' &&
           // Don't auto-archive if we're on a filter that would hide this newsletter
           // when it gets archived (like 'unread' for read newsletters, 'liked' for unliked newsletters)
           !(filter === 'unread' && newsletter.is_read) &&
-          !(filter === 'liked' && !newsletter.is_liked)
-        );
+          !(filter === 'liked' && !newsletter.is_liked);
 
         if (shouldArchive) {
-          actions.push(
-            newsletterActions.handleToggleArchive(newsletter)
-          );
+          actions.push(newsletterActions.handleToggleArchive(newsletter));
         }
 
         // Execute actions in parallel for better performance
@@ -561,7 +590,16 @@ const Inbox: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [navigate, newsletterActions, preserveFilterParams, log, filter, sourceFilter, timeRange, debouncedTagIds]
+    [
+      navigate,
+      newsletterActions,
+      preserveFilterParams,
+      log,
+      filter,
+      sourceFilter,
+      timeRange,
+      debouncedTagIds,
+    ]
   );
 
   const handleRemoveFromQueue = useCallback(
@@ -856,7 +894,9 @@ const Inbox: React.FC = () => {
       />
 
       {/* Newsletter List with Infinite Scroll */}
-      <div className={`${selectedTags.length > 0 ? 'pt-2' : 'pt-6'} pb-6 overflow-auto sm:px-6 px-0`}>
+      <div
+        className={`${selectedTags.length > 0 ? 'pt-2' : 'pt-6'} pb-6 overflow-auto sm:px-6 px-0`}
+      >
         {isLoadingNewsletters && rawNewsletters.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-neutral-500">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
@@ -880,7 +920,9 @@ const Inbox: React.FC = () => {
             readingQueue={readingQueue}
             visibleTags={visibleTags}
             // Newsletter row actions
-            onToggleSelect={async (id: string) => { toggleSelect(id); }}
+            onToggleSelect={async (id: string) => {
+              toggleSelect(id);
+            }}
             onToggleLike={handleToggleLikeWrapper}
             onToggleArchive={async (id: string) => {
               const newsletter = rawNewsletters.find((n) => n.id === id);

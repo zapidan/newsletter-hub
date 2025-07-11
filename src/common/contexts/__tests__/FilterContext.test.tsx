@@ -64,14 +64,17 @@ let currentMockState: MockState = {
 // Helper to update the mock state
 const updateMockState = (updates: Partial<MockState>) => {
   // Ensure filter defaults to 'unread' if not specified in updates
-  const newFilter = updates.filter === undefined && currentMockState.filter === undefined
-    ? 'unread'
-    : updates.filter !== undefined ? updates.filter : currentMockState.filter;
+  const newFilter =
+    updates.filter === undefined && currentMockState.filter === undefined
+      ? 'unread'
+      : updates.filter !== undefined
+        ? updates.filter
+        : currentMockState.filter;
 
   currentMockState = {
     ...currentMockState,
     ...updates,
-    filter: newFilter // Apply new default logic
+    filter: newFilter, // Apply new default logic
   };
 
   currentMockState.hasActiveFilters =
@@ -98,7 +101,11 @@ vi.mock('@common/hooks/useUrlParams', () => {
 
     const updateParams = (updates: MockParams) => {
       mockUpdateParams(updates);
-      const tagIds = Array.isArray(updates.tags) ? updates.tags : updates.tags ? updates.tags.split(',') : [];
+      const tagIds = Array.isArray(updates.tags)
+        ? updates.tags
+        : updates.tags
+          ? updates.tags.split(',')
+          : [];
       updateMockState({
         filter: updates.filter,
         sourceFilter: updates.source,
@@ -122,7 +129,11 @@ vi.mock('@common/hooks/useUrlParams', () => {
     // Mock setInitialParams
     const setInitialParams = (initialParams: MockParams) => {
       mockParams = initialParams;
-      const tagIds = Array.isArray(initialParams.tags) ? initialParams.tags : initialParams.tags ? initialParams.tags.split(',') : [];
+      const tagIds = Array.isArray(initialParams.tags)
+        ? initialParams.tags
+        : initialParams.tags
+          ? initialParams.tags.split(',')
+          : [];
       setParams(initialParams);
       updateMockState({
         filter: initialParams.filter,
@@ -135,7 +146,6 @@ vi.mock('@common/hooks/useUrlParams', () => {
     return { params, updateParams, resetParams, setInitialParams };
   };
 
-
   return { __esModule: true, useInboxUrlParams };
 });
 
@@ -144,16 +154,20 @@ vi.mock('@common/hooks/useUrlParams', () => {
  * ────────────────────────────────────────────────────────────── */
 const createWrapper =
   (params: Record<string, any> = {}) =>
-    ({ children }: { children: React.ReactNode }) => {
-      const tagIds = Array.isArray(params.tags) ? params.tags : params.tags ? params.tags.split(',') : [];
-      updateMockState({
-        filter: params.filter,
-        sourceFilter: params.source,
-        timeRange: params.time,
-        tagIds,
-      });
-      return <FilterProvider>{children}</FilterProvider>;
-    };
+  ({ children }: { children: React.ReactNode }) => {
+    const tagIds = Array.isArray(params.tags)
+      ? params.tags
+      : params.tags
+        ? params.tags.split(',')
+        : [];
+    updateMockState({
+      filter: params.filter,
+      sourceFilter: params.source,
+      timeRange: params.time,
+      tagIds,
+    });
+    return <FilterProvider>{children}</FilterProvider>;
+  };
 
 const defaultWrapper = createWrapper();
 
@@ -285,13 +299,11 @@ describe('FilterContext', () => {
     expect(mockUpdateParams).toHaveBeenCalledWith({ time: 'week' });
   });
 
-
   /* ---------------------------------------------------------- */
   it('updates time range through `useTimeFilter` hook', () => {
-    const { result } = renderHook(
-      () => ({ timeFilter: useTimeFilter(), filters: useFilters() }),
-      { wrapper: defaultWrapper },
-    );
+    const { result } = renderHook(() => ({ timeFilter: useTimeFilter(), filters: useFilters() }), {
+      wrapper: defaultWrapper,
+    });
 
     act(() => result.current.timeFilter.setTimeRange('week'));
 
@@ -302,10 +314,9 @@ describe('FilterContext', () => {
 
   /* ---------------------------------------------------------- */
   it('handles tag filter changes', () => {
-    const { result } = renderHook(
-      () => ({ tagFilter: useTagFilter(), filters: useFilters() }),
-      { wrapper: defaultWrapper },
-    );
+    const { result } = renderHook(() => ({ tagFilter: useTagFilter(), filters: useFilters() }), {
+      wrapper: defaultWrapper,
+    });
 
     /* add two tags */
     act(() => result.current.tagFilter.setTagIds(['tag1', 'tag2']));
@@ -339,7 +350,7 @@ describe('FilterContext', () => {
         tagFilter: useTagFilter(),
         filters: useFilters(),
       }),
-      { wrapper },
+      { wrapper }
     );
 
     act(() => result.current.filters.resetFilters());
@@ -382,7 +393,7 @@ describe('FilterContext', () => {
   it('toggles status filter with `useStatusFilter`', () => {
     const { result } = renderHook(
       () => ({ statusFilter: useStatusFilter(), filters: useFilters() }),
-      { wrapper: defaultWrapper },
+      { wrapper: defaultWrapper }
     );
 
     act(() => result.current.statusFilter.setFilter('unread')); // Set to default
@@ -417,19 +428,26 @@ describe('FilterContext', () => {
 
   describe('newsletterFilter derivation', () => {
     it('should correctly derive newsletterFilter for status "unread"', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'unread' }) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ filter: 'unread' }),
+      });
       expect(result.current.newsletterFilter.isRead).toBe(false);
       expect(result.current.newsletterFilter.isArchived).toBe(false);
     });
 
     it('should correctly derive newsletterFilter for status "liked"', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'liked' }) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ filter: 'liked' }),
+      });
       expect(result.current.newsletterFilter.isLiked).toBe(true);
-      expect(result.current.newsletterFilter.isArchived).toBe(false);
+      // Liked filter shows all liked newsletters, including archived ones
+      expect(result.current.newsletterFilter.isArchived).toBeUndefined();
     });
 
     it('should correctly derive newsletterFilter for status "archived"', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'archived' }) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ filter: 'archived' }),
+      });
       expect(result.current.newsletterFilter.isArchived).toBe(true);
     });
 
@@ -443,7 +461,9 @@ describe('FilterContext', () => {
     // });
 
     it('should include sourceIds in newsletterFilter if sourceFilter is set', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ source: 'src-123' }) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ source: 'src-123' }),
+      });
       expect(result.current.newsletterFilter.sourceIds).toEqual(['src-123']);
     });
 
@@ -480,31 +500,49 @@ describe('FilterContext', () => {
       });
 
       it('should derive dateFrom for timeRange "day"', () => {
-        const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ time: 'day' }) });
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: 'day' }),
+        });
         // Start of the current day
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(new Date('2024-03-15T00:00:00.000Z'));
+        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
+          new Date('2024-03-15T00:00:00.000Z')
+        );
       });
 
       it('should derive dateFrom for timeRange "week"', () => {
-        const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ time: 'week' }) });
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: 'week' }),
+        });
         // 7 days ago
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(new Date('2024-03-08T12:00:00.000Z'));
+        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
+          new Date('2024-03-08T12:00:00.000Z')
+        );
       });
 
       it('should derive dateFrom for timeRange "month"', () => {
-        const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ time: 'month' }) });
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: 'month' }),
+        });
         // 1 month ago
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(new Date('2024-02-15T12:00:00.000Z'));
+        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
+          new Date('2024-02-15T12:00:00.000Z')
+        );
       });
 
       it('should derive dateFrom for timeRange "2days"', () => {
-        const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ time: '2days' }) });
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: '2days' }),
+        });
         // 2 days ago
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(new Date('2024-03-13T12:00:00.000Z'));
+        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
+          new Date('2024-03-13T12:00:00.000Z')
+        );
       });
 
       it('should not set dateFrom for timeRange "all"', () => {
-        const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ time: 'all' }) });
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: 'all' }),
+        });
         expect(result.current.newsletterFilter.dateFrom).toBeUndefined();
       });
     });
@@ -522,18 +560,24 @@ describe('FilterContext', () => {
 
     it('should correctly report active filters when set', () => {
       // Test with a non-default status filter
-      let { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'liked', tags: ['tag1']}) });
+      let { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ filter: 'liked', tags: ['tag1'] }),
+      });
       expect(result.current.hasActiveFilters).toBe(true);
       expect(result.current.isFilterActive('filter')).toBe(true); // 'liked' is a deviation
       expect(result.current.isFilterActive('tagIds')).toBe(true);
 
       // Test with default status filter ('unread') but other active filters
-      ({ result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'unread', source: 'src-1' }) }));
+      ({ result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ filter: 'unread', source: 'src-1' }),
+      }));
       expect(result.current.hasActiveFilters).toBe(true);
       expect(result.current.isFilterActive('filter')).toBe(false); // 'unread' status is default
       expect(result.current.isFilterActive('sourceFilter')).toBe(true);
 
-      ({ result } = renderHook(() => useFilters(), { wrapper: createWrapper({ filter: 'unread', time: 'day' }) }));
+      ({ result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ filter: 'unread', time: 'day' }),
+      }));
       expect(result.current.hasActiveFilters).toBe(true);
       expect(result.current.isFilterActive('filter')).toBe(false);
       expect(result.current.isFilterActive('timeRange')).toBe(true);
@@ -548,7 +592,9 @@ describe('FilterContext', () => {
     });
 
     it('toggleTag should remove a tag if present', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ tags: ['tag1', 'tag2']}) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ tags: ['tag1', 'tag2'] }),
+      });
       act(() => result.current.toggleTag('tag1'));
       expect(result.current.tagIds).toEqual(['tag2']);
     });
@@ -560,25 +606,33 @@ describe('FilterContext', () => {
     });
 
     it('addTag should not duplicate an existing tag', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ tags: ['tag1']}) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ tags: ['tag1'] }),
+      });
       act(() => result.current.addTag('tag1'));
       expect(result.current.tagIds).toEqual(['tag1']);
     });
 
     it('removeTag should remove an existing tag', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ tags: ['tag1', 'tag2']}) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ tags: ['tag1', 'tag2'] }),
+      });
       act(() => result.current.removeTag('tag1'));
       expect(result.current.tagIds).toEqual(['tag2']);
     });
 
     it('removeTag should do nothing if tag is not present', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ tags: ['tag1']}) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ tags: ['tag1'] }),
+      });
       act(() => result.current.removeTag('tagNonExistent'));
       expect(result.current.tagIds).toEqual(['tag1']);
     });
 
     it('clearTags should remove all tags', () => {
-      const { result } = renderHook(() => useFilters(), { wrapper: createWrapper({ tags: ['tag1', 'tag2']}) });
+      const { result } = renderHook(() => useFilters(), {
+        wrapper: createWrapper({ tags: ['tag1', 'tag2'] }),
+      });
       act(() => result.current.clearTags());
       expect(result.current.tagIds).toEqual([]);
     });

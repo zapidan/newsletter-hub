@@ -52,7 +52,6 @@ vi.mock('@common/hooks/useUrlParams', () => ({
   }),
 }));
 
-
 // Wrapper component that includes the actual FilterProvider
 const TestWrapper: FC<{ children: ReactNode }> = ({ children }) => (
   <FilterProvider>{children}</FilterProvider>
@@ -68,7 +67,9 @@ describe('useInboxFilters', () => {
   });
 
   it('initializes with "unread" as the default filter and correct newsletterFilter properties', () => {
-    const { result } = renderHook(() => useInboxFilters({ autoLoadTags: false }), { wrapper: TestWrapper });
+    const { result } = renderHook(() => useInboxFilters({ autoLoadTags: false }), {
+      wrapper: TestWrapper,
+    });
     expect(result.current.filter).toBe('unread');
     expect(result.current.sourceFilter).toBeNull();
     expect(result.current.timeRange).toBe('all');
@@ -85,7 +86,9 @@ describe('useInboxFilters', () => {
   });
 
   it('correctly sets "liked" filter and updates newsletterFilter', async () => {
-    const { result, rerender } = renderHook(() => useInboxFilters({ autoLoadTags: false }), { wrapper: TestWrapper });
+    const { result, rerender } = renderHook(() => useInboxFilters({ autoLoadTags: false }), {
+      wrapper: TestWrapper,
+    });
     act(() => {
       result.current.setFilter('liked');
     });
@@ -95,14 +98,16 @@ describe('useInboxFilters', () => {
 
     expect(result.current.filter).toBe('liked');
     expect(result.current.newsletterFilter.isLiked).toBe(true);
-    expect(result.current.newsletterFilter.isArchived).toBe(false);
+    expect(result.current.newsletterFilter.isArchived).toBeUndefined();
     expect(result.current.newsletterFilter.isRead).toBeUndefined(); // No isRead for liked
     expect(result.current.hasActiveFilters).toBe(true);
     expect(result.current.isFilterActive('filter')).toBe(true);
   });
 
   it('correctly sets "archived" filter and updates newsletterFilter', async () => {
-    const { result, rerender } = renderHook(() => useInboxFilters({ autoLoadTags: false }), { wrapper: TestWrapper });
+    const { result, rerender } = renderHook(() => useInboxFilters({ autoLoadTags: false }), {
+      wrapper: TestWrapper,
+    });
     act(() => {
       result.current.setFilter('archived');
     });
@@ -119,7 +124,9 @@ describe('useInboxFilters', () => {
   it('resetFilters reverts to "unread" and clears other filters', async () => {
     // Initialize with some active filters by setting currentMockParams before the hook renders
     currentMockParams = { filter: 'liked', source: 'source123', time: 'day', tags: ['tag1'] };
-    const { result, rerender } = renderHook(() => useInboxFilters({ autoLoadTags: false }), { wrapper: TestWrapper });
+    const { result, rerender } = renderHook(() => useInboxFilters({ autoLoadTags: false }), {
+      wrapper: TestWrapper,
+    });
 
     // Verify initial active state based on mocked params
     expect(result.current.filter).toBe('liked');
@@ -144,7 +151,9 @@ describe('useInboxFilters', () => {
   });
 
   it('debounces tag updates and eventually calls setTagIds (via context and URL params)', async () => {
-    const { result } = renderHook(() => useInboxFilters({ debounceMs: 20, autoLoadTags: false }), { wrapper: TestWrapper });
+    const { result } = renderHook(() => useInboxFilters({ debounceMs: 20, autoLoadTags: false }), {
+      wrapper: TestWrapper,
+    });
 
     act(() => result.current.updateTagDebounced(['tag1']));
 
@@ -160,7 +169,10 @@ describe('useInboxFilters', () => {
   // Needs further investigation to properly test debouncing with react-query and context.
   it.skip('loads tags and toggles a tag via handleTagClick', async () => {
     const debounceMs = 10;
-    const { result, rerender } = renderHook(() => useInboxFilters({ debounceMs, autoLoadTags: true }), { wrapper: TestWrapper });
+    const { result, rerender } = renderHook(
+      () => useInboxFilters({ debounceMs, autoLoadTags: true }),
+      { wrapper: TestWrapper }
+    );
 
     // 1. Load tags (uses real timers implicitly if vi.useFakeTimers() is not called yet for this test block)
     await waitFor(() => expect(result.current.allTags.length).toBe(2));
@@ -169,20 +181,28 @@ describe('useInboxFilters', () => {
     vi.useFakeTimers();
 
     // Toggle ON
-    act(() => { result.current.handleTagClick('tag1'); });
+    act(() => {
+      result.current.handleTagClick('tag1');
+    });
     expect(result.current.pendingTagUpdates).toEqual(['tag1']); // Check immediate pending update
 
-    act(() => { vi.advanceTimersByTime(debounceMs); });
+    act(() => {
+      vi.advanceTimersByTime(debounceMs);
+    });
     rerender(); // Allow FilterProvider to re-render based on changed currentMockParams
 
     await waitFor(() => expect(result.current.debouncedTagIds).toEqual(['tag1']));
     expect(mockUpdateParamsSpy).toHaveBeenCalledWith({ tags: ['tag1'] });
 
     // Toggle OFF
-    act(() => { result.current.handleTagClick('tag1'); });
+    act(() => {
+      result.current.handleTagClick('tag1');
+    });
     expect(result.current.pendingTagUpdates).toEqual([]); // Check immediate pending update
 
-    act(() => { vi.advanceTimersByTime(debounceMs); });
+    act(() => {
+      vi.advanceTimersByTime(debounceMs);
+    });
     rerender(); // Allow FilterProvider to re-render
 
     await waitFor(() => expect(result.current.debouncedTagIds).toEqual([]));

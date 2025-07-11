@@ -1,44 +1,40 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-describe("Auto Mark As Read Smoke Tests", () => {
+describe('Auto Mark As Read Smoke Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("should be able to import shared newsletter actions", async () => {
-    const { useSharedNewsletterActions } = await import(
-      "@common/hooks/useSharedNewsletterActions"
-    );
+  it('should be able to import shared newsletter actions', async () => {
+    const { useSharedNewsletterActions } = await import('@common/hooks/useSharedNewsletterActions');
     expect(useSharedNewsletterActions).toBeDefined();
-    expect(typeof useSharedNewsletterActions).toBe("function");
+    expect(typeof useSharedNewsletterActions).toBe('function');
   });
 
-  it("should be able to import newsletter navigation with auto-mark feature", async () => {
-    const { default: NewsletterNavigation } = await import(
-      "../../components/NewsletterDetail/NewsletterNavigation"
+  it('should be able to import navigation arrows component', async () => {
+    const { default: NavigationArrows } = await import(
+      '../../components/NewsletterDetail/NavigationArrows'
     );
-    expect(NewsletterNavigation).toBeDefined();
-    expect(typeof NewsletterNavigation).toBe("function");
+    expect(NavigationArrows).toBeDefined();
+    expect(typeof NavigationArrows).toBe('function');
   });
 
-  it("should have markAsRead function in newsletter API", async () => {
-    const { newsletterApi } = await import("@common/api/newsletterApi");
+  it('should have markAsRead function in newsletter API', async () => {
+    const { newsletterApi } = await import('@common/api/newsletterApi');
     expect(newsletterApi.markAsRead).toBeDefined();
-    expect(typeof newsletterApi.markAsRead).toBe("function");
+    expect(typeof newsletterApi.markAsRead).toBe('function');
   });
 
-  it("should have handleMarkAsRead in shared actions", async () => {
+  it('should have handleMarkAsRead in shared actions', async () => {
     // This is a smoke test to ensure the function exists
     // We can't easily test the implementation without complex mocking
-    const module = await import("@common/hooks/useSharedNewsletterActions");
+    const module = await import('@common/hooks/useSharedNewsletterActions');
     expect(module.useSharedNewsletterActions).toBeDefined();
   });
 
-  it("should export required types for auto-mark functionality", async () => {
-    const { newsletterApi } = await import("@common/api/newsletterApi");
-    const { useSharedNewsletterActions } = await import(
-      "@common/hooks/useSharedNewsletterActions"
-    );
+  it('should export required types for auto-mark functionality', async () => {
+    const { newsletterApi } = await import('@common/api/newsletterApi');
+    const { useSharedNewsletterActions } = await import('@common/hooks/useSharedNewsletterActions');
 
     // Verify the functions exist (smoke test for compilation)
     expect(newsletterApi).toBeDefined();
@@ -47,9 +43,9 @@ describe("Auto Mark As Read Smoke Tests", () => {
     expect(useSharedNewsletterActions).toBeDefined();
   });
 
-  it("should have proper TypeScript types for newsletter with read status", async () => {
+  it('should have proper TypeScript types for newsletter with read status', async () => {
     // Import types to verify they compile correctly
-    const typesModule = await import("@common/types");
+    const typesModule = await import('@common/types');
     expect(typesModule).toBeDefined();
 
     // This verifies that our NewsletterWithRelations type includes is_read

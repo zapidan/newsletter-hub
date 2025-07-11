@@ -1,6 +1,6 @@
-import { NewsletterWithRelations } from "@common/types";
-import { useLogger } from "@common/utils/logger/useLogger";
-import clsx from "clsx";
+import { NewsletterWithRelations } from '@common/types';
+import { useLogger } from '@common/utils/logger/useLogger';
+import clsx from 'clsx';
 import {
   Archive,
   ArchiveX,
@@ -9,9 +9,9 @@ import {
   EyeOff,
   Heart,
   MoreHorizontal,
-  Trash
-} from "lucide-react";
-import React, { useState } from "react";
+  Trash,
+} from 'lucide-react';
+import React, { useState } from 'react';
 
 interface NewsletterActionsProps {
   newsletter: NewsletterWithRelations;
@@ -20,7 +20,7 @@ interface NewsletterActionsProps {
   onToggleRead: (id: string) => Promise<void>;
   onTrash: (id: string) => void;
   onToggleQueue?: (newsletterId: string) => Promise<void>;
-  onToggleTagVisibility?: (e: React.MouseEvent) => void;
+  _onToggleTagVisibility?: (e: React.MouseEvent) => void;
   loadingStates?: Record<string, string>;
   _errorTogglingLike?: Error | null;
   isInReadingQueue?: boolean;
@@ -35,8 +35,8 @@ const ActionButton: React.FC<{
   _isActive?: boolean;
   icon: React.ReactNode;
   label: string;
-  variant?: "primary" | "secondary" | "danger";
-  size?: "sm" | "md";
+  variant?: 'primary' | 'secondary' | 'danger';
+  size?: 'sm' | 'md';
   className?: string;
 }> = ({
   onClick,
@@ -45,42 +45,42 @@ const ActionButton: React.FC<{
   _isActive = false,
   icon,
   label,
-  variant = "secondary",
-  size = "md",
-  className
+  variant = 'secondary',
+  size = 'md',
+  className,
 }) => {
-    const baseClasses = `
+  const baseClasses = `
     inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200
     focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed
-    ${size === "sm" ? "px-2 py-1 text-xs" : "px-2.5 py-1.5 text-sm"}
+    ${size === 'sm' ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm'}
   `;
 
-    const variantClasses = {
-      primary: "text-gray-700 hover:bg-gray-200 focus:ring-gray-500",
-      secondary: "text-gray-700 hover:bg-gray-200 focus:ring-gray-500",
-      danger: "text-gray-700 hover:bg-gray-200 focus:ring-gray-500"
-    };
-
-    const finalClasses = className || variantClasses[variant];
-
-    return (
-      <button
-        onClick={onClick}
-        disabled={disabled || isLoading}
-        className={`${baseClasses} ${finalClasses}`}
-        aria-label={label}
-        title={label}
-      >
-        {isLoading ? (
-          <div className={`animate-spin rounded-full border-2 border-current border-t-transparent ${size === "sm" ? "w-3 h-3" : "w-4 h-4"}`} />
-        ) : (
-          <span className={`${size === "sm" ? "w-3 h-3" : "w-4 h-4"}`}>
-            {icon}
-          </span>
-        )}
-      </button>
-    );
+  const variantClasses = {
+    primary: 'text-gray-700 hover:bg-gray-200 focus:ring-gray-500',
+    secondary: 'text-gray-700 hover:bg-gray-200 focus:ring-gray-500',
+    danger: 'text-gray-700 hover:bg-gray-200 focus:ring-gray-500',
   };
+
+  const finalClasses = className || variantClasses[variant];
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled || isLoading}
+      className={`${baseClasses} ${finalClasses}`}
+      aria-label={label}
+      title={label}
+    >
+      {isLoading ? (
+        <div
+          className={`animate-spin rounded-full border-2 border-current border-t-transparent ${size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'}`}
+        />
+      ) : (
+        <span className={`${size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'}`}>{icon}</span>
+      )}
+    </button>
+  );
+};
 
 const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   newsletter,
@@ -89,20 +89,24 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   onToggleRead,
   onTrash,
   onToggleQueue,
-  onToggleTagVisibility,
+  _onToggleTagVisibility,
   loadingStates = {},
   _errorTogglingLike,
   isInReadingQueue = false,
   compact = false,
 }) => {
-  const log = useLogger("NewsletterActions");
+  const log = useLogger('NewsletterActions');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const handleToggleRead = async () => {
     try {
       await onToggleRead(newsletter.id);
     } catch (error) {
-      log.error("Failed to toggle read status", { newsletterId: newsletter.id }, error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        'Failed to toggle read status',
+        { newsletterId: newsletter.id },
+        error instanceof Error ? error : new Error(String(error))
+      );
     }
   };
 
@@ -110,7 +114,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     try {
       await onToggleLike(newsletter);
     } catch (error) {
-      log.error("Failed to toggle like", { newsletterId: newsletter.id }, error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        'Failed to toggle like',
+        { newsletterId: newsletter.id },
+        error instanceof Error ? error : new Error(String(error))
+      );
     }
   };
 
@@ -118,7 +126,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     try {
       await onToggleArchive(newsletter.id);
     } catch (error) {
-      log.error("Failed to toggle archive", { newsletterId: newsletter.id }, error instanceof Error ? error : new Error(String(error)));
+      log.error(
+        'Failed to toggle archive',
+        { newsletterId: newsletter.id },
+        error instanceof Error ? error : new Error(String(error))
+      );
     }
   };
 
@@ -127,13 +139,11 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
     try {
       await onToggleQueue(newsletter.id);
     } catch (error) {
-      log.error("Failed to toggle queue", { newsletterId: newsletter.id }, error instanceof Error ? error : new Error(String(error)));
-    }
-  };
-
-  const handleToggleTagVisibility = (e: React.MouseEvent) => {
-    if (onToggleTagVisibility) {
-      onToggleTagVisibility(e);
+      log.error(
+        'Failed to toggle queue',
+        { newsletterId: newsletter.id },
+        error instanceof Error ? error : new Error(String(error))
+      );
     }
   };
 
@@ -145,61 +155,76 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
   const isLiked = newsletter.is_liked;
   const isArchived = newsletter.is_archived;
   const isLoading = Object.keys(loadingStates).length > 0;
-  const size = compact ? "sm" : "md";
+  const size = compact ? 'sm' : 'md';
 
   // On mobile, show archive, queue, like as primary actions; move read and tag to more menu
   const primaryActions = [
-    ...(onToggleQueue ? [{
-      key: "queue",
-      action: handleToggleQueue,
-      icon: <BookmarkIcon size={14} className={isInReadingQueue ? "fill-blue-500 text-blue-500" : "text-gray-700"} />,
-      label: isInReadingQueue ? "Remove from queue" : "Add to queue",
-      variant: "secondary" as const,
-      _isActive: isInReadingQueue,
-      isLoading: loadingStates[newsletter.id] === "queue",
-    }] : []),
+    ...(onToggleQueue
+      ? [
+          {
+            key: 'queue',
+            action: handleToggleQueue,
+            icon: (
+              <BookmarkIcon
+                size={14}
+                className={isInReadingQueue ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}
+              />
+            ),
+            label: isInReadingQueue ? 'Remove from queue' : 'Add to queue',
+            variant: 'secondary' as const,
+            _isActive: isInReadingQueue,
+            isLoading: loadingStates[newsletter.id] === 'queue',
+          },
+        ]
+      : []),
     {
-      key: "archive",
+      key: 'archive',
       action: handleToggleArchive,
       icon: isArchived ? <ArchiveX size={14} /> : <Archive size={14} />,
-      label: isArchived ? "Unarchive" : "Archive",
-      variant: "secondary" as const,
-      isLoading: loadingStates[newsletter.id] === "archive",
-      className: isArchived ? "text-green-600 hover:bg-green-100" : undefined,
+      label: isArchived ? 'Unarchive' : 'Archive',
+      variant: 'secondary' as const,
+      isLoading: loadingStates[newsletter.id] === 'archive',
+      className: isArchived ? 'text-green-600 hover:bg-green-100' : undefined,
     },
     {
-      key: "like",
+      key: 'like',
       action: handleToggleLike,
-      icon: <Heart size={14} className={isLiked ? "fill-red-500 text-red-500" : "text-gray-700"} />,
-      label: isLiked ? "Unlike" : "Like",
-      variant: "secondary" as const,
+      icon: <Heart size={14} className={isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700'} />,
+      label: isLiked ? 'Unlike' : 'Like',
+      variant: 'secondary' as const,
       _isActive: isLiked,
-      isLoading: loadingStates[newsletter.id] === "like",
+      isLoading: loadingStates[newsletter.id] === 'like',
     },
   ];
 
   // In secondaryActions, ensure all actions are () => void
   const secondaryActions = [
     {
-      key: "read",
-      action: () => { handleToggleRead(); },
+      key: 'read',
+      action: () => {
+        handleToggleRead();
+      },
       icon: isRead ? <EyeOff size={14} /> : <Eye size={14} className="text-gray-700" />,
-      label: isRead ? "Mark as unread" : "Mark as read",
-      variant: "primary" as const,
-      isLoading: loadingStates[newsletter.id] === "read",
+      label: isRead ? 'Mark as unread' : 'Mark as read',
+      variant: 'primary' as const,
+      isLoading: loadingStates[newsletter.id] === 'read',
       className: undefined,
     },
     // Remove tags action from the more menu
     // Only show trash icon for archived newsletters
-    ...(isArchived ? [{
-      key: "trash",
-      action: handleTrash,
-      icon: <Trash size={14} />,
-      label: "Delete",
-      variant: "danger" as const,
-      isLoading: loadingStates[newsletter.id] === "trash",
-      className: "text-red-600 hover:bg-red-100",
-    }] : []),
+    ...(isArchived
+      ? [
+          {
+            key: 'trash',
+            action: handleTrash,
+            icon: <Trash size={14} />,
+            label: 'Delete',
+            variant: 'danger' as const,
+            isLoading: loadingStates[newsletter.id] === 'trash',
+            className: 'text-red-600 hover:bg-red-100',
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -251,10 +276,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
         {showMoreMenu && (
           <>
             {/* Backdrop */}
-            <div
-              className="fixed inset-0 z-[100]"
-              onClick={() => setShowMoreMenu(false)}
-            />
+            <div className="fixed inset-0 z-[100]" onClick={() => setShowMoreMenu(false)} />
 
             {/* Dropdown Menu */}
             <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-[110] py-1">

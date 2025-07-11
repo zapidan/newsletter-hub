@@ -1,17 +1,16 @@
-import { Folder, MoreHorizontal, Trash2, Edit } from "lucide-react";
-import { useState } from "react";
+import { useClickOutside } from "@common/hooks/useClickOutside";
 import { useNewsletterSourceGroups } from "@common/hooks/useNewsletterSourceGroups";
 import { NewsletterSourceGroup } from "@common/types";
-import { useClickOutside } from "@common/hooks/useClickOutside";
 import { useLogger } from "@common/utils/logger/useLogger";
+import { Edit, Folder, MoreHorizontal, Trash2 } from "lucide-react";
+import { useState } from "react";
 
 interface SourceGroupCardProps {
   group: NewsletterSourceGroup;
   onEdit: (group: NewsletterSourceGroup) => void;
   onDelete?: (groupId: string) => void;
   isAnyModalOpen?: boolean;
-  isSelected?: boolean;
-  onClick?: (groupId: string) => void;
+  // Remove isSelected and onClick props
 }
 
 export const SourceGroupCard = ({
@@ -19,8 +18,7 @@ export const SourceGroupCard = ({
   onEdit,
   onDelete,
   isAnyModalOpen = false,
-  isSelected = false,
-  onClick,
+  // Remove isSelected and onClick props
 }: SourceGroupCardProps) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const { deleteGroup } = useNewsletterSourceGroups();
@@ -75,22 +73,14 @@ export const SourceGroupCard = ({
     });
   }
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onClick?.(group.id);
-  };
+  // Remove handleClick
 
   return (
     <div className="relative">
       <div
-        onClick={handleClick}
-        className={`group relative flex flex-col p-4 bg-white rounded-lg border transition-all duration-200 overflow-hidden cursor-pointer
-          ${
-            isSelected
-              ? "border-blue-400 bg-blue-50"
-              : "border-gray-200 hover:border-blue-200 hover:shadow-md"
-          }`}
+        // Remove onClick handler and cursor-pointer class
+        className={`group relative flex flex-col p-4 bg-white rounded-lg border transition-all duration-200 overflow-hidden
+          border-gray-200 hover:border-blue-200 hover:shadow-md`}
       >
         {!isAnyModalOpen ? (
           <div className="absolute top-2 right-2">
