@@ -13,10 +13,7 @@ import { useLogger } from '@common/utils/logger/useLogger';
 
 import { newsletterApi } from '@common/api';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
-import {
-  NewsletterSource,
-  NewsletterSourceGroup,
-} from '@common/types';
+import { NewsletterSource, NewsletterSourceGroup } from '@common/types';
 import { getCacheManager, prefetchQuery } from '@common/utils/cacheUtils';
 import { queryKeyFactory } from '@common/utils/queryKeyFactory';
 import { CreateSourceGroupModal } from '@web/components/CreateSourceGroupModal';
@@ -51,11 +48,11 @@ const NewsletterGroupsPage: React.FC = () => {
 
   const {
     newsletterSources,
-    isLoadingSources,
-    isErrorSources,
+    isLoadingSources: _isLoadingSources,
+    isErrorSources: _isErrorSources,
     updateSource,
     setSourceArchiveStatus,
-    isArchivingSource,
+    isArchivingSource: _isArchivingSource,
   } = useNewsletterSources();
 
   // Performance optimization: Preload newsletter data for popular sources
@@ -101,7 +98,7 @@ const NewsletterGroupsPage: React.FC = () => {
   };
 
   // Handle editing a source
-  const handleEdit = (source: NewsletterSource) => {
+  const _handleEdit = (source: NewsletterSource) => {
     setFormData({
       name: source.name,
       from: source.from,
@@ -246,10 +243,10 @@ const NewsletterGroupsPage: React.FC = () => {
   }, [selectedGroupId, groups, log]);
 
   // Clear group filter
-  const clearGroupFilter = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedGroupId(null);
-  }, []);
+  // const clearGroupFilter = useCallback((e: React.MouseEvent) => {
+  //   e.stopPropagation();
+  //   setSelectedGroupId(null);
+  // }, []);
 
   // Debug modal states
   React.useEffect(() => {
@@ -265,7 +262,7 @@ const NewsletterGroupsPage: React.FC = () => {
   }, [isGroupModalOpen, showEditModal, deleteConfirmId, log]);
 
   // Handle archive source (delete confirmation)
-  const handleArchiveSource = async (sourceId: string) => {
+  const _handleArchiveSource = async (sourceId: string) => {
     setDeleteConfirmId(sourceId);
   };
 
@@ -362,33 +359,50 @@ const NewsletterGroupsPage: React.FC = () => {
 
   // Memoize mutations object to prevent unnecessary re-renders
   // This is now simplified as many actions are no longer used on this page.
-  const mutations = useMemo(() => ({
-    markAsRead, // Kept in case any other part of useSharedNewsletterActions needs it
-    markAsUnread,
-    toggleLike,
-    toggleArchive,
-    deleteNewsletter,
-    toggleInQueue,
-    bulkMarkAsRead,
-    bulkMarkAsUnread,
-    bulkArchive, // This one is used
-    bulkUnarchive,
-    bulkDeleteNewsletters,
-    updateNewsletterTags,
-  }), [
-    markAsRead, markAsUnread, toggleLike, toggleArchive, deleteNewsletter,
-    toggleInQueue, bulkMarkAsRead, bulkMarkAsUnread, bulkArchive,
-    bulkUnarchive, bulkDeleteNewsletters, updateNewsletterTags,
-  ]);
+  const mutations = useMemo(
+    () => ({
+      markAsRead, // Kept in case any other part of useSharedNewsletterActions needs it
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      bulkMarkAsRead,
+      bulkMarkAsUnread,
+      bulkArchive, // This one is used
+      bulkUnarchive,
+      bulkDeleteNewsletters,
+      updateNewsletterTags,
+    }),
+    [
+      markAsRead,
+      markAsUnread,
+      toggleLike,
+      toggleArchive,
+      deleteNewsletter,
+      toggleInQueue,
+      bulkMarkAsRead,
+      bulkMarkAsUnread,
+      bulkArchive,
+      bulkUnarchive,
+      bulkDeleteNewsletters,
+      updateNewsletterTags,
+    ]
+  );
 
   // Shared newsletter actions hook - primarily for bulkArchive now
-  useSharedNewsletterActions( // Result not assigned as specific actions aren't called directly here
+  useSharedNewsletterActions(
+    // Result not assigned as specific actions aren't called directly here
     mutations,
     {
       showToasts: true,
       optimisticUpdates: false,
-      onSuccess: () => {/* Success handled by shared handlers */ },
-      onError: (error) => { toast.error(error.message); },
+      onSuccess: () => {
+        /* Success handled by shared handlers */
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
     }
   );
 
@@ -474,9 +488,9 @@ const NewsletterGroupsPage: React.FC = () => {
   // const handleTrashWrapper = ...
   // const handleNewsletterClick = ...
 
-
   useEffect(() => {
-    if (errorNewsletters) { // This error is for the useNewsletters hook which is now minimal
+    if (errorNewsletters) {
+      // This error is for the useNewsletters hook which is now minimal
       log.error(
         'Failed to load newsletters',
         {
@@ -546,14 +560,6 @@ const NewsletterGroupsPage: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-semibold text-gray-800">Your Groups</h2>
-              {selectedGroupId && (
-                <button
-                  onClick={clearGroupFilter}
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  Clear filter
-                </button>
-              )}
             </div>
             <div
               style={{
@@ -613,8 +619,7 @@ const NewsletterGroupsPage: React.FC = () => {
             <SourceGroupsList
               key={JSON.stringify(modalStateKey)}
               groups={groups}
-              selectedGroupId={selectedGroupId}
-              onGroupClick={setSelectedGroupId}
+              // Remove selectedGroupId and onGroupClick props to disable selection/click
               onEditGroup={(group) => {
                 setEditingGroup(group);
                 setIsGroupModalOpen(true);
@@ -833,15 +838,12 @@ const NewsletterGroupsPage: React.FC = () => {
 const SourceGroupsList = React.memo(
   ({
     groups,
-    selectedGroupId,
-    onGroupClick,
+    // Remove selectedGroupId and onGroupClick from props
     onEditGroup,
     isAnyModalOpen,
     onDeleteGroup,
   }: {
     groups: NewsletterSourceGroup[];
-    selectedGroupId: string | null;
-    onGroupClick: (groupId: string) => void;
     onEditGroup: (group: NewsletterSourceGroup) => void;
     isAnyModalOpen: boolean;
     onDeleteGroup: (groupId: string) => void;
@@ -861,13 +863,9 @@ const SourceGroupsList = React.memo(
           <SourceGroupCard
             key={group.id}
             group={group}
-            isSelected={group.id === selectedGroupId}
-            onClick={() => onGroupClick(group.id)}
+            // Remove isSelected and onClick props
             onEdit={onEditGroup}
             onDelete={() => {
-              if (selectedGroupId === group.id) {
-                onGroupClick(''); // Clear the selected group
-              }
               onDeleteGroup(group.id);
             }}
             isAnyModalOpen={isAnyModalOpen}

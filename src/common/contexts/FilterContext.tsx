@@ -51,7 +51,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
   // Extract filter state from URL params
   const validFilters = ['unread', 'read', 'liked', 'archived'];
-  const filterValue = (params.filter as FilterState['filter']);
+  const filterValue = params.filter as FilterState['filter'];
   const filter: FilterState['filter'] = validFilters.includes(filterValue) ? filterValue : 'unread';
 
   const filterState: FilterState = useMemo(
@@ -81,7 +81,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
         break;
       case 'liked':
         filters.isLiked = true;
-        filters.isArchived = false;
+        // Show all liked newsletters, including archived ones
         break;
       case 'archived':
         filters.isArchived = true;
@@ -103,12 +103,23 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     if (filterState.timeRange && filterState.timeRange !== 'all') {
       // Create a date at the current time in UTC
       const now = new Date();
-      const nowUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds()));
+      const nowUTC = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate(),
+          now.getUTCHours(),
+          now.getUTCMinutes(),
+          now.getUTCSeconds()
+        )
+      );
       let dateFrom: Date;
 
       switch (filterState.timeRange) {
         case 'day':
-          dateFrom = new Date(Date.UTC(nowUTC.getUTCFullYear(), nowUTC.getUTCMonth(), nowUTC.getUTCDate()));
+          dateFrom = new Date(
+            Date.UTC(nowUTC.getUTCFullYear(), nowUTC.getUTCMonth(), nowUTC.getUTCDate())
+          );
           break;
         case 'week':
           dateFrom = new Date(nowUTC);

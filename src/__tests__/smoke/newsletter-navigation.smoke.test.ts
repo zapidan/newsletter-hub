@@ -1,36 +1,42 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from 'vitest';
 
-describe("Newsletter Navigation Smoke Tests", () => {
-  it("should be able to import navigation hook", async () => {
-    const { useNewsletterNavigation } = await import(
-      "@common/hooks/useNewsletterNavigation"
-    );
+describe('Newsletter Navigation Smoke Tests', () => {
+  it('should be able to import navigation hook', async () => {
+    const { useNewsletterNavigation } = await import('@common/hooks/useNewsletterNavigation');
     expect(useNewsletterNavigation).toBeDefined();
-    expect(typeof useNewsletterNavigation).toBe("function");
+    expect(typeof useNewsletterNavigation).toBe('function');
   });
 
-  it("should be able to import navigation component", async () => {
-    const { default: NewsletterNavigation } = await import(
-      "../../components/NewsletterDetail/NewsletterNavigation"
+  it('should be able to import navigation arrows component', async () => {
+    const { default: NavigationArrows } = await import(
+      '../../components/NewsletterDetail/NavigationArrows'
     );
-    expect(NewsletterNavigation).toBeDefined();
-    expect(typeof NewsletterNavigation).toBe("function");
+    expect(NavigationArrows).toBeDefined();
+    expect(typeof NavigationArrows).toBe('function');
   });
 
-  it("should export hook variants", async () => {
+  it('should be able to import simple newsletter navigation hook', async () => {
+    const { useSimpleNewsletterNavigation } = await import(
+      '@common/hooks/useSimpleNewsletterNavigation'
+    );
+    expect(useSimpleNewsletterNavigation).toBeDefined();
+    expect(typeof useSimpleNewsletterNavigation).toBe('function');
+  });
+
+  it('should export hook variants', async () => {
     const {
       useNewsletterNavigation,
       useNewsletterNavigationState,
       useNewsletterNavigationActions,
-    } = await import("@common/hooks/useNewsletterNavigation");
+    } = await import('@common/hooks/useNewsletterNavigation');
 
     expect(useNewsletterNavigation).toBeDefined();
     expect(useNewsletterNavigationState).toBeDefined();
     expect(useNewsletterNavigationActions).toBeDefined();
   });
 
-  it("should have proper TypeScript types", async () => {
-    const module = await import("@common/hooks/useNewsletterNavigation");
+  it('should have proper TypeScript types', async () => {
+    const module = await import('@common/hooks/useNewsletterNavigation');
 
     // Check that the module exports what we expect
     expect(module.useNewsletterNavigation).toBeDefined();

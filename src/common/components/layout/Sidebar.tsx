@@ -18,7 +18,7 @@ import {
   UserCircle
 } from "lucide-react";
 import { useContext, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -49,113 +49,124 @@ const SidebarContent: React.FC<{
   user,
   toggleSidebar,
   isControlled,
-}) => (
-    <>
-      <div className="p-5 border-b border-slate-200/60 md:border-b-0">
-        <div className="flex items-center space-x-3 mb-5">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-2 shadow-sm">
-            <Inbox className="text-white" size={20} />
-          </div>
-          <h2 className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-            Newsletter Hub
-          </h2>
-        </div>
-        {emailLoading ? (
-          <div className="text-sm text-slate-500 animate-pulse py-2.5 px-3.5 bg-slate-50 rounded-lg flex items-center">
-            <div className="loading-dots"><span></span><span></span><span></span></div>
-            <span className="ml-2">Loading email...</span>
-          </div>
-        ) : emailAlias ? (
-          <div className="w-full text-sm bg-gradient-to-r from-slate-50 to-blue-50/50 border border-slate-200/60 rounded-lg p-2.5 flex items-center justify-between transition-all hover:shadow-sm">
-            <div className="flex items-center flex-1 min-w-0">
-              <Mail className="w-4 h-4 mr-2.5 text-slate-400 flex-shrink-0" />
-              <span className="font-mono text-xs break-all text-slate-700">
-                {emailAlias}
-              </span>
+}) => {
+    const location = useLocation();
+    return (
+      <>
+        <div className="p-5 border-b border-slate-200/60 md:border-b-0">
+          <div className="flex items-center space-x-3 mb-5">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-2 shadow-sm">
+              <Inbox className="text-white" size={20} />
             </div>
-            <button
-              onClick={copyToClipboard}
-              className="btn btn-ghost btn-xs ml-2 p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all flex-shrink-0"
-              title={copied ? "Copied!" : "Copy email"}
-              disabled={copied}
+            <h2 className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+              Newsletter Hub
+            </h2>
+          </div>
+          {emailLoading ? (
+            <div className="text-sm text-slate-500 animate-pulse py-2.5 px-3.5 bg-slate-50 rounded-lg flex items-center">
+              <div className="loading-dots"><span></span><span></span><span></span></div>
+              <span className="ml-2">Loading email...</span>
+            </div>
+          ) : emailAlias ? (
+            <div className="w-full text-sm bg-gradient-to-r from-slate-50 to-blue-50/50 border border-slate-200/60 rounded-lg p-2.5 flex items-center justify-between transition-all hover:shadow-sm">
+              <div className="flex items-center flex-1 min-w-0">
+                <Mail className="w-4 h-4 mr-2.5 text-slate-400 flex-shrink-0" />
+                <span className="font-mono text-xs break-all text-slate-700">
+                  {emailAlias}
+                </span>
+              </div>
+              <button
+                onClick={copyToClipboard}
+                className="btn btn-ghost btn-xs ml-2 p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all flex-shrink-0"
+                title={copied ? "Copied!" : "Copy email"}
+                disabled={copied}
+              >
+                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          ) : null}
+        </div>
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+          {navLinks.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              data-testid={`sidebar-link-${link.to.replace('/', '')}`}
+              end={link.end}
+              className={({ isActive }) => {
+                // Enhanced logic: highlight Inbox if on a newsletter detail page and navigation state says we came from inbox
+                const isNewsletterDetailPage =
+                  window.location.pathname.startsWith("/newsletters/") &&
+                  link.to === "/inbox" &&
+                  (
+                    (location.state && (location.state.from === "/inbox" || location.state.fromInbox)) ||
+                    (!location.state && window.location.pathname.match(/^\/newsletters\//))
+                  );
+                return `sidebar-link ${isActive || isNewsletterDetailPage ? "active" : ""}`;
+              }}
+              onClick={(e) => {
+                if (link.to === "/inbox" && window.location.pathname === "/inbox") {
+                  e.preventDefault();
+                  window.history.replaceState({}, "", "/inbox");
+                  window.dispatchEvent(new Event("inbox:clear-filters"));
+                  window.dispatchEvent(new Event("inbox:refresh-newsletters"));
+                }
+                // On mobile, clicking a link should close the sidebar
+                if (window.innerWidth < 768 && isControlled) {
+                  toggleSidebar();
+                }
+              }}
             >
-              {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-            </button>
-          </div>
-        ) : null}
-      </div>
-      <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-        {navLinks.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            data-testid={`sidebar-link-${link.to.replace('/', '')}`}
-            className={({ isActive }) => {
-              const isNewsletterDetailPage = window.location.pathname.startsWith("/newsletters/") && link.to === "/inbox";
-              return `sidebar-link ${isActive || isNewsletterDetailPage ? "active" : ""}`;
-            }}
-            onClick={(e) => {
-              if (link.to === "/inbox" && window.location.pathname === "/inbox") {
-                e.preventDefault();
-                window.history.replaceState({}, "", "/inbox");
-                window.dispatchEvent(new Event("inbox:clear-filters"));
-                window.dispatchEvent(new Event("inbox:refresh-newsletters"));
-              }
-              // On mobile, clicking a link should close the sidebar
-              if (window.innerWidth < 768 && isControlled) {
-                toggleSidebar();
-              }
-            }}
-          >
-            {link.icon}
-            <span className="flex-1">{link.label}</span>
-            {link.to === "/inbox" && (
-              <AnimatePresence>
-                {showUnreadBadge && (
-                  <motion.span
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.5 }}
-                    className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200/70 shadow-sm"
-                    aria-live="polite"
-                    aria-atomic="true"
-                  >
-                    {unreadCount}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            )}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="p-4 border-t border-slate-200/60">
-        {bottomLinks.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            data-testid={`sidebar-link-${link.to.replace('/', '')}`}
-            className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
-            onClick={() => {
-              if (window.innerWidth < 768 && isControlled) {
-                toggleSidebar();
-              }
-            }}
-          >
-            {link.icon}
-            <span className="flex-1">{link.label}</span>
-          </NavLink>
-        ))}
-        <div className="mt-3 pt-3 border-t border-slate-200/60">
-          <div className="text-xs text-slate-500 mb-1">
-            Signed in as
-          </div>
-          <div className="font-medium text-slate-700 truncate text-sm">
-            {user?.email}
+              {link.icon}
+              <span className="flex-1">{link.label}</span>
+              {link.to === "/inbox" && (
+                <AnimatePresence>
+                  {showUnreadBadge && (
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200/70 shadow-sm"
+                      aria-live="polite"
+                      aria-atomic="true"
+                    >
+                      {unreadCount}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="p-4 border-t border-slate-200/60">
+          {bottomLinks.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              data-testid={`sidebar-link-${link.to.replace('/', '')}`}
+              className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
+              onClick={() => {
+                if (window.innerWidth < 768 && isControlled) {
+                  toggleSidebar();
+                }
+              }}
+            >
+              {link.icon}
+              <span className="flex-1">{link.label}</span>
+            </NavLink>
+          ))}
+          <div className="mt-3 pt-3 border-t border-slate-200/60">
+            <div className="text-xs text-slate-500 mb-1">
+              Signed in as
+            </div>
+            <div className="font-medium text-slate-700 truncate text-sm">
+              {user?.email}
+            </div>
           </div>
         </div>
-      </div>
-    </>
-  );
+      </>
+    );
+  };
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const log = useLogger("Sidebar");
@@ -180,7 +191,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
     { to: "/search", icon: <Search size={20} />, label: "Search" },
     { to: "/trending", icon: <TrendingUp size={20} />, label: "Trending Topics" },
     { to: "/tags", icon: <Tag size={20} />, label: "Tags" },
-    { to: "/newsletters", icon: <Newspaper size={20} />, label: "Newsletter Groups" },
+    { to: "/newsletters", icon: <Newspaper size={20} />, label: "Newsletter Groups", end: true },
   ];
 
   const bottomLinks = [
