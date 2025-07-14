@@ -1,7 +1,7 @@
 import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
 import type { NewsletterSource } from "@common/types";
 import { Archive, Building2, ChevronDown, Clock, Eye, EyeOff, Heart } from "lucide-react";
-import { FC, memo, useState } from "react";
+import { FC, memo, useMemo, useState } from "react";
 
 export type FilterType = InboxFilterType; // Use the shared type
 export type TimeRange = "all" | "day" | "2days" | "week" | "month";
@@ -106,6 +106,12 @@ const SourceFilterDropdown: FC<{
   }) => {
     const [isOpen, setIsOpen] = useState(false);
 
+    // Sort sources alphabetically by name
+    const sortedSources = useMemo(
+      () => [...sources].sort((a, b) => a.name.localeCompare(b.name)),
+      [sources]
+    );
+
     const selectedSource = selectedSourceId
       ? sources.find((s) => s.id === selectedSourceId)
       : null;
@@ -190,7 +196,7 @@ const SourceFilterDropdown: FC<{
                 >
                   <span>All Sources</span>
                 </button>
-                {sources.map((source) => (
+                {sortedSources.map((source) => (
                   <button
                     key={source.id}
                     type="button"

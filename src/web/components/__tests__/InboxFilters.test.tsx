@@ -180,4 +180,22 @@ describe('InboxFilters', () => {
     const sourceButtons2 = screen.getAllByLabelText('Filter by newsletter source').filter(btn => btn.offsetParent !== null);
     sourceButtons2.forEach(btn => expect(btn).toBeDisabled());
   });
+
+  test('source filter dropdown options are sorted alphabetically', () => {
+    // Purposely provide sources out of order
+    const unorderedSources = [
+      { id: 'sourceB', name: 'Zebra News', count: 2, user_id: 'user1', from: '', created_at: '', updated_at: '', is_archived: false },
+      { id: 'sourceA', name: 'Alpha News', count: 1, user_id: 'user1', from: '', created_at: '', updated_at: '', is_archived: false },
+      { id: 'sourceC', name: 'Middle News', count: 3, user_id: 'user1', from: '', created_at: '', updated_at: '', is_archived: false },
+    ];
+    render(<InboxFilters {...defaultProps} newsletterSources={unorderedSources} />);
+    const sourceButtons = screen.getAllByLabelText('Filter by newsletter source');
+    fireEvent.click(sourceButtons[0]);
+    // Get all source option buttons (excluding 'All Sources')
+    const optionButtons = screen.getAllByRole('button').filter(btn =>
+      ['Alpha News', 'Middle News', 'Zebra News'].some(name => btn.textContent?.includes(name))
+    );
+    const optionNames = optionButtons.map(btn => btn.textContent?.replace(/\d+$/, '').trim());
+    expect(optionNames).toEqual(['Alpha News', 'Middle News', 'Zebra News']);
+  });
 });
