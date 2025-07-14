@@ -273,10 +273,6 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       text: localNewsletter?.is_liked ? 'Liked' : 'Like',
       variant: "secondary" as const,
     },
-  ];
-
-  // Secondary actions (in more menu on mobile)
-  const secondaryActions = [
     {
       key: "queue",
       onClick: handleToggleQueue,
@@ -308,7 +304,12 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       icon: <ArchiveX className="w-4 h-4" />,
       text: "Unarchive",
       variant: "secondary" as const,
-    }, {
+    }]),
+  ];
+
+  // Secondary actions (only destructive actions for More menu on mobile)
+  const secondaryActions = [
+    ...((localNewsletter?.is_archived) ? [{
       key: "trash",
       onClick: handleTrash,
       disabled: isDeletingNewsletter,
@@ -318,7 +319,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       icon: <TrashIcon className="w-4 h-4" />,
       text: "Delete",
       variant: "danger" as const,
-    }]),
+    }] : []),
   ];
 
   return (
@@ -372,51 +373,53 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
         ))}
       </div>
       {/* More Menu for Mobile */}
-      <div className="sm:hidden relative">
-        <DetailActionButton
-          onClick={() => setShowMoreMenu(!showMoreMenu)}
-          disabled={false}
-          className="bg-gray-100 text-gray-700 hover:bg-gray-200"
-          ariaLabel="More actions"
-          icon={<MoreHorizontal className="w-4 h-4" />}
-          text="More"
-          variant="secondary"
-        />
-        {showMoreMenu && (
-          <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowMoreMenu(false)}
-            />
-            {/* Dropdown Menu */}
-            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1">
-              {secondaryActions.map((action) => (
-                <button
-                  key={action.key}
-                  onClick={() => {
-                    action.onClick();
-                    setShowMoreMenu(false);
-                  }}
-                  disabled={action.disabled}
-                  className={`
-                    w-full text-left px-3 py-2 text-sm flex items-center gap-2
-                    hover:bg-gray-50 transition-colors disabled:opacity-50
-                    ${action.className.replace('hover:', '')}
-                  `}
-                >
-                  {action.isLoading ? (
-                    <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <span className="w-4 h-4">{action.icon}</span>
-                  )}
-                  {action.text}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+      {secondaryActions.length > 0 && (
+        <div className="sm:hidden relative">
+          <DetailActionButton
+            onClick={() => setShowMoreMenu(!showMoreMenu)}
+            disabled={false}
+            className="bg-gray-100 text-gray-700 hover:bg-gray-200"
+            ariaLabel="More actions"
+            icon={<MoreHorizontal className="w-4 h-4" />}
+            text="More"
+            variant="secondary"
+          />
+          {showMoreMenu && (
+            <>
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowMoreMenu(false)}
+              />
+              {/* Dropdown Menu */}
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1">
+                {secondaryActions.map((action) => (
+                  <button
+                    key={action.key}
+                    onClick={() => {
+                      action.onClick();
+                      setShowMoreMenu(false);
+                    }}
+                    disabled={action.disabled}
+                    className={`
+                      w-full text-left px-3 py-2 text-sm flex items-center gap-2
+                      hover:bg-gray-50 transition-colors disabled:opacity-50
+                      ${action.className.replace('hover:', '')}
+                    `}
+                  >
+                    {action.isLoading ? (
+                      <div className="w-4 h-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <span className="w-4 h-4">{action.icon}</span>
+                    )}
+                    {action.text}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };
