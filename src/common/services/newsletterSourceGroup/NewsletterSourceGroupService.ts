@@ -253,6 +253,18 @@ export class NewsletterSourceGroupService extends BaseService {
     );
   }
 
+  /**
+   * Find the group that contains a given sourceId
+   */
+  findGroupBySourceId(groups: NewsletterSourceGroup[], sourceId: string): NewsletterSourceGroup | null {
+    for (const group of groups) {
+      if (group.sources && group.sources.some(source => source.id === sourceId)) {
+        return group;
+      }
+    }
+    return null;
+  }
+
   // /**
   //  * Delete multiple newsletter source groups
   //  */
@@ -348,6 +360,18 @@ export class NewsletterSourceGroupService extends BaseService {
       }
     }
   }
+}
+
+/**
+ * Standalone helper to find the group containing a sourceId
+ */
+export function findGroupBySourceId(groups: NewsletterSourceGroup[], sourceId: string): NewsletterSourceGroup | null {
+  for (const group of groups) {
+    if (group.sources && group.sources.some(source => source.id === sourceId)) {
+      return group;
+    }
+  }
+  return null;
 }
 
 // Export singleton instance
