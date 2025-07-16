@@ -58,7 +58,7 @@ export default async function handler(req: Request) {
           console.error('Error parsing JSON:', e);
           return new Response('Invalid JSON', { status: 400 });
         }
-      } 
+      }
       // Otherwise try to parse as form data
       else {
         try {
@@ -71,23 +71,23 @@ export default async function handler(req: Request) {
             'body-html': formData.get('body-html') as string || formData.get('html') as string || '',
             'message-headers': formData.get('message-headers') as string || `From: ${formData.get('from')}\nTo: ${formData.get('recipient')}\nSubject: ${formData.get('subject')}`
           };
-      } catch (e) {
-        console.error('Error parsing form data:', e);
-        return new Response('Invalid form data', { status: 400 });
+        } catch (e) {
+          console.error('Error parsing form data:', e);
+          return new Response('Invalid form data', { status: 400 });
+        }
       }
-    }
 
       // Verify the request is from Mailgun (in production)
       if (Deno.env.get('SUPABASE_ENVIRONMENT') === 'production') {
         const signature = formData.get('signature') as string;
         const token = formData.get('token') as string;
         const timestamp = formData.get('timestamp') as string;
-        
+
         if (!signature || !token || !timestamp) {
           console.error('Missing Mailgun signature parameters in form data');
           return new Response('Missing Mailgun signature parameters', { status: 400 });
         }
-        
+
         const isValid = await verifyMailgunWebhook(token, timestamp, signature);
         if (!isValid) {
           console.error('Invalid Mailgun signature');
@@ -96,7 +96,7 @@ export default async function handler(req: Request) {
       }
 
       const result = await processIncomingEmail(emailData);
-      
+
       if (result.error) {
         return new Response(JSON.stringify({ error: result.error }), {
           status: 400,
@@ -116,7 +116,7 @@ export default async function handler(req: Request) {
       });
     } catch (error) {
       console.error('Error handling request:', error);
-      return new Response(JSON.stringify({ error: 'Error processing request' }), { 
+      return new Response(JSON.stringify({ error: 'Error processing request' }), {
         status: 500,
         headers: {
           ...corsHeaders,
@@ -127,7 +127,7 @@ export default async function handler(req: Request) {
   }
 
   // Handle other HTTP methods
-  return new Response(JSON.stringify({ error: 'Method not allowed' }), { 
+  return new Response(JSON.stringify({ error: 'Method not allowed' }), {
     status: 405,
     headers: {
       ...corsHeaders,
@@ -141,6 +141,9 @@ interface ProcessEmailResult {
   data?: any;
   error?: string;
   userId?: string | null;
+  skipped?: boolean;
+  skipReason?: string;
+  skipDetails?: any;
 }
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -148,9 +151,10 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function findOrCreateSource(
-  email: string, 
+  email: string,
   name: string,
-  supabase: any
+  supabase: any,
+  userId?: string | null
 ): Promise<{ source: Source; created: boolean; isArchived: boolean }> {
   // First, try to find an existing source by 'from' field (case-insensitive)
   const { data: existingSource, error: findError } = await supabase
@@ -166,21 +170,37 @@ async function findOrCreateSource(
 
   // If source exists, check if it's archived
   if (existingSource) {
-    if (existingSource.is_archived) {
-      // Return the source with isArchived: true - we don't unarchive it anymore
-      return { source: existingSource, created: false, isArchived: true };
-    }
-    return { source: existingSource, created: false, isArchived: false };
+    return {
+      source: existingSource,
+      created: false,
+      isArchived: existingSource.is_archived || false
+    };
   }
 
-  // If source doesn't exist, create a new one
+  // Only check can_add_source if we have a user ID (not for system operations)
+  if (userId) {
+    const { data: canAddSource, error: sourceLimitError } = await supabase
+      .rpc('can_add_source', { user_id_param: userId });
+
+    if (sourceLimitError) {
+      console.error('Error checking source limit:', sourceLimitError);
+      throw new Error(`Failed to check source limit: ${sourceLimitError.message}`);
+    }
+
+    if (canAddSource === false) {
+      console.log(`User ${userId} cannot add more sources due to plan limits`);
+      throw new Error('Source limit reached for your subscription plan');
+    }
+  }
+
+  // If source doesn't exist and user can add it (or no user context), create a new one
   const { data: newSource, error: createError } = await supabase
     .from('newsletter_sources')
     .insert([
       {
         from: email,
         name: name || email.split('@')[0], // Use the part before @ as name if not provided
-        user_id: null, // Will be set by RLS or trigger
+        user_id: userId || null,
       },
     ])
     .select()
@@ -210,9 +230,9 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
   try {
     // Validate required fields before starting transaction
     if (!emailData.from || !emailData.to || !emailData.subject) {
-      return { 
-        success: false, 
-        error: 'Missing required email fields (from, to, or subject)' 
+      return {
+        success: false,
+        error: 'Missing required email fields (from, to, or subject)'
       };
     }
 
@@ -223,12 +243,14 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
 
     // Find or create the source
     const { source, isArchived } = await findOrCreateSource(fromEmail, fromName, supabaseWithAuth);
-    
+
     // If source is archived, skip processing
     if (isArchived) {
       console.log(`Skipping processing for archived source: ${fromEmail}`);
       return {
         success: true,
+        skipped: true,
+        skipReason: 'source_archived',
         data: { skipped: true, reason: 'Source is archived' }
       };
     }
@@ -242,7 +264,7 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
       // It's just an alias, append the domain
       userEmail = `${emailData.to}@dzapatariesco.dev`;
     }
-    
+
     // Extract the local part for UUID check
     const emailMatch = userEmail.match(/^([^@]+)@/);
     if (!emailMatch) {
@@ -251,10 +273,10 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
         error: 'Invalid recipient email format'
       };
     }
-    
+
     const localPart = emailMatch[1];
     let userId: string | null = null;
-    
+
     // Check if the local part is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (uuidRegex.test(localPart)) {
@@ -277,34 +299,161 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
       userId = userData.id;
     }
 
-    // Process the email in a transaction
+    // Check if user can receive this newsletter
+    console.log('Checking if user can receive newsletter for:', userId);
+    const { data: canReceiveData, error: limitError } = await supabaseWithAuth.rpc(
+      'can_receive_newsletter',
+      {
+        user_id_param: userId,
+        title: emailData.subject,
+        content: emailData['body-plain']
+      }
+    );
+
+    if (limitError) {
+      console.error('Error checking subscription limits:', limitError);
+      // Continue processing but log the error
+      console.log('Proceeding with newsletter storage despite limit check error');
+    } else if (canReceiveData) {
+      // Parse the JSONB response
+      const canReceive = typeof canReceiveData === 'string'
+        ? JSON.parse(canReceiveData)
+        : canReceiveData;
+
+      console.log('Can receive newsletter check result:', JSON.stringify(canReceive, null, 2));
+
+      if (!canReceive.can_receive) {
+        // User cannot receive this newsletter due to limits
+        const skipReason = canReceive.reason || 'limit_reached';
+        console.log(`Skipping newsletter for user ${userId}: ${skipReason}`, canReceive);
+
+        // Store in skipped_newsletters with reason
+        const { error: skipError } = await supabaseWithAuth
+          .from('skipped_newsletters')
+          .insert({
+            user_id: userId,
+            title: emailData.subject,
+            content: emailData['body-html'] || emailData['body-plain'],
+            received_at: new Date().toISOString(),
+            newsletter_source_id: source?.id,
+            skip_reason: skipReason,
+            skip_details: {
+              limit_details: canReceive,
+              from_email: fromEmail,
+              received_at: new Date().toISOString()
+            }
+          });
+
+        if (skipError) {
+          console.error('Error saving skipped newsletter:', skipError);
+        } else {
+          console.log(`Successfully saved skipped newsletter for user ${userId} with reason: ${skipReason}`);
+        }
+
+        // Return early without calling handle_incoming_email_transaction
+        return {
+          success: true,
+          skipped: true,
+          skipReason,
+          skipDetails: canReceive,
+          userId,
+          data: {
+            skipped: true,
+            reason: skipReason,
+            details: canReceive
+          }
+        };
+      } else {
+        console.log('User can receive newsletter, proceeding with processing');
+      }
+    } else {
+      console.log('No canReceiveData received, proceeding with processing');
+    }
+
+    console.log('Processing email with handle_incoming_email_transaction for user:', userId);
+    // Only process the email if we didn't hit any limits
     const { data, error } = await supabaseWithAuth.rpc(
       'handle_incoming_email_transaction',
       {
-        p_user_id: userId, // Pass the resolved user ID
+        p_user_id: userId,
         p_from_email: fromEmail,
         p_from_name: fromName,
         p_subject: emailData.subject,
         p_content: emailData['body-html'] || emailData['body-plain'],
-        p_excerpt: emailData['body-plain']?.substring(0, 200) || '', // First 200 chars as excerpt
+        p_excerpt: emailData['body-plain']?.substring(0, 200) || '',
         p_raw_headers: JSON.stringify(emailData['message-headers'] || [])
       }
     );
 
     if (error) {
       console.error('Transaction error:', error);
+
+      // If the error is due to duplicate detection in the transaction, log it as skipped
+      if (error.message.includes('duplicate') || error.message.includes('already exists')) {
+        // Store in skipped_newsletters with duplicate reason
+        await supabaseWithAuth
+          .from('skipped_newsletters')
+          .insert({
+            user_id: userId,
+            title: emailData.subject,
+            content: emailData['body-html'] || emailData['body-plain'],
+            received_at: new Date().toISOString(),
+            newsletter_source_id: source.id,
+            skip_reason: 'duplicate',
+            skip_details: {
+              error: error.message,
+              from_email: fromEmail,
+              received_at: new Date().toISOString()
+            }
+          });
+
+        return {
+          success: true,
+          skipped: true,
+          skipReason: 'duplicate',
+          userId,
+          data: { skipped: true, reason: 'duplicate' }
+        };
+      }
+
       throw new Error(`Transaction failed: ${error.message}`);
     }
 
     return {
       success: true,
+      userId,
       data
     };
   } catch (error) {
     console.error('Error processing email:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+
+    // Log the error to skipped_newsletters if we have a userId
+    if (userId) {
+      try {
+        await supabaseWithAuth
+          .from('skipped_newsletters')
+          .insert({
+            user_id: userId,
+            title: emailData.subject,
+            content: emailData['body-html'] || emailData['body-plain'],
+            received_at: new Date().toISOString(),
+            skip_reason: 'processing_error',
+            skip_details: {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              stack: error instanceof Error ? error.stack : undefined,
+              from_email: fromEmail,
+              received_at: new Date().toISOString()
+            }
+          });
+      } catch (logError) {
+        console.error('Error logging skipped newsletter:', logError);
+      }
+    }
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      userId: userId || undefined
     };
   }
 }
@@ -339,7 +488,7 @@ async function verifyMailgunWebhook(
     // Create the signature string to verify
     const signatureData = `${timestamp}${token}`;
     const signatureBytes = encoder.encode(signatureData);
-    
+
     // Convert the hex signature to bytes
     const signatureHex = atob(signature.replace(/-/g, '+').replace(/_/g, '/'));
     const signatureBuffer = new Uint8Array(signatureHex.length);
@@ -366,7 +515,7 @@ async function verifyMailgunWebhook(
 function parseMessageHeaders(headersString: string): Record<string, string> {
   const headers: Record<string, string> = {};
   if (!headersString) return headers;
-  
+
   const lines = headersString.split('\n');
   for (const line of lines) {
     const separatorIndex = line.indexOf(':');
