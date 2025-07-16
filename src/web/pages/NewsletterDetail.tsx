@@ -3,8 +3,10 @@ import { useAuth } from '@common/contexts/AuthContext';
 import { useNewsletterDetail } from '@common/hooks/useNewsletterDetail';
 import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { useSimpleNewsletterNavigation } from '@common/hooks/useSimpleNewsletterNavigation';
 import { useTags } from '@common/hooks/useTags';
 import { newsletterService } from '@common/services';
+import { findGroupBySourceId, newsletterSourceGroupService } from '@common/services/newsletterSourceGroup/NewsletterSourceGroupService';
 import type { NewsletterWithRelations, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { useMutation } from '@tanstack/react-query';
@@ -12,9 +14,8 @@ import TagSelector from '@web/components/TagSelector';
 import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
 import NavigationArrows from '../../components/NewsletterDetail/NavigationArrows';
-import { useSimpleNewsletterNavigation } from '@common/hooks/useSimpleNewsletterNavigation';
+import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
 
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
@@ -398,12 +399,6 @@ const NewsletterDetail = memo(() => {
   );
 
   const { groups = [] } = useNewsletterSourceGroups();
-  // Find the group for the newsletter's source
-  const sourceGroup = useMemo(() => {
-    if (!newsletter?.source?.id) return undefined;
-    return groups.find((group) => group.sources?.some((s) => s.id === newsletter.source!.id));
-  }, [newsletter?.source, groups]);
-
   // Get navigation filter from location state or URL params
   const navigationFilter = useMemo(() => {
     // Prefer URL params over location state for filter
@@ -501,7 +496,7 @@ const NewsletterDetail = memo(() => {
                   </div>
                   <div data-testid="newsletter-source-group" className="text-sm text-gray-600 mt-1">
                     <span className="font-medium">Source Group:</span>{' '}
-                    {sourceGroup ? sourceGroup.name : 'None'}
+                    <SourceGroupDropdown newsletter={newsletter} groups={groups} onGroupChange={refetch} />
                   </div>
                 </div>
               </div>
@@ -658,4 +653,94 @@ const NewsletterDetail = memo(() => {
     </div>
   );
 });
+
+// Inline Source Group Dropdown component
+function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter: NewsletterWithRelations, groups: any[], onGroupChange?: () => void }) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [groupLoading] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [groupUpdating, setGroupUpdating] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const currentGroup = newsletter.source?.id ? findGroupBySourceId(groups, newsletter.source.id) : null;
+  const currentGroupName = currentGroup ? currentGroup.name : 'None';
+
+  useEffect(() => {
+    setSelectedGroupId(currentGroup ? currentGroup.id : '');
+  }, [currentGroup?.id]);
+
+  useEffect(() => {
+    if (!showDropdown) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDropdown]);
+
+  const handleGroupChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newGroupId = e.target.value;
+    if (!newsletter.source?.id) return;
+    setGroupUpdating(true);
+    setGroupError(null);
+    try {
+      // Remove from previous group if needed
+      if (currentGroup && currentGroup.id !== newGroupId) {
+        await newsletterSourceGroupService.removeSourcesFromGroup(currentGroup.id, [newsletter.source.id]);
+      }
+      // Add to new group if not already in it
+      if (newGroupId && (!currentGroup || currentGroup.id !== newGroupId)) {
+        await newsletterSourceGroupService.addSourcesToGroup(newGroupId, [newsletter.source.id]);
+      }
+      setSelectedGroupId(newGroupId);
+      setShowDropdown(false);
+      if (onGroupChange) onGroupChange();
+    } catch (_err) {
+      setGroupError('Failed to update group');
+    } finally {
+      setGroupUpdating(false);
+    }
+  };
+
+  return (
+    <span ref={dropdownRef} style={{ display: 'inline-block', minWidth: 120 }}>
+      {!showDropdown ? (
+        <button
+          type="button"
+          className="font-medium text-blue-700 hover:underline focus:outline-none px-1 rounded"
+          onClick={() => setShowDropdown(true)}
+          disabled={groupLoading || groupUpdating || !groups.length}
+          aria-label="Edit source group"
+        >
+          {currentGroupName}
+        </button>
+      ) : (
+        <select
+          id="source-group-select"
+          className="border rounded px-2 py-1 text-sm min-w-[120px]"
+          value={selectedGroupId || ''}
+          onChange={handleGroupChange}
+          disabled={groupLoading || groupUpdating || !groups.length}
+          style={{ minWidth: 120 }}
+          autoFocus
+          onBlur={() => setShowDropdown(false)}
+        >
+          <option value="">None</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>{group.name}</option>
+          ))}
+        </select>
+      )}
+      {(groupLoading || groupUpdating) && (
+        <span className="ml-2 text-xs text-gray-400">Updating...</span>
+      )}
+      {groupError && (
+        <span className="ml-2 text-xs text-red-500">{groupError}</span>
+      )}
+    </span>
+  );
+}
+
 export default NewsletterDetail;

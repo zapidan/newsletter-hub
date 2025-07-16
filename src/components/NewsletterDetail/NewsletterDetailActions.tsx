@@ -24,7 +24,8 @@ const DetailActionButton: React.FC<{
   text: string;
   isLoading?: boolean;
   variant?: "primary" | "secondary" | "danger";
-}> = ({ onClick, disabled, className, ariaLabel, icon, text, isLoading, variant = "secondary" }) => (
+  dataTestId?: string;
+}> = ({ onClick, disabled, className, ariaLabel, icon, text, isLoading, variant = "secondary", dataTestId }) => (
   <button
     onClick={onClick}
     disabled={disabled || isLoading}
@@ -37,6 +38,7 @@ const DetailActionButton: React.FC<{
     `}
     aria-label={ariaLabel}
     {...(ariaLabel === 'Mark as read' ? { 'data-testid': 'mark-as-read-btn' } : {})}
+    {...(dataTestId ? { 'data-testid': dataTestId } : {})}
   >
     {isLoading && (
       <div className="w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -283,6 +285,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       icon: <BookmarkIcon className={`w-4 h-4 ${isInQueue ? 'fill-yellow-500' : 'fill-none'}`} stroke="currentColor" />,
       text: isCheckingQueue ? 'Checking...' : isInQueue ? 'Saved' : 'Save',
       variant: "secondary" as const,
+      dataTestId: isInQueue ? 'remove-from-queue-btn' : 'add-to-queue-btn',
     },
     ...(!localNewsletter?.is_archived ? [{
       key: "archive",
@@ -337,6 +340,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
             icon={action.icon}
             text={action.text}
             variant={action.variant}
+            dataTestId={action.dataTestId}
           />
         ))}
       </div>
@@ -353,6 +357,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
             icon={action.icon}
             text={action.text}
             variant={action.variant}
+            dataTestId={action.dataTestId}
           />
         ))}
       </div>

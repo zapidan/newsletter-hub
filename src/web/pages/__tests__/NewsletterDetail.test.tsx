@@ -545,8 +545,9 @@ describe('NewsletterDetail (fast version)', () => {
 
     renderPage();
 
-    // Find and click the queue toggle button
-    const queueButton = await screen.findByLabelText(/add to queue/i);
+    // Find and click the queue toggle button (use test id to avoid duplicate label error)
+    const queueButtons = await screen.findAllByTestId('add-to-queue-btn');
+    const queueButton = queueButtons[0];
     await act(async () => {
       await user.click(queueButton);
     });
