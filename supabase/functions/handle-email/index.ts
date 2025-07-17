@@ -211,6 +211,17 @@ async function findOrCreateSource(
     throw new Error(`Failed to create source: ${createError.message}`);
   }
 
+  // After successfully creating a new source, increment the source count
+  if (userId) {
+    const { error: incrementError } = await supabase
+      .rpc('increment_source_count', { user_id_param: userId });
+
+    if (incrementError) {
+      console.error('Error incrementing source count:', incrementError);
+      // Don't fail the entire operation if incrementing fails, just log it
+    }
+  }
+
   return { source: newSource, created: true, isArchived: false };
 }
 

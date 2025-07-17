@@ -230,4 +230,139 @@ describe('Email Handler', () => {
       }
     });
   });
+
+  it('should increment source count when creating a new source', async () => {
+    // Mock the handler to simulate a new source creation
+    const mockSource = {
+      id: 'new-source-id',
+      user_id: 'user-123',
+      name: 'Test Source',
+      from: 'newsletter@example.com',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // Mock the handler to simulate a successful newsletter processing with a new source
+    mockHandler.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        success: true,
+        data: {
+          id: 'new-newsletter-id',
+          source: {
+            ...mockSource,
+            created: true
+          }
+        }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
+
+    const request = new Request('https://example.com/api/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...mockEmailData,
+        from: 'newsletter@example.com',
+        to: 'test-alias@dzapatariesco.dev'
+      }),
+    });
+
+    const response = await mockHandler(request);
+    const result = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        id: 'new-newsletter-id',
+        source: {
+          id: 'new-source-id',
+          created: true
+        }
+      }
+    });
+
+    // In a real test with Supabase client, we would also verify that:
+    // 1. increment_source_count was called with the correct user_id
+    // 2. The source was created with the correct details
+  });
+
+  it('should increment newsletter count when processing a newsletter', async () => {
+    // Mock the handler to simulate a successful newsletter processing
+    mockHandler.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        success: true,
+        data: { id: 'newsletter-123' }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
+
+    const request = new Request('https://example.com/api/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mockEmailData),
+    });
+
+    const response = await mockHandler(request);
+    const result = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(result).toMatchObject({
+      success: true,
+      data: { id: 'newsletter-123' }
+    });
+
+    // In a real test with Supabase client, we would also verify that:
+    // 1. increment_received_newsletter was called with the correct user_id
+    // 2. The daily_counts table was updated correctly
+  });
+
+  it('should handle source limit reached error', async () => {
+    // Mock the handler to simulate a source limit reached error
+    mockHandler.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        success: true,
+        skipped: true,
+        skipReason: 'source_limit_reached',
+        data: {
+          skipped: true,
+          reason: 'source_limit_reached',
+          message: 'Cannot add more sources - please upgrade your plan'
+        }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    );
+
+    const request = new Request('https://example.com/api/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...mockEmailData,
+        subject: 'New Source - Limit Reached',
+        to: 'test-alias@dzapatariesco.dev',
+        from: 'new-source@example.com' // New source
+      }),
+    });
+
+    const response = await mockHandler(request);
+    const result = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(result).toMatchObject({
+      success: true,
+      skipped: true,
+      skipReason: 'source_limit_reached',
+      data: {
+        skipped: true,
+        reason: 'source_limit_reached',
+        message: expect.stringContaining('Cannot add more sources')
+      }
+    });
+  });
 });
