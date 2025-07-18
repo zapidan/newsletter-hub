@@ -1,7 +1,21 @@
 -- Drop the function if it exists to avoid conflicts
-DROP FUNCTION IF EXISTS public.handle_incoming_email_transaction(
-  uuid, text, text, text, text, text, text
-);
+DO $$
+DECLARE
+    func_record RECORD;
+    drop_statement TEXT;
+BEGIN
+    FOR func_record IN 
+        SELECT proname, pg_get_function_identity_arguments(oid) as args
+        FROM pg_proc 
+        WHERE proname = 'handle_incoming_email_transaction'
+    LOOP
+        drop_statement := format('DROP FUNCTION IF EXISTS %I(%s) CASCADE', 
+                               func_record.proname, 
+                               func_record.args);
+        EXECUTE drop_statement;
+        RAISE NOTICE 'Dropped function %(%)', func_record.proname, func_record.args;
+    END LOOP;
+END $$;
 
 -- Create the function
 CREATE OR REPLACE FUNCTION public.handle_incoming_email_transaction(
@@ -126,6 +140,9 @@ BEGIN
     NOW()   -- updated_at
   )
   RETURNING id INTO v_newsletter_id;
+
+  -- Increment the received newsletter count
+  PERFORM public.increment_received_newsletter(p_user_id);
 
   -- Return the result
   RETURN jsonb_build_object(
