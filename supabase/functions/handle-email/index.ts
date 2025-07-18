@@ -238,6 +238,12 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
     }
   );
 
+  // Strip <style> tags from HTML body before saving
+  if (emailData['body-html']) {
+    // Remove all <style>...</style> blocks (case-insensitive, multiline)
+    emailData['body-html'] = emailData['body-html'].replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '');
+  }
+
   try {
     // Validate required fields before starting transaction
     if (!emailData.from || !emailData.to || !emailData.subject) {
