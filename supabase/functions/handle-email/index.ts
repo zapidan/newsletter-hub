@@ -241,7 +241,7 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
 
   // Sanitize HTML body before saving (forbid <style> tags)
   if (emailData['body-html']) {
-    emailData['body-html'] = DOMPurify.sanitize(emailData['body-html'], { FORBID_TAGS: ['style'] });
+    emailData['body-html'] = DOMPurify.default.sanitize(emailData['body-html'], { FORBID_TAGS: ['style'] });
   }
 
   try {
