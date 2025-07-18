@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import DOMPurify from 'https://esm.sh/dompurify@3.0.8';
 
 interface EmailData {
   to: string;
@@ -238,10 +239,9 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
     }
   );
 
-  // Strip <style> tags from HTML body before saving
+  // Sanitize HTML body before saving (forbid <style> tags)
   if (emailData['body-html']) {
-    // Remove all <style>...</style> blocks (case-insensitive, multiline)
-    emailData['body-html'] = emailData['body-html'].replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '');
+    emailData['body-html'] = DOMPurify.sanitize(emailData['body-html'], { FORBID_TAGS: ['style'] });
   }
 
   try {
