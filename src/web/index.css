@@ -497,3 +497,10 @@ mark {
         transform: scale(1);
     }
 }
+
+/* Override problematic inline styles from newsletter HTML */
+.prose [style*="background-color: #FEFEFE"],
+.prose [style*="color: #010101"] {
+  background-color: inherit !important;
+  color: inherit !important;
+}
