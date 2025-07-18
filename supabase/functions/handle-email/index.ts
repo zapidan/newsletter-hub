@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import DOMPurify from 'https://esm.sh/dompurify@3.0.8';
 
 interface EmailData {
   to: string;
@@ -237,6 +238,11 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
       }
     }
   );
+
+  // Sanitize HTML body before saving (forbid <style> tags)
+  if (emailData['body-html']) {
+    emailData['body-html'] = DOMPurify.sanitize(emailData['body-html'], { FORBID_TAGS: ['style'] });
+  }
 
   try {
     // Validate required fields before starting transaction
