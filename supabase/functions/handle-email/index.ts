@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import DOMPurify from 'https://esm.sh/dompurify@3.0.8';
 
 interface EmailData {
   to: string;
@@ -157,24 +156,33 @@ async function findOrCreateSource(
   supabase: any,
   userId?: string | null
 ): Promise<{ source: Source; created: boolean; isArchived: boolean }> {
-  // First, try to find an existing source by 'from' field (case-insensitive)
-  const { data: existingSource, error: findError } = await supabase
+  // Match on both 'from' (email) and 'name' (title)
+  const { data: sources, error: findError } = await supabase
     .from('newsletter_sources')
     .select('*')
     .ilike('from', email)
-    .maybeSingle();
+    .ilike('name', name);
 
   if (findError) {
     console.error('Error finding source:', findError);
     throw new Error(`Failed to find source: ${findError.message}`);
   }
 
-  // If source exists, check if it's archived
-  if (existingSource) {
+  if (sources && sources.length > 1) {
+    // Multiple sources found for the same 'from' email and name
+    const ids = sources.map(s => s.id).join(', ');
+    console.warn(`Multiple sources found for email ${email} and name ${name}. Using the first one. IDs: ${ids}`);
     return {
-      source: existingSource,
+      source: sources[0],
       created: false,
-      isArchived: existingSource.is_archived || false
+      isArchived: sources[0].is_archived || false
+    };
+  } else if (sources && sources.length === 1) {
+    // Exactly one source found
+    return {
+      source: sources[0],
+      created: false,
+      isArchived: sources[0].is_archived || false
     };
   }
 
@@ -239,10 +247,9 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
     }
   );
 
-  // Sanitize HTML body before saving (forbid <style> tags)
-  if (emailData['body-html']) {
-    emailData['body-html'] = DOMPurify.sanitize(emailData['body-html'], { FORBID_TAGS: ['style'] });
-  }
+  let userId: string | null = null; // Ensure userId is always defined
+  let fromEmail: string = '';
+  let fromName: string = '';
 
   try {
     // Validate required fields before starting transaction
@@ -255,11 +262,11 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
 
     // Extract sender information
     const fromMatch = emailData.from.match(/<?([^<>]+@[^>\s]+)>?/);
-    const fromEmail = fromMatch ? fromMatch[1] : emailData.from;
-    const fromName = emailData.from.replace(/<[^>]+>/g, '').trim();
+    fromEmail = fromMatch ? fromMatch[1] : emailData.from;
+    fromName = emailData.from.replace(/<[^>]+>/g, '').trim();
 
     // Find or create the source
-    const { source, isArchived } = await findOrCreateSource(fromEmail, fromName, supabaseWithAuth);
+    const { source, isArchived } = await findOrCreateSource(fromEmail, fromName, supabaseWithAuth, userId);
 
     // If source is archived, skip processing
     if (isArchived) {
@@ -292,7 +299,6 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
     }
 
     const localPart = emailMatch[1];
-    let userId: string | null = null;
 
     // Check if the local part is a valid UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -445,6 +451,7 @@ async function processIncomingEmail(emailData: EmailData): Promise<ProcessEmailR
     console.error('Error processing email:', error);
 
     // Log the error to skipped_newsletters if we have a userId
+    if (typeof userId === 'undefined') userId = null;
     if (userId) {
       try {
         await supabaseWithAuth
