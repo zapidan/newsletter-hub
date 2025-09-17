@@ -36,9 +36,6 @@ export default async function handler(req: Request, supabaseClient?: any) {
     try {
       let emailData: EmailData | null = null;
       const contentType = req.headers.get('content-type') || '';
-      const contentLength = req.headers.get('content-length') || 'unknown';
-      console.log('[handle-email] Incoming POST', { contentType, contentLength });
-      let parsePath: 'json' | 'form' | 'urlencoded' | 'none' = 'none';
 
       // We will try multiple parsing strategies to be robust against missing/incorrect content-type
       // 1) JSON when content-type indicates JSON
@@ -53,9 +50,8 @@ export default async function handler(req: Request, supabaseClient?: any) {
             'body-plain': jsonData['body-plain'] || jsonData.text || '',
             'message-headers': jsonData['message-headers'] || `From: ${jsonData.from}\nTo: ${jsonData.recipient || jsonData.to}\nSubject: ${jsonData.subject}`
           } as EmailData;
-          parsePath = 'json';
         } catch (e) {
-          console.warn('JSON parse failed; will attempt form/text parsing');
+          // fallthrough
         }
       }
 
@@ -71,7 +67,6 @@ export default async function handler(req: Request, supabaseClient?: any) {
             'body-html': (fd.get('body-html') as string) || (fd.get('html') as string) || '',
             'message-headers': (fd.get('message-headers') as string) || `From: ${fd.get('from')}\nTo: ${fd.get('recipient')}\nSubject: ${fd.get('subject')}`
           } as EmailData;
-          parsePath = 'form';
         } catch (_e) {
           // fallthrough
         }
@@ -93,7 +88,6 @@ export default async function handler(req: Request, supabaseClient?: any) {
               'body-html': get('body-html') || get('html'),
               'message-headers': get('message-headers') || `From: ${get('from')}\nTo: ${get('recipient')}\nSubject: ${get('subject')}`
             } as EmailData;
-            parsePath = 'urlencoded';
           }
         } catch (_e) {
           // fallthrough
@@ -101,18 +95,8 @@ export default async function handler(req: Request, supabaseClient?: any) {
       }
 
       if (!emailData) {
-        console.warn('[handle-email] Unsupported or unparseable request body; returning 400', { contentType, contentLength });
         return new Response('Invalid request body', { status: 400, headers: { ...corsHeaders } });
       }
-
-      console.log('[handle-email] Parsed emailData summary', {
-        parsePath,
-        hasTo: !!emailData.to,
-        hasFrom: !!emailData.from,
-        hasSubject: !!emailData.subject,
-        bodyPlainLen: emailData['body-plain'] ? String(emailData['body-plain'].length) : '0',
-        bodyHtmlLen: emailData['body-html'] ? String(emailData['body-html'].length) : '0',
-      });
 
       // Verify the request is from Mailgun (in production) for form-encoded payloads only
       if (Deno.env.get('SUPABASE_ENVIRONMENT') === 'production') {
@@ -145,11 +129,6 @@ export default async function handler(req: Request, supabaseClient?: any) {
         }
 
         if (gotAny) {
-          console.log('[handle-email] Mailgun signature fields present', {
-            hasSignature: !!signature,
-            hasToken: !!token,
-            hasTimestamp: !!timestamp,
-          });
           if (!signature || !token || !timestamp) {
             console.error('[handle-email] Missing Mailgun signature parameters');
             return new Response('Missing Mailgun signature parameters', { status: 400, headers: { ...corsHeaders } });
@@ -159,12 +138,10 @@ export default async function handler(req: Request, supabaseClient?: any) {
             console.error('[handle-email] Invalid Mailgun signature');
             return new Response('Invalid signature', { status: 403, headers: { ...corsHeaders } });
           }
-          console.log('[handle-email] Mailgun signature verified');
         }
       }
 
       const supabase = supabaseClient || getSupabaseClient();
-      console.log('[handle-email] About to call processIncomingEmail');
 
       // Add timeout protection
       const timeoutPromise = new Promise((_, reject) =>
@@ -175,8 +152,6 @@ export default async function handler(req: Request, supabaseClient?: any) {
         processIncomingEmail(emailData, supabase),
         timeoutPromise
       ]) as any;
-
-      console.log('[handle-email] processIncomingEmail result', { success: result.success, error: result.error, skipped: result.skipped });
 
       if (result.error) {
         return new Response(JSON.stringify({ error: result.error }), {
@@ -233,12 +208,9 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
   let fromName: string = '';
 
   try {
-    console.log('[processIncomingEmail] Starting with emailData', { to: emailData.to, from: emailData.from, subject: emailData.subject });
     // Choose client: use injected if it looks valid, otherwise create a fresh one
     const client = (supabase && typeof (supabase as any).from === 'function') ? supabase : getSupabaseClient();
-    console.log('[processIncomingEmail] Using client', { injected: !!supabase, validInjected: !!(supabase && typeof (supabase as any).from === 'function') });
     if (!emailData.from || !emailData.to || !emailData.subject) {
-      console.log('[processIncomingEmail] Missing required fields');
       return {
         success: false,
         error: 'Missing required email fields (from, to, or subject)'
@@ -248,15 +220,11 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
     const fromMatch = emailData.from.match(/<?([^<>]+@[^>\s]+)>?/);
     fromEmail = fromMatch ? fromMatch[1] : emailData.from;
     fromName = emailData.from.replace(/<[^>]+>/g, '').trim();
-    console.log('[processIncomingEmail] Extracted sender info', { fromEmail, fromName });
 
     let source, isArchived;
     try {
-      console.log('[processIncomingEmail] About to findOrCreateSource');
       ({ source, isArchived } = await findOrCreateSource(fromEmail, fromName, client, userId));
-      console.log('[processIncomingEmail] Source found/created', { sourceId: source?.id, isArchived });
     } catch (err) {
-      console.log('[processIncomingEmail] findOrCreateSource error', { error: err instanceof Error ? err.message : String(err) });
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('Source limit reached')) {
         return { success: false, error: msg };
@@ -286,11 +254,8 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
       userEmail = `${firstRecipient}@dzapatariesco.dev`;
     }
 
-    console.log('[processIncomingEmail] User email resolved', { userEmail, originalTo: emailData.to });
-
     const emailMatch = userEmail.match(/^([^@]+)@/);
     if (!emailMatch) {
-      console.log('[processIncomingEmail] Invalid email format');
       return {
         success: false,
         error: 'Invalid recipient email format'
@@ -301,19 +266,15 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (uuidRegex.test(localPart)) {
       userId = localPart;
-      console.log('[processIncomingEmail] User ID from UUID', { userId });
     } else {
-      console.log('[processIncomingEmail] Looking up user by email alias');
       const { data: userData, error: userError } = await client
         .from('users')
         .select('id')
         .eq('email_alias', userEmail)
         .single();
       if (userError || !userData) {
-        console.log('[processIncomingEmail] User not found', { userError: (userError as any)?.message, userEmail });
         const fallbackUserId = Deno.env.get('DEFAULT_RECIPIENT_USER_ID') || '';
         if (fallbackUserId) {
-          console.log('[processIncomingEmail] Using DEFAULT_RECIPIENT_USER_ID fallback');
           userId = fallbackUserId;
         } else {
           return {
@@ -329,10 +290,8 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
       if (!userId) {
         userId = userData.id;
       }
-      console.log('[processIncomingEmail] User found', { userId });
     }
 
-    console.log('[processIncomingEmail] About to check can_receive_newsletter');
     const { data: canReceiveData, error: limitError } = await client.rpc(
       'can_receive_newsletter',
       {
@@ -341,7 +300,6 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
         content: emailData['body-plain']
       }
     );
-    console.log('[processIncomingEmail] can_receive_newsletter result', { hasData: !!canReceiveData, hasError: !!limitError });
 
     if (!limitError && canReceiveData) {
       const canReceive = typeof canReceiveData === 'string'
@@ -379,7 +337,6 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
       }
     }
 
-    console.log('[processIncomingEmail] About to call handle_incoming_email_transaction');
     const { data, error } = await client.rpc(
       'handle_incoming_email_transaction',
       {
@@ -392,7 +349,6 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
         p_raw_headers: JSON.stringify(emailData['message-headers'] || [])
       }
     );
-    console.log('[processIncomingEmail] handle_incoming_email_transaction result', { hasData: !!data, hasError: !!error });
 
     if (error) {
       if ((error as any).message?.includes('duplicate') || (error as any).message?.includes('already exists')) {
