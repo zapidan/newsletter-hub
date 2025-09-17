@@ -311,13 +311,24 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
         .single();
       if (userError || !userData) {
         console.log('[processIncomingEmail] User not found', { userError: (userError as any)?.message, userEmail });
-        return {
-          success: false,
-          error: `User not found for email alias: ${userEmail}`,
-          userId: null
-        };
+        const fallbackUserId = Deno.env.get('DEFAULT_RECIPIENT_USER_ID') || '';
+        if (fallbackUserId) {
+          console.log('[processIncomingEmail] Using DEFAULT_RECIPIENT_USER_ID fallback');
+          userId = fallbackUserId;
+        } else {
+          return {
+            success: true,
+            skipped: true,
+            skipReason: 'unknown_recipient',
+            skipDetails: { userEmail },
+            userId: null,
+            data: { skipped: true, reason: 'unknown_recipient' }
+          };
+        }
       }
-      userId = userData.id;
+      if (!userId) {
+        userId = userData.id;
+      }
       console.log('[processIncomingEmail] User found', { userId });
     }
 
