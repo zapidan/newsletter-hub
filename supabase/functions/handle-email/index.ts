@@ -428,68 +428,73 @@ function getSupabaseClient() {
   });
 }
 
+// Update findOrCreateSource function in handle-email/index.ts
 async function findOrCreateSource(
   email: string,
   name: string,
   supabase: any,
-  userId?: string | null
+  userId: string // Make userId required, not optional
 ): Promise<{ source: Source; created: boolean; isArchived: boolean }> {
-  // Match on both 'from' (email) and 'name' (title)
+
+  // Validate userId is provided
+  if (!userId) {
+    throw new Error('userId is required - all sources must be user-scoped');
+  }
+
+  // Find existing source by NAME only for this user
   const { data: sources, error: findError } = await supabase
     .from('newsletter_sources')
     .select('*')
-    .ilike('from', email)
-    .ilike('name', name);
+    .eq('name', name)
+    .eq('user_id', userId);
 
   if (findError) {
     console.error('Error finding source:', findError);
     throw new Error(`Failed to find source: ${findError.message}`);
   }
 
-  if (sources && sources.length > 1) {
-    // Multiple sources found for the same 'from' email and name
-    const ids = sources.map(s => s.id).join(', ');
-    console.warn(`Multiple sources found for email ${email} and name ${name}. Using the first one. IDs: ${ids}`);
+  if (sources && sources.length > 0) {
+    // Source exists, update email if different
+    const source = sources[0];
+    if (source.from !== email) {
+      const { error: updateError } = await supabase
+        .from('newsletter_sources')
+        .update({ from: email, updated_at: new Date().toISOString() })
+        .eq('id', source.id);
+
+      if (updateError) {
+        console.error('Error updating source email:', updateError);
+      }
+    }
+
     return {
-      source: sources[0],
+      source: { ...source, from: email },
       created: false,
-      isArchived: sources[0].is_archived || false
-    };
-  } else if (sources && sources.length === 1) {
-    // Exactly one source found
-    return {
-      source: sources[0],
-      created: false,
-      isArchived: sources[0].is_archived || false
+      isArchived: source.is_archived || false
     };
   }
 
-  // Only check can_add_source if we have a user ID (not for system operations)
-  if (userId) {
-    const { data: canAddSource, error: sourceLimitError } = await supabase
-      .rpc('can_add_source', { user_id_param: userId });
+  // Check source limit
+  const { data: canAddSource, error: sourceLimitError } = await supabase
+    .rpc('can_add_source', { user_id_param: userId });
 
-    if (sourceLimitError) {
-      console.error('Error checking source limit:', sourceLimitError);
-      throw new Error(`Failed to check source limit: ${sourceLimitError.message}`);
-    }
-
-    if (canAddSource === false) {
-      console.log(`User ${userId} cannot add more sources due to plan limits`);
-      throw new Error('Source limit reached for your subscription plan');
-    }
+  if (sourceLimitError) {
+    console.error('Error checking source limit:', sourceLimitError);
+    throw new Error(`Failed to check source limit: ${sourceLimitError.message}`);
   }
 
-  // If source doesn't exist and user can add it (or no user context), create a new one
+  if (canAddSource === false) {
+    throw new Error('Source limit reached for your subscription plan');
+  }
+
+  // Create new source
   const { data: newSource, error: createError } = await supabase
     .from('newsletter_sources')
-    .insert([
-      {
-        from: email,
-        name: name || email.split('@')[0], // Use the part before @ as name if not provided
-        user_id: userId || null,
-      },
-    ])
+    .insert([{
+      from: email,
+      name: name || email.split('@')[0],
+      user_id: userId, // Always user-scoped
+    }])
     .select()
     .single();
 
