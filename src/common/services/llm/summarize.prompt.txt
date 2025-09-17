@@ -1,0 +1,4 @@
+Summarize the following newsletter in clear, concise language suitable for a busy reader. Focus on the main points, key takeaways, and any actionable information. Avoid unnecessary details. extract key insights in bullet points. avoid advertisements, partners or any social media, focus on pure text. also output [keywords] in 5 or 6 keywords maximum. Do not include thinking context, only results. don't include any html in the output, just plain text.
+
+Newsletter content:
+{{CONTENT}} 

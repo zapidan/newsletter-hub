@@ -6,6 +6,7 @@ import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterAct
 import { useSimpleNewsletterNavigation } from '@common/hooks/useSimpleNewsletterNavigation';
 import { useTags } from '@common/hooks/useTags';
 import { newsletterService } from '@common/services';
+import { LLMService } from '@common/services/llm';
 import { findGroupBySourceId, newsletterSourceGroupService } from '@common/services/newsletterSourceGroup/NewsletterSourceGroupService';
 import type { NewsletterWithRelations, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
@@ -436,6 +437,28 @@ const NewsletterDetail = memo(() => {
     sourceId: sourceId,
   });
 
+  const [isSummaryModalOpen, setSummaryModalOpen] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  const handleSummarize = async () => {
+    if (!newsletter?.content) return;
+    setIsSummarizing(true);
+    setSummaryError(null);
+    setSummary(null);
+    try {
+      const llmService = new LLMService({});
+      const result = await llmService.summarize(newsletter.content);
+      setSummary(result);
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : 'Failed to summarize');
+    } finally {
+      setIsSummarizing(false);
+      setSummaryModalOpen(true);
+    }
+  };
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -461,7 +484,6 @@ const NewsletterDetail = memo(() => {
     return <LoadingScreen />;
   }
 
-  // Add key to force remount when ID changes
   return (
     <div data-testid="newsletter-detail" className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -552,7 +574,7 @@ const NewsletterDetail = memo(() => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="ml-4">
+                <div className="ml-4 flex gap-2 items-center">
                   {newsletter && (
                     <NewsletterDetailActions
                       newsletter={newsletter}
@@ -561,6 +583,14 @@ const NewsletterDetail = memo(() => {
                       mutations={mutations}
                     />
                   )}
+                  {/* Summarize Button */}
+                  <button
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    onClick={handleSummarize}
+                    disabled={isSummarizing}
+                  >
+                    {isSummarizing ? 'Summarizing...' : 'Summarize'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -575,6 +605,32 @@ const NewsletterDetail = memo(() => {
                   hasNext={navigation.hasNext}
                   isLoading={navigation.isLoading}
                 />
+              </div>
+            )}
+
+            {/* Summary Modal */}
+            {isSummaryModalOpen && (
+              <div
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]"
+                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+              >
+                <div
+                  className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden p-6 relative"
+                  style={{ backgroundColor: 'white', borderRadius: '1rem', width: '100%', maxWidth: '40rem', maxHeight: '90vh', overflow: 'hidden', position: 'relative', zIndex: 10000, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}
+                >
+                  <div className="flex justify-between items-center pb-4 border-b">
+                    <h2 className="text-xl font-semibold">Newsletter Summary</h2>
+                    <button onClick={() => setSummaryModalOpen(false)} className="text-gray-500 hover:text-gray-700" aria-label="Close">
+                      ×
+                    </button>
+                  </div>
+                  <div className="pt-4 pb-4 flex-1 overflow-auto">
+                    {summaryError && <div className="text-red-600 mb-2">{summaryError}</div>}
+                    {isSummarizing && <div>Summarizing...</div>}
+                    {summary && <div className="whitespace-pre-line text-gray-800">{summary}</div>}
+                    {!summary && !isSummarizing && !summaryError && <div>No summary available.</div>}
+                  </div>
+                </div>
               </div>
             )}
 
