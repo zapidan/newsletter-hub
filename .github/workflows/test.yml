@@ -194,6 +194,17 @@ jobs:
           fail-on-error: 'false'
           only-summary: 'true'
 
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Deno version
+        run: deno --version
+
+      - name: Run Deno Edge Function Tests
+        run: deno test --allow-net --allow-env --allow-read --trace-leaks src/__tests__/supabase/edge-function.test.ts
+
       - name: Debug dist directory before upload
         run: |
           echo "Listing dist directory:"
