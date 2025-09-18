@@ -396,11 +396,24 @@ function generateTestResultsHTML(testSuites, testCases) {
 }
 
 function main() {
-    const junitFile = path.join(process.cwd(), 'test-results', 'junit.xml');
-    const outputFile = path.join(process.cwd(), 'test-results', 'test-results.html');
+    const resultsDir = path.join(process.cwd(), 'test-results');
+    const outputFile = path.join(resultsDir, 'test-results.html');
 
-    if (!fs.existsSync(junitFile)) {
-        console.error('❌ JUnit XML file not found:', junitFile);
+    // Discover all junit XML files under test-results/*.xml
+    let xmlFiles = [];
+    if (fs.existsSync(resultsDir)) {
+        try {
+            const entries = fs.readdirSync(resultsDir, { withFileTypes: true });
+            xmlFiles = entries
+                .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.xml'))
+                .map((e) => path.join(resultsDir, e.name));
+        } catch (err) {
+            console.error('❌ Failed to read test-results directory:', err.message);
+        }
+    }
+
+    if (!xmlFiles || xmlFiles.length === 0) {
+        console.error('❌ No JUnit XML files found in:', resultsDir);
         console.log('Creating empty test results file...');
 
         // Create empty test results
@@ -418,10 +431,22 @@ function main() {
     }
 
     try {
-        const xmlContent = fs.readFileSync(junitFile, 'utf8');
-        const { testSuites, testCases } = parseJUnitXML(xmlContent);
+        // Aggregate suites and cases across all XML files
+        const allSuites = [];
+        const allCases = [];
 
-        const html = generateTestResultsHTML(testSuites, testCases);
+        xmlFiles.forEach((filePath) => {
+            try {
+                const xmlContent = fs.readFileSync(filePath, 'utf8');
+                const { testSuites, testCases } = parseJUnitXML(xmlContent);
+                allSuites.push(...testSuites);
+                allCases.push(...testCases);
+            } catch (fileErr) {
+                console.error(`⚠️ Failed to parse JUnit XML: ${filePath}:`, fileErr.message);
+            }
+        });
+
+        const html = generateTestResultsHTML(allSuites, allCases);
 
         // Ensure directory exists
         const outputDir = path.dirname(outputFile);
@@ -431,10 +456,11 @@ function main() {
 
         fs.writeFileSync(outputFile, html);
 
-        const totalTests = testSuites.reduce((sum, suite) => sum + suite.tests, 0);
-        const totalFailed = testSuites.reduce((sum, suite) => sum + suite.failed, 0);
+        const totalTests = allSuites.reduce((sum, suite) => sum + suite.tests, 0);
+        const totalFailed = allSuites.reduce((sum, suite) => sum + suite.failed, 0);
 
         console.log('✅ Test results HTML generated successfully!');
+        console.log(`📦 Parsed ${xmlFiles.length} JUnit file(s)`);
         console.log(`📊 ${totalTests} tests, ${totalFailed} failed`);
         console.log(`📄 Output: ${outputFile}`);
 

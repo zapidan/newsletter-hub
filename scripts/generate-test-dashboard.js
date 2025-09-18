@@ -546,21 +546,43 @@ function generateTestDashboard(testData, coverageData) {
 }
 
 function main() {
-    const junitFile = path.join(process.cwd(), 'test-results', 'junit.xml');
+    const resultsDir = path.join(process.cwd(), 'test-results');
     const coverageDir = path.join(process.cwd(), 'html');
     const outputFile = path.join(process.cwd(), 'test-dashboard', 'index.html');
 
     // Parse test data
     let testData = { testSuites: [], testCases: [] };
-    if (fs.existsSync(junitFile)) {
+
+    // Discover all junit XML files under test-results/*.xml
+    let xmlFiles = [];
+    if (fs.existsSync(resultsDir)) {
         try {
-            const xmlContent = fs.readFileSync(junitFile, 'utf8');
-            testData = parseJUnitXML(xmlContent);
-        } catch (error) {
-            console.error('Error parsing test data:', error.message);
+            const entries = fs.readdirSync(resultsDir, { withFileTypes: true });
+            xmlFiles = entries
+                .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.xml'))
+                .map((e) => path.join(resultsDir, e.name));
+        } catch (err) {
+            console.error('❌ Failed to read test-results directory:', err.message);
         }
+    }
+
+    if (xmlFiles.length > 0) {
+        const allSuites = [];
+        const allCases = [];
+        xmlFiles.forEach((filePath) => {
+            try {
+                const xmlContent = fs.readFileSync(filePath, 'utf8');
+                const { testSuites, testCases } = parseJUnitXML(xmlContent);
+                allSuites.push(...testSuites);
+                allCases.push(...testCases);
+            } catch (fileErr) {
+                console.error(`⚠️ Failed to parse JUnit XML: ${filePath}:`, fileErr.message);
+            }
+        });
+        testData = { testSuites: allSuites, testCases: allCases };
+        console.log(`📦 Parsed ${xmlFiles.length} JUnit file(s) for dashboard`);
     } else {
-        console.log('No JUnit XML file found, using empty test data');
+        console.log('No JUnit XML files found, using empty test data');
     }
 
     // Parse coverage data
