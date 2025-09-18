@@ -1,7 +1,7 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { TimeFilter } from '../TimeFilter';
-import type { TimeRange } from '../TimeFilter';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
+import type { TimeRange } from '../TimeFilter';
+import { TimeFilter } from '../TimeFilter';
 
 describe('TimeFilter', () => {
   const mockOnChange = vi.fn();
@@ -32,7 +32,9 @@ describe('TimeFilter', () => {
     fireEvent.click(button);
     expect(screen.getByText('Today')).toBeVisible(); // One of the dropdown options
     expect(screen.getByText('Last 2 days')).toBeVisible();
+    expect(screen.getByText('Last 7 days')).toBeVisible();
     expect(screen.getByText('This week')).toBeVisible();
+    expect(screen.getByText('Last 30 days')).toBeVisible();
     expect(screen.getByText('This month')).toBeVisible();
   });
 
@@ -66,7 +68,7 @@ describe('TimeFilter', () => {
     fireEvent.mouseDown(screen.getByText('Outside')); // Click outside
 
     await waitFor(() => {
-        expect(screen.queryByText('Today')).not.toBeInTheDocument();
+      expect(screen.queryByText('Today')).not.toBeInTheDocument();
     });
   });
 
@@ -80,6 +82,20 @@ describe('TimeFilter', () => {
     fireEvent.click(weekOption);
 
     expect(mockOnChange).toHaveBeenCalledWith('week');
+  });
+
+  test('supports selecting new explicit presets', () => {
+    render(<TimeFilter {...defaultProps} />);
+    const button = screen.getByRole('button', { name: /All time/i });
+    fireEvent.click(button);
+
+    fireEvent.click(screen.getByText('Last 7 days'));
+    expect(mockOnChange).toHaveBeenCalledWith('last7');
+
+    // Re-open and select Last 30 days (component is controlled, label stays 'All time')
+    fireEvent.click(button);
+    fireEvent.click(screen.getByText('Last 30 days'));
+    expect(mockOnChange).toHaveBeenCalledWith('last30');
   });
 
   test('highlights the selected option in the dropdown', () => {

@@ -28,7 +28,7 @@ import { InboxFilterType } from '@common/hooks/useInboxFilters'; // Import the t
 interface MockParams {
   filter?: InboxFilterType;
   source?: string | null;
-  time?: 'all' | 'day' | 'week' | 'month';
+  time?: 'all' | 'day' | '2days' | 'week' | 'month' | 'last7' | 'last30';
   tags?: string | string[];
 }
 
@@ -48,7 +48,7 @@ const mockResetParams = vi.fn(() => {
 interface MockState {
   filter: InboxFilterType;
   sourceFilter: string | null;
-  timeRange: 'all' | 'day' | 'week' | 'month';
+  timeRange: 'all' | 'day' | '2days' | 'week' | 'month' | 'last7' | 'last30';
   tagIds: string[];
   hasActiveFilters: boolean;
 }
@@ -154,20 +154,20 @@ vi.mock('@common/hooks/useUrlParams', () => {
  * ────────────────────────────────────────────────────────────── */
 const createWrapper =
   (params: Record<string, any> = {}) =>
-  ({ children }: { children: React.ReactNode }) => {
-    const tagIds = Array.isArray(params.tags)
-      ? params.tags
-      : params.tags
-        ? params.tags.split(',')
-        : [];
-    updateMockState({
-      filter: params.filter,
-      sourceFilter: params.source,
-      timeRange: params.time,
-      tagIds,
-    });
-    return <FilterProvider>{children}</FilterProvider>;
-  };
+    ({ children }: { children: React.ReactNode }) => {
+      const tagIds = Array.isArray(params.tags)
+        ? params.tags
+        : params.tags
+          ? params.tags.split(',')
+          : [];
+      updateMockState({
+        filter: params.filter,
+        sourceFilter: params.source,
+        timeRange: params.time,
+        tagIds,
+      });
+      return <FilterProvider>{children}</FilterProvider>;
+    };
 
 const defaultWrapper = createWrapper();
 
@@ -499,43 +499,77 @@ describe('FilterContext', () => {
         vi.useRealTimers();
       });
 
-      it('should derive dateFrom for timeRange "day"', () => {
+      it('should derive dateFrom for timeRange "day" (start of local day)', () => {
         const { result } = renderHook(() => useFilters(), {
           wrapper: createWrapper({ time: 'day' }),
         });
-        // Start of the current day
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
-          new Date('2024-03-15T00:00:00.000Z')
+        // Start of the current local day
+        const expected = new Date(systemTime);
+        expected.setHours(0, 0, 0, 0);
+        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
+          expected.getTime()
         );
       });
 
-      it('should derive dateFrom for timeRange "week"', () => {
+      it('should derive dateFrom for timeRange "week" (start of week Monday local)', () => {
         const { result } = renderHook(() => useFilters(), {
           wrapper: createWrapper({ time: 'week' }),
         });
-        // 7 days ago
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
-          new Date('2024-03-08T12:00:00.000Z')
+        // Start of the current week (Monday 00:00 local)
+        const expected = new Date(systemTime);
+        expected.setHours(0, 0, 0, 0);
+        const day = expected.getDay(); // 0=Sun,1=Mon,...6=Sat
+        const diffSinceMonday = (day + 6) % 7; // days since Monday
+        expected.setDate(expected.getDate() - diffSinceMonday);
+        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
+          expected.getTime()
         );
       });
 
-      it('should derive dateFrom for timeRange "month"', () => {
+      it('should derive dateFrom for timeRange "month" (start of current month local)', () => {
         const { result } = renderHook(() => useFilters(), {
           wrapper: createWrapper({ time: 'month' }),
         });
-        // 1 month ago
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
-          new Date('2024-02-15T12:00:00.000Z')
+        // Start of the current month at local midnight
+        const base = new Date(systemTime);
+        const expected = new Date(base.getFullYear(), base.getMonth(), 1);
+        expected.setHours(0, 0, 0, 0);
+        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
+          expected.getTime()
         );
       });
 
-      it('should derive dateFrom for timeRange "2days"', () => {
+      it('should derive dateFrom for timeRange "2days" (rolling two days local)', () => {
         const { result } = renderHook(() => useFilters(), {
           wrapper: createWrapper({ time: '2days' }),
         });
-        // 2 days ago
-        expect(new Date(result.current.newsletterFilter.dateFrom!)).toEqual(
-          new Date('2024-03-13T12:00:00.000Z')
+        // 2 days ago from now (local)
+        const expected = new Date(systemTime);
+        expected.setDate(expected.getDate() - 2);
+        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
+          expected.getTime()
+        );
+      });
+
+      it('should derive dateFrom for timeRange "last7" (rolling 7 days local)', () => {
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: 'last7' }),
+        });
+        const expected = new Date(systemTime);
+        expected.setDate(expected.getDate() - 7);
+        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
+          expected.getTime()
+        );
+      });
+
+      it('should derive dateFrom for timeRange "last30" (rolling 30 days local)', () => {
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: 'last30' }),
+        });
+        const expected = new Date(systemTime);
+        expected.setDate(expected.getDate() - 30);
+        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
+          expected.getTime()
         );
       });
 
