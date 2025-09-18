@@ -221,6 +221,44 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
     fromEmail = fromMatch ? fromMatch[1] : emailData.from;
     fromName = emailData.from.replace(/<[^>]+>/g, '').trim();
 
+    // Assume only one recipient and resolve user strictly from DB using email_alias
+    const userEmail = emailData.to.trim();
+
+    // Basic recipient email format validation
+    const simpleEmailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!simpleEmailRegex.test(userEmail)) {
+      return {
+        success: false,
+        error: 'Invalid recipient email format'
+      };
+    }
+
+    // Resolve userId via DB (no regex/local-part UUID inference)
+    const { data: userData, error: userError } = await client
+      .from('users')
+      .select('id')
+      .eq('email_alias', userEmail)
+      .single();
+
+    if (userError || !userData) {
+      const fallbackUserId = Deno.env.get('DEFAULT_RECIPIENT_USER_ID') || '';
+      if (fallbackUserId) {
+        userId = fallbackUserId;
+      } else {
+        return {
+          success: true,
+          skipped: true,
+          skipReason: 'unknown_recipient',
+          skipDetails: { userEmail },
+          userId: null,
+          data: { skipped: true, reason: 'unknown_recipient' }
+        };
+      }
+    } else {
+      userId = userData.id;
+    }
+
+    // With userId resolved, proceed to find or create the source scoped to this user
     let source, isArchived;
     try {
       ({ source, isArchived } = await findOrCreateSource(fromEmail, fromName, client, userId));
@@ -242,54 +280,6 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
         skipReason: 'source_archived',
         data: { skipped: true, reason: 'Source is archived' }
       };
-    }
-
-    // Take only the first recipient (before any comma)
-    const firstRecipient = emailData.to.split(',')[0].trim();
-    let userEmail: string;
-
-    if (firstRecipient.includes('@')) {
-      userEmail = firstRecipient;
-    } else {
-      userEmail = `${firstRecipient}@dzapatariesco.dev`;
-    }
-
-    const emailMatch = userEmail.match(/^([^@]+)@/);
-    if (!emailMatch) {
-      return {
-        success: false,
-        error: 'Invalid recipient email format'
-      };
-    }
-
-    const localPart = emailMatch[1];
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(localPart)) {
-      userId = localPart;
-    } else {
-      const { data: userData, error: userError } = await client
-        .from('users')
-        .select('id')
-        .eq('email_alias', userEmail)
-        .single();
-      if (userError || !userData) {
-        const fallbackUserId = Deno.env.get('DEFAULT_RECIPIENT_USER_ID') || '';
-        if (fallbackUserId) {
-          userId = fallbackUserId;
-        } else {
-          return {
-            success: true,
-            skipped: true,
-            skipReason: 'unknown_recipient',
-            skipDetails: { userEmail },
-            userId: null,
-            data: { skipped: true, reason: 'unknown_recipient' }
-          };
-        }
-      }
-      if (!userId) {
-        userId = userData.id;
-      }
     }
 
     const { data: canReceiveData, error: limitError } = await client.rpc(
@@ -359,13 +349,9 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
             title: emailData.subject,
             content: emailData['body-html'] || emailData['body-plain'],
             received_at: new Date().toISOString(),
-            newsletter_source_id: source.id,
+            newsletter_source_id: source?.id,
             skip_reason: 'duplicate',
-            skip_details: {
-              error: (error as any).message,
-              from_email: fromEmail,
-              received_at: new Date().toISOString()
-            }
+            skip_details: { from_email: fromEmail }
           });
         return {
           success: true,
@@ -375,42 +361,13 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
           data: { skipped: true, reason: 'duplicate' }
         };
       }
-      throw new Error(`Transaction failed: ${(error as any).message}`);
+      return { success: false, error: (error as any).message || 'Unknown error' };
     }
 
-    return {
-      success: true,
-      userId,
-      data
-    };
-  } catch (error) {
-    if (typeof userId === 'undefined') userId = null;
-    if (userId) {
-      try {
-        await (supabase && typeof (supabase as any).from === 'function' ? supabase : getSupabaseClient())
-          .from('skipped_newsletters')
-          .insert({
-            user_id: userId,
-            title: emailData.subject,
-            content: emailData['body-html'] || emailData['body-plain'],
-            received_at: new Date().toISOString(),
-            skip_reason: 'processing_error',
-            skip_details: {
-              error: error instanceof Error ? error.message : 'Unknown error',
-              stack: error instanceof Error ? error.stack : undefined,
-              from_email: fromEmail,
-              received_at: new Date().toISOString()
-            }
-          });
-      } catch (_logError) {
-        // ignore
-      }
-    }
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-      userId: userId || undefined
-    };
+    return { success: true, data };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { success: false, error: message };
   }
 }
 
