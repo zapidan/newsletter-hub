@@ -101,41 +101,61 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
     // Handle time range filter
     if (filterState.timeRange && filterState.timeRange !== 'all') {
-      // Create a date at the current time in UTC
+      // Use local time for date calculations so 'Today' reflects the user's local day
       const now = new Date();
-      const nowUTC = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate(),
-          now.getUTCHours(),
-          now.getUTCMinutes(),
-          now.getUTCSeconds()
-        )
-      );
       let dateFrom: Date;
 
       switch (filterState.timeRange) {
-        case 'day':
-          dateFrom = new Date(
-            Date.UTC(nowUTC.getUTCFullYear(), nowUTC.getUTCMonth(), nowUTC.getUTCDate())
-          );
+        case 'day': {
+          // Start of the local day (local midnight)
+          const startOfLocalDay = new Date(now);
+          startOfLocalDay.setHours(0, 0, 0, 0);
+          dateFrom = startOfLocalDay;
           break;
-        case 'week':
-          dateFrom = new Date(nowUTC);
-          dateFrom.setUTCDate(nowUTC.getUTCDate() - 7);
+        }
+        case 'week': {
+          // Start of the current week (Monday 00:00 local time)
+          const startOfWeek = new Date(now);
+          startOfWeek.setHours(0, 0, 0, 0);
+          const day = startOfWeek.getDay(); // 0=Sun,1=Mon,...6=Sat
+          const diffSinceMonday = (day + 6) % 7; // days since Monday
+          startOfWeek.setDate(startOfWeek.getDate() - diffSinceMonday);
+          dateFrom = startOfWeek;
           break;
-        case 'month':
-          dateFrom = new Date(nowUTC);
-          dateFrom.setUTCMonth(nowUTC.getUTCMonth() - 1);
+        }
+        case 'month': {
+          // Start of the current month at local midnight
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          startOfMonth.setHours(0, 0, 0, 0);
+          dateFrom = startOfMonth;
           break;
-        case '2days':
-          dateFrom = new Date(nowUTC);
-          dateFrom.setUTCDate(nowUTC.getUTCDate() - 2);
+        }
+        case '2days': {
+          // Rolling 2 days (48 hours) based on local time
+          const twoDaysAgo = new Date(now);
+          twoDaysAgo.setDate(now.getDate() - 2);
+          dateFrom = twoDaysAgo;
           break;
-        default:
-          dateFrom = new Date(nowUTC);
-          dateFrom.setUTCDate(nowUTC.getUTCDate() - 7);
+        }
+        case 'last7': {
+          // Rolling 7 days based on local time
+          const sevenDaysAgo = new Date(now);
+          sevenDaysAgo.setDate(now.getDate() - 7);
+          dateFrom = sevenDaysAgo;
+          break;
+        }
+        case 'last30': {
+          // Rolling 30 days based on local time
+          const thirtyDaysAgo = new Date(now);
+          thirtyDaysAgo.setDate(now.getDate() - 30);
+          dateFrom = thirtyDaysAgo;
+          break;
+        }
+        default: {
+          const sevenDaysAgo = new Date(now);
+          sevenDaysAgo.setDate(now.getDate() - 7);
+          dateFrom = sevenDaysAgo;
+        }
       }
 
       filters.dateFrom = dateFrom.toISOString();

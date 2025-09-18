@@ -76,6 +76,9 @@ export default defineConfig({
       ".cache",
       "src/**/*.e2e.{js,ts,jsx,tsx}",
       "src/**/e2e/**/*",
+      // Exclude Deno-specific tests (run with `deno test` instead of Vitest)
+      "src/__tests__/supabase/**",
+      "**/*.deno.test.{js,ts,tsx}",
     ],
     typecheck: {
       tsconfig: "./tsconfig.test.json",
