@@ -435,9 +435,11 @@ export const useNewsletters = (
     onSettled: (_data: boolean | undefined, error: Error | null, id: string) => {
       // Invalidate and refetch related queries
       if (!error) {
-        // Use setTimeout to batch invalidations
+        // Use invalidateForOperation to properly update UI
+        invalidateForOperation(queryClient, 'mark-read', [id]);
+
+        // Also update unread count optimistically for immediate feedback
         setTimeout(() => {
-          // Use optimistic unread count update instead of invalidation
           cacheManager.updateUnreadCountOptimistically({
             type: 'mark-read',
             newsletterIds: [id],
@@ -510,9 +512,11 @@ export const useNewsletters = (
     onSettled: (_data: boolean | undefined, error: Error | null, id: string) => {
       // Invalidate and refetch related queries
       if (!error) {
-        // Use setTimeout to batch invalidations
+        // Use invalidateForOperation to properly update UI
+        invalidateForOperation(queryClient, 'mark-unread', [id]);
+
+        // Also update unread count optimistically for immediate feedback
         setTimeout(() => {
-          // Use optimistic unread count update instead of invalidation
           cacheManager.updateUnreadCountOptimistically({
             type: 'mark-unread',
             newsletterIds: [id],
@@ -594,9 +598,11 @@ export const useNewsletters = (
     onSettled: (_data: boolean | undefined, error: Error | null, ids: string[]) => {
       // Invalidate and refetch related queries
       if (!error) {
-        // Use setTimeout to batch invalidations
+        // Use invalidateForOperation to properly update UI
+        invalidateForOperation(queryClient, 'bulk-mark-read', ids);
+
+        // Also update unread count optimistically for immediate feedback
         setTimeout(() => {
-          // Use optimistic unread count update instead of invalidation
           cacheManager.updateUnreadCountOptimistically({
             type: 'bulk-mark-read',
             newsletterIds: ids,
@@ -678,9 +684,11 @@ export const useNewsletters = (
     onSettled: (_data: boolean | undefined, error: Error | null, ids: string[]) => {
       // Invalidate and refetch related queries
       if (!error) {
-        // Use setTimeout to batch invalidations
+        // Use invalidateForOperation to properly update UI
+        invalidateForOperation(queryClient, 'bulk-mark-unread', ids);
+
+        // Also update unread count optimistically for immediate feedback
         setTimeout(() => {
-          // Use optimistic unread count update instead of invalidation
           cacheManager.updateUnreadCountOptimistically({
             type: 'bulk-mark-unread',
             newsletterIds: ids,
@@ -746,8 +754,12 @@ export const useNewsletters = (
         }
       }
     },
-    onSettled: () => {
-      // No cache invalidation needed to preserve filter state
+    onSettled: (_data: boolean | undefined, error: Error | null, id: string) => {
+      // Invalidate and refetch related queries
+      if (!error) {
+        // Use invalidateForOperation to properly update UI
+        invalidateForOperation(queryClient, 'toggle-like', [id]);
+      }
     },
   });
 
@@ -916,23 +928,12 @@ export const useNewsletters = (
       }
     },
     onSettled: (_data, _error, id) => {
-      // Use minimal invalidation to preserve filter state
-      setTimeout(() => {
-        // Only invalidate specific queries to prevent cascade
-        queryClient.invalidateQueries({
-          queryKey: queryKeyFactory.newsletters.detail(id),
-          refetchType: 'none', // Don't refetch automatically
-        });
-
-        // Only invalidate unread counts without refetching
-        queryClient.invalidateQueries({
-          queryKey: ['unreadCount'],
-          refetchType: 'none',
-        });
-
+      // Use invalidateForOperation to properly update UI
+      if (!_error) {
+        invalidateForOperation(queryClient, 'toggle-archive', [id]);
         // Dispatch event for unread count updates
         window.dispatchEvent(new CustomEvent('newsletter:archived'));
-      }, 100);
+      }
     },
   });
 
