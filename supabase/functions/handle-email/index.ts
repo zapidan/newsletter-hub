@@ -261,7 +261,7 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
     // With userId resolved, proceed to find or create the source scoped to this user
     let source, isArchived;
     try {
-      ({ source, isArchived } = await findOrCreateSource(fromEmail, fromName, client, userId));
+      ({ source, isArchived } = await findOrCreateSource(fromEmail, fromName, client, userId as string));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('Source limit reached')) {
@@ -508,12 +508,17 @@ async function verifyMailgunWebhook(
     // Mailgun provides HMAC digest as lowercase hex. Convert hex string to bytes.
     const signatureBuffer = hexToBytes(signature.trim());
 
+    // Deno's type definitions for WebCrypto are strict about BufferSource being ArrayBuffer.
+    // Convert Uint8Array views to ArrayBuffer instances for compatibility.
+    const signatureArrayBuffer = toArrayBuffer(signatureBuffer);
+    const dataArrayBuffer = toArrayBuffer(signatureBytes);
+
     // Verify the signature
     const isValid = await crypto.subtle.verify(
       'HMAC',
       key,
-      signatureBuffer,
-      signatureBytes
+      signatureArrayBuffer,
+      dataArrayBuffer
     );
 
     return isValid;
@@ -533,6 +538,13 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i / 2] = parseInt(normalized.substr(i, 2), 16);
   }
   return bytes;
+}
+
+// Convert a Uint8Array to a standalone ArrayBuffer (required for strict BufferSource typing in Deno)
+function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
+  const ab = new ArrayBuffer(u8.byteLength);
+  new Uint8Array(ab).set(u8);
+  return ab;
 }
 
 // Helper function to parse message headers string into an object

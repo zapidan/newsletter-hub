@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import { assert } from "https://deno.land/std@0.203.0/assert/mod.ts";
 import { load } from "https://deno.land/std@0.203.0/dotenv/mod.ts";
 await load({ envPath: ".env.test", export: true });
@@ -167,15 +169,20 @@ function setupTimerMocks() {
   let timeouts: Array<{ id: number; handler: () => void; time: number }> = [];
   let nextId = 1;
 
-  globalThis.setTimeout = (handler: () => void, time = 0) => {
+  // Align overrides with Deno's TimerHandler signature and return types
+  globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ..._args: any[]) => {
     const id = nextId++;
-    timeouts.push({ id, handler, time });
-    return id as unknown as ReturnType<typeof setTimeout>;
-  };
+    // Only support function handlers in this simple mock
+    const fn = (typeof handler === 'function') ? handler as () => void : () => { };
+    timeouts.push({ id, handler: fn, time: timeout ?? 0 });
+    return id as unknown as number;
+  }) as typeof globalThis.setTimeout;
 
-  globalThis.clearTimeout = (id: number) => {
-    timeouts = timeouts.filter(t => t.id !== id);
-  };
+  globalThis.clearTimeout = ((id?: number) => {
+    if (typeof id === 'number') {
+      timeouts = timeouts.filter(t => t.id !== id);
+    }
+  }) as typeof globalThis.clearTimeout;
 
   return {
     runAllTimers: () => {
