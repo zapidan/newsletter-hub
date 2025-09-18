@@ -318,7 +318,7 @@ const Inbox: React.FC = () => {
   // Shared newsletter actions with our enhanced version
   const newsletterActions = useSharedNewsletterActions(mutations, {
     showToasts: true,
-    optimisticUpdates: false,
+    optimisticUpdates: true,
     enableErrorHandling: true,
     enableLoadingStates: true,
     onSuccess: useCallback(() => {
@@ -659,10 +659,8 @@ const Inbox: React.FC = () => {
       setIsActionInProgress(true);
 
       try {
-        await toggleLike(newsletter.id);
+        await newsletterActions.handleToggleLike(newsletter);
         preserveFilterParams();
-        // Dispatch event for unread count updates
-        window.dispatchEvent(new CustomEvent('newsletter:like-status-changed'));
       } catch (error) {
         log.error(
           'Failed to toggle like status',
@@ -672,16 +670,12 @@ const Inbox: React.FC = () => {
           },
           error instanceof Error ? error : new Error(String(error))
         );
-        // Revert optimistic update on error
-        if (filter === 'liked') {
-          await refetchNewsletters();
-        }
         throw error;
       } finally {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [toggleLike, filter, preserveFilterParams, refetchNewsletters, log]
+    [newsletterActions, filter, preserveFilterParams, log]
   );
 
   const handleToggleArchiveWrapper = useCallback(
@@ -689,7 +683,7 @@ const Inbox: React.FC = () => {
       setIsActionInProgress(true);
 
       try {
-        await toggleArchive(newsletter.id);
+        await newsletterActions.handleToggleArchive(newsletter);
         preserveFilterParams();
       } catch (error) {
         log.error(
@@ -705,7 +699,7 @@ const Inbox: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [toggleArchive, preserveFilterParams, filter, log]
+    [newsletterActions, preserveFilterParams, filter, log]
   );
 
   const handleToggleReadWrapper = useCallback(
@@ -714,9 +708,9 @@ const Inbox: React.FC = () => {
 
       try {
         if (newsletter.is_read) {
-          await markAsUnread(newsletter.id); // Use direct mutation instead of newsletterActions
+          await newsletterActions.handleMarkAsUnread(newsletter.id);
         } else {
-          await markAsRead(newsletter.id); // Use direct mutation instead of newsletterActions
+          await newsletterActions.handleMarkAsRead(newsletter.id);
         }
         preserveFilterParams();
       } catch (error) {
@@ -733,7 +727,7 @@ const Inbox: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [markAsRead, markAsUnread, preserveFilterParams, filter, log]
+    [newsletterActions, preserveFilterParams, filter, log]
   );
 
   const handleDeleteNewsletterWrapper = useCallback(
@@ -748,7 +742,7 @@ const Inbox: React.FC = () => {
           'Failed to delete newsletter',
           {
             action: 'delete_newsletter',
-            metadata: { newsletterId: newsletterId },
+            metadata: { newsletterId, filter },
           },
           error instanceof Error ? error : new Error(String(error))
         );
@@ -757,7 +751,7 @@ const Inbox: React.FC = () => {
         setTimeout(() => setIsActionInProgress(false), 100);
       }
     },
-    [newsletterActions, preserveFilterParams, log]
+    [newsletterActions, preserveFilterParams, filter, log]
   );
 
   const handleToggleQueueWrapper = useCallback(
