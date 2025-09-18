@@ -135,7 +135,7 @@ jobs:
           mkdir -p test-results
           chmod -R 777 test-results
 
-      - name: Run tests with coverage and generate reports
+      - name: Run tests with coverage
         run: pnpm test:ci
         env:
           CI: 'true'
@@ -152,7 +152,18 @@ jobs:
           echo "Test results directory:"
           ls -la test-results/ || echo "test-results directory not found"
 
-      - name: Generate test reports
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Deno version
+        run: deno --version
+
+      - name: Run Deno Edge Function Tests
+        run: deno test --allow-net --allow-env --allow-read --trace-leaks --junit-path test-results/deno-edge-tests.xml src/__tests__/supabase/edge-function.test.ts
+
+      - name: Generate test reports (after all tests)
         if: always()
         run: |
           echo "=== Generating Test Reports ==="
@@ -167,43 +178,15 @@ jobs:
           echo "=== Test Reports Generation Complete ==="
         continue-on-error: true
 
-      - name: Create fallback test results
-        if: always()
-        run: |
-          mkdir -p test-results
-          if [ ! -f "test-results/junit.xml" ]; then
-            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="No Tests Run" tests="0" failures="0" errors="0" skipped="0" time="0"></testsuite></testsuites>' > test-results/junit.xml
-          fi
-          if [ ! -d "html" ]; then
-            mkdir -p html
-            echo '<html><body><h1>No Coverage Data Available</h1></body></html>' > html/index.html
-          fi
-          if [ ! -d "test-dashboard" ]; then
-            mkdir -p test-dashboard
-            echo '<html><body><h1>Test Dashboard</h1><p>No test data available</p></body></html>' > test-dashboard/index.html
-          fi
-        continue-on-error: true
-
-      - name: Upload test results
+      - name: Upload all test results
         if: always()
         uses: dorny/test-reporter@v1
         with:
-          name: 'Test Results'
+          name: 'All Test Results'
           path: 'test-results/*.xml'
           reporter: 'java-junit'
           fail-on-error: 'false'
           only-summary: 'true'
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v2.x
-
-      - name: Deno version
-        run: deno --version
-
-      - name: Run Deno Edge Function Tests
-        run: deno test --allow-net --allow-env --allow-read --trace-leaks src/__tests__/supabase/edge-function.test.ts
 
       - name: Debug dist directory before upload
         run: |
