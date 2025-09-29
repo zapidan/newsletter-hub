@@ -209,10 +209,10 @@ const TagsPage: React.FC = () => {
                           {tag.name}
                         </span>
                         <span className="text-sm text-neutral-500">
-                          Used in {(tagNewsletters[tag.id] || []).length}{' '}
-                          {(tagNewsletters[tag.id] || []).length === 1
-                            ? 'newsletter'
-                            : 'newsletters'}
+                          {(() => {
+                            const count = tagNewsletters[tag.id]?.length ?? tag.newsletter_count;
+                            return `Used in ${count} ${count === 1 ? 'newsletter' : 'newsletters'}`;
+                          })()}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">

@@ -1,10 +1,10 @@
-import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
-import type { NewsletterSource } from "@common/types";
-import { Archive, Building2, ChevronDown, Clock, Eye, EyeOff, Heart } from "lucide-react";
-import { FC, memo, useMemo, useState } from "react";
+import type { InboxFilterType } from '@common/hooks/useInboxFilters'; // Import the shared type
+import type { NewsletterSource } from '@common/types';
+import { Archive, Building2, ChevronDown, Clock, Eye, EyeOff, Heart } from 'lucide-react';
+import { FC, memo, useMemo, useState } from 'react';
+import { TimeRange } from '@web/components/TimeFilter';
 
 export type FilterType = InboxFilterType; // Use the shared type
-export type TimeRange = "all" | "day" | "2days" | "week" | "month";
 
 export interface NewsletterSourceWithCount extends NewsletterSource {
   count?: number;
@@ -35,18 +35,18 @@ interface InboxFiltersProps {
 }
 
 const TIME_RANGE_OPTIONS = [
-  { value: "all" as const, label: "All Time" },
-  { value: "day" as const, label: "Today" },
-  { value: "2days" as const, label: "2 Days" },
-  { value: "week" as const, label: "This Week" },
-  { value: "month" as const, label: "This Month" },
+  { value: 'all' as const, label: 'All Time' },
+  { value: 'day' as const, label: 'Today' },
+  { value: '2days' as const, label: '2 Days' },
+  { value: 'week' as const, label: 'This Week' },
+  { value: 'month' as const, label: 'This Month' },
 ];
 
 const FILTER_OPTIONS = [
-  { value: "unread" as const, label: "Unread", icon: EyeOff },
-  { value: "read" as const, label: "Read", icon: Eye },
-  { value: "liked" as const, label: "Liked", icon: Heart },
-  { value: "archived" as const, label: "Archived", icon: Archive },
+  { value: 'unread' as const, label: 'Unread', icon: EyeOff },
+  { value: 'read' as const, label: 'Read', icon: Eye },
+  { value: 'liked' as const, label: 'Liked', icon: Heart },
+  { value: 'archived' as const, label: 'Archived', icon: Archive },
 ];
 
 // Time Filter Dropdown Component
@@ -64,11 +64,11 @@ const TimeFilterDropdown: FC<{
         disabled={disabled}
         className={`
           appearance-none bg-white border border-gray-200 rounded-lg
-          ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}
+          ${compact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}
           text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
           focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
           disabled:opacity-50 disabled:cursor-not-allowed
-          ${disabled ? "bg-gray-50" : "hover:bg-gray-50"}
+          ${disabled ? 'bg-gray-50' : 'hover:bg-gray-50'}
         `}
         aria-label="Filter by time range"
       >
@@ -79,7 +79,7 @@ const TimeFilterDropdown: FC<{
         ))}
       </select>
       <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-        <Clock className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400`} />
+        <Clock className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} text-gray-400`} />
       </div>
     </div>
   );
@@ -112,9 +112,7 @@ const SourceFilterDropdown: FC<{
       [sources]
     );
 
-    const selectedSource = selectedSourceId
-      ? sources.find((s) => s.id === selectedSourceId)
-      : null;
+    const selectedSource = selectedSourceId ? sources.find((s) => s.id === selectedSourceId) : null;
 
     const handleToggle = (e: React.MouseEvent) => {
       e.preventDefault();
@@ -139,11 +137,11 @@ const SourceFilterDropdown: FC<{
           disabled={disabled || isLoading}
           className={`
             flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg
-            ${compact ? "px-2 py-1 text-xs min-w-[120px]" : "px-3 py-1.5 text-sm min-w-[140px]"}
+            ${compact ? 'px-2 py-1 text-xs min-w-[120px]' : 'px-3 py-1.5 text-sm min-w-[140px]'}
             text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
-            ${disabled || isLoading ? "bg-gray-50" : "hover:bg-gray-50"}
+            ${disabled || isLoading ? 'bg-gray-50' : 'hover:bg-gray-50'}
           `}
           aria-label="Filter by newsletter source"
           aria-expanded={isOpen}
@@ -151,16 +149,14 @@ const SourceFilterDropdown: FC<{
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {isLoading ? (
               <div
-                className={`animate-spin rounded-full border-2 border-gray-300 border-t-primary-600 ${compact ? "h-3 w-3" : "h-4 w-4"}`}
+                className={`animate-spin rounded-full border-2 border-gray-300 border-t-primary-600 ${compact ? 'h-3 w-3' : 'h-4 w-4'}`}
               />
             ) : (
               <Building2
-                className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 flex-shrink-0`}
+                className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} text-gray-400 flex-shrink-0`}
               />
             )}
-            <span className="truncate">
-              {selectedSource ? selectedSource.name : "All Sources"}
-            </span>
+            <span className="truncate">{selectedSource ? selectedSource.name : 'All Sources'}</span>
             {selectedSource &&
               showCounts &&
               selectedSource.count !== undefined &&
@@ -171,28 +167,27 @@ const SourceFilterDropdown: FC<{
               )}
           </div>
           <ChevronDown
-            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""
-              }`}
+            className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} text-gray-400 transition-transform flex-shrink-0 ${
+              isOpen ? 'transform rotate-180' : ''
+            }`}
           />
         </button>
 
         {isOpen && (
           <>
             {/* Backdrop to close dropdown when clicking outside */}
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-            />
+            <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
             {/* Dropdown menu */}
             <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-50 border border-gray-200 max-h-60 overflow-y-auto">
               <div className="py-1">
                 <button
                   type="button"
                   onClick={(e) => handleSelect(null, e)}
-                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedSourceId
-                    ? "bg-blue-50 text-blue-800 font-medium"
-                    : "text-gray-700 hover:bg-gray-100"
-                    }`}
+                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${
+                    !selectedSourceId
+                      ? 'bg-blue-50 text-blue-800 font-medium'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
                 >
                   <span>All Sources</span>
                 </button>
@@ -201,19 +196,18 @@ const SourceFilterDropdown: FC<{
                     key={source.id}
                     type="button"
                     onClick={(e) => handleSelect(source.id, e)}
-                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedSourceId === source.id
-                      ? "bg-blue-50 text-blue-800 font-medium"
-                      : "text-gray-700 hover:bg-gray-100"
-                      }`}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${
+                      selectedSourceId === source.id
+                        ? 'bg-blue-50 text-blue-800 font-medium'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
                     <span className="truncate pr-2">{source.name}</span>
-                    {showCounts &&
-                      source.count !== undefined &&
-                      source.count > 0 && (
-                        <span className="bg-orange-100 text-orange-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
-                          {source.count}
-                        </span>
-                      )}
+                    {showCounts && source.count !== undefined && source.count > 0 && (
+                      <span className="bg-orange-100 text-orange-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        {source.count}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -222,7 +216,7 @@ const SourceFilterDropdown: FC<{
         )}
       </div>
     );
-  },
+  }
 );
 
 // Group Filter Dropdown Component
@@ -245,9 +239,7 @@ const GroupFilterDropdown: FC<{
     showCounts = false,
   }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const selectedGroup = selectedGroupId
-      ? groups.find((g) => g.id === selectedGroupId)
-      : null;
+    const selectedGroup = selectedGroupId ? groups.find((g) => g.id === selectedGroupId) : null;
     const handleToggle = (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -269,19 +261,17 @@ const GroupFilterDropdown: FC<{
           disabled={disabled || isLoading}
           className={`
             flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg
-            ${compact ? "px-2 py-1 text-xs min-w-[120px]" : "px-3 py-1.5 text-sm min-w-[140px]"}
+            ${compact ? 'px-2 py-1 text-xs min-w-[120px]' : 'px-3 py-1.5 text-sm min-w-[140px]'}
             text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
-            ${disabled || isLoading ? "bg-gray-50" : "hover:bg-gray-50"}
+            ${disabled || isLoading ? 'bg-gray-50' : 'hover:bg-gray-50'}
           `}
           aria-label="Filter by group"
           aria-expanded={isOpen}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="truncate">
-              {selectedGroup ? selectedGroup.name : "All Groups"}
-            </span>
+            <span className="truncate">{selectedGroup ? selectedGroup.name : 'All Groups'}</span>
             {selectedGroup &&
               showCounts &&
               selectedGroup.count !== undefined &&
@@ -292,7 +282,7 @@ const GroupFilterDropdown: FC<{
               )}
           </div>
           <ChevronDown
-            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""}`}
+            className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'transform rotate-180' : ''}`}
           />
         </button>
         {isOpen && (
@@ -303,10 +293,11 @@ const GroupFilterDropdown: FC<{
                 <button
                   type="button"
                   onClick={(e) => handleSelect(null, e)}
-                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedGroupId
-                    ? "bg-blue-50 text-blue-800 font-medium"
-                    : "text-gray-700 hover:bg-gray-100"
-                    }`}
+                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${
+                    !selectedGroupId
+                      ? 'bg-blue-50 text-blue-800 font-medium'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
                 >
                   <span>All Groups</span>
                 </button>
@@ -315,10 +306,11 @@ const GroupFilterDropdown: FC<{
                     key={group.id}
                     type="button"
                     onClick={(e) => handleSelect(group.id, e)}
-                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedGroupId === group.id
-                      ? "bg-blue-50 text-blue-800 font-medium"
-                      : "text-gray-700 hover:bg-gray-100"
-                      }`}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${
+                      selectedGroupId === group.id
+                        ? 'bg-blue-50 text-blue-800 font-medium'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
                     <span className="truncate pr-2">{group.name}</span>
                     {showCounts && group.count !== undefined && group.count > 0 && (
@@ -334,7 +326,7 @@ const GroupFilterDropdown: FC<{
         )}
       </div>
     );
-  },
+  }
 );
 
 // Filter Button Component
@@ -347,15 +339,7 @@ const FilterButton: FC<{
   count?: number;
   showCount?: boolean;
 }> = memo(
-  ({
-    option,
-    isActive,
-    onClick,
-    disabled = false,
-    compact = false,
-    count,
-    showCount = false,
-  }) => {
+  ({ option, isActive, onClick, disabled = false, compact = false, count, showCount = false }) => {
     const Icon = option.icon;
 
     return (
@@ -363,40 +347,38 @@ const FilterButton: FC<{
         onClick={onClick}
         disabled={disabled}
         className={`
-        ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}
+        ${compact ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}
         rounded-full transition-all duration-200 font-medium
         flex items-center gap-1.5 min-w-0 relative
-        ${isActive
-            ? "bg-primary-600 text-white shadow-sm hover:bg-primary-700 focus:bg-primary-700"
-            : "text-gray-600 hover:bg-gray-100 hover:text-gray-800 focus:bg-gray-100"
-          }
+        ${
+          isActive
+            ? 'bg-primary-600 text-white shadow-sm hover:bg-primary-700 focus:bg-primary-700'
+            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800 focus:bg-gray-100'
+        }
         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1
         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent
-        ${disabled ? "" : "active:scale-95"}
+        ${disabled ? '' : 'active:scale-95'}
       `}
         aria-pressed={isActive}
         aria-label={`Filter by ${option.label.toLowerCase()} newsletters`}
       >
-        <Icon
-          className={compact ? "h-3 w-3" : "h-4 w-4"}
-          aria-hidden="true"
-        />
+        <Icon className={compact ? 'h-3 w-3' : 'h-4 w-4'} aria-hidden="true" />
         <span className="truncate">{option.label}</span>
         {showCount && count !== undefined && count > 0 && (
           <span
             className={`
-            ${compact ? "text-xs px-1" : "text-xs px-1.5"}
+            ${compact ? 'text-xs px-1' : 'text-xs px-1.5'}
             py-0.5 rounded-full font-normal
-            ${isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}
+            ${isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}
           `}
             aria-label={`${count} newsletters`}
           >
-            {count > 999 ? "999+" : count}
+            {count > 999 ? '999+' : count}
           </span>
         )}
       </button>
     );
-  },
+  }
 );
 
 // Utility to check if a filter is selected (not null, undefined, or empty string)
@@ -414,13 +396,13 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
     newsletterGroups = [],
     onFilterChange,
     onSourceFilterChange,
-    onGroupFilterChange = () => { },
+    onGroupFilterChange = () => {},
     onTimeRangeChange,
     isLoading = false,
     isLoadingSources = false,
     isLoadingGroups = false,
     disabled = false,
-    className = "",
+    className = '',
     compact = false,
     showTimeFilter = true,
     showSourceFilter = true,
@@ -554,7 +536,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
         </div>
       </div>
     );
-  },
+  }
 );
 
-InboxFilters.displayName = "InboxFilters";
+InboxFilters.displayName = 'InboxFilters';

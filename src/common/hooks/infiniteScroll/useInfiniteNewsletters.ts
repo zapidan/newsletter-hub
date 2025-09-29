@@ -2,6 +2,7 @@ import { useLogger } from '@common/utils/logger/useLogger';
 import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { newsletterService } from '../../services';
 import { NewsletterWithRelations } from '../../types';
@@ -40,6 +41,7 @@ export const useInfiniteNewsletters = (
 ): UseInfiniteNewslettersReturn => {
   const { user } = useAuth();
   const log = useLogger('useInfiniteNewsletters');
+  const queryClient = useQueryClient();
   const {
     enabled = true,
     _refetchOnWindowFocus = false,
@@ -61,17 +63,20 @@ export const useInfiniteNewsletters = (
   const lastDebugLogRef = useRef<Record<string, number>>({});
   const DEBUG_THROTTLE_MS = 100; // Only log debug messages every 100ms
 
-  const throttledDebug = useCallback((action: string, message: string, metadata?: any) => {
-    if (!debug) return;
+  const throttledDebug = useCallback(
+    (action: string, message: string, metadata?: any) => {
+      if (!debug) return;
 
-    const now = Date.now();
-    const lastLog = lastDebugLogRef.current[action] || 0;
+      const now = Date.now();
+      const lastLog = lastDebugLogRef.current[action] || 0;
 
-    if (now - lastLog > DEBUG_THROTTLE_MS) {
-      log.debug(message, { action, metadata });
-      lastDebugLogRef.current[action] = now;
-    }
-  }, [debug, log]);
+      if (now - lastLog > DEBUG_THROTTLE_MS) {
+        log.debug(message, { action, metadata });
+        lastDebugLogRef.current[action] = now;
+      }
+    },
+    [debug, log]
+  );
 
   useEffect(() => {
     isMounted.current = true;
@@ -106,7 +111,7 @@ export const useInfiniteNewsletters = (
     normalizedFilters.dateTo,
     normalizedFilters.orderBy,
     normalizedFilters.ascending,
-    throttledDebug
+    throttledDebug,
   ]);
 
   // Build API query parameters from normalized filters - memoize to prevent unnecessary re-renders
@@ -146,7 +151,7 @@ export const useInfiniteNewsletters = (
     normalizedFilters.orderBy,
     normalizedFilters.ascending,
     pageSize,
-    throttledDebug
+    throttledDebug,
   ]);
 
   // Debug: Log enabled condition
@@ -166,7 +171,9 @@ export const useInfiniteNewsletters = (
       queryFn: async ({ pageParam = 0 }) => {
         // Prevent multiple simultaneous requests
         if (isFetchingRef.current) {
-          throttledDebug('skip_fetch_already_fetching', 'Skipping fetch - already fetching', { pageParam });
+          throttledDebug('skip_fetch_already_fetching', 'Skipping fetch - already fetching', {
+            pageParam,
+          });
           return { data: [], count: 0, hasMore: false };
         }
 
@@ -200,7 +207,7 @@ export const useInfiniteNewsletters = (
           throttledDebug('fetch_page_error', 'Failed to fetch newsletters', {
             pageParam,
             pageSize,
-            filters: JSON.stringify(normalizedFilters)
+            filters: JSON.stringify(normalizedFilters),
           });
           throw err;
         } finally {
@@ -219,7 +226,7 @@ export const useInfiniteNewsletters = (
                 currentPageDataLength: lastPage.data.length,
                 hasMore: lastPage.hasMore,
                 totalPages: allPages.length,
-                totalFetched: allPages.reduce((sum, page) => sum + page.data.length, 0)
+                totalFetched: allPages.reduce((sum, page) => sum + page.data.length, 0),
               },
             });
           }
@@ -233,13 +240,49 @@ export const useInfiniteNewsletters = (
         return lastPage.hasMore && totalFetched < lastPage.count ? totalFetched : undefined;
       },
       initialPageParam: 0,
-      staleTime: 60000, // Increase stale time to 1 minute to prevent constant refetches
+      staleTime: 30000, // 30 seconds - simplified caching
       refetchOnWindowFocus: false,
-      refetchOnMount: false, // Prevent refetch on mount if data exists
+      refetchOnMount: false, // Don't force refetch on mount
       refetchOnReconnect: false, // Prevent refetch on reconnect
       retry: 3,
       retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
     });
+
+  // Simple cache invalidation only when necessary
+  const previousFiltersRef = useRef<string>('');
+  useEffect(() => {
+    // Only invalidate for major filter changes, not minor tag updates
+    const currentFiltersStr = JSON.stringify({
+      isRead: normalizedFilters.isRead,
+      isArchived: normalizedFilters.isArchived,
+      isLiked: normalizedFilters.isLiked,
+      sourceIds: normalizedFilters.sourceIds,
+    });
+
+    if (previousFiltersRef.current && previousFiltersRef.current !== currentFiltersStr) {
+      log.debug('Major filter change detected, invalidating cache', {
+        action: 'invalidate_cache_on_major_filter_change',
+        metadata: {
+          oldFilters: previousFiltersRef.current,
+          newFilters: currentFiltersStr,
+        },
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['newsletters'],
+        exact: false,
+      });
+    }
+
+    previousFiltersRef.current = currentFiltersStr;
+  }, [
+    normalizedFilters.isRead,
+    normalizedFilters.isArchived,
+    normalizedFilters.isLiked,
+    normalizedFilters.sourceIds,
+    queryClient,
+    log,
+  ]);
 
   // Debug: Log query state - optimized to reduce re-renders
   useEffect(() => {
@@ -264,7 +307,18 @@ export const useInfiniteNewsletters = (
         },
       });
     }
-  }, [debug, enabled, user?.id, isLoading, error, hasNextPage, isFetchingNextPage, log, queryKey, data?.pages?.length]);
+  }, [
+    debug,
+    enabled,
+    user?.id,
+    isLoading,
+    error,
+    hasNextPage,
+    isFetchingNextPage,
+    log,
+    queryKey,
+    data?.pages?.length,
+  ]);
 
   // Flatten all pages into a single array of newsletters
   const newsletters = useMemo(() => {
@@ -291,8 +345,9 @@ export const useInfiniteNewsletters = (
           count: allNewsletters.length,
           pages: data.pages.length,
           lastPageSize: data.pages[data.pages.length - 1]?.data.length || 0,
-          firstPageData: data.pages[0]?.data?.slice(0, 2).map(n => ({ id: n.id, title: n.title })) || [],
-          allPagesDataLengths: data.pages.map(page => page.data?.length || 0),
+          firstPageData:
+            data.pages[0]?.data?.slice(0, 2).map((n) => ({ id: n.id, title: n.title })) || [],
+          allPagesDataLengths: data.pages.map((page) => page.data?.length || 0),
         },
       });
     }
@@ -326,7 +381,17 @@ export const useInfiniteNewsletters = (
         },
       });
     }
-  }, [hasNextPage, totalCount, newsletters.length, pageCount, currentPage, isFetchingNextPage, debug, log, data?.pages?.length]);
+  }, [
+    hasNextPage,
+    totalCount,
+    newsletters.length,
+    pageCount,
+    currentPage,
+    isFetchingNextPage,
+    debug,
+    log,
+    data?.pages?.length,
+  ]);
 
   // Update current page when data changes
   useMemo(() => {
@@ -378,7 +443,22 @@ export const useInfiniteNewsletters = (
 
     setCurrentPage(1);
     return refetch();
-  }, [refetch, debug, normalizedFilters.search, normalizedFilters.isRead, normalizedFilters.isArchived, normalizedFilters.isLiked, normalizedFilters.tagIds, normalizedFilters.sourceIds, normalizedFilters.dateFrom, normalizedFilters.dateTo, normalizedFilters.orderBy, normalizedFilters.ascending, newsletters.length, log]);
+  }, [
+    refetch,
+    debug,
+    normalizedFilters.search,
+    normalizedFilters.isRead,
+    normalizedFilters.isArchived,
+    normalizedFilters.isLiked,
+    normalizedFilters.tagIds,
+    normalizedFilters.sourceIds,
+    normalizedFilters.dateFrom,
+    normalizedFilters.dateTo,
+    normalizedFilters.orderBy,
+    normalizedFilters.ascending,
+    newsletters.length,
+    log,
+  ]);
 
   return {
     newsletters,

@@ -68,20 +68,20 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Transform tags if they exist
   const transformedTags: Tag[] = Array.isArray(data.tags)
     ? data.tags
-      .map((t: { tag: any }) => {
-        if (t.tag && typeof t.tag === 'object') {
-          return {
-            id: t.tag.id as string,
-            name: t.tag.name as string,
-            color: t.tag.color as string,
-            user_id: t.tag.user_id as string,
-            created_at: t.tag.created_at as string,
-            newsletter_count: t.tag.newsletter_count as number | undefined,
-          } as Tag;
-        }
-        return null;
-      })
-      .filter((tag: Tag | null): tag is Tag => tag !== null)
+        .map((t: { tag: any }) => {
+          if (t.tag && typeof t.tag === 'object') {
+            return {
+              id: t.tag.id as string,
+              name: t.tag.name as string,
+              color: t.tag.color as string,
+              user_id: t.tag.user_id as string,
+              created_at: t.tag.created_at as string,
+              newsletter_count: t.tag.newsletter_count as number | undefined,
+            } as Tag;
+          }
+          return null;
+        })
+        .filter((tag: Tag | null): tag is Tag => tag !== null)
     : [];
 
   const { _newsletter_sources, source: _rawSource, tags: _rawTags, ...restOfData } = data;
@@ -128,7 +128,7 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
 };
 
 // Build query based on parameters
-const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
+const buildNewsletterQuery = (params: NewsletterQueryParams = {}, newsletterIds?: string[]) => {
   // Build select clause
   let selectClause = '*, newsletter_source_id'; // Ensure newsletter_source_id is always selected
   const relations = [];
@@ -140,7 +140,7 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     // Include the relation with the source filter
     relations.push('source:newsletter_sources(id, name, from, created_at, updated_at, user_id)'); // Select specific source fields
   }
-  if (params.includeTags) {
+  if (params.includeTags || (params.tagIds && params.tagIds.length > 0)) {
     relations.push('tags:newsletter_tags(tag:tags(id, name, color, user_id, created_at))'); // Select specific tag fields
   }
 
@@ -154,6 +154,11 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
   // CRITICAL: Filter by user_id first to ensure data isolation
   if (params.user_id) {
     query = query.eq('user_id', params.user_id);
+  }
+
+  // If we have pre-filtered newsletter IDs (from tag filtering), use them
+  if (newsletterIds && newsletterIds.length > 0) {
+    query = query.in('id', newsletterIds);
   }
 
   // Apply filters with proper chaining
@@ -225,11 +230,13 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}) => {
     metadata: {
       select: selectClause,
       filters: {
+        tagIds: params.tagIds,
         sourceIds: params.sourceIds,
         isArchived: params.isArchived,
         isRead: params.isRead,
         dateFrom: params.dateFrom,
         dateTo: params.dateTo,
+        preFilteredIds: newsletterIds?.length || 0,
       },
       order: { column: orderColumn, ascending },
       limit: params.limit,
@@ -258,11 +265,94 @@ export const newsletterApi = {
         },
       });
 
-      // Build the query using buildNewsletterQuery
-      const query = buildNewsletterQuery({
-        ...params,
-        user_id: user.id, // Pass user_id to ensure it's included in the query
-      });
+      let preFilteredNewsletterIds: string[] | undefined;
+
+      // Handle tag filtering at database level for better performance
+      if (params.tagIds?.length) {
+        log.debug('Pre-filtering newsletters by tags', {
+          component: 'NewsletterApi',
+          action: 'tag_prefilter_start',
+          metadata: {
+            requestedTagIds: params.tagIds,
+            tagCount: params.tagIds.length,
+          },
+        });
+
+        // Get newsletters that have ALL the required tags
+        // We do this by finding newsletters that appear in newsletter_tags for each required tag
+        const tagQueries = params.tagIds.map((tagId) =>
+          supabase
+            .from('newsletter_tags')
+            .select('newsletter_id')
+            .eq('tag_id', tagId)
+            .eq('user_id', user.id)
+        );
+
+        const tagResults = await Promise.all(tagQueries);
+
+        // Check for errors
+        for (let i = 0; i < tagResults.length; i++) {
+          if (tagResults[i].error) {
+            log.error(
+              'Tag pre-filtering query failed',
+              {
+                component: 'NewsletterApi',
+                action: 'tag_prefilter_error',
+                metadata: { tagId: params.tagIds[i], userId: user.id },
+              },
+              tagResults[i].error!
+            );
+            handleSupabaseError(tagResults[i].error!);
+          }
+        }
+
+        // Find newsletters that appear in ALL tag result sets (intersection)
+        if (tagResults.length > 0 && tagResults[0].data) {
+          let newsletterIds = new Set(tagResults[0].data!.map((row) => row.newsletter_id));
+
+          for (let i = 1; i < tagResults.length; i++) {
+            const currentTagNewsletterIds = new Set(
+              tagResults[i].data!.map((row) => row.newsletter_id)
+            );
+            newsletterIds = new Set(
+              [...newsletterIds].filter((id) => currentTagNewsletterIds.has(id))
+            );
+          }
+
+          preFilteredNewsletterIds = Array.from(newsletterIds);
+
+          log.debug('Tag pre-filtering completed', {
+            component: 'NewsletterApi',
+            action: 'tag_prefilter_complete',
+            metadata: {
+              requestedTagIds: params.tagIds,
+              matchingNewsletterCount: preFilteredNewsletterIds.length,
+            },
+          });
+
+          // If no newsletters match all tags, return early
+          if (preFilteredNewsletterIds.length === 0) {
+            return {
+              data: [],
+              count: 0,
+              page: 1,
+              limit: params.limit || 50,
+              hasMore: false,
+              nextPage: null,
+              prevPage: null,
+            };
+          }
+        }
+      }
+
+      // Build the query using buildNewsletterQuery with pre-filtered IDs
+      const query = buildNewsletterQuery(
+        {
+          ...params,
+          user_id: user.id, // Pass user_id to ensure it's included in the query
+        },
+        preFilteredNewsletterIds
+      );
 
       log.debug('Executing newsletter query', {
         component: 'NewsletterApi',
@@ -272,11 +362,12 @@ export const newsletterApi = {
           sourceIds: params.sourceIds || null,
           isArchived: params.isArchived,
           isRead: params.isRead,
+          preFilteredCount: preFilteredNewsletterIds?.length || 0,
         },
       });
 
       const queryResult = await query;
-      const { data, error, count } = queryResult;
+      const { data, error, count: _count } = queryResult;
 
       if (error) {
         log.error(
@@ -300,67 +391,42 @@ export const newsletterApi = {
           sourceIds: params.sourceIds || null,
           firstItem: data?.[0]
             ? {
-              id: (data[0] as any).id,
-              title: (data[0] as any).title,
-              sourceId: (data[0] as any).newsletter_source_id,
-              hasSource: !!(data[0] as any).source,
-            }
+                id: (data[0] as any).id,
+                title: (data[0] as any).title,
+                sourceId: (data[0] as any).newsletter_source_id,
+                hasSource: !!(data[0] as any).source,
+              }
             : null,
         },
       });
 
-      // Log the raw response for the first item if available
-      if (data?.[0]) {
-        const firstItem = data[0] as any;
-        log.debug('Newsletter raw data sample', {
-          component: 'NewsletterApi',
-          action: 'get_all_raw_data_sample',
-          metadata: {
-            id: firstItem.id,
-            title: firstItem.title,
-            sourceId: firstItem.newsletter_source_id,
-            hasSource: !!firstItem.source,
-          },
-        });
-      }
-
       // Transform the data
-      let transformedData = (data || [])
+      const transformedData = (data || [])
         .map((item: any) => transformNewsletterResponse(item))
         .filter(Boolean);
 
-      // Log the transformed data for the first item if available
-      if (transformedData[0]) {
-        log.debug('Newsletter transformed data sample', {
-          component: 'NewsletterApi',
-          action: 'get_all_transformed_data_sample',
-          metadata: {
-            id: transformedData[0].id,
-            title: transformedData[0].title,
-            sourceId: transformedData[0].newsletter_source_id,
-            hasSource: !!transformedData[0].source,
-          },
-        });
-      }
+      // Tag filtering is now handled at database level - no post-processing needed
+      const actualCount = _count || 0;
 
-      // Handle tag filtering post-query with AND logic (newsletters must have ALL specified tags)
-      if (params.tagIds?.length) {
-        transformedData = transformedData.filter((newsletter) =>
-          params.tagIds!.every((tagId) => newsletter.tags?.some((tag) => tag.id === tagId))
-        );
-      }
+      log.debug('Newsletter processing completed', {
+        component: 'NewsletterApi',
+        action: 'get_all_processing_complete',
+        metadata: {
+          finalCount: transformedData.length,
+          actualCount,
+        },
+      });
 
       const limit = params.limit || 50;
       const offset = params.offset || 0;
       const page = Math.floor(offset / limit) + 1;
 
-      // Calculate hasMore based on total count and current offset, not filtered result length
-      const totalCount = count || 0;
-      const hasMore = (offset + limit) < totalCount;
+      // Calculate hasMore based on actual count
+      const hasMore = offset + limit < actualCount;
 
       const result = {
         data: transformedData,
-        count: totalCount,
+        count: actualCount,
         page,
         limit,
         hasMore,
@@ -549,17 +615,21 @@ export const newsletterApi = {
         const logContext = {
           newsletterId: id,
           userId: user.id,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
 
         log.debug('🔍 Starting delete operation', logContext);
 
         // Validate the ID format first
-        if (!id || typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        if (
+          !id ||
+          typeof id !== 'string' ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+        ) {
           log.error('❌ Invalid newsletter ID format', {
             ...logContext,
             id,
-            type: typeof id
+            type: typeof id,
           });
           return false;
         }
@@ -575,7 +645,7 @@ export const newsletterApi = {
         if (fetchError) {
           log.error('❌ Error fetching newsletter', {
             ...logContext,
-            error: fetchError
+            error: fetchError,
           });
           return false;
         }
@@ -589,22 +659,19 @@ export const newsletterApi = {
           log.warn('⚠️ Access denied: Newsletter does not belong to user', {
             ...logContext,
             ownerId: existingNewsletter.user_id,
-            requestingUserId: user.id
+            requestingUserId: user.id,
           });
           return false;
         }
 
         // Perform the delete
         log.debug('🗑️ Attempting to delete newsletter', logContext);
-        const { error: deleteError } = await supabase
-          .from('newsletters')
-          .delete()
-          .eq('id', id);
+        const { error: deleteError } = await supabase.from('newsletters').delete().eq('id', id);
 
         if (deleteError) {
           log.error('❌ Delete operation failed', {
             ...logContext,
-            error: deleteError
+            error: deleteError,
           });
           return false;
         }
@@ -620,7 +687,7 @@ export const newsletterApi = {
         if (verifyError) {
           log.error('❌ Error verifying deletion', {
             ...logContext,
-            error: verifyError
+            error: verifyError,
           });
           return false;
         }
@@ -632,14 +699,16 @@ export const newsletterApi = {
 
         log.info('✅ Newsletter successfully deleted', logContext);
         return true;
-
       } catch (error) {
         log.error('❌ Unexpected error in delete operation', {
-          error: error instanceof Error ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-          } : error
+          error:
+            error instanceof Error
+              ? {
+                  name: error.name,
+                  message: error.message,
+                  stack: error.stack,
+                }
+              : error,
         });
         return false;
       }
@@ -648,7 +717,7 @@ export const newsletterApi = {
 
   // Bulk update newsletters
   async bulkUpdate(
-    params: BulkUpdateNewsletterParams,
+    params: BulkUpdateNewsletterParams
   ): Promise<BatchResult<NewsletterWithRelations>> {
     return withPerformanceLogging('newsletters.bulkUpdate', async () => {
       const user = await requireAuth();
@@ -735,7 +804,7 @@ export const newsletterApi = {
   // Get newsletters by tag
   async getByTag(
     tagId: string,
-    params: Omit<NewsletterQueryParams, 'tagIds'> = {},
+    params: Omit<NewsletterQueryParams, 'tagIds'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.getAll({ ...params, tagIds: [tagId] });
   },
@@ -743,7 +812,7 @@ export const newsletterApi = {
   // Get newsletters by source
   async getBySource(
     sourceId: string,
-    params: Omit<NewsletterQueryParams, 'sourceIds'> = {},
+    params: Omit<NewsletterQueryParams, 'sourceIds'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.getAll({ ...params, sourceIds: [sourceId] });
   },
@@ -751,7 +820,7 @@ export const newsletterApi = {
   // Search newsletters
   async search(
     query: string,
-    params: Omit<NewsletterQueryParams, 'search'> = {},
+    params: Omit<NewsletterQueryParams, 'search'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return newsletterApi.getAll({ ...params, search: query });
   },
@@ -898,7 +967,7 @@ export const newsletterApi = {
             action: 'get_unread_count',
             metadata: { sourceId, userId: user.id },
           },
-          error,
+          error
         );
         handleSupabaseError(error);
       }

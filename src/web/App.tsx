@@ -131,7 +131,7 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary fallback={errorFallback}>
       <ToastProvider>
-        <FilterProvider useLocalTagFiltering={true}>
+        <FilterProvider useLocalTagFiltering={false}>
           <CacheInitializer>
             <div className="min-h-screen bg-gray-50">
               {import.meta.env.MODE !== 'production' && (

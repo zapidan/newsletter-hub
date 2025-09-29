@@ -16,6 +16,7 @@ import { useNewsletters } from '@common/hooks/useNewsletters';
 import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@common/contexts';
 import { useToast } from '@common/contexts/ToastContext';
@@ -100,6 +101,28 @@ const Inbox: React.FC = () => {
     resetFilters,
     handleTagClick,
   } = useInboxFilters();
+
+  // Enhanced reset filters that also invalidates cache
+  const queryClient = useQueryClient();
+  const handleResetFilters = useCallback(() => {
+    log.debug('Resetting all filters and invalidating cache', {
+      action: 'reset_all_filters',
+      metadata: {
+        currentFilter: filter,
+        currentSourceFilter: sourceFilter,
+        currentTimeRange: timeRange,
+        currentTagIds: debouncedTagIds,
+      },
+    });
+
+    resetFilters();
+
+    // Force cache invalidation to ensure fresh data
+    queryClient.invalidateQueries({
+      queryKey: ['newsletters'],
+      exact: false,
+    });
+  }, [resetFilters, queryClient, log, filter, sourceFilter, timeRange, debouncedTagIds]);
 
   // Group filter state
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
@@ -884,7 +907,7 @@ const Inbox: React.FC = () => {
       <SelectedTagsDisplay
         selectedTags={selectedTags}
         onRemoveTag={removeTag}
-        onClearAll={resetFilters}
+        onClearAll={handleResetFilters}
       />
 
       {/* Newsletter List with Infinite Scroll */}

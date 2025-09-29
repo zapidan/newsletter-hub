@@ -123,7 +123,11 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
       const currentFilterState = JSON.stringify({ filter, sourceFilter, timeRange, tagIds });
 
       // Check if the filter state has actually changed
-      if (pendingStr !== currentStr && !isUpdatingTagsRef.current && lastFilterStateRef.current !== currentFilterState) {
+      if (
+        pendingStr !== currentStr &&
+        !isUpdatingTagsRef.current &&
+        lastFilterStateRef.current !== currentFilterState
+      ) {
         isUpdatingTagsRef.current = true;
         lastFilterStateRef.current = currentFilterState;
         stableSetTagIds(pendingTagUpdates);
@@ -350,16 +354,10 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     );
   }, [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]);
 
-  // Create newsletter filter that excludes tagIds for local filtering
+  // Use newsletter filter with tagIds for database-level filtering
   const enhancedNewsletterFilter = useMemo(() => {
-    // Always exclude tagIds from server filter to enable local filtering
-    if (!newsletterFilter.tagIds || newsletterFilter.tagIds.length === 0) {
-      return newsletterFilter; // Already has no tagIds, return same reference
-    }
-
-    // Remove tagIds from the filter
-    const { tagIds: _tagIds, ...filterWithoutTags } = newsletterFilter;
-    return filterWithoutTags;
+    // Keep tagIds in the filter for efficient database-level filtering
+    return newsletterFilter;
   }, [
     newsletterFilter.isRead,
     newsletterFilter.isArchived,
@@ -369,7 +367,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     newsletterFilter.dateTo,
     newsletterFilter.orderBy,
     newsletterFilter.ascending,
-    newsletterFilter.tagIds
+    newsletterFilter.tagIds,
   ]);
 
   const state: InboxFiltersState = {

@@ -3,21 +3,21 @@ import {
   handleSupabaseError,
   requireAuth,
   withPerformanceLogging,
-} from "./supabaseClient";
-import { Tag, TagCreate, TagUpdate } from "../types";
+} from './supabaseClient';
+import { Tag, TagCreate, TagUpdate } from '../types';
 
 // Tag API Service
 export const tagApi = {
   // Get all tags for the current user
   async getAll(): Promise<Tag[]> {
-    return withPerformanceLogging("tags.getAll", async () => {
+    return withPerformanceLogging('tags.getAll', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("tags")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("name");
+        .from('tags')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('name');
 
       if (error) handleSupabaseError(error);
       return data || [];
@@ -26,18 +26,18 @@ export const tagApi = {
 
   // Get tag by ID
   async getById(id: string): Promise<Tag | null> {
-    return withPerformanceLogging("tags.getById", async () => {
+    return withPerformanceLogging('tags.getById', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("tags")
-        .select("*")
-        .eq("id", id)
-        .eq("user_id", user.id)
+        .from('tags')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', user.id)
         .single();
 
       if (error) {
-        if (error.code === "PGRST116") {
+        if (error.code === 'PGRST116') {
           return null; // Not found
         }
         handleSupabaseError(error);
@@ -49,11 +49,11 @@ export const tagApi = {
 
   // Create a new tag
   async create(tag: TagCreate): Promise<Tag> {
-    return withPerformanceLogging("tags.create", async () => {
+    return withPerformanceLogging('tags.create', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("tags")
+        .from('tags')
         .insert([{ ...tag, user_id: user.id }])
         .select()
         .single();
@@ -65,15 +65,15 @@ export const tagApi = {
 
   // Update an existing tag
   async update(tag: TagUpdate): Promise<Tag> {
-    return withPerformanceLogging("tags.update", async () => {
+    return withPerformanceLogging('tags.update', async () => {
       const user = await requireAuth();
 
       const { id, ...updates } = tag;
       const { data, error } = await supabase
-        .from("tags")
+        .from('tags')
         .update(updates)
-        .eq("id", id)
-        .eq("user_id", user.id)
+        .eq('id', id)
+        .eq('user_id', user.id)
         .select()
         .single();
 
@@ -84,14 +84,10 @@ export const tagApi = {
 
   // Delete a tag
   async delete(tagId: string): Promise<boolean> {
-    return withPerformanceLogging("tags.delete", async () => {
+    return withPerformanceLogging('tags.delete', async () => {
       const user = await requireAuth();
 
-      const { error } = await supabase
-        .from("tags")
-        .delete()
-        .eq("id", tagId)
-        .eq("user_id", user.id);
+      const { error } = await supabase.from('tags').delete().eq('id', tagId).eq('user_id', user.id);
 
       if (error) handleSupabaseError(error);
       return true;
@@ -100,20 +96,20 @@ export const tagApi = {
 
   // Get tags for a specific newsletter
   async getTagsForNewsletter(newsletterId: string): Promise<Tag[]> {
-    return withPerformanceLogging("tags.getTagsForNewsletter", async () => {
+    return withPerformanceLogging('tags.getTagsForNewsletter', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("newsletter_tags")
-        .select("tag:tags(*)")
-        .eq("newsletter_id", newsletterId)
-        .eq("user_id", user.id);
+        .from('newsletter_tags')
+        .select('tag:tags(*)')
+        .eq('newsletter_id', newsletterId)
+        .eq('user_id', user.id);
 
       if (error) handleSupabaseError(error);
       return (
         data
           ?.map((item: { tag: any }) => {
-            if (item.tag && typeof item.tag === "object") {
+            if (item.tag && typeof item.tag === 'object') {
               return {
                 id: item.tag.id as string,
                 name: item.tag.name as string,
@@ -131,45 +127,34 @@ export const tagApi = {
   },
 
   // Update tags for a newsletter
-  async updateNewsletterTags(
-    newsletterId: string,
-    tags: Tag[],
-  ): Promise<boolean> {
-    return withPerformanceLogging("tags.updateNewsletterTags", async () => {
+  async updateNewsletterTags(newsletterId: string, tags: Tag[]): Promise<boolean> {
+    return withPerformanceLogging('tags.updateNewsletterTags', async () => {
       const user = await requireAuth();
 
       // Get current tags
       const { data: currentTags, error: currentTagsError } = await supabase
-        .from("newsletter_tags")
-        .select("tag_id")
-        .eq("newsletter_id", newsletterId)
-        .eq("user_id", user.id);
+        .from('newsletter_tags')
+        .select('tag_id')
+        .eq('newsletter_id', newsletterId)
+        .eq('user_id', user.id);
 
       if (currentTagsError) handleSupabaseError(currentTagsError);
 
       // Compute tags to add and remove
-      const currentTagIds = (currentTags || []).map(
-        (t: { tag_id: string }) => t.tag_id,
-      );
+      const currentTagIds = (currentTags || []).map((t: { tag_id: string }) => t.tag_id);
       const newTagIds = tags.map((tag) => tag.id);
-      const tagsToAdd = newTagIds.filter(
-        (id: string) => !currentTagIds.includes(id),
-      );
-      const tagsToRemove = currentTagIds.filter(
-        (id: string) => !newTagIds.includes(id),
-      );
+      const tagsToAdd = newTagIds.filter((id: string) => !currentTagIds.includes(id));
+      const tagsToRemove = currentTagIds.filter((id: string) => !newTagIds.includes(id));
 
       // Add new tags
       if (tagsToAdd.length > 0) {
-        const { error: addError } = await supabase
-          .from("newsletter_tags")
-          .insert(
-            tagsToAdd.map((tagId) => ({
-              newsletter_id: newsletterId,
-              tag_id: tagId,
-              user_id: user.id,
-            })),
-          );
+        const { error: addError } = await supabase.from('newsletter_tags').insert(
+          tagsToAdd.map((tagId) => ({
+            newsletter_id: newsletterId,
+            tag_id: tagId,
+            user_id: user.id,
+          }))
+        );
 
         if (addError) handleSupabaseError(addError);
       }
@@ -177,11 +162,11 @@ export const tagApi = {
       // Remove tags
       if (tagsToRemove.length > 0) {
         const { error: removeError } = await supabase
-          .from("newsletter_tags")
+          .from('newsletter_tags')
           .delete()
-          .eq("newsletter_id", newsletterId)
-          .eq("user_id", user.id)
-          .in("tag_id", tagsToRemove);
+          .eq('newsletter_id', newsletterId)
+          .eq('user_id', user.id)
+          .in('tag_id', tagsToRemove);
 
         if (removeError) handleSupabaseError(removeError);
       }
@@ -192,23 +177,23 @@ export const tagApi = {
 
   // Add a tag to a newsletter
   async addToNewsletter(newsletterId: string, tagId: string): Promise<boolean> {
-    return withPerformanceLogging("tags.addToNewsletter", async () => {
+    return withPerformanceLogging('tags.addToNewsletter', async () => {
       const user = await requireAuth();
 
       // Check if the relationship already exists
       const { data: existing } = await supabase
-        .from("newsletter_tags")
-        .select("id")
-        .eq("newsletter_id", newsletterId)
-        .eq("tag_id", tagId)
-        .eq("user_id", user.id)
+        .from('newsletter_tags')
+        .select('id')
+        .eq('newsletter_id', newsletterId)
+        .eq('tag_id', tagId)
+        .eq('user_id', user.id)
         .maybeSingle();
 
       if (existing) {
         return true; // Already exists
       }
 
-      const { error } = await supabase.from("newsletter_tags").insert({
+      const { error } = await supabase.from('newsletter_tags').insert({
         newsletter_id: newsletterId,
         tag_id: tagId,
         user_id: user.id,
@@ -220,19 +205,16 @@ export const tagApi = {
   },
 
   // Remove a tag from a newsletter
-  async removeFromNewsletter(
-    newsletterId: string,
-    tagId: string,
-  ): Promise<boolean> {
-    return withPerformanceLogging("tags.removeFromNewsletter", async () => {
+  async removeFromNewsletter(newsletterId: string, tagId: string): Promise<boolean> {
+    return withPerformanceLogging('tags.removeFromNewsletter', async () => {
       const user = await requireAuth();
 
       const { error } = await supabase
-        .from("newsletter_tags")
+        .from('newsletter_tags')
         .delete()
-        .eq("newsletter_id", newsletterId)
-        .eq("tag_id", tagId)
-        .eq("user_id", user.id);
+        .eq('newsletter_id', newsletterId)
+        .eq('tag_id', tagId)
+        .eq('user_id', user.id);
 
       if (error) handleSupabaseError(error);
       return true;
@@ -241,15 +223,15 @@ export const tagApi = {
 
   // Get or create a tag by name
   async getOrCreate(name: string, color?: string): Promise<Tag> {
-    return withPerformanceLogging("tags.getOrCreate", async () => {
+    return withPerformanceLogging('tags.getOrCreate', async () => {
       const user = await requireAuth();
 
       // Try to find existing tag
       const { data: existingTag } = await supabase
-        .from("tags")
-        .select("*")
-        .eq("name", name.trim())
-        .eq("user_id", user.id)
+        .from('tags')
+        .select('*')
+        .eq('name', name.trim())
+        .eq('user_id', user.id)
         .single();
 
       if (existingTag) {
@@ -259,10 +241,10 @@ export const tagApi = {
       // Create new tag if not found
       const tagColor =
         color ||
-        "#" +
+        '#' +
           Math.floor(Math.random() * 16777215)
             .toString(16)
-            .padStart(6, "0");
+            .padStart(6, '0');
 
       return this.create({
         name: name.trim(),
@@ -273,11 +255,11 @@ export const tagApi = {
 
   // Bulk create tags
   async bulkCreate(tags: TagCreate[]): Promise<Tag[]> {
-    return withPerformanceLogging("tags.bulkCreate", async () => {
+    return withPerformanceLogging('tags.bulkCreate', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("tags")
+        .from('tags')
         .insert(tags.map((tag) => ({ ...tag, user_id: user.id })))
         .select();
 
@@ -288,46 +270,63 @@ export const tagApi = {
 
   // Get newsletter count for each tag
   async getTagUsageStats(): Promise<Array<Tag & { newsletter_count: number }>> {
-    return withPerformanceLogging("tags.getTagUsageStats", async () => {
+    return withPerformanceLogging('tags.getTagUsageStats', async () => {
       const user = await requireAuth();
 
-      const { data, error } = await supabase
-        .from("tags")
-        .select(
-          `
-          *,
-          newsletter_tags!inner(newsletter_id)
-        `,
-        )
-        .eq("user_id", user.id);
+      // Use a much more efficient approach: get tags and their counts separately
+      // First get all tags
+      const { data: tags, error: tagsError } = await supabase
+        .from('tags')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('name');
 
-      if (error) handleSupabaseError(error);
+      if (tagsError) handleSupabaseError(tagsError);
 
-      // Count newsletters for each tag
-      const tagsWithCounts = (data || []).map(
-        (tag: Tag & { newsletter_tags?: unknown[] }) => ({
-          ...tag,
-          newsletter_count: tag.newsletter_tags?.length || 0,
-        }),
+      if (!tags || tags.length === 0) {
+        return [];
+      }
+
+      // Then get counts for all tags in a single efficient query
+      const { data: counts, error: countsError } = await supabase
+        .from('newsletter_tags')
+        .select('tag_id')
+        .eq('user_id', user.id)
+        .in(
+          'tag_id',
+          tags.map((t) => t.id)
+        );
+
+      if (countsError) handleSupabaseError(countsError);
+
+      // Create a count map
+      const countMap = (counts || []).reduce(
+        (acc, item) => {
+          acc[item.tag_id] = (acc[item.tag_id] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
       );
 
-      return tagsWithCounts.map(
-        ({ ...tag }) => tag,
-      ) as (Tag & { newsletter_count: number })[];
+      // Combine tags with their counts
+      return tags.map((tag) => ({
+        ...tag,
+        newsletter_count: countMap[tag.id] || 0,
+      }));
     });
   },
 
   // Search tags by name
   async search(query: string): Promise<Tag[]> {
-    return withPerformanceLogging("tags.search", async () => {
+    return withPerformanceLogging('tags.search', async () => {
       const user = await requireAuth();
 
       const { data, error } = await supabase
-        .from("tags")
-        .select("*")
-        .eq("user_id", user.id)
-        .ilike("name", `%${query}%`)
-        .order("name");
+        .from('tags')
+        .select('*')
+        .eq('user_id', user.id)
+        .ilike('name', `%${query}%`)
+        .order('name');
 
       if (error) handleSupabaseError(error);
       return data || [];
@@ -340,36 +339,25 @@ export const tagApi = {
       limit?: number;
       offset?: number;
       search?: string;
-      orderBy?: "name" | "created_at";
+      orderBy?: 'name' | 'created_at';
       ascending?: boolean;
-    } = {},
+    } = {}
   ): Promise<{
     data: Tag[];
     count: number;
     hasMore: boolean;
   }> {
-    return withPerformanceLogging("tags.getPaginated", async () => {
+    return withPerformanceLogging('tags.getPaginated', async () => {
       const user = await requireAuth();
-      const {
-        limit = 50,
-        offset = 0,
-        search,
-        orderBy = "name",
-        ascending = true,
-      } = options;
+      const { limit = 50, offset = 0, search, orderBy = 'name', ascending = true } = options;
 
-      let query = supabase
-        .from("tags")
-        .select("*", { count: "exact" })
-        .eq("user_id", user.id);
+      let query = supabase.from('tags').select('*', { count: 'exact' }).eq('user_id', user.id);
 
       if (search) {
-        query = query.ilike("name", `%${search}%`);
+        query = query.ilike('name', `%${search}%`);
       }
 
-      query = query
-        .order(orderBy, { ascending })
-        .range(offset, offset + limit - 1);
+      query = query.order(orderBy, { ascending }).range(offset, offset + limit - 1);
 
       const { data, error, count } = await query;
 
