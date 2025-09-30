@@ -96,7 +96,7 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
       const currentValue = params[key];
       const newValue =
         typeof value === 'function' ? (value as (current: T[K]) => T[K])(currentValue) : value;
-      updateParams({ [key]: newValue } as Partial<T>);
+      updateParams({ [key]: newValue } as unknown as Partial<T>);
     },
     [params, updateParams]
   );
@@ -179,7 +179,7 @@ function deserializeValue(value: string, defaultValue: ParamValue): ParamValue {
 export function useInboxUrlParams() {
   return useUrlParams({
     filter: {
-      defaultValue: 'all' as const,
+      defaultValue: 'unread' as const,
       omitIfDefault: true,
     },
     source: {

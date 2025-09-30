@@ -39,8 +39,8 @@ export const useUnreadCount = (sourceId?: string | null) => {
 
   // Selector function to extract the needed count
   const selectCount = useCallback(
-    (data: UnreadCountData | undefined): number => {
-      if (!data) return 0;
+    (data: UnreadCountData | undefined): number | undefined => {
+      if (!data) return undefined;
 
       if (sourceId) {
         return data.bySource[sourceId] || 0;
@@ -53,11 +53,11 @@ export const useUnreadCount = (sourceId?: string | null) => {
 
   // Single query that fetches all unread counts
   const {
-    data: unreadCount = 0,
+    data: unreadCount,
     isLoading,
     isError,
     error,
-  } = useQuery<UnreadCountData, Error, number>({
+  } = useQuery<UnreadCountData, Error, number | undefined>({
     queryKey,
     queryFn: async () => {
       if (!user) {

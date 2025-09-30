@@ -49,8 +49,8 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   // Track last filter state to prevent unnecessary updates
   const lastNewsletterFilterRef = useRef<string>('');
 
-  // Extract filter state from URL params
-  const validFilters = ['unread', 'read', 'liked', 'archived'];
+  // Extract filter state from URL params with explicit defaults
+  const validFilters: InboxFilterType[] = ['unread', 'read', 'liked', 'archived'];
   const filterValue = params.filter as FilterState['filter'];
   const filter: FilterState['filter'] = validFilters.includes(filterValue) ? filterValue : 'unread';
 
@@ -68,10 +68,10 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   const newsletterFilter = useMemo(() => {
     const filters: NewsletterFilter = {};
 
-    // Handle status filter
+    // Handle status filter - 'unread' is the default inbox view
     switch (filterState.filter) {
       case 'unread':
-      default: // 'unread' is the new default
+      default: // 'unread' is the default - show unread, non-archived newsletters
         filters.isRead = false;
         filters.isArchived = false;
         break;
@@ -162,11 +162,17 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     }
 
     return filters;
-  }, [filterState, useLocalTagFiltering]);
+  }, [
+    filterState.filter,
+    filterState.sourceFilter,
+    filterState.timeRange,
+    filterState.tagIds,
+    useLocalTagFiltering,
+  ]);
 
   // Check if any filters are active (non-default)
   const hasActiveFilters = useMemo(() => {
-    // 'unread' is the default for status. Active if not 'unread' or other filters are set.
+    // Compare against default values - any deviation means filters are active
     return (
       filterState.filter !== 'unread' ||
       filterState.sourceFilter !== null ||
@@ -180,12 +186,12 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     (filterName: keyof FilterState): boolean => {
       switch (filterName) {
         case 'filter':
-          // 'unread' is the default. Active if it's 'liked' or 'archived'.
+          // Active if different from default filter
           return filterState.filter !== 'unread';
         case 'sourceFilter':
           return filterState.sourceFilter !== null;
         case 'timeRange':
-          return filterState.timeRange !== 'all'; // 'all' time is default
+          return filterState.timeRange !== 'all';
         case 'tagIds':
           return filterState.tagIds.length > 0;
         default:

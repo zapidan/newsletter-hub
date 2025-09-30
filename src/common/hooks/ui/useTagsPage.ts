@@ -125,23 +125,14 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Remove expensive newsletter fetching - use tag usage stats only
-
-  // Compute tags with usage counts
-  const { tagsWithCount, newslettersByTag } = useMemo(() => {
-    // Use tag usage stats for efficient counts, fallback to base tags with 0 counts
-    const tagsWithCount: TagWithCount[] =
-      tagUsageStats.length > 0
-        ? tagUsageStats
-        : baseTags.map((tag: Tag) => ({
-            ...tag,
-            newsletter_count: 0,
-          }));
-
-    // Use empty newsletters map since we're not fetching newsletters for performance
-    const newslettersMap: Record<string, Newsletter[]> = {};
-
-    return { tagsWithCount, newslettersByTag: newslettersMap };
+  // Compute tags with usage counts - simple and fast
+  const tagsWithCount: TagWithCount[] = useMemo(() => {
+    return tagUsageStats.length > 0
+      ? tagUsageStats
+      : baseTags.map((tag: Tag) => ({
+          ...tag,
+          newsletter_count: 0,
+        }));
   }, [baseTags, tagUsageStats]);
 
   // Compute loading and error states
@@ -328,13 +319,13 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
 
     // Data
     tags: tagsWithCount,
-    tagNewsletters: newslettersByTag,
-    newsletters: [], // Empty since we don't fetch all newsletters anymore
+    tagNewsletters: {}, // Keep interface compatible but empty for performance
+    newsletters: [], // Empty since we don't fetch all newsletters for performance
 
     // Loading states
     isLoading,
     isLoadingTags,
-    isLoadingNewsletters: false, // No longer loading newsletters
+    isLoadingNewsletters: false, // Not loading newsletters anymore for performance
     isLoadingTagUsage,
 
     // Error states

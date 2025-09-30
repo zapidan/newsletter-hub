@@ -122,11 +122,43 @@ const Inbox: React.FC = () => {
       queryKey: ['newsletters'],
       exact: false,
     });
+
+    // Also invalidate unread count to refresh badge/counters
+    queryClient.invalidateQueries({
+      queryKey: ['unreadCount'],
+      exact: false,
+    });
   }, [resetFilters, queryClient, log, filter, sourceFilter, timeRange, debouncedTagIds]);
 
   // Group filter state
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
+
+  // Invalidate unread count when filters change (excluding initial load)
+  const hasInitiallyLoaded = React.useRef(false);
+  useEffect(() => {
+    // Skip invalidation on initial load
+    if (!hasInitiallyLoaded.current) {
+      hasInitiallyLoaded.current = true;
+      return;
+    }
+
+    log.debug('Filter changed, invalidating unread count', {
+      action: 'filter_change_invalidate_unread',
+      metadata: {
+        filter,
+        sourceFilter,
+        timeRange,
+        tagCount: debouncedTagIds?.length || 0,
+      },
+    });
+
+    // Invalidate unread count when any filter changes
+    queryClient.invalidateQueries({
+      queryKey: ['unreadCount'],
+      exact: false,
+    });
+  }, [filter, sourceFilter, timeRange, debouncedTagIds, queryClient, log]);
 
   // When group is selected, clear source filter; when source is selected, clear group filter
   const handleSourceFilterChange = useCallback(
@@ -186,7 +218,20 @@ const Inbox: React.FC = () => {
       };
     }
     return filterObj;
-  }, [contextNewsletterFilter, groupFilter, selectedGroupSourceIds]);
+  }, [
+    contextNewsletterFilter.isRead,
+    contextNewsletterFilter.isArchived,
+    contextNewsletterFilter.isLiked,
+    contextNewsletterFilter.tagIds?.join(','),
+    contextNewsletterFilter.sourceIds?.join(','),
+    contextNewsletterFilter.dateFrom,
+    contextNewsletterFilter.dateTo,
+    contextNewsletterFilter.orderBy,
+    contextNewsletterFilter.ascending,
+    contextNewsletterFilter.search,
+    groupFilter,
+    selectedGroupSourceIds?.join(','),
+  ]);
 
   // Newsletter data with infinite scroll
   const {

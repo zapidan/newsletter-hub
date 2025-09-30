@@ -268,12 +268,11 @@ export const tagApi = {
     });
   },
 
-  // Get newsletter count for each tag
+  // Get newsletter count for each tag using the same logic as filtering
   async getTagUsageStats(): Promise<Array<Tag & { newsletter_count: number }>> {
     return withPerformanceLogging('tags.getTagUsageStats', async () => {
       const user = await requireAuth();
 
-      // Use a much more efficient approach: get tags and their counts separately
       // First get all tags
       const { data: tags, error: tagsError } = await supabase
         .from('tags')
@@ -287,22 +286,52 @@ export const tagApi = {
         return [];
       }
 
-      // Then get counts for all tags in a single efficient query
-      const { data: counts, error: countsError } = await supabase
-        .from('newsletter_tags')
-        .select('tag_id')
-        .eq('user_id', user.id)
-        .in(
-          'tag_id',
-          tags.map((t) => t.id)
+      // For each tag, use the EXACT same query logic as the filtering in newsletterApi.ts
+      // This ensures the counts match what users will see when they actually filter
+      const tagCountPromises = tags.map(async (tag) => {
+        // Use the same pre-filtering logic as in newsletterApi.getAll()
+        const { data: tagNewsletters, error: tagError } = await supabase
+          .from('newsletter_tags')
+          .select('newsletter_id')
+          .eq('tag_id', tag.id)
+          .eq('user_id', user.id);
+
+        if (tagError) {
+          handleSupabaseError(tagError);
+          return { tagId: tag.id, count: 0 };
+        }
+
+        // Get unique newsletter IDs that have this tag
+        const newsletterIds = Array.from(
+          new Set(tagNewsletters?.map((row) => row.newsletter_id) || [])
         );
 
-      if (countsError) handleSupabaseError(countsError);
+        if (newsletterIds.length === 0) {
+          return { tagId: tag.id, count: 0 };
+        }
+
+        // Now count how many of these newsletters actually exist and are not filtered out
+        // This matches the same logic used in buildNewsletterQuery
+        const { count, error: countError } = await supabase
+          .from('newsletters')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .in('id', newsletterIds);
+
+        if (countError) {
+          handleSupabaseError(countError);
+          return { tagId: tag.id, count: 0 };
+        }
+
+        return { tagId: tag.id, count: count || 0 };
+      });
+
+      const tagCounts = await Promise.all(tagCountPromises);
 
       // Create a count map
-      const countMap = (counts || []).reduce(
+      const countMap = tagCounts.reduce(
         (acc, item) => {
-          acc[item.tag_id] = (acc[item.tag_id] || 0) + 1;
+          acc[item.tagId] = item.count;
           return acc;
         },
         {} as Record<string, number>

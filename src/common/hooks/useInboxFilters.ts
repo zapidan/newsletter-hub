@@ -354,21 +354,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     );
   }, [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]);
 
-  // Use newsletter filter with tagIds for database-level filtering
-  const enhancedNewsletterFilter = useMemo(() => {
-    // Keep tagIds in the filter for efficient database-level filtering
-    return newsletterFilter;
-  }, [
-    newsletterFilter.isRead,
-    newsletterFilter.isArchived,
-    newsletterFilter.isLiked,
-    newsletterFilter.sourceIds,
-    newsletterFilter.dateFrom,
-    newsletterFilter.dateTo,
-    newsletterFilter.orderBy,
-    newsletterFilter.ascending,
-    newsletterFilter.tagIds,
-  ]);
+  // Use newsletter filter directly - no additional memoization needed
 
   const state: InboxFiltersState = {
     filter,
@@ -399,7 +385,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   return {
     ...state,
     ...actions,
-    newsletterFilter: enhancedNewsletterFilter,
+    newsletterFilter,
     hasActiveFilters: enhancedHasActiveFilters,
     isFilterActive: enhancedIsFilterActive,
     newsletterSources,
