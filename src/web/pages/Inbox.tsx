@@ -134,8 +134,10 @@ const Inbox: React.FC = () => {
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
 
-  // Invalidate unread count when filters change (excluding initial load)
+  // Enhanced filter change handling with navigation stability
   const hasInitiallyLoaded = React.useRef(false);
+  const lastFilterStateRef = React.useRef<string>('');
+
   useEffect(() => {
     // Skip invalidation on initial load
     if (!hasInitiallyLoaded.current) {
@@ -143,19 +145,40 @@ const Inbox: React.FC = () => {
       return;
     }
 
-    log.debug('Filter changed, invalidating unread count', {
-      action: 'filter_change_invalidate_unread',
+    // Create stable filter state key for comparison
+    const currentFilterState = JSON.stringify({
+      filter,
+      sourceFilter,
+      timeRange,
+      tagIds: debouncedTagIds?.sort(),
+    });
+
+    // Only invalidate if filter state actually changed
+    if (lastFilterStateRef.current === currentFilterState) {
+      return;
+    }
+    lastFilterStateRef.current = currentFilterState;
+
+    log.debug('Filter changed, invalidating unread count and newsletter cache', {
+      action: 'filter_change_invalidate',
       metadata: {
         filter,
         sourceFilter,
         timeRange,
         tagCount: debouncedTagIds?.length || 0,
+        hasComplexTagFilter: (debouncedTagIds?.length || 0) > 3,
       },
     });
 
-    // Invalidate unread count when any filter changes
+    // Invalidate both unread count and newsletter cache for navigation stability
     queryClient.invalidateQueries({
       queryKey: ['unreadCount'],
+      exact: false,
+    });
+
+    // Also invalidate newsletter queries to prevent stale cache issues during navigation
+    queryClient.invalidateQueries({
+      queryKey: ['newsletters'],
       exact: false,
     });
   }, [filter, sourceFilter, timeRange, debouncedTagIds, queryClient, log]);
@@ -233,7 +256,26 @@ const Inbox: React.FC = () => {
     selectedGroupSourceIds?.join(','),
   ]);
 
-  // Newsletter data with infinite scroll
+  // Newsletter data with infinite scroll and enhanced error recovery
+  const [fallbackMode, setFallbackMode] = useState(false);
+  const [errorRetryCount, setErrorRetryCount] = useState(0);
+
+  // Create fallback filter for complex tag queries
+  const fallbackFilter = useMemo(() => {
+    if (!fallbackMode) return stableNewsletterFilter;
+
+    // Simplify filter by removing complex tag filtering to prevent timeouts
+    const { tagIds, ...simplifiedFilter } = stableNewsletterFilter;
+    log.debug('Using fallback filter for navigation stability', {
+      action: 'fallback_filter_active',
+      metadata: {
+        originalTagCount: tagIds?.length || 0,
+        fallbackActive: true,
+      },
+    });
+    return simplifiedFilter;
+  }, [stableNewsletterFilter, fallbackMode, log]);
+
   const {
     newsletters: rawNewsletters,
     isLoading: isLoadingNewsletters,
@@ -243,7 +285,7 @@ const Inbox: React.FC = () => {
     fetchNextPage,
     refetch: refetchNewsletters,
     totalCount,
-  } = useInfiniteNewsletters(stableNewsletterFilter, {
+  } = useInfiniteNewsletters(fallbackFilter, {
     _refetchOnWindowFocus: false,
     _staleTime: 0,
     pageSize: 25,
@@ -253,11 +295,70 @@ const Inbox: React.FC = () => {
   // Reading queue
   const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
 
-  // Error handling
+  // Enhanced error handling with fallback recovery
   const { handleError } = useErrorHandling({
     enableToasts: true,
     enableLogging: true,
   });
+
+  // Error recovery effect
+  useEffect(() => {
+    if (errorNewsletters && !fallbackMode) {
+      const isTagRelatedError = (stableNewsletterFilter.tagIds?.length || 0) > 0;
+      const errorMessage = errorNewsletters.message || '';
+      const isTimeoutError =
+        errorMessage.includes('timeout') || errorMessage.includes('Query timeout');
+
+      if (isTagRelatedError && (isTimeoutError || errorRetryCount >= 2)) {
+        log.warn('Activating fallback mode for navigation stability', {
+          action: 'fallback_mode_activated',
+          metadata: {
+            error: errorMessage,
+            tagCount: stableNewsletterFilter.tagIds?.length || 0,
+            retryCount: errorRetryCount,
+            isTimeout: isTimeoutError,
+          },
+        });
+
+        setFallbackMode(true);
+        setErrorRetryCount(0);
+
+        showError(
+          'Tag filtering is experiencing issues. Showing simplified results for better performance.'
+        );
+      } else if (errorNewsletters) {
+        setErrorRetryCount((prev) => prev + 1);
+
+        // Auto-retry with a delay for non-tag errors
+        setTimeout(() => {
+          refetchNewsletters();
+        }, 2000);
+      }
+    }
+  }, [
+    errorNewsletters,
+    fallbackMode,
+    stableNewsletterFilter.tagIds,
+    errorRetryCount,
+    log,
+    showError,
+    refetchNewsletters,
+  ]);
+
+  // Reset fallback mode when filters change significantly
+  useEffect(() => {
+    const shouldResetFallback = fallbackMode && (stableNewsletterFilter.tagIds?.length || 0) <= 2;
+    if (shouldResetFallback) {
+      log.debug('Resetting fallback mode - simpler tag filter detected', {
+        action: 'fallback_mode_reset',
+        metadata: {
+          tagCount: stableNewsletterFilter.tagIds?.length || 0,
+        },
+      });
+      setFallbackMode(false);
+      setErrorRetryCount(0);
+    }
+  }, [stableNewsletterFilter.tagIds, fallbackMode, log]);
 
   // Loading states for bulk operations
   const bulkLoadingStates = useBulkLoadingStates();
