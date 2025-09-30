@@ -2,17 +2,16 @@ import { useLogger } from '@common/utils/logger/useLogger';
 import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import { newsletterService } from '../../services';
 import { NewsletterWithRelations } from '../../types';
 import { NewsletterFilter } from '../../types/cache';
 import { queryKeyFactory } from '../../utils/queryKeyFactory';
-import { useFilters } from '../../contexts/FilterContext';
 
 export interface UseInfiniteNewslettersOptions {
   enabled?: boolean;
   _refetchOnWindowFocus?: boolean;
+  _refetchOnMount?: boolean;
   _staleTime?: number;
   pageSize?: number;
   debug?: boolean;
@@ -42,22 +41,10 @@ export const useInfiniteNewsletters = (
 ): UseInfiniteNewslettersReturn => {
   const { user } = useAuth();
   const log = useLogger('useInfiniteNewsletters');
-  const queryClient = useQueryClient();
-  // Make useFilters optional for backward compatibility with tests
-  let reportNavigationHealth = () => {};
-  let effectiveUseLocalTagFiltering = false;
-
-  try {
-    const filtersContext = useFilters();
-    reportNavigationHealth = filtersContext.reportNavigationHealth;
-    effectiveUseLocalTagFiltering = filtersContext.effectiveUseLocalTagFiltering;
-  } catch (error) {
-    // FilterProvider not available (e.g., in tests)
-    // Use default values
-  }
   const {
     enabled = true,
     _refetchOnWindowFocus = false,
+    _refetchOnMount = false,
     _staleTime = 30000, // 30 seconds
     pageSize = 20,
     debug = false,
@@ -71,34 +58,6 @@ export const useInfiniteNewsletters = (
 
   // Track if currently fetching to prevent multiple simultaneous requests
   const isFetchingRef = useRef(false);
-
-  // Determine if query should run
-  const shouldRunQuery = enabled && !!user;
-
-  // Normalize filters to camelCase for query and cache
-  const normalizedFilters = useMemo(() => normalizeNewsletterFilter(filters), [filters]);
-
-  // Track navigation state to prevent stale queries
-  const navigationStateRef = useRef<string>('');
-
-  // Generate navigation state key for cache stability
-  const navigationState = useMemo(() => {
-    const state = JSON.stringify({
-      tagIds: normalizedFilters.tagIds?.sort(),
-      sourceIds: normalizedFilters.sourceIds?.sort(),
-      isRead: normalizedFilters.isRead,
-      isArchived: normalizedFilters.isArchived,
-      isLiked: normalizedFilters.isLiked,
-    });
-    navigationStateRef.current = state;
-    return state;
-  }, [
-    normalizedFilters.tagIds?.join(','),
-    normalizedFilters.sourceIds?.join(','),
-    normalizedFilters.isRead,
-    normalizedFilters.isArchived,
-    normalizedFilters.isLiked,
-  ]);
 
   // Throttle debug logging to prevent excessive logs during rapid updates
   const lastDebugLogRef = useRef<Record<string, number>>({});
@@ -126,6 +85,12 @@ export const useInfiniteNewsletters = (
     };
   }, []);
 
+  // Determine if query should run
+  const shouldRunQuery = enabled && !!user;
+
+  // Normalize filters to camelCase for query and cache
+  const normalizedFilters = useMemo(() => normalizeNewsletterFilter(filters), [filters]);
+
   // Generate query key with normalized filters
   const queryKey = useMemo(() => {
     const key = queryKeyFactory.newsletters.infinite(normalizedFilters);
@@ -140,8 +105,8 @@ export const useInfiniteNewsletters = (
     normalizedFilters.isRead,
     normalizedFilters.isArchived,
     normalizedFilters.isLiked,
-    normalizedFilters.tagIds?.join(','),
-    normalizedFilters.sourceIds?.join(','),
+    normalizedFilters.tagIds,
+    normalizedFilters.sourceIds,
     normalizedFilters.dateFrom,
     normalizedFilters.dateTo,
     normalizedFilters.orderBy,
@@ -179,8 +144,8 @@ export const useInfiniteNewsletters = (
     normalizedFilters.isRead,
     normalizedFilters.isArchived,
     normalizedFilters.isLiked,
-    normalizedFilters.tagIds?.join(','),
-    normalizedFilters.sourceIds?.join(','),
+    normalizedFilters.tagIds,
+    normalizedFilters.sourceIds,
     normalizedFilters.dateFrom,
     normalizedFilters.dateTo,
     normalizedFilters.orderBy,
@@ -203,19 +168,6 @@ export const useInfiniteNewsletters = (
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
     useInfiniteQuery({
       queryKey,
-      // Add timeout and retry configuration for better resilience
-      retry: (failureCount, error) => {
-        // Don't retry on timeout for tag filtering queries to prevent cascading delays
-        if (normalizedFilters.tagIds?.length && failureCount >= 1) {
-          throttledDebug('skip_retry_tag_filter', 'Skipping retry for tag filter query', {
-            failureCount,
-            tagCount: normalizedFilters.tagIds.length,
-          });
-          return false;
-        }
-        return failureCount < 2;
-      },
-      retryDelay: 1000,
       queryFn: async ({ pageParam = 0 }) => {
         // Prevent multiple simultaneous requests
         if (isFetchingRef.current) {
@@ -239,23 +191,7 @@ export const useInfiniteNewsletters = (
         };
 
         try {
-          // Add timing measurement for navigation health monitoring
-          const startTime = performance.now();
-
-          // Add timeout for tag filtering queries to prevent test timeouts
-          const timeoutMs = normalizedFilters.tagIds?.length ? 15000 : 30000;
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Query timeout')), timeoutMs)
-          );
-
-          const result = (await Promise.race([
-            newsletterService.getAll(queryParams),
-            timeoutPromise,
-          ])) as any;
-
-          // Report successful navigation health
-          const responseTime = performance.now() - startTime;
-          reportNavigationHealth(true, responseTime);
+          const result = await newsletterService.getAll(queryParams);
 
           throttledDebug('fetch_page_success', 'Newsletters fetched successfully', {
             count: result.data.length,
@@ -268,45 +204,17 @@ export const useInfiniteNewsletters = (
 
           return result;
         } catch (err) {
-          const isTimeout = err instanceof Error && err.message === 'Query timeout';
-
           throttledDebug('fetch_page_error', 'Failed to fetch newsletters', {
             pageParam,
             pageSize,
             filters: JSON.stringify(normalizedFilters),
-            isTimeout,
-            hasTagFilters: !!normalizedFilters.tagIds?.length,
           });
-
-          // Report navigation health failure
-          reportNavigationHealth(false);
-
-          // For timeout errors with tag filtering, return empty results to prevent cascading failures
-          if (isTimeout && normalizedFilters.tagIds?.length) {
-            log.warn('Tag filtering query timed out, returning empty results', {
-              action: 'tag_filter_timeout',
-              metadata: {
-                tagCount: normalizedFilters.tagIds.length,
-                pageParam,
-              },
-            });
-            return { data: [], count: 0, hasMore: false };
-          }
-
           throw err;
         } finally {
           isFetchingRef.current = false;
         }
       },
       enabled: shouldRunQuery,
-      // Enhanced cache configuration for navigation stability
-      refetchOnWindowFocus: false,
-      refetchOnMount: true,
-      refetchOnReconnect: true,
-      // Use navigation state in query key for better cache isolation
-      queryKeyHashFn: (queryKey) => {
-        return JSON.stringify([...queryKey, navigationState]);
-      },
       getNextPageParam: (lastPage, allPages) => {
         // Check if there's more data available
         if (!lastPage.hasMore) {
@@ -332,61 +240,13 @@ export const useInfiniteNewsletters = (
         return lastPage.hasMore && totalFetched < lastPage.count ? totalFetched : undefined;
       },
       initialPageParam: 0,
+      staleTime: _staleTime, // Use configurable stale time from options
+      refetchOnWindowFocus: _refetchOnWindowFocus,
+      refetchOnMount: _refetchOnMount, // Can be overridden via options
+      refetchOnReconnect: false, // Prevent refetch on reconnect
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
     });
-
-  // Client-side tag filtering when using fallback mode
-  const applyClientSideTagFilter = useCallback(
-    (newsletters: NewsletterWithRelations[]) => {
-      if (!effectiveUseLocalTagFiltering || !normalizedFilters.tagIds?.length) {
-        return newsletters;
-      }
-
-      return newsletters.filter((newsletter) => {
-        // Check if newsletter has all required tags
-        const newsletterTagIds = newsletter.tags?.map((tag) => tag.id) || [];
-        return normalizedFilters.tagIds!.every((requiredTagId) =>
-          newsletterTagIds.includes(requiredTagId)
-        );
-      });
-    },
-    [effectiveUseLocalTagFiltering, normalizedFilters.tagIds]
-  );
-
-  // Simple cache invalidation only when necessary
-  const previousFiltersRef = useRef<string>('');
-  useEffect(() => {
-    // Only invalidate for major filter changes, not minor tag updates
-    const currentFiltersStr = JSON.stringify({
-      isRead: normalizedFilters.isRead,
-      isArchived: normalizedFilters.isArchived,
-      isLiked: normalizedFilters.isLiked,
-      sourceIds: normalizedFilters.sourceIds,
-    });
-
-    if (previousFiltersRef.current && previousFiltersRef.current !== currentFiltersStr) {
-      log.debug('Major filter change detected, invalidating cache', {
-        action: 'invalidate_cache_on_major_filter_change',
-        metadata: {
-          oldFilters: previousFiltersRef.current,
-          newFilters: currentFiltersStr,
-        },
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ['newsletters'],
-        exact: false,
-      });
-    }
-
-    previousFiltersRef.current = currentFiltersStr;
-  }, [
-    normalizedFilters.isRead,
-    normalizedFilters.isArchived,
-    normalizedFilters.isLiked,
-    normalizedFilters.sourceIds,
-    queryClient,
-    log,
-  ]);
 
   // Debug: Log query state - optimized to reduce re-renders
   useEffect(() => {
@@ -564,11 +424,8 @@ export const useInfiniteNewsletters = (
     log,
   ]);
 
-  // Apply client-side tag filtering when in fallback mode
-  const filteredNewsletters = applyClientSideTagFilter(newsletters);
-
   return {
-    newsletters: filteredNewsletters,
+    newsletters,
     isLoading,
     isLoadingMore: isFetchingNextPage,
     error: error as Error | null,

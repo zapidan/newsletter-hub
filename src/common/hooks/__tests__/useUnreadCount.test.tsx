@@ -450,7 +450,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
       // Wait for initial data to load
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
       });
 
       // Simulate optimistic update
@@ -479,7 +479,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
       // Wait for initial data to load
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
       });
 
       const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
@@ -494,7 +494,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
       // Wait a bit to see if any refetches occur
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 100));
       });
 
       // Should not have made additional API calls
@@ -506,7 +506,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
       // Wait for initial data to load
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
       });
 
       expect(result.current.unreadCount).toBe(10);
@@ -544,9 +544,11 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       const { result } = renderUseUnreadCount();
 
       // Wait for initial data to load
-      await waitFor(() => {
-        expect(result.current.unreadCount).toBe(10);
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
       });
+
+      expect(result.current.unreadCount).toBe(10);
 
       // Simulate optimistic update
       await act(async () => {
@@ -580,7 +582,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
       // Wait for initial data to load
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
       });
 
       const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
@@ -603,7 +605,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
       // Wait for initial data to load
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise(resolve => setTimeout(resolve, 0));
       });
 
       const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
@@ -617,13 +619,11 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
       // Wait for debounce delay
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 600)); // Debounce delay is 500ms
+        await new Promise(resolve => setTimeout(resolve, 600)); // Debounce delay is 500ms
       });
 
       // Should only have made one additional call due to debouncing
-      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(
-        initialCallCount + 1
-      );
+      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount + 1);
     });
   });
 });

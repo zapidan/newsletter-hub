@@ -16,7 +16,6 @@ import { useNewsletters } from '@common/hooks/useNewsletters';
 import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
-import { useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@common/contexts';
 import { useToast } from '@common/contexts/ToastContext';
@@ -93,6 +92,7 @@ const Inbox: React.FC = () => {
     allTags,
     newsletterSources,
     isLoadingSources,
+    useLocalTagFiltering,
     // Filter actions
     setFilter,
     setSourceFilter,
@@ -102,86 +102,9 @@ const Inbox: React.FC = () => {
     handleTagClick,
   } = useInboxFilters();
 
-  // Enhanced reset filters that also invalidates cache
-  const queryClient = useQueryClient();
-  const handleResetFilters = useCallback(() => {
-    log.debug('Resetting all filters and invalidating cache', {
-      action: 'reset_all_filters',
-      metadata: {
-        currentFilter: filter,
-        currentSourceFilter: sourceFilter,
-        currentTimeRange: timeRange,
-        currentTagIds: debouncedTagIds,
-      },
-    });
-
-    resetFilters();
-
-    // Force cache invalidation to ensure fresh data
-    queryClient.invalidateQueries({
-      queryKey: ['newsletters'],
-      exact: false,
-    });
-
-    // Also invalidate unread count to refresh badge/counters
-    queryClient.invalidateQueries({
-      queryKey: ['unreadCount'],
-      exact: false,
-    });
-  }, [resetFilters, queryClient, log, filter, sourceFilter, timeRange, debouncedTagIds]);
-
   // Group filter state
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
-
-  // Enhanced filter change handling with navigation stability
-  const hasInitiallyLoaded = React.useRef(false);
-  const lastFilterStateRef = React.useRef<string>('');
-
-  useEffect(() => {
-    // Skip invalidation on initial load
-    if (!hasInitiallyLoaded.current) {
-      hasInitiallyLoaded.current = true;
-      return;
-    }
-
-    // Create stable filter state key for comparison
-    const currentFilterState = JSON.stringify({
-      filter,
-      sourceFilter,
-      timeRange,
-      tagIds: debouncedTagIds?.sort(),
-    });
-
-    // Only invalidate if filter state actually changed
-    if (lastFilterStateRef.current === currentFilterState) {
-      return;
-    }
-    lastFilterStateRef.current = currentFilterState;
-
-    log.debug('Filter changed, invalidating unread count and newsletter cache', {
-      action: 'filter_change_invalidate',
-      metadata: {
-        filter,
-        sourceFilter,
-        timeRange,
-        tagCount: debouncedTagIds?.length || 0,
-        hasComplexTagFilter: (debouncedTagIds?.length || 0) > 3,
-      },
-    });
-
-    // Invalidate both unread count and newsletter cache for navigation stability
-    queryClient.invalidateQueries({
-      queryKey: ['unreadCount'],
-      exact: false,
-    });
-
-    // Also invalidate newsletter queries to prevent stale cache issues during navigation
-    queryClient.invalidateQueries({
-      queryKey: ['newsletters'],
-      exact: false,
-    });
-  }, [filter, sourceFilter, timeRange, debouncedTagIds, queryClient, log]);
 
   // When group is selected, clear source filter; when source is selected, clear group filter
   const handleSourceFilterChange = useCallback(
@@ -240,42 +163,30 @@ const Inbox: React.FC = () => {
         sourceIds: selectedGroupSourceIds,
       };
     }
+
+    // Debug: Log filter changes when tags are selected
+    if (process.env.NODE_ENV === 'development' && debouncedTagIds.length > 0) {
+      console.log('[Inbox] Filter changed with tags:', {
+        filter,
+        useLocalTagFiltering,
+        debouncedTagIds,
+        contextFilter: contextNewsletterFilter,
+        serverFilter: filterObj,
+        hasTagsInServerFilter: !!filterObj.tagIds?.length,
+      });
+    }
+
     return filterObj;
   }, [
-    contextNewsletterFilter.isRead,
-    contextNewsletterFilter.isArchived,
-    contextNewsletterFilter.isLiked,
-    contextNewsletterFilter.tagIds?.join(','),
-    contextNewsletterFilter.sourceIds?.join(','),
-    contextNewsletterFilter.dateFrom,
-    contextNewsletterFilter.dateTo,
-    contextNewsletterFilter.orderBy,
-    contextNewsletterFilter.ascending,
-    contextNewsletterFilter.search,
+    contextNewsletterFilter,
     groupFilter,
-    selectedGroupSourceIds?.join(','),
+    selectedGroupSourceIds,
+    filter,
+    debouncedTagIds,
+    useLocalTagFiltering,
   ]);
 
-  // Newsletter data with infinite scroll and enhanced error recovery
-  const [fallbackMode, setFallbackMode] = useState(false);
-  const [errorRetryCount, setErrorRetryCount] = useState(0);
-
-  // Create fallback filter for complex tag queries
-  const fallbackFilter = useMemo(() => {
-    if (!fallbackMode) return stableNewsletterFilter;
-
-    // Simplify filter by removing complex tag filtering to prevent timeouts
-    const { tagIds, ...simplifiedFilter } = stableNewsletterFilter;
-    log.debug('Using fallback filter for navigation stability', {
-      action: 'fallback_filter_active',
-      metadata: {
-        originalTagCount: tagIds?.length || 0,
-        fallbackActive: true,
-      },
-    });
-    return simplifiedFilter;
-  }, [stableNewsletterFilter, fallbackMode, log]);
-
+  // Newsletter data with infinite scroll
   const {
     newsletters: rawNewsletters,
     isLoading: isLoadingNewsletters,
@@ -285,80 +196,68 @@ const Inbox: React.FC = () => {
     fetchNextPage,
     refetch: refetchNewsletters,
     totalCount,
-  } = useInfiniteNewsletters(fallbackFilter, {
+  } = useInfiniteNewsletters(stableNewsletterFilter, {
     _refetchOnWindowFocus: false,
+    _refetchOnMount: useLocalTagFiltering && debouncedTagIds.length > 0, // Force refetch when tags are selected
     _staleTime: 0,
     pageSize: 25,
     debug: process.env.NODE_ENV === 'development',
   });
 
+  // Apply client-side tag filtering when useLocalTagFiltering is enabled
+  const newsletters = useMemo(() => {
+    if (!useLocalTagFiltering || !debouncedTagIds.length) {
+      // Debug: No client-side filtering needed
+      if (process.env.NODE_ENV === 'development' && debouncedTagIds.length > 0) {
+        console.log('[Inbox] Skipping client-side filtering:', {
+          useLocalTagFiltering,
+          tagCount: debouncedTagIds.length,
+          rawCount: rawNewsletters.length,
+        });
+      }
+      return rawNewsletters;
+    }
+
+    const filtered = rawNewsletters.filter((newsletter) => {
+      const newsletterTagIds = newsletter.tags?.map((tag) => tag.id) || [];
+      return debouncedTagIds.every((requiredTagId) => newsletterTagIds.includes(requiredTagId));
+    });
+
+    // Debug: Log client-side filtering results
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Inbox] Client-side tag filtering applied:', {
+        filter,
+        requiredTags: debouncedTagIds,
+        rawCount: rawNewsletters.length,
+        filteredCount: filtered.length,
+        sampleRawNewsletter: rawNewsletters[0]
+          ? {
+              id: rawNewsletters[0].id,
+              title: rawNewsletters[0].title?.substring(0, 50),
+              tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+            }
+          : null,
+        sampleFiltered: filtered[0]
+          ? {
+              id: filtered[0].id,
+              title: filtered[0].title?.substring(0, 50),
+              tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+            }
+          : null,
+      });
+    }
+
+    return filtered;
+  }, [rawNewsletters, useLocalTagFiltering, debouncedTagIds, filter]);
+
   // Reading queue
   const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
 
-  // Enhanced error handling with fallback recovery
+  // Error handling
   const { handleError } = useErrorHandling({
     enableToasts: true,
     enableLogging: true,
   });
-
-  // Error recovery effect
-  useEffect(() => {
-    if (errorNewsletters && !fallbackMode) {
-      const isTagRelatedError = (stableNewsletterFilter.tagIds?.length || 0) > 0;
-      const errorMessage = errorNewsletters.message || '';
-      const isTimeoutError =
-        errorMessage.includes('timeout') || errorMessage.includes('Query timeout');
-
-      if (isTagRelatedError && (isTimeoutError || errorRetryCount >= 2)) {
-        log.warn('Activating fallback mode for navigation stability', {
-          action: 'fallback_mode_activated',
-          metadata: {
-            error: errorMessage,
-            tagCount: stableNewsletterFilter.tagIds?.length || 0,
-            retryCount: errorRetryCount,
-            isTimeout: isTimeoutError,
-          },
-        });
-
-        setFallbackMode(true);
-        setErrorRetryCount(0);
-
-        showError(
-          'Tag filtering is experiencing issues. Showing simplified results for better performance.'
-        );
-      } else if (errorNewsletters) {
-        setErrorRetryCount((prev) => prev + 1);
-
-        // Auto-retry with a delay for non-tag errors
-        setTimeout(() => {
-          refetchNewsletters();
-        }, 2000);
-      }
-    }
-  }, [
-    errorNewsletters,
-    fallbackMode,
-    stableNewsletterFilter.tagIds,
-    errorRetryCount,
-    log,
-    showError,
-    refetchNewsletters,
-  ]);
-
-  // Reset fallback mode when filters change significantly
-  useEffect(() => {
-    const shouldResetFallback = fallbackMode && (stableNewsletterFilter.tagIds?.length || 0) <= 2;
-    if (shouldResetFallback) {
-      log.debug('Resetting fallback mode - simpler tag filter detected', {
-        action: 'fallback_mode_reset',
-        metadata: {
-          tagCount: stableNewsletterFilter.tagIds?.length || 0,
-        },
-      });
-      setFallbackMode(false);
-      setErrorRetryCount(0);
-    }
-  }, [stableNewsletterFilter.tagIds, fallbackMode, log]);
 
   // Loading states for bulk operations
   const bulkLoadingStates = useBulkLoadingStates();
@@ -540,26 +439,26 @@ const Inbox: React.FC = () => {
   }, []);
 
   const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === rawNewsletters.length) {
+    if (selectedIds.size === newsletters.length) {
       clearSelection();
     } else {
-      const allIds = new Set(rawNewsletters.map((n) => n.id));
+      const allIds = new Set(newsletters.map((n) => n.id));
       setSelectedIds(allIds);
       setIsSelecting(true);
     }
-  }, [rawNewsletters, selectedIds.size, clearSelection]);
+  }, [newsletters, selectedIds.size, clearSelection]);
 
   const selectRead = useCallback(() => {
-    const readIds = rawNewsletters.filter((n) => n.is_read).map((n) => n.id);
+    const readIds = newsletters.filter((n) => n.is_read).map((n) => n.id);
     setSelectedIds(new Set(readIds));
     setIsSelecting(readIds.length > 0);
-  }, [rawNewsletters]);
+  }, [newsletters]);
 
   const selectUnread = useCallback(() => {
-    const unreadIds = rawNewsletters.filter((n) => !n.is_read).map((n) => n.id);
+    const unreadIds = newsletters.filter((n) => !n.is_read).map((n) => n.id);
     setSelectedIds(new Set(unreadIds));
     setIsSelecting(unreadIds.length > 0);
-  }, [rawNewsletters]);
+  }, [newsletters]);
 
   // Memoized bulk action handlers with optimistic updates
   const handleBulkMarkAsRead = useCallback(async () => {
@@ -987,7 +886,7 @@ const Inbox: React.FC = () => {
   }, [newsletterSources]);
 
   // Loading state
-  if (isLoadingNewsletters && rawNewsletters.length === 0) {
+  if (isLoadingNewsletters && newsletters.length === 0) {
     return <LoadingScreen />;
   }
 
@@ -1033,7 +932,7 @@ const Inbox: React.FC = () => {
         <div className="mt-2">
           <BulkSelectionActions
             selectedCount={selectedIds.size}
-            totalCount={rawNewsletters.length}
+            totalCount={newsletters.length}
             showArchived={showArchived}
             isBulkActionLoading={bulkLoadingStates.isBulkActionInProgress}
             onSelectAll={toggleSelectAll}
@@ -1053,7 +952,7 @@ const Inbox: React.FC = () => {
       <SelectedTagsDisplay
         selectedTags={selectedTags}
         onRemoveTag={removeTag}
-        onClearAll={handleResetFilters}
+        onClearAll={resetFilters}
       />
 
       {/* Newsletter List with Infinite Scroll */}
@@ -1065,11 +964,11 @@ const Inbox: React.FC = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
             <p className="text-base text-neutral-400">Loading newsletters...</p>
           </div>
-        ) : rawNewsletters.length === 0 && !isLoadingNewsletters ? (
+        ) : newsletters.length === 0 && !isLoadingNewsletters ? (
           <EmptyState filter={filter} sourceFilter={sourceFilter} />
         ) : (
           <InfiniteNewsletterList
-            newsletters={rawNewsletters}
+            newsletters={newsletters}
             isLoading={isLoadingNewsletters}
             isLoadingMore={isLoadingMore}
             hasNextPage={hasNextPage}
@@ -1088,18 +987,18 @@ const Inbox: React.FC = () => {
             }}
             onToggleLike={handleToggleLikeWrapper}
             onToggleArchive={async (id: string) => {
-              const newsletter = rawNewsletters.find((n) => n.id === id);
+              const newsletter = newsletters.find((n) => n.id === id);
               if (newsletter) await handleToggleArchiveWrapper(newsletter);
             }}
             onToggleRead={async (id: string) => {
-              const newsletter = rawNewsletters.find((n) => n.id === id);
+              const newsletter = newsletters.find((n) => n.id === id);
               if (newsletter) await handleToggleReadWrapper(newsletter);
             }}
             onTrash={async (id: string) => {
               await handleDeleteNewsletterWrapper(id);
             }}
             onToggleQueue={async (newsletterId: string) => {
-              const newsletter = rawNewsletters.find((n) => n.id === newsletterId);
+              const newsletter = newsletters.find((n) => n.id === newsletterId);
               const isInQueue = readingQueue.some((item) => item.newsletter_id === newsletterId);
               if (newsletter) await handleToggleQueueWrapper(newsletter, isInQueue);
             }}

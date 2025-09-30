@@ -1,7 +1,7 @@
 import { useInboxUrlParams } from '@common/hooks/useUrlParams';
 import type { NewsletterFilter } from '@common/types/cache';
 import type { TimeRange } from '@web/components/TimeFilter';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import type { InboxFilterType } from '../hooks/useInboxFilters'; // Import the shared type
 
 export interface FilterState {
@@ -9,14 +9,6 @@ export interface FilterState {
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
-}
-
-export interface NavigationHealth {
-  isHealthy: boolean;
-  failureCount: number;
-  lastFailureTime: number | null;
-  avgResponseTime: number;
-  shouldUseFallback: boolean;
 }
 
 export interface FilterActions {
@@ -30,15 +22,13 @@ export interface FilterActions {
   clearTags: () => void;
   resetFilters: () => void;
   updateFilters: (updates: Partial<FilterState>) => void;
-  reportNavigationHealth: (success: boolean, responseTime?: number) => void;
 }
 
 export interface FilterContextType extends FilterState, FilterActions {
   newsletterFilter: NewsletterFilter;
   hasActiveFilters: boolean;
   isFilterActive: (filterName: keyof FilterState) => boolean;
-  navigationHealth: NavigationHealth;
-  effectiveUseLocalTagFiltering: boolean;
+  useLocalTagFiltering: boolean;
 }
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined);
@@ -57,24 +47,11 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 }) => {
   const { params, updateParams, resetParams } = useInboxUrlParams();
 
-  // Navigation health monitoring state
-  const [navigationHealth, setNavigationHealth] = useState<NavigationHealth>({
-    isHealthy: true,
-    failureCount: 0,
-    lastFailureTime: null,
-    avgResponseTime: 0,
-    shouldUseFallback: false,
-  });
-
-  // Track response times for health monitoring
-  const responseTimesRef = useRef<number[]>([]);
-  const healthCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
   // Track last filter state to prevent unnecessary updates
   const lastNewsletterFilterRef = useRef<string>('');
 
-  // Extract filter state from URL params with explicit defaults
-  const validFilters: InboxFilterType[] = ['unread', 'read', 'liked', 'archived'];
+  // Extract filter state from URL params
+  const validFilters = ['unread', 'read', 'liked', 'archived'];
   const filterValue = params.filter as FilterState['filter'];
   const filter: FilterState['filter'] = validFilters.includes(filterValue) ? filterValue : 'unread';
 
@@ -92,10 +69,10 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   const newsletterFilter = useMemo(() => {
     const filters: NewsletterFilter = {};
 
-    // Handle status filter - 'unread' is the default inbox view
+    // Handle status filter
     switch (filterState.filter) {
       case 'unread':
-      default: // 'unread' is the default - show unread, non-archived newsletters
+      default: // 'unread' is the new default
         filters.isRead = false;
         filters.isArchived = false;
         break;
@@ -118,13 +95,9 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       filters.sourceIds = [filterState.sourceFilter];
     }
 
-    // Handle tag filter (only include in server filter if not using local filtering and navigation is healthy)
-    if (!useLocalTagFiltering && !navigationHealth.shouldUseFallback && filterState.tagIds.length > 0) {      // For navigation stability, limit complex server-side tag queries
-      if (filterState.tagIds.length > 4 && navigationHealth.failureCount > 1) {
-        // Fall back to local filtering for complex queries
-      } else {
-        filters.tagIds = [...filterState.tagIds]; // Create a new array to ensure stability
-      }
+    // Handle tag filter (only include in server filter if not using local filtering)
+    if (!useLocalTagFiltering && filterState.tagIds.length > 0) {
+      filters.tagIds = [...filterState.tagIds]; // Create a new array to ensure stability
     }
 
     // Handle time range filter
@@ -190,19 +163,11 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     }
 
     return filters;
-  }, [
-    filterState.filter,
-    filterState.sourceFilter,
-    filterState.timeRange,
-    filterState.tagIds,
-    useLocalTagFiltering,
-    navigationHealth.failureCount,
-    navigationHealth.shouldUseFallback,
-  ]);
+  }, [filterState, useLocalTagFiltering]);
 
   // Check if any filters are active (non-default)
   const hasActiveFilters = useMemo(() => {
-    // Compare against default values - any deviation means filters are active
+    // 'unread' is the default for status. Active if not 'unread' or other filters are set.
     return (
       filterState.filter !== 'unread' ||
       filterState.sourceFilter !== null ||
@@ -216,12 +181,12 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     (filterName: keyof FilterState): boolean => {
       switch (filterName) {
         case 'filter':
-          // Active if different from default filter
+          // 'unread' is the default. Active if it's 'liked' or 'archived'.
           return filterState.filter !== 'unread';
         case 'sourceFilter':
           return filterState.sourceFilter !== null;
         case 'timeRange':
-          return filterState.timeRange !== 'all';
+          return filterState.timeRange !== 'all'; // 'all' time is default
         case 'tagIds':
           return filterState.tagIds.length > 0;
         default:
@@ -263,87 +228,6 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     },
     [updateParams]
   );
-
-  // Navigation health reporting
-  const reportNavigationHealth = useCallback(
-    (success: boolean, responseTime?: number) => {
-      setNavigationHealth((prev) => {
-        const now = Date.now();
-        let newFailureCount = prev.failureCount;
-        let newLastFailureTime = prev.lastFailureTime;
-        let newAvgResponseTime = prev.avgResponseTime;
-
-        if (!success) {
-          newFailureCount = prev.failureCount + 1;
-          newLastFailureTime = now;
-        } else if (responseTime) {
-          // Update response time tracking
-          responseTimesRef.current.push(responseTime);
-          if (responseTimesRef.current.length > 10) {
-            responseTimesRef.current = responseTimesRef.current.slice(-10);
-          }
-          newAvgResponseTime =
-            responseTimesRef.current.reduce((a, b) => a + b, 0) / responseTimesRef.current.length;
-
-          // Reset failure count on successful operation
-          if (newFailureCount > 0) {
-            newFailureCount = Math.max(0, newFailureCount - 1);
-          }
-        }
-
-        // Determine if we should use fallback mode
-        const shouldUseFallback =
-          newFailureCount >= 3 ||
-          (newAvgResponseTime > 5000 && filterState.tagIds.length > 2) ||
-          (newLastFailureTime && now - newLastFailureTime < 30000 && newFailureCount > 1);
-
-        const isHealthy = newFailureCount < 2 && newAvgResponseTime < 3000;
-
-        return {
-          isHealthy,
-          failureCount: newFailureCount,
-          lastFailureTime: newLastFailureTime,
-          avgResponseTime: newAvgResponseTime,
-          shouldUseFallback,
-        };
-      });
-    },
-    [filterState.tagIds.length]
-  );
-
-  // Health recovery mechanism
-  useEffect(() => {
-    if (!navigationHealth.isHealthy) {
-      // Clear health check interval if exists
-      if (healthCheckIntervalRef.current) {
-        clearInterval(healthCheckIntervalRef.current);
-      }
-
-      // Set up recovery check every 30 seconds
-      healthCheckIntervalRef.current = setInterval(() => {
-        const now = Date.now();
-        const timeSinceLastFailure = navigationHealth.lastFailureTime
-          ? now - navigationHealth.lastFailureTime
-          : Infinity;
-
-        // Gradually recover after 1 minute of no failures
-        if (timeSinceLastFailure > 60000) {
-          setNavigationHealth((prev) => ({
-            ...prev,
-            failureCount: Math.max(0, prev.failureCount - 1),
-            shouldUseFallback: prev.failureCount > 1,
-            isHealthy: prev.failureCount <= 1,
-          }));
-        }
-      }, 30000);
-    }
-
-    return () => {
-      if (healthCheckIntervalRef.current) {
-        clearInterval(healthCheckIntervalRef.current);
-      }
-    };
-  }, [navigationHealth.isHealthy, navigationHealth.lastFailureTime, navigationHealth.failureCount]);
 
   const setTagIds = useCallback(
     (tagIds: string[]) => {
@@ -403,16 +287,12 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     [updateParams]
   );
 
-  // Determine effective local tag filtering mode
-  const effectiveUseLocalTagFiltering = useLocalTagFiltering || navigationHealth.shouldUseFallback;
-
   const contextValue: FilterContextType = {
     // State
     ...filterState,
     newsletterFilter,
     hasActiveFilters,
-    navigationHealth,
-    effectiveUseLocalTagFiltering,
+    useLocalTagFiltering,
 
     // Actions
     setFilter,
@@ -426,7 +306,6 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     resetFilters,
     updateFilters,
     isFilterActive,
-    reportNavigationHealth,
   };
 
   return <FilterContext.Provider value={contextValue}>{children}</FilterContext.Provider>;

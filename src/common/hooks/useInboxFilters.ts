@@ -47,6 +47,7 @@ export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersAc
   newsletterSources: NewsletterSource[];
   isLoadingTags: boolean;
   isLoadingSources: boolean;
+  useLocalTagFiltering: boolean;
 }
 
 export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxFiltersReturn => {
@@ -65,6 +66,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     timeRange,
     tagIds,
     newsletterFilter,
+    useLocalTagFiltering,
     setFilter,
     setSourceFilter,
     setTimeRange,
@@ -354,7 +356,28 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     );
   }, [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]);
 
-  // Use newsletter filter directly - no additional memoization needed
+  // Create newsletter filter that conditionally excludes tagIds based on useLocalTagFiltering
+  const enhancedNewsletterFilter = useMemo(() => {
+    // Only exclude tagIds from server filter when useLocalTagFiltering is true
+    if (!useLocalTagFiltering || !newsletterFilter.tagIds || newsletterFilter.tagIds.length === 0) {
+      return newsletterFilter; // Keep tagIds for server filtering or if no tagIds exist
+    }
+
+    // Remove tagIds from the filter for client-side filtering
+    const { tagIds: _tagIds, ...filterWithoutTags } = newsletterFilter;
+    return filterWithoutTags;
+  }, [
+    useLocalTagFiltering,
+    newsletterFilter.isRead,
+    newsletterFilter.isArchived,
+    newsletterFilter.isLiked,
+    newsletterFilter.sourceIds,
+    newsletterFilter.dateFrom,
+    newsletterFilter.dateTo,
+    newsletterFilter.orderBy,
+    newsletterFilter.ascending,
+    newsletterFilter.tagIds,
+  ]);
 
   const state: InboxFiltersState = {
     filter,
@@ -385,12 +408,13 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   return {
     ...state,
     ...actions,
-    newsletterFilter,
+    newsletterFilter: enhancedNewsletterFilter,
     hasActiveFilters: enhancedHasActiveFilters,
     isFilterActive: enhancedIsFilterActive,
     newsletterSources,
     isLoadingTags,
     isLoadingSources,
+    useLocalTagFiltering,
   };
 };
 
