@@ -1,4 +1,5 @@
 import { AuthError } from '@supabase/supabase-js';
+import * as crypto from 'crypto';
 import { logger } from '../utils/logger';
 
 // Custom error types
@@ -353,7 +354,8 @@ let sessionId: string | null = null;
 
 const getSessionId = (): string => {
   if (!sessionId) {
-    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // Use a cryptographically secure random value for the session ID
+    sessionId = `session_${Date.now()}_${crypto.randomBytes(16).toString('hex')}`;
   }
   return sessionId;
 };
