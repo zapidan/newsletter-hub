@@ -19,6 +19,19 @@ interface Source {
   updated_at: string;
 }
 
+/**
+ * Escape basic HTML entities (&, <, >, ", ')
+ * Prevents HTML/JS injection when rendering fromName
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export default async function handler(req: Request, supabaseClient?: any) {
   // Set CORS headers
   const corsHeaders = {
@@ -219,7 +232,7 @@ export async function processIncomingEmail(emailData: EmailData, supabase: any):
 
     const fromMatch = emailData.from.match(/<?([^<>]+@[^>\s]+)>?/);
     fromEmail = fromMatch ? fromMatch[1] : emailData.from;
-    fromName = emailData.from.replace(/<[^>]+>/g, '').trim();
+    fromName = escapeHtml(emailData.from.replace(/<[^>]+>/g, '').trim());
 
     // Assume only one recipient and resolve user strictly from DB using email_alias
     const userEmail = emailData.to.trim();
