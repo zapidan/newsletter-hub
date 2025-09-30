@@ -92,6 +92,7 @@ const Inbox: React.FC = () => {
     allTags,
     newsletterSources,
     isLoadingSources,
+    useLocalTagFiltering,
     // Filter actions
     setFilter,
     setSourceFilter,
@@ -162,8 +163,28 @@ const Inbox: React.FC = () => {
         sourceIds: selectedGroupSourceIds,
       };
     }
+
+    // Debug: Log filter changes when tags are selected
+    if (process.env.NODE_ENV === 'development' && debouncedTagIds.length > 0) {
+      console.log('[Inbox] Filter changed with tags:', {
+        filter,
+        useLocalTagFiltering,
+        debouncedTagIds,
+        contextFilter: contextNewsletterFilter,
+        serverFilter: filterObj,
+        hasTagsInServerFilter: !!filterObj.tagIds?.length,
+      });
+    }
+
     return filterObj;
-  }, [contextNewsletterFilter, groupFilter, selectedGroupSourceIds]);
+  }, [
+    contextNewsletterFilter,
+    groupFilter,
+    selectedGroupSourceIds,
+    filter,
+    debouncedTagIds,
+    useLocalTagFiltering,
+  ]);
 
   // Newsletter data with infinite scroll
   const {
@@ -177,10 +198,57 @@ const Inbox: React.FC = () => {
     totalCount,
   } = useInfiniteNewsletters(stableNewsletterFilter, {
     _refetchOnWindowFocus: false,
+    _refetchOnMount: useLocalTagFiltering && debouncedTagIds.length > 0, // Force refetch when tags are selected
     _staleTime: 0,
     pageSize: 25,
     debug: process.env.NODE_ENV === 'development',
   });
+
+  // Apply client-side tag filtering when useLocalTagFiltering is enabled
+  const newsletters = useMemo(() => {
+    if (!useLocalTagFiltering || !debouncedTagIds.length) {
+      // Debug: No client-side filtering needed
+      if (process.env.NODE_ENV === 'development' && debouncedTagIds.length > 0) {
+        console.log('[Inbox] Skipping client-side filtering:', {
+          useLocalTagFiltering,
+          tagCount: debouncedTagIds.length,
+          rawCount: rawNewsletters.length,
+        });
+      }
+      return rawNewsletters;
+    }
+
+    const filtered = rawNewsletters.filter((newsletter) => {
+      const newsletterTagIds = newsletter.tags?.map((tag) => tag.id) || [];
+      return debouncedTagIds.every((requiredTagId) => newsletterTagIds.includes(requiredTagId));
+    });
+
+    // Debug: Log client-side filtering results
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Inbox] Client-side tag filtering applied:', {
+        filter,
+        requiredTags: debouncedTagIds,
+        rawCount: rawNewsletters.length,
+        filteredCount: filtered.length,
+        sampleRawNewsletter: rawNewsletters[0]
+          ? {
+              id: rawNewsletters[0].id,
+              title: rawNewsletters[0].title?.substring(0, 50),
+              tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+            }
+          : null,
+        sampleFiltered: filtered[0]
+          ? {
+              id: filtered[0].id,
+              title: filtered[0].title?.substring(0, 50),
+              tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+            }
+          : null,
+      });
+    }
+
+    return filtered;
+  }, [rawNewsletters, useLocalTagFiltering, debouncedTagIds, filter]);
 
   // Reading queue
   const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
@@ -371,26 +439,26 @@ const Inbox: React.FC = () => {
   }, []);
 
   const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === rawNewsletters.length) {
+    if (selectedIds.size === newsletters.length) {
       clearSelection();
     } else {
-      const allIds = new Set(rawNewsletters.map((n) => n.id));
+      const allIds = new Set(newsletters.map((n) => n.id));
       setSelectedIds(allIds);
       setIsSelecting(true);
     }
-  }, [rawNewsletters, selectedIds.size, clearSelection]);
+  }, [newsletters, selectedIds.size, clearSelection]);
 
   const selectRead = useCallback(() => {
-    const readIds = rawNewsletters.filter((n) => n.is_read).map((n) => n.id);
+    const readIds = newsletters.filter((n) => n.is_read).map((n) => n.id);
     setSelectedIds(new Set(readIds));
     setIsSelecting(readIds.length > 0);
-  }, [rawNewsletters]);
+  }, [newsletters]);
 
   const selectUnread = useCallback(() => {
-    const unreadIds = rawNewsletters.filter((n) => !n.is_read).map((n) => n.id);
+    const unreadIds = newsletters.filter((n) => !n.is_read).map((n) => n.id);
     setSelectedIds(new Set(unreadIds));
     setIsSelecting(unreadIds.length > 0);
-  }, [rawNewsletters]);
+  }, [newsletters]);
 
   // Memoized bulk action handlers with optimistic updates
   const handleBulkMarkAsRead = useCallback(async () => {
@@ -818,7 +886,7 @@ const Inbox: React.FC = () => {
   }, [newsletterSources]);
 
   // Loading state
-  if (isLoadingNewsletters && rawNewsletters.length === 0) {
+  if (isLoadingNewsletters && newsletters.length === 0) {
     return <LoadingScreen />;
   }
 
@@ -864,7 +932,7 @@ const Inbox: React.FC = () => {
         <div className="mt-2">
           <BulkSelectionActions
             selectedCount={selectedIds.size}
-            totalCount={rawNewsletters.length}
+            totalCount={newsletters.length}
             showArchived={showArchived}
             isBulkActionLoading={bulkLoadingStates.isBulkActionInProgress}
             onSelectAll={toggleSelectAll}
@@ -896,11 +964,11 @@ const Inbox: React.FC = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
             <p className="text-base text-neutral-400">Loading newsletters...</p>
           </div>
-        ) : rawNewsletters.length === 0 && !isLoadingNewsletters ? (
+        ) : newsletters.length === 0 && !isLoadingNewsletters ? (
           <EmptyState filter={filter} sourceFilter={sourceFilter} />
         ) : (
           <InfiniteNewsletterList
-            newsletters={rawNewsletters}
+            newsletters={newsletters}
             isLoading={isLoadingNewsletters}
             isLoadingMore={isLoadingMore}
             hasNextPage={hasNextPage}
@@ -919,18 +987,18 @@ const Inbox: React.FC = () => {
             }}
             onToggleLike={handleToggleLikeWrapper}
             onToggleArchive={async (id: string) => {
-              const newsletter = rawNewsletters.find((n) => n.id === id);
+              const newsletter = newsletters.find((n) => n.id === id);
               if (newsletter) await handleToggleArchiveWrapper(newsletter);
             }}
             onToggleRead={async (id: string) => {
-              const newsletter = rawNewsletters.find((n) => n.id === id);
+              const newsletter = newsletters.find((n) => n.id === id);
               if (newsletter) await handleToggleReadWrapper(newsletter);
             }}
             onTrash={async (id: string) => {
               await handleDeleteNewsletterWrapper(id);
             }}
             onToggleQueue={async (newsletterId: string) => {
-              const newsletter = rawNewsletters.find((n) => n.id === newsletterId);
+              const newsletter = newsletters.find((n) => n.id === newsletterId);
               const isInQueue = readingQueue.some((item) => item.newsletter_id === newsletterId);
               if (newsletter) await handleToggleQueueWrapper(newsletter, isInQueue);
             }}

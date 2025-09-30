@@ -79,6 +79,7 @@ export const queryKeyFactory: any = {
       [...queryKeyFactory.newsletters.unreadCounts(), 'by-source'] as const,
     totalCountsBySource: () =>
       [...queryKeyFactory.newsletters.all(), 'total-counts', 'by-source'] as const,
+    byTags: () => [...queryKeyFactory.newsletters.all(), 'by-tags'] as const,
     inbox: () => [...queryKeyFactory.newsletters.all(), 'inbox'] as const,
   },
 

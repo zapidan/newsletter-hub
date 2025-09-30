@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useTagOperations } from '@common/hooks/business/useTagOperations';
@@ -102,7 +102,7 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
     },
   });
 
-  // Fetch tag usage statistics
+  // Fetch tag usage statistics - this now efficiently gets counts without fetching all newsletters
   const {
     data: tagUsageStats = [],
     isLoading: isLoadingTagUsage,
@@ -125,73 +125,19 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch all newsletters with tags for computing tag relationships
-  const {
-    data: newslettersResponse,
-    isLoading: isLoadingNewsletters,
-    error: newslettersError,
-  } = useQuery({
-    queryKey: queryKeyFactory.newsletters.all(),
-    queryFn: async () => {
-      try {
-        return await newsletterService.getAll({
-          includeSource: true,
-          includeTags: true,
-          limit: 1000, // Get a large number for tags page
-        });
-      } catch (error) {
-        log.error('Failed to fetch newsletters', {
-          component: 'useTagsPage',
-          action: 'fetchNewsletters',
-          error,
-        });
-        throw error;
-      }
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  const newsletters = newslettersResponse?.data || [];
-
-  // Compute tags with usage counts and newsletter relationships
-  const { tagsWithCount, newslettersByTag } = useMemo(() => {
-    // Map tag_id to array of newsletters (excluding archived ones)
-    const newslettersMap: Record<string, Newsletter[]> = {};
-
-    if (Array.isArray(newsletters)) {
-      newsletters.forEach((newsletter: Newsletter) => {
-        // Skip archived newsletters
-        if (newsletter.is_archived) return;
-
-        if (newsletter.tags && Array.isArray(newsletter.tags)) {
-          newsletter.tags.forEach((tag: Tag) => {
-            if (!newslettersMap[tag.id]) {
-              newslettersMap[tag.id] = [];
-            }
-            newslettersMap[tag.id].push(newsletter);
-          });
-        }
-      });
-    }
-
-    // Use tag usage stats if available, otherwise compute from newsletters
-    const tagsWithCount: TagWithCount[] =
-      tagUsageStats.length > 0
-        ? tagUsageStats.map((stat) => ({
-            ...stat,
-            newsletter_count: stat.newsletter_count || newslettersMap[stat.id]?.length || 0,
-          }))
-        : baseTags.map((tag: Tag) => ({
-            ...tag,
-            newsletter_count: newslettersMap[tag.id]?.length || 0,
-          }));
-
-    return { tagsWithCount, newslettersByTag: newslettersMap };
-  }, [baseTags, tagUsageStats, newsletters]);
+  // Compute tags with usage counts - simple and fast
+  const tagsWithCount: TagWithCount[] = useMemo(() => {
+    return tagUsageStats.length > 0
+      ? tagUsageStats
+      : baseTags.map((tag: Tag) => ({
+          ...tag,
+          newsletter_count: 0,
+        }));
+  }, [baseTags, tagUsageStats]);
 
   // Compute loading and error states
-  const isLoading = isLoadingTags || isLoadingTagUsage || isLoadingNewsletters;
-  const error = tagUsageError?.message || newslettersError?.message || null;
+  const isLoading = isLoadingTags || isLoadingTagUsage;
+  const error = tagUsageError?.message || null;
   const isError = !!error;
 
   // Action handlers
@@ -365,10 +311,7 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
     }
   }, [batchInvalidate, refetchTags, log]);
 
-  // Refresh data on mount
-  useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+  // Remove automatic data refresh on mount to prevent cascading requests
 
   return {
     // State
@@ -376,13 +319,13 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
 
     // Data
     tags: tagsWithCount,
-    tagNewsletters: newslettersByTag,
-    newsletters,
+    tagNewsletters: {}, // Keep interface compatible but empty for performance
+    newsletters: [], // Empty since we don't fetch all newsletters for performance
 
     // Loading states
     isLoading,
     isLoadingTags,
-    isLoadingNewsletters,
+    isLoadingNewsletters: false, // Not loading newsletters anymore for performance
     isLoadingTagUsage,
 
     // Error states

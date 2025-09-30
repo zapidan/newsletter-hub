@@ -13,6 +13,21 @@ vi.mock('@common/hooks/useCache');
 vi.mock('@common/utils/logger');
 vi.mock('react-hot-toast');
 
+// Mock queryKeyFactory
+vi.mock('@common/utils/queryKeyFactory', () => ({
+  queryKeyFactory: {
+    tags: {
+      all: () => ['tags', 'all'],
+      usageStats: (tagId: string) => ['tags', 'usageStats', tagId],
+    },
+    newsletters: {
+      all: () => ['newsletters', 'all'],
+      inbox: () => ['newsletters', 'inbox'],
+      readingQueue: () => ['newsletters', 'readingQueue'],
+    },
+  },
+}));
+
 // Mock data
 const mockTags = [
   {
@@ -36,7 +51,7 @@ const mockTags = [
 ];
 
 const mockUseTagOperations = {
-  tags: mockTags.map(({ _newsletter_count, ...tag }) => tag),
+  tags: mockTags,
   isLoadingTags: false,
   createTag: vi.fn(),
   updateTag: vi.fn(),
@@ -48,7 +63,7 @@ const mockUseTagOperations = {
 };
 
 const mockUseCache = {
-  batchInvalidate: vi.fn(),
+  batchInvalidate: vi.fn().mockResolvedValue(undefined),
 };
 
 const mockLogger = {
@@ -92,8 +107,8 @@ describe('useTagsPage', () => {
     (useTagOperations as any).mockReturnValue(mockUseTagOperations);
     (useCache as any).mockReturnValue(mockUseCache);
     (useLogger as any).mockReturnValue(mockLogger);
-    (toast.success as any).mockImplementation(() => { });
-    (toast.error as any).mockImplementation(() => { });
+    (toast.success as any).mockImplementation(() => {});
+    (toast.error as any).mockImplementation(() => {});
   });
 
   describe('initialization', () => {

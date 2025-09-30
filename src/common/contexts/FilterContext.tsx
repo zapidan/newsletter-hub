@@ -28,6 +28,7 @@ export interface FilterContextType extends FilterState, FilterActions {
   newsletterFilter: NewsletterFilter;
   hasActiveFilters: boolean;
   isFilterActive: (filterName: keyof FilterState) => boolean;
+  useLocalTagFiltering: boolean;
 }
 
 const FilterContext = createContext<FilterContextType | undefined>(undefined);
@@ -291,6 +292,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     ...filterState,
     newsletterFilter,
     hasActiveFilters,
+    useLocalTagFiltering,
 
     // Actions
     setFilter,
