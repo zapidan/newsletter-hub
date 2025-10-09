@@ -72,6 +72,12 @@ export class NewsletterService extends BaseService {
     return this.withRetry(async () => {
       // Apply business logic for default parameters
       const processedParams = this.processNewsletterParams(params);
+
+      // Handle tag filtering through the service layer
+      if (processedParams.tagIds && processedParams.tagIds.length > 0) {
+        return await this.getNewslettersByTags(processedParams.tagIds, processedParams);
+      }
+
       return await newsletterApi.getAll(processedParams);
     }, 'getNewsletters');
   }
@@ -83,6 +89,35 @@ export class NewsletterService extends BaseService {
     params: NewsletterQueryParams = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return this.getNewsletters(params);
+  }
+
+  /**
+   * Get newsletters filtered by specific tags
+   * This method ensures newsletters have ALL the specified tags (AND logic)
+   */
+  async getNewslettersByTags(
+    tagIds: string[],
+    params: Omit<NewsletterQueryParams, 'tagIds'> = {}
+  ): Promise<PaginatedResponse<NewsletterWithRelations>> {
+    this.validateArray(tagIds, 'tag IDs', { minLength: 1 });
+
+    return this.executeWithLogging(
+      async () => {
+        // Apply business logic for default parameters
+        const processedParams = this.processNewsletterParams({
+          ...params,
+          includeTags: true, // Always include tags when filtering by tags
+        });
+
+        // Use the API's getByTags method which handles the complex tag intersection logic
+        return await this.withRetry(
+          () => newsletterApi.getByTags(tagIds, processedParams),
+          'getNewslettersByTags'
+        );
+      },
+      'getNewslettersByTags',
+      { tagCount: tagIds.length, params }
+    );
   }
 
   /**
@@ -658,8 +693,8 @@ export class NewsletterService extends BaseService {
       processed.orderDirection = 'desc';
     }
 
-    // Apply default pagination if not specified
-    if (!processed.limit) {
+    // Apply default pagination if not specified or is 0
+    if (!processed.limit || processed.limit === 0) {
       processed.limit = 50;
     }
 

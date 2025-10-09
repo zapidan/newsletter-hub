@@ -11,8 +11,8 @@ import {
 } from '@common/hooks';
 import { useLogger } from '@common/utils/logger/useLogger';
 
-import { newsletterApi } from '@common/api';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { newsletterService } from '@common/services';
 import { NewsletterSource, NewsletterSourceGroup } from '@common/types';
 import { getCacheManager, prefetchQuery } from '@common/utils/cacheUtils';
 import { queryKeyFactory } from '@common/utils/queryKeyFactory';
@@ -269,7 +269,7 @@ const NewsletterGroupsPage: React.FC = () => {
   const confirmDelete = async () => {
     if (!deleteConfirmId) return;
     try {
-      const newslettersResponse = await newsletterApi.getAll({
+      const newslettersResponse = await newsletterService.getAll({
         sourceIds: [deleteConfirmId],
         isArchived: false,
         limit: 1000, // Get all newsletters for this source
