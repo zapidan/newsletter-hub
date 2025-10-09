@@ -1,9 +1,9 @@
+import { newsletterApi } from '@common/api/newsletterApi';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { newsletterService } from '../../services';
 import { NewsletterWithRelations } from '../../types';
 import { NewsletterFilter } from '../../types/cache';
 import { queryKeyFactory } from '../../utils/queryKeyFactory';
@@ -165,11 +165,11 @@ export const useInfiniteNewsletters = (
   }, [enabled, user?.id, throttledDebug]);
 
   // Infinite query for newsletters
+  // In useInfiniteNewsletters.ts
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
     useInfiniteQuery({
       queryKey,
       queryFn: async ({ pageParam = 0 }) => {
-        // Prevent multiple simultaneous requests
         if (isFetchingRef.current) {
           throttledDebug('skip_fetch_already_fetching', 'Skipping fetch - already fetching', {
             pageParam,
@@ -191,15 +191,16 @@ export const useInfiniteNewsletters = (
         };
 
         try {
-          const result = await newsletterService.getAll(queryParams);
+          // Use getByTags if tagIds are provided, otherwise use getAll
+          const result = normalizedFilters.tagIds?.length
+            ? await newsletterApi.getByTags(normalizedFilters.tagIds, queryParams)
+            : await newsletterApi.getAll(queryParams);
 
           throttledDebug('fetch_page_success', 'Newsletters fetched successfully', {
             count: result.data.length,
             total: result.count,
             hasMore: result.hasMore,
             page: pageParam / pageSize + 1,
-            resultKeys: Object.keys(result),
-            resultDataKeys: result.data ? Object.keys(result.data[0] || {}) : [],
           });
 
           return result;
@@ -214,6 +215,7 @@ export const useInfiniteNewsletters = (
           isFetchingRef.current = false;
         }
       },
+
       enabled: shouldRunQuery,
       getNextPageParam: (lastPage, allPages) => {
         // Check if there's more data available
