@@ -142,7 +142,6 @@ jobs:
           NODE_ENV: 'test'
           VITEST_JUNIT_OUTPUT_DIR: 'test-results'
           VITEST_JUNIT_SUITE_NAME: 'Test Results'
-        continue-on-error: true
 
       - name: Debug scripts directory
         if: always()
