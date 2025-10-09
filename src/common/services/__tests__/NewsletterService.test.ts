@@ -128,6 +128,140 @@ describe("NewsletterService", () => {
         includeTags: true,
       });
     });
+
+    it("should use getByTags when tagIds are provided", async () => {
+      const mockResponse = {
+        data: [mockNewsletter],
+        count: 1,
+        hasMore: false,
+      };
+      mockNewsletterApi.getByTags.mockResolvedValue(mockResponse);
+
+      const result = await service.getNewsletters({
+        tagIds: ["tag-1", "tag-2"],
+        limit: 10
+      });
+
+      expect(result).toEqual(mockResponse);
+      expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
+        ["tag-1", "tag-2"],
+        expect.objectContaining({
+          limit: 10,
+          includeSource: true,
+          includeTags: true,
+          orderBy: "received_at",
+          orderDirection: "desc",
+        })
+      );
+      expect(mockNewsletterApi.getAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getNewslettersByTags", () => {
+    it("should return newsletters filtered by tags", async () => {
+      const mockResponse = {
+        data: [mockNewsletter],
+        count: 1,
+        hasMore: false,
+      };
+      mockNewsletterApi.getByTags.mockResolvedValue(mockResponse);
+
+      const result = await service.getNewslettersByTags(["tag-1", "tag-2"], {
+        limit: 10,
+        isRead: false,
+      });
+
+      expect(result).toEqual(mockResponse);
+      expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
+        ["tag-1", "tag-2"],
+        expect.objectContaining({
+          limit: 10,
+          isRead: false,
+          includeSource: true,
+          includeTags: true,
+          orderBy: "received_at",
+          orderDirection: "desc",
+        })
+      );
+    });
+
+    it("should validate tagIds parameter", async () => {
+      await expect(service.getNewslettersByTags([])).rejects.toThrow(
+        "tag IDs must have at least 1 items"
+      );
+
+      await expect(service.getNewslettersByTags("invalid" as any)).rejects.toThrow(
+        "tag IDs must be an array"
+      );
+    });
+
+    it("should handle API errors gracefully", async () => {
+      const error = new Error("API Error");
+      mockNewsletterApi.getByTags.mockRejectedValue(error);
+
+      await expect(
+        service.getNewslettersByTags(["tag-1"], { limit: 10 })
+      ).rejects.toThrow("API Error");
+
+      expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
+        ["tag-1"],
+        expect.objectContaining({
+          limit: 10,
+          includeTags: true,
+        })
+      );
+    });
+
+    it("should always include tags when filtering by tags", async () => {
+      const mockResponse = {
+        data: [],
+        count: 0,
+        hasMore: false,
+      };
+      mockNewsletterApi.getByTags.mockResolvedValue(mockResponse);
+
+      await service.getNewslettersByTags(["tag-1"], {
+        includeTags: false, // This should be overridden
+      });
+
+      expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
+        ["tag-1"],
+        expect.objectContaining({
+          includeTags: true, // Should be forced to true
+        })
+      );
+    });
+
+    it("should handle empty tag results", async () => {
+      const mockResponse = {
+        data: [],
+        count: 0,
+        hasMore: false,
+      };
+      mockNewsletterApi.getByTags.mockResolvedValue(mockResponse);
+
+      const result = await service.getNewslettersByTags(["non-existent-tag"]);
+
+      expect(result).toEqual(mockResponse);
+      expect(result.data).toHaveLength(0);
+    });
+
+    it("should work with multiple tags (AND logic)", async () => {
+      const mockResponse = {
+        data: [mockNewsletter],
+        count: 1,
+        hasMore: false,
+      };
+      mockNewsletterApi.getByTags.mockResolvedValue(mockResponse);
+
+      const result = await service.getNewslettersByTags(["tag-1", "tag-2", "tag-3"]);
+
+      expect(result).toEqual(mockResponse);
+      expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
+        ["tag-1", "tag-2", "tag-3"],
+        expect.any(Object)
+      );
+    });
   });
 
   describe("markAsRead", () => {

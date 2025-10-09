@@ -1,11 +1,11 @@
 import {
-  newsletterApi,
   getAllNewsletterSources,
   updateNewsletter,
 } from "@common/api";
+import { newsletterService } from "@common/services";
 import { Newsletter, NewsletterSource } from "@common/types";
-import { buildSearchParams, validateSearchFilters } from "../utils/searchUtils";
 import { logger } from "@common/utils/logger";
+import { buildSearchParams, validateSearchFilters } from "../utils/searchUtils";
 
 export interface SearchFilters {
   selectedSources: string[];
@@ -69,7 +69,7 @@ class SearchService {
     });
 
     try {
-      const response = await newsletterApi.getAll({
+      const response = await newsletterService.getAll({
         ...searchParams,
         search: query,
         limit: itemsPerPage,

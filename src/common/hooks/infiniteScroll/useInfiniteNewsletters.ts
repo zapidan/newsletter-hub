@@ -1,9 +1,9 @@
-import { newsletterApi } from '@common/api/newsletterApi';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { newsletterService } from '../../services';
 import { NewsletterWithRelations } from '../../types';
 import { NewsletterFilter } from '../../types/cache';
 import { queryKeyFactory } from '../../utils/queryKeyFactory';
@@ -191,10 +191,9 @@ export const useInfiniteNewsletters = (
         };
 
         try {
-          // Use getByTags if tagIds are provided, otherwise use getAll
-          const result = normalizedFilters.tagIds?.length
-            ? await newsletterApi.getByTags(normalizedFilters.tagIds, queryParams)
-            : await newsletterApi.getAll(queryParams);
+          // Use NewsletterService as the single source of truth
+          // The service will handle tag filtering internally
+          const result = await newsletterService.getAll(queryParams);
 
           throttledDebug('fetch_page_success', 'Newsletters fetched successfully', {
             count: result.data.length,
