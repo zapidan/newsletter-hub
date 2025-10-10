@@ -6,6 +6,7 @@ import { useLogger } from '@common/utils/logger/useLogger';
 import { Archive, ArchiveX, Bookmark as BookmarkIcon, Eye, EyeOff, Heart, MoreHorizontal, Trash2 as TrashIcon } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface NewsletterDetailActionsProps {
   newsletter: NewsletterWithRelations;
@@ -62,6 +63,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   mutations,
 }) => {
   const log = useLogger();
+  const navigate = useNavigate();
   const { isInQueue: checkIsInQueue } = useReadingQueue();
   const {
     handleMarkAsRead, handleMarkAsUnread, handleToggleLike, handleToggleArchive,
@@ -241,15 +243,15 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     try {
       await handleDeleteNewsletter(localNewsletter.id);
       if (isFromReadingQueue) {
-        window.location.href = '/reading-queue';
+        navigate('/reading-queue');
       } else {
-        window.location.href = '/inbox?filter=archived';
+        navigate('/inbox?filter=archived');
       }
     } catch (error) {
       log.error('Failed to delete newsletter', { metadata: { newsletterId: newsletter.id } }, error instanceof Error ? error : new Error(String(error)));
       toast.error('Failed to delete newsletter');
     }
-  }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue, log, newsletter.id]);
+  }, [localNewsletter?.id, handleDeleteNewsletter, isFromReadingQueue, log, newsletter.id, navigate]);
 
   // Primary actions (always visible)
   const primaryActions = [

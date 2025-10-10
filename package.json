@@ -31,7 +31,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "prepare": "command -v husky >/dev/null 2>&1 && husky install || echo 'Husky not available, skipping git hooks setup'",
-    "test:ci": "npx vitest run --coverage --coverage.provider=v8 --reporter=junit --reporter=html --outputFile.junit=test-results/junit.xml --coverage.threshold.autoUpdate -u",
+    "test:ci": "npx vitest run --coverage --coverage.provider=v8 --reporter=junit --reporter=html --outputFile.junit=test-results/junit.xml",
     "test:coverage:html": "npx vitest run --coverage --coverage.provider=v8 --reporter=html",
     "test:coverage:open": "open html/index.html || xdg-open html/index.html || start html/index.html",
     "test:results:parse": "node scripts/parse-junit-results.js",
