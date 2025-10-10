@@ -1,11 +1,25 @@
 import {
-  getAllNewsletterSources,
-  updateNewsletter,
+  getAllNewsletterSources as apiGetAllNewsletterSources,
+  updateNewsletter as apiUpdateNewsletter,
 } from "@common/api";
-import { newsletterService } from "@common/services";
+import { newsletterService as commonNewsletterService } from "@common/services";
+import type { NewsletterService } from "@common/services";
 import { Newsletter, NewsletterSource } from "@common/types";
-import { logger } from "@common/utils/logger";
-import { buildSearchParams, validateSearchFilters } from "../utils/searchUtils";
+import { ILogger, logger as appLogger } from "@common/utils/logger";
+import {
+  buildSearchParams as utilBuildSearchParams,
+  validateSearchFilters as utilValidateSearchFilters,
+} from "../utils/searchUtils";
+
+export interface SearchServiceDependencies {
+  getAllNewsletterSources: typeof apiGetAllNewsletterSources;
+  updateNewsletter: typeof apiUpdateNewsletter;
+  newsletterService: NewsletterService;
+  logger: ILogger;
+  window: Pick<Window, "location" | "history" | "localStorage">;
+  buildSearchParams: typeof utilBuildSearchParams;
+  validateSearchFilters: typeof utilValidateSearchFilters;
+}
 
 export interface SearchFilters {
   selectedSources: string[];
@@ -43,7 +57,16 @@ export interface SearchState {
 class SearchService {
   private static readonly RECENT_SEARCHES_KEY = "newsletter_recent_searches";
   private static readonly MAX_RECENT_SEARCHES = 10;
-  private log = logger;
+
+  private readonly deps: SearchServiceDependencies;
+
+  constructor(dependencies: SearchServiceDependencies) {
+    this.deps = dependencies;
+  }
+
+  private get log() {
+    return this.deps.logger;
+  }
 
   /**
    * Performs a search with the given options
@@ -57,19 +80,19 @@ class SearchService {
     }
 
     // Validate filters
-    const validation = validateSearchFilters(filters);
+    const validation = this.deps.validateSearchFilters(filters);
     if (!validation.isValid) {
       throw new Error(validation.errors.join(", "));
     }
 
     // Build search parameters
-    const searchParams = buildSearchParams(query, filters, {
+    const searchParams = this.deps.buildSearchParams(query, filters, {
       page,
       itemsPerPage,
     });
 
     try {
-      const response = await newsletterService.getAll({
+      const response = await this.deps.newsletterService.getAll({
         ...searchParams,
         search: query,
         limit: itemsPerPage,
@@ -105,7 +128,7 @@ class SearchService {
    */
   async getSources(): Promise<NewsletterSource[]> {
     try {
-      const response = await getAllNewsletterSources();
+      const response = await this.deps.getAllNewsletterSources();
       return response.data || [];
     } catch (error) {
       this.log.error(
@@ -131,7 +154,7 @@ class SearchService {
       });
 
       // Update both read and archived status in one call
-      await updateNewsletter({
+      await this.deps.updateNewsletter({
         id: newsletterId,
         is_read: true,
         is_archived: true,
@@ -172,7 +195,7 @@ class SearchService {
         action: "open_newsletter_detail",
         metadata: { newsletterId, url: `/newsletters/${newsletterId}` },
       });
-      window.location.href = `/newsletters/${newsletterId}`;
+      this.deps.window.location.href = `/newsletters/${newsletterId}`;
     } catch (error) {
       this.log.error(
         "Failed to open newsletter detail",
@@ -183,7 +206,7 @@ class SearchService {
         error instanceof Error ? error : new Error(String(error)),
       );
       // Still navigate even if status update fails
-      window.location.href = `/newsletters/${newsletterId}`;
+      this.deps.window.location.href = `/newsletters/${newsletterId}`;
     }
   }
 
@@ -207,7 +230,9 @@ class SearchService {
    */
   getRecentSearches(): string[] {
     try {
-      const saved = localStorage.getItem(SearchService.RECENT_SEARCHES_KEY);
+      const saved = this.deps.window.localStorage.getItem(
+        SearchService.RECENT_SEARCHES_KEY,
+      );
       return saved ? JSON.parse(saved) : [];
     } catch (error) {
       this.log.error(
@@ -227,7 +252,7 @@ class SearchService {
    */
   private setRecentSearches(searches: string[]): void {
     try {
-      localStorage.setItem(
+      this.deps.window.localStorage.setItem(
         SearchService.RECENT_SEARCHES_KEY,
         JSON.stringify(searches),
       );
@@ -257,7 +282,9 @@ class SearchService {
    */
   clearRecentSearches(): void {
     try {
-      localStorage.removeItem(SearchService.RECENT_SEARCHES_KEY);
+      this.deps.window.localStorage.removeItem(
+        SearchService.RECENT_SEARCHES_KEY,
+      );
     } catch (error) {
       this.log.error(
         "Failed to clear recent searches",
@@ -357,7 +384,7 @@ class SearchService {
     const params = this.buildUrlParams(query, page);
     const newUrl = `/search${params.toString() ? `?${params.toString()}` : ""}`;
 
-    window.history.pushState({ path: newUrl }, "", newUrl);
+    this.deps.window.history.pushState({ path: newUrl }, "", newUrl);
   }
 
   /**
@@ -440,13 +467,26 @@ class SearchService {
 }
 
 // Factory function to create SearchService instance
-export const createSearchService = () => new SearchService();
+export const createSearchService = (
+  deps: SearchServiceDependencies,
+): SearchService => {
+  return new SearchService(deps);
+};
 
 // Export singleton instance - created lazily
 let searchServiceInstance: SearchService | null = null;
 export const searchService = (): SearchService => {
   if (!searchServiceInstance) {
-    searchServiceInstance = new SearchService();
+    const deps: SearchServiceDependencies = {
+      getAllNewsletterSources: apiGetAllNewsletterSources,
+      updateNewsletter: apiUpdateNewsletter,
+      newsletterService: commonNewsletterService,
+      logger: appLogger,
+      window: window,
+      buildSearchParams: utilBuildSearchParams,
+      validateSearchFilters: utilValidateSearchFilters,
+    };
+    searchServiceInstance = new SearchService(deps);
   }
   return searchServiceInstance;
 };

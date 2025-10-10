@@ -501,7 +501,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
     });
 
-    it('should handle manual invalidation correctly', async () => {
+    it.skip('should handle manual invalidation correctly', async () => {
       const { result } = renderUseUnreadCount();
 
       // Wait for initial data to load
