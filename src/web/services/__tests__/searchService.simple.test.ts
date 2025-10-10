@@ -1,87 +1,103 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// Mock the API module with factory function
-vi.mock("@common/api", () => ({
-  newsletterApi: {
-    getAll: vi.fn(),
-  },
-  getAllNewsletterSources: vi.fn(),
-  updateNewsletter: vi.fn(),
-}));
-
+import { ILogger } from "@common/utils/logger";
 import {
-  getAllNewsletterSources,
-  newsletterApi,
-  updateNewsletter,
-} from "@common/api";
-import { searchService } from "../searchService";
+  buildSearchParams,
+  validateSearchFilters,
+} from "@web/utils/searchUtils";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createSearchService, SearchServiceDependencies } from "../searchService";
 
-// Get the service instance for testing
-const serviceInstance = searchService();
+// Mock dependencies
+const mockGetAllNewsletterSources = vi.fn();
+const mockUpdateNewsletter = vi.fn();
+const mockNewsletterService = {
+  getAll: vi.fn(),
+  getById: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  getNewsletterCountBySource: vi.fn(),
+  getReadCount: vi.fn(),
+  getArchivedCount: vi.fn(),
+  getFeed: vi.fn(),
+  getFavorites: vi.fn(),
+};
 
-// Mock search utils
-vi.mock("../../utils/searchUtils", () => ({
-  buildSearchParams: vi.fn((query, filters, pagination) => ({
-    search: query,
-    limit: pagination.itemsPerPage || 20,
-    offset: ((pagination.page || 1) - 1) * (pagination.itemsPerPage || 20),
-    ...filters,
-  })),
-  validateSearchFilters: vi.fn(() => ({ isValid: true, errors: [] })),
-}));
+const mockLogger: ILogger = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  auth: vi.fn(),
+  api: vi.fn(),
+  ui: vi.fn(),
+  logUserAction: vi.fn(),
+  logApiRequest: vi.fn(),
+  logNavigation: vi.fn(),
+  logError: vi.fn(),
+};
 
-// Mock logger
-vi.mock("@common/utils/logger/useLogger", () => ({
-  useLoggerStatic: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    auth: vi.fn(),
-    api: vi.fn(),
-    ui: vi.fn(),
-    logUserAction: vi.fn(),
-    logApiRequest: vi.fn(),
-    logNavigation: vi.fn(),
-    logError: vi.fn(),
-  }),
-  useLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    logUserAction: vi.fn(),
-    logNavigation: vi.fn(),
-    logError: vi.fn(),
-  }),
-}));
-
-// Mock localStorage
-const localStorageMock = {
+const mockLocalStorage = {
   getItem: vi.fn(),
   setItem: vi.fn(),
   removeItem: vi.fn(),
   clear: vi.fn(),
 };
-Object.defineProperty(global, "localStorage", { value: localStorageMock });
 
-// Mock window location
-const mockLocation = {
-  href: "",
+const mockWindow = {
+  location: {
+    href: "",
+  },
+  history: {
+    pushState: vi.fn(),
+  },
+  localStorage: mockLocalStorage,
 };
-Object.defineProperty(window, "location", { value: mockLocation });
+
+const mockBuildSearchParams =
+  vi.fn<Parameters<typeof buildSearchParams>[0], any>();
+const mockValidateSearchFilters =
+  vi.fn<Parameters<typeof validateSearchFilters>[0], any>();
+
+// Default mock dependencies
+const defaultMockDependencies: SearchServiceDependencies = {
+  getAllNewsletterSources: mockGetAllNewsletterSources,
+  updateNewsletter: mockUpdateNewsletter,
+  newsletterService: mockNewsletterService,
+  logger: mockLogger,
+  window: mockWindow as any,
+  buildSearchParams: mockBuildSearchParams,
+  validateSearchFilters: mockValidateSearchFilters,
+};
+
+// Create a new instance of the service with mock dependencies
+const createMockedSearchService = (
+  overrides: Partial<SearchServiceDependencies> = {},
+) => {
+  return createSearchService({ ...defaultMockDependencies, ...overrides });
+};
 
 describe("SearchService Simple Tests", () => {
+  let serviceInstance = createMockedSearchService();
+
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorageMock.getItem.mockReturnValue("[]");
-    mockLocation.href = "";
+    mockLocalStorage.getItem.mockReturnValue("[]");
+    mockWindow.location.href = "";
+    mockValidateSearchFilters.mockReturnValue({ isValid: true, errors: [] });
+    mockBuildSearchParams.mockImplementation(
+      (query, filters, pagination) => ({
+        search: query,
+        limit: pagination.itemsPerPage || 20,
+        offset: ((pagination.page || 1) - 1) * (pagination.itemsPerPage || 20),
+        ...filters,
+      }),
+    );
+    serviceInstance = createMockedSearchService();
   });
 
   describe("Basic functionality", () => {
     it("should create default filters", () => {
       const filters = serviceInstance.createDefaultFilters();
-
       expect(filters).toEqual({
         selectedSources: [],
         readStatus: "all",
@@ -93,7 +109,6 @@ describe("SearchService Simple Tests", () => {
 
     it("should create initial state", () => {
       const state = serviceInstance.createInitialState();
-
       expect(state).toEqual({
         results: [],
         loading: false,
@@ -111,7 +126,6 @@ describe("SearchService Simple Tests", () => {
         ...defaultFilters,
         selectedSources: ["source-1"],
       };
-
       expect(serviceInstance.hasFiltersApplied(defaultFilters)).toBe(false);
       expect(serviceInstance.hasFiltersApplied(appliedFilters)).toBe(true);
     });
@@ -119,7 +133,6 @@ describe("SearchService Simple Tests", () => {
     it("should reset filters to default", () => {
       const resetFilters = serviceInstance.resetFilters();
       const defaultFilters = serviceInstance.createDefaultFilters();
-
       expect(resetFilters).toEqual(defaultFilters);
     });
   });
@@ -158,11 +171,9 @@ describe("SearchService Simple Tests", () => {
 
   describe("Recent searches", () => {
     it("should save recent search", () => {
-      localStorageMock.getItem.mockReturnValue("[]");
-
+      mockLocalStorage.getItem.mockReturnValue("[]");
       serviceInstance.saveRecentSearch("test search");
-
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
         "newsletter_recent_searches",
         JSON.stringify(["test search"]),
       );
@@ -170,27 +181,26 @@ describe("SearchService Simple Tests", () => {
 
     it("should not save empty search", () => {
       serviceInstance.saveRecentSearch("   ");
-      expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      expect(mockLocalStorage.setItem).not.toHaveBeenCalled();
     });
 
     it("should get recent searches", () => {
       const mockSearches = ["search1", "search2"];
-      localStorageMock.getItem.mockReturnValue(JSON.stringify(mockSearches));
-
+      mockLocalStorage.getItem.mockReturnValue(JSON.stringify(mockSearches));
       const result = serviceInstance.getRecentSearches();
       expect(result).toEqual(mockSearches);
     });
 
     it("should handle corrupted localStorage data", () => {
-      localStorageMock.getItem.mockReturnValue("invalid json");
-
+      mockLocalStorage.getItem.mockReturnValue("invalid json");
       const result = serviceInstance.getRecentSearches();
       expect(result).toEqual([]);
+      expect(mockLogger.error).toHaveBeenCalled();
     });
 
     it("should clear all recent searches", () => {
       serviceInstance.clearRecentSearches();
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith(
+      expect(mockLocalStorage.removeItem).toHaveBeenCalledWith(
         "newsletter_recent_searches",
       );
     });
@@ -199,14 +209,12 @@ describe("SearchService Simple Tests", () => {
   describe("URL management", () => {
     it("should build URL parameters", () => {
       const params = serviceInstance.buildUrlParams("test search", 2);
-
       expect(params.get("q")).toBe("test search");
       expect(params.get("page")).toBe("2");
     });
 
     it("should not include empty parameters", () => {
       const params = serviceInstance.buildUrlParams("", 1);
-
       expect(params.has("q")).toBe(false);
       expect(params.has("page")).toBe(false);
     });
@@ -214,21 +222,22 @@ describe("SearchService Simple Tests", () => {
     it("should parse URL parameters", () => {
       const searchParams = new URLSearchParams("q=test+search&page=3");
       const result = serviceInstance.parseUrlParams(searchParams);
-
-      expect(result).toEqual({
-        query: "test search",
-        page: 3,
-      });
+      expect(result).toEqual({ query: "test search", page: 3 });
     });
 
     it("should handle missing URL parameters", () => {
       const searchParams = new URLSearchParams();
       const result = serviceInstance.parseUrlParams(searchParams);
+      expect(result).toEqual({ query: "", page: 1 });
+    });
 
-      expect(result).toEqual({
-        query: "",
-        page: 1,
-      });
+    it("should update URL", () => {
+      serviceInstance.updateUrl("test", 2);
+      expect(mockWindow.history.pushState).toHaveBeenCalledWith(
+        { path: "/search?q=test&page=2" },
+        "",
+        "/search?q=test&page=2",
+      );
     });
   });
 
@@ -237,31 +246,22 @@ describe("SearchService Simple Tests", () => {
       const emptyState = serviceInstance.createInitialState();
       const stateWithResults = {
         ...emptyState,
-        results: [{ id: "1", title: "Test" }],
+        results: [{ id: "1", title: "Test" } as any],
       };
-
       expect(serviceInstance.hasResults(emptyState)).toBe(false);
       expect(serviceInstance.hasResults(stateWithResults)).toBe(true);
     });
 
     it("should check if searching", () => {
       const idleState = serviceInstance.createInitialState();
-      const loadingState = {
-        ...idleState,
-        loading: true,
-      };
-
+      const loadingState = { ...idleState, loading: true };
       expect(serviceInstance.isSearching(idleState)).toBe(false);
       expect(serviceInstance.isSearching(loadingState)).toBe(true);
     });
 
     it("should check if has searched", () => {
       const initialState = serviceInstance.createInitialState();
-      const searchedState = {
-        ...initialState,
-        searchPerformed: true,
-      };
-
+      const searchedState = { ...initialState, searchPerformed: true };
       expect(serviceInstance.hasSearched(initialState)).toBe(false);
       expect(serviceInstance.hasSearched(searchedState)).toBe(true);
     });
@@ -273,9 +273,7 @@ describe("SearchService Simple Tests", () => {
         currentPage: 2,
         hasMore: true,
       };
-
       const stats = serviceInstance.getSearchStats(state);
-
       expect(stats).toEqual({
         totalResults: 100,
         currentPage: 2,
@@ -311,8 +309,7 @@ describe("SearchService Simple Tests", () => {
         page: 1,
         hasMore: false,
       };
-
-      (newsletterApi.getAll as any).mockResolvedValue(mockResponse);
+      mockNewsletterService.getAll.mockResolvedValue(mockResponse);
 
       const searchOptions = {
         query: "test",
@@ -323,18 +320,18 @@ describe("SearchService Simple Tests", () => {
 
       const result = await serviceInstance.search(searchOptions);
 
-      expect(newsletterApi.getAll).toHaveBeenCalled();
+      expect(mockNewsletterService.getAll).toHaveBeenCalled();
       expect(result).toEqual({
         data: mockResponse.data,
         count: mockResponse.count,
         page: 1,
-        hasMore: mockResponse.hasMore,
+        hasMore: false,
         totalPages: 1,
       });
     });
 
     it("should handle API errors gracefully", async () => {
-      (newsletterApi.getAll as any).mockRejectedValue(new Error("API Error"));
+      mockNewsletterService.getAll.mockRejectedValue(new Error("API Error"));
 
       const searchOptions = {
         query: "test",
@@ -346,6 +343,7 @@ describe("SearchService Simple Tests", () => {
       await expect(serviceInstance.search(searchOptions)).rejects.toThrow(
         "Failed to search newsletters. Please try again.",
       );
+      expect(mockLogger.error).toHaveBeenCalled();
     });
 
     it("should throw error for empty query", async () => {
@@ -360,6 +358,23 @@ describe("SearchService Simple Tests", () => {
         "Search query cannot be empty",
       );
     });
+
+    it("should throw error for invalid filters", async () => {
+      mockValidateSearchFilters.mockReturnValue({
+        isValid: false,
+        errors: ["Invalid filter"],
+      });
+      const searchOptions = {
+        query: "test",
+        filters: serviceInstance.createDefaultFilters(),
+        page: 1,
+        itemsPerPage: 20,
+      };
+
+      await expect(serviceInstance.search(searchOptions)).rejects.toThrow(
+        "Invalid filter",
+      );
+    });
   });
 
   describe("Sources functionality", () => {
@@ -368,35 +383,28 @@ describe("SearchService Simple Tests", () => {
         { id: "1", name: "Source 1" },
         { id: "2", name: "Source 2" },
       ];
-
-      (getAllNewsletterSources as any).mockResolvedValue({
-        data: mockSources,
-      });
+      mockGetAllNewsletterSources.mockResolvedValue({ data: mockSources });
 
       const result = await serviceInstance.getSources();
 
-      expect(getAllNewsletterSources).toHaveBeenCalledWith();
+      expect(mockGetAllNewsletterSources).toHaveBeenCalledWith();
       expect(result).toEqual(mockSources);
     });
 
     it("should handle sources API errors", async () => {
-      (getAllNewsletterSources as any).mockRejectedValue(
-        new Error("API Error"),
-      );
-
+      mockGetAllNewsletterSources.mockRejectedValue(new Error("API Error"));
       await expect(serviceInstance.getSources()).rejects.toThrow(
         "Failed to load newsletter sources",
       );
+      expect(mockLogger.error).toHaveBeenCalled();
     });
   });
 
   describe("Newsletter actions", () => {
     it("should mark newsletter as read and archived", async () => {
-      (updateNewsletter as any).mockResolvedValue({});
-
+      mockUpdateNewsletter.mockResolvedValue({});
       await serviceInstance.markAsReadAndArchive("newsletter-1");
-
-      expect(updateNewsletter).toHaveBeenCalledWith({
+      expect(mockUpdateNewsletter).toHaveBeenCalledWith({
         id: "newsletter-1",
         is_read: true,
         is_archived: true,
@@ -404,32 +412,29 @@ describe("SearchService Simple Tests", () => {
     });
 
     it("should handle update errors", async () => {
-      (updateNewsletter as any).mockRejectedValue(new Error("Update failed"));
-
+      mockUpdateNewsletter.mockRejectedValue(new Error("Update failed"));
       await expect(
         serviceInstance.markAsReadAndArchive("newsletter-1"),
       ).rejects.toThrow("Failed to update newsletter status");
+      expect(mockLogger.error).toHaveBeenCalled();
     });
 
     it("should open newsletter detail and update status", async () => {
-      (updateNewsletter as any).mockResolvedValue({});
-
+      mockUpdateNewsletter.mockResolvedValue({});
       await serviceInstance.openNewsletterDetail("newsletter-1");
-
-      expect(updateNewsletter).toHaveBeenCalledWith({
+      expect(mockUpdateNewsletter).toHaveBeenCalledWith({
         id: "newsletter-1",
         is_read: true,
         is_archived: true,
       });
-      expect(mockLocation.href).toBe("/newsletters/newsletter-1");
+      expect(mockWindow.location.href).toBe("/newsletters/newsletter-1");
     });
 
     it("should navigate even if status update fails", async () => {
-      (updateNewsletter as any).mockRejectedValue(new Error("Update failed"));
-
+      mockUpdateNewsletter.mockRejectedValue(new Error("Update failed"));
       await serviceInstance.openNewsletterDetail("newsletter-1");
-
-      expect(mockLocation.href).toBe("/newsletters/newsletter-1");
+      expect(mockWindow.location.href).toBe("/newsletters/newsletter-1");
+      expect(mockLogger.error).toHaveBeenCalled();
     });
   });
 });
