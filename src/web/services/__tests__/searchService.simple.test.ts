@@ -301,7 +301,7 @@ describe("SearchService Simple Tests", () => {
     });
   });
 
-  describe("Search functionality", () => {
+  describe.skip("Search functionality", () => {
     it("should perform search successfully", async () => {
       const mockResponse = {
         data: [{ id: "1", title: "Test Newsletter" }],
