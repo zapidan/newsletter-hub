@@ -10,6 +10,7 @@ import { findGroupBySourceId, newsletterSourceGroupService } from '@common/servi
 import type { NewsletterWithRelations, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { useMutation } from '@tanstack/react-query';
+import NewsletterIframe from '@web/components/NewsletterIframe';
 import TagSelector from '@web/components/TagSelector';
 import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -599,9 +600,7 @@ const NewsletterDetail = memo(() => {
                   )}
                 </div>
               )}
-              {newsletter?.content && (
-                <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
-              )}
+              {newsletter?.content && <NewsletterIframe htmlContent={newsletter.content} />}
             </div>
 
             {/* Context & Insights - Moved below newsletter content */}
