@@ -38,6 +38,7 @@ export interface UseInboxFiltersOptions {
   debounceMs?: number;
   autoLoadTags?: boolean;
   preserveUrlOnActions?: boolean;
+  sourceSearchTerm?: string;
 }
 
 export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersActions {
@@ -54,6 +55,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const {
     debounceMs = 300,
     autoLoadTags = true,
+    sourceSearchTerm,
     // preserveUrlOnActions = true, // Commented out unused parameter
   } = options;
 
@@ -89,6 +91,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const memoizedGetTags = useCallback(getTags, [getTags]);
   const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
     includeCount: true,
+    name: sourceSearchTerm,
   });
 
   // Sync pendingTagUpdates with URL changes - only if they actually differ
