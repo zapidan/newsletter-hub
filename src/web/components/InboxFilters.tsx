@@ -19,6 +19,7 @@ interface InboxFiltersProps {
   newsletterGroups?: { id: string; name: string; count?: number }[];
   onFilterChange: (filter: FilterType) => void;
   onSourceFilterChange: (sourceId: string | null) => void;
+  onSourceSearchChange: (searchTerm: string) => void;
   onGroupFilterChange?: (groupId: string | null) => void;
   onTimeRangeChange: (range: TimeRange) => void;
   isLoading?: boolean;
@@ -90,6 +91,7 @@ const SourceFilterDropdown: FC<{
   sources: NewsletterSourceWithCount[];
   selectedSourceId: string | null;
   onSourceSelect: (sourceId: string | null) => void;
+  onSearchChange: (searchTerm: string) => void;
   isLoading?: boolean;
   disabled?: boolean;
   compact?: boolean;
@@ -99,12 +101,14 @@ const SourceFilterDropdown: FC<{
     sources,
     selectedSourceId,
     onSourceSelect,
+    onSearchChange,
     isLoading = false,
     disabled = false,
     compact = false,
     showCounts = false,
   }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
     // Sort sources alphabetically by name
     const sortedSources = useMemo(
@@ -129,6 +133,11 @@ const SourceFilterDropdown: FC<{
       e.stopPropagation();
       onSourceSelect(sourceId);
       setIsOpen(false);
+    };
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchTerm(e.target.value);
+      onSearchChange(e.target.value);
     };
 
     return (
@@ -185,6 +194,15 @@ const SourceFilterDropdown: FC<{
             />
             {/* Dropdown menu */}
             <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-50 border border-gray-200 max-h-60 overflow-y-auto">
+              <div className="p-2">
+                <input
+                  type="text"
+                  placeholder="Search sources..."
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
               <div className="py-1">
                 <button
                   type="button"
@@ -414,6 +432,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
     newsletterGroups = [],
     onFilterChange,
     onSourceFilterChange,
+    onSourceSearchChange,
     onGroupFilterChange = () => { },
     onTimeRangeChange,
     isLoading = false,
@@ -465,6 +484,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
                 sources={newsletterSources}
                 selectedSourceId={isFilterSelected(groupFilter) ? null : sourceFilter}
                 onSourceSelect={onSourceFilterChange}
+                onSearchChange={onSourceSearchChange}
                 isLoading={isLoadingSources}
                 disabled={disabled || isLoading || isFilterSelected(groupFilter)}
                 compact={compact}
@@ -526,6 +546,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
                 sources={newsletterSources}
                 selectedSourceId={isFilterSelected(groupFilter) ? null : sourceFilter}
                 onSourceSelect={onSourceFilterChange}
+                onSearchChange={onSourceSearchChange}
                 isLoading={isLoadingSources}
                 disabled={disabled || isLoading || isFilterSelected(groupFilter)}
                 compact={compact}

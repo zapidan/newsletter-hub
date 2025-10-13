@@ -83,6 +83,7 @@ const Inbox: React.FC = () => {
   const { showError } = useToast();
   const log = useLogger();
 
+  const [sourceSearchTerm, setSourceSearchTerm] = useState('');
   // Filter management using our new context and hooks
   const {
     filter,
@@ -100,7 +101,7 @@ const Inbox: React.FC = () => {
     removeTag,
     resetFilters,
     handleTagClick,
-  } = useInboxFilters();
+  } = useInboxFilters({ sourceSearchTerm });
 
   // Group filter state
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
@@ -114,6 +115,10 @@ const Inbox: React.FC = () => {
     },
     [setSourceFilter]
   );
+
+  const handleSourceSearchChange = useCallback((searchTerm: string) => {
+    setSourceSearchTerm(searchTerm);
+  }, []);
 
   const handleGroupFilterChange = useCallback(
     (groupId: string | null) => {
@@ -916,6 +921,7 @@ const Inbox: React.FC = () => {
               newsletterGroups={groupsForDropdown}
               onFilterChange={setFilter}
               onSourceFilterChange={handleSourceFilterChange}
+              onSourceSearchChange={handleSourceSearchChange}
               onGroupFilterChange={handleGroupFilterChange}
               onTimeRangeChange={setTimeRange}
               isLoadingSources={isLoadingSources}
