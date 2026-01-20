@@ -337,7 +337,7 @@ export function sanitizeUrlParam(value: string): string {
     previous = value;
     value = value
       // Remove any script or HTML tags
-      .replace(/<script[^>]*>.*?<\/script>/gi, '')
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, '')
       .replace(/<[^>]*>/g, '')
       // Remove potential XSS patterns
       .replace(/javascript:/gi, '')
