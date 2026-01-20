@@ -55,15 +55,14 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   const filterValue = params.filter as FilterState['filter'];
   const filter: FilterState['filter'] = validFilters.includes(filterValue) ? filterValue : 'unread';
 
-  const filterState: FilterState = useMemo(
-    () => ({
+  const filterState: FilterState = useMemo(() => {
+    return {
       filter,
       sourceFilter: (params.source as string) || null,
       timeRange: (params.time as TimeRange) || 'all',
       tagIds: (params.tags as string[]) || [],
-    }),
-    [filter, params.source, params.time, params.tags]
-  );
+    };
+  }, [filter, params.source, params.time, params.tags]);
 
   // Generate newsletter filter object with stable memoization
   const newsletterFilter = useMemo(() => {
@@ -138,24 +137,14 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
           dateFrom = twoDaysAgo;
           break;
         }
-        case 'last7': {
-          // Rolling 7 days based on local time
-          const sevenDaysAgo = new Date(now);
-          sevenDaysAgo.setDate(now.getDate() - 7);
-          dateFrom = sevenDaysAgo;
-          break;
-        }
-        case 'last30': {
-          // Rolling 30 days based on local time
-          const thirtyDaysAgo = new Date(now);
-          thirtyDaysAgo.setDate(now.getDate() - 30);
-          dateFrom = thirtyDaysAgo;
-          break;
-        }
         default: {
-          const sevenDaysAgo = new Date(now);
-          sevenDaysAgo.setDate(now.getDate() - 7);
-          dateFrom = sevenDaysAgo;
+          // For unsupported values, fall back to start of current week
+          const startOfWeek = new Date(now);
+          startOfWeek.setHours(0, 0, 0, 0);
+          const day = startOfWeek.getDay();
+          const diffSinceMonday = (day + 6) % 7;
+          startOfWeek.setDate(startOfWeek.getDate() - diffSinceMonday);
+          dateFrom = startOfWeek;
         }
       }
 

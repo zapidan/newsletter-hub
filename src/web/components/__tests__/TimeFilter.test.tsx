@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import type { TimeRange } from '../TimeFilter';
 import { TimeFilter } from '../TimeFilter';
@@ -32,9 +32,9 @@ describe('TimeFilter', () => {
     fireEvent.click(button);
     expect(screen.getByText('Today')).toBeVisible(); // One of the dropdown options
     expect(screen.getByText('Last 2 days')).toBeVisible();
-    expect(screen.getByText('Last 7 days')).toBeVisible();
+    // No rolling 7-day preset anymore
     expect(screen.getByText('This week')).toBeVisible();
-    expect(screen.getByText('Last 30 days')).toBeVisible();
+    // No rolling 30-day preset anymore
     expect(screen.getByText('This month')).toBeVisible();
   });
 
@@ -84,36 +84,36 @@ describe('TimeFilter', () => {
     expect(mockOnChange).toHaveBeenCalledWith('week');
   });
 
-  test('supports selecting new explicit presets', () => {
+  test('supports selecting presets (week, month)', () => {
     render(<TimeFilter {...defaultProps} />);
     const button = screen.getByRole('button', { name: /All time/i });
     fireEvent.click(button);
 
-    fireEvent.click(screen.getByText('Last 7 days'));
-    expect(mockOnChange).toHaveBeenCalledWith('last7');
+    fireEvent.click(screen.getByText('This week'));
+    expect(mockOnChange).toHaveBeenCalledWith('week');
 
-    // Re-open and select Last 30 days (component is controlled, label stays 'All time')
     fireEvent.click(button);
-    fireEvent.click(screen.getByText('Last 30 days'));
-    expect(mockOnChange).toHaveBeenCalledWith('last30');
+    fireEvent.click(screen.getByText('This month'));
+    expect(mockOnChange).toHaveBeenCalledWith('month');
   });
 
-  test('highlights the selected option in the dropdown', () => {
+  test('highlights selected option in dropdown', () => {
     render(<TimeFilter {...defaultProps} selectedRange="month" />);
-    const mainButton = screen.getByRole('button', { name: /This month/i }); // Button label updates
+    const mainButton = screen.getByRole('button', { name: /This month/i });
     fireEvent.click(mainButton);
 
-    // The dropdown itself has a specific structure. We need to find the button *within* the dropdown.
-    // The options are buttons within a div that appears.
-    const dropdownContainer = mainButton.nextElementSibling; // Assuming dropdown is sibling
-    expect(dropdownContainer).toBeInTheDocument();
+    // Get all buttons with "This month" text and select the dropdown one (should have bg-primary-50 class)
+    const monthButtons = screen.getAllByRole('button', { name: 'This month' });
+    const monthOptionButton = monthButtons.find(button =>
+      button.classList.contains('bg-primary-50')
+    );
 
-    if (!dropdownContainer) throw new Error("Dropdown container not found");
-
-    const monthOptionButton = within(dropdownContainer).getByRole('button', { name: 'This month' });
     expect(monthOptionButton).toHaveClass('bg-primary-50');
 
-    const allTimeOptionButton = within(dropdownContainer).getByRole('button', { name: 'All time' });
+    const allTimeButtons = screen.getAllByRole('button', { name: 'All time' });
+    const allTimeOptionButton = allTimeButtons.find(button =>
+      !button.classList.contains('bg-primary-50')
+    );
     expect(allTimeOptionButton).not.toHaveClass('bg-primary-50');
   });
 });

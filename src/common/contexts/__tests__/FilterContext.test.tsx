@@ -28,7 +28,7 @@ import { InboxFilterType } from '@common/hooks/useInboxFilters'; // Import the t
 interface MockParams {
   filter?: InboxFilterType;
   source?: string | null;
-  time?: 'all' | 'day' | '2days' | 'week' | 'month' | 'last7' | 'last30';
+  time?: 'all' | 'day' | '2days' | 'week' | 'month';
   tags?: string | string[];
 }
 
@@ -48,7 +48,7 @@ const mockResetParams = vi.fn(() => {
 interface MockState {
   filter: InboxFilterType;
   sourceFilter: string | null;
-  timeRange: 'all' | 'day' | '2days' | 'week' | 'month' | 'last7' | 'last30';
+  timeRange: 'all' | 'day' | '2days' | 'week' | 'month';
   tagIds: string[];
   hasActiveFilters: boolean;
 }
@@ -112,7 +112,7 @@ vi.mock('@common/hooks/useUrlParams', () => {
         timeRange: updates.time || 'all',
         tagIds,
       });
-      setParams((prev) => ({ ...prev, ...updates }));
+      setParams((prev: MockParams) => ({ ...prev, ...updates }));
     };
 
     const resetParams = () => {
@@ -551,27 +551,7 @@ describe('FilterContext', () => {
         );
       });
 
-      it('should derive dateFrom for timeRange "last7" (rolling 7 days local)', () => {
-        const { result } = renderHook(() => useFilters(), {
-          wrapper: createWrapper({ time: 'last7' }),
-        });
-        const expected = new Date(systemTime);
-        expected.setDate(expected.getDate() - 7);
-        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
-          expected.getTime()
-        );
-      });
-
-      it('should derive dateFrom for timeRange "last30" (rolling 30 days local)', () => {
-        const { result } = renderHook(() => useFilters(), {
-          wrapper: createWrapper({ time: 'last30' }),
-        });
-        const expected = new Date(systemTime);
-        expected.setDate(expected.getDate() - 30);
-        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
-          expected.getTime()
-        );
-      });
+      // Removed legacy rolling presets (last7/last30)
 
       it('should not set dateFrom for timeRange "all"', () => {
         const { result } = renderHook(() => useFilters(), {

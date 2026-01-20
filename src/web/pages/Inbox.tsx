@@ -20,6 +20,8 @@ import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterAct
 import { useAuth } from '@common/contexts';
 import { useToast } from '@common/contexts/ToastContext';
 import { useLogger } from '@common/utils/logger/useLogger';
+import MobileFilterPanel from '@web/components/MobileFilterPanel';
+import { SelectedFiltersDisplay } from '@web/components/SelectedFiltersDisplay';
 import SelectedTagsDisplay from '@web/components/SelectedTagsDisplay';
 
 import type { NewsletterWithRelations, Tag } from '@common/types';
@@ -102,26 +104,51 @@ const Inbox: React.FC = () => {
     handleTagClick,
   } = useInboxFilters();
 
-  // Group filter state
-  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  // Group filters state (multi-select)
+  const [groupFilters, setGroupFilters] = useState<string[]>([]);
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
 
-  // When group is selected, clear source filter; when source is selected, clear group filter
+  // Mobile filter panel state
+  const [isMobileFilterPanelOpen, setIsMobileFilterPanelOpen] = useState(false);
+
+  // When group(s) are selected, clear source filter; when source is selected, clear group filters
   const handleSourceFilterChange = useCallback(
     (sourceId: string | null) => {
-      setGroupFilter(null);
+      setGroupFilters([]);
       setSourceFilter(sourceId);
     },
     [setSourceFilter]
   );
 
-  const handleGroupFilterChange = useCallback(
-    (groupId: string | null) => {
+  const handleGroupFiltersChange = useCallback(
+    (groupIds: string[]) => {
       setSourceFilter(null);
-      setGroupFilter(groupId);
+      setGroupFilters(groupIds);
     },
     [setSourceFilter]
   );
+
+  // Mobile filter panel handlers
+  const handleMobileFilterOpen = useCallback(() => {
+    setIsMobileFilterPanelOpen(true);
+  }, []);
+
+  const handleMobileFilterClose = useCallback(() => {
+    setIsMobileFilterPanelOpen(false);
+  }, []);
+
+  const handleMobileFilterApply = useCallback(() => {
+    // Filters are already applied in real-time, just close the panel
+    setIsMobileFilterPanelOpen(false);
+  }, []);
+
+  const handleMobileFilterClearAll = useCallback(() => {
+    setFilter('unread');
+    setSourceFilter(null);
+    setGroupFilters([]);
+    setTimeRange('all');
+    resetFilters();
+  }, [setFilter, setSourceFilter, setGroupFilters, setTimeRange, resetFilters]);
 
   // Prepare group dropdown data
   const groupsForDropdown = useMemo(
@@ -138,12 +165,16 @@ const Inbox: React.FC = () => {
     [newsletterGroups, newsletterSources]
   );
 
-  // Compute source IDs for the selected group
+  // Compute source IDs for the selected groups (union)
   const selectedGroupSourceIds = useMemo(() => {
-    if (!groupFilter) return undefined;
-    const group = newsletterGroups.find((g) => g.id === groupFilter);
-    return group?.sources?.map((s) => s.id) || [];
-  }, [groupFilter, newsletterGroups]);
+    if (!groupFilters || groupFilters.length === 0) return undefined;
+    const idSet = new Set<string>();
+    groupFilters.forEach((gid) => {
+      const g = newsletterGroups.find((x) => x.id === gid);
+      g?.sources?.forEach((s) => idSet.add(s.id));
+    });
+    return Array.from(idSet);
+  }, [groupFilters, newsletterGroups]);
 
   // Newsletter filter from context
   const { newsletterFilter: contextNewsletterFilter } = useInboxFilters();
@@ -157,7 +188,7 @@ const Inbox: React.FC = () => {
         ? [...contextNewsletterFilter.sourceIds]
         : undefined,
     };
-    if (groupFilter && selectedGroupSourceIds) {
+    if (groupFilters.length > 0 && selectedGroupSourceIds) {
       filterObj = {
         ...filterObj,
         sourceIds: selectedGroupSourceIds,
@@ -179,7 +210,7 @@ const Inbox: React.FC = () => {
     return filterObj;
   }, [
     contextNewsletterFilter,
-    groupFilter,
+    groupFilters,
     selectedGroupSourceIds,
     filter,
     debouncedTagIds,
@@ -232,17 +263,17 @@ const Inbox: React.FC = () => {
         filteredCount: filtered.length,
         sampleRawNewsletter: rawNewsletters[0]
           ? {
-              id: rawNewsletters[0].id,
-              title: rawNewsletters[0].title?.substring(0, 50),
-              tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
-            }
+            id: rawNewsletters[0].id,
+            title: rawNewsletters[0].title?.substring(0, 50),
+            tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+          }
           : null,
         sampleFiltered: filtered[0]
           ? {
-              id: filtered[0].id,
-              title: filtered[0].title?.substring(0, 50),
-              tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
-            }
+            id: filtered[0].id,
+            title: filtered[0].title?.substring(0, 50),
+            tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+          }
           : null,
       });
     }
@@ -340,12 +371,23 @@ const Inbox: React.FC = () => {
       }
     }
 
-    if (groupFilter) {
-      if (params.get('group') !== groupFilter) {
-        params.set('group', groupFilter);
+    // Multi-group support
+    if (groupFilters.length > 0) {
+      const tag = params.get('groups');
+      const next = groupFilters.join(',');
+      if (tag !== next) {
+        params.set('groups', next);
+        hasChanges = true;
+      }
+      if (params.has('group')) {
+        params.delete('group');
         hasChanges = true;
       }
     } else {
+      if (params.has('groups')) {
+        params.delete('groups');
+        hasChanges = true;
+      }
       if (params.has('group')) {
         params.delete('group');
         hasChanges = true;
@@ -381,7 +423,7 @@ const Inbox: React.FC = () => {
       const newUrl = `${window.location.pathname}?${params.toString()}`;
       window.history.replaceState({}, '', newUrl);
     }
-  }, [filter, sourceFilter, groupFilter, timeRange, debouncedTagIds]);
+  }, [filter, sourceFilter, groupFilters, timeRange, debouncedTagIds]);
 
   // Shared newsletter actions with our enhanced version
   const newsletterActions = useSharedNewsletterActions(mutations, {
@@ -556,8 +598,9 @@ const Inbox: React.FC = () => {
       if (sourceFilter) {
         params.set('source', sourceFilter);
       }
-      if (groupFilter) {
-        params.set('group', groupFilter);
+      // Multi-group param support
+      if (groupFilters && groupFilters.length > 0) {
+        params.set('groups', groupFilters.join(','));
       }
       if (timeRange && timeRange !== 'all') {
         params.set('time', timeRange);
@@ -665,6 +708,7 @@ const Inbox: React.FC = () => {
       log,
       filter,
       sourceFilter,
+      groupFilters,
       timeRange,
       debouncedTagIds,
     ]
@@ -875,6 +919,19 @@ const Inbox: React.FC = () => {
     }
   }, [cacheManager, user?.id]);
 
+  // Initialize group filters from URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const groupsParam = params.get('groups');
+    if (groupsParam) {
+      const ids = groupsParam.split(',').map((s) => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        setGroupFilters(ids);
+        setSourceFilter(null);
+      }
+    }
+  }, [setSourceFilter]);
+
   // Create sources with unread counts for the filter dropdown
   const sourcesWithUnreadCounts = useMemo(() => {
     return newsletterSources.map(
@@ -910,13 +967,13 @@ const Inbox: React.FC = () => {
             <InboxFilters
               filter={filter}
               sourceFilter={sourceFilter}
-              groupFilter={groupFilter}
+              groupFilters={groupFilters}
               timeRange={timeRange}
               newsletterSources={sourcesWithUnreadCounts}
               newsletterGroups={groupsForDropdown}
               onFilterChange={setFilter}
               onSourceFilterChange={handleSourceFilterChange}
-              onGroupFilterChange={handleGroupFilterChange}
+              onGroupFiltersChange={handleGroupFiltersChange}
               onTimeRangeChange={setTimeRange}
               isLoadingSources={isLoadingSources}
               isLoadingGroups={isLoadingGroups}
@@ -926,6 +983,45 @@ const Inbox: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Mobile Filter Panel Button - Only visible on small screens */}
+      <div className="sm:hidden mb-4">
+        <button
+          onClick={handleMobileFilterOpen}
+          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          Filters
+          {(filter !== 'unread' || sourceFilter !== null || groupFilters.length > 0 || timeRange !== 'all') && (
+            <span className="bg-primary-100 text-primary-700 text-xs px-2 py-1 rounded-full">
+              Active
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Mobile Filter Panel */}
+      <MobileFilterPanel
+        isOpen={isMobileFilterPanelOpen}
+        onClose={handleMobileFilterClose}
+        onApply={handleMobileFilterApply}
+        onClearAll={handleMobileFilterClearAll}
+        filter={filter}
+        sourceFilter={sourceFilter}
+        groupFilters={groupFilters}
+        timeRange={timeRange}
+        newsletterSources={sourcesWithUnreadCounts}
+        newsletterGroups={groupsForDropdown}
+        onFilterChange={setFilter}
+        onSourceFilterChange={handleSourceFilterChange}
+        onGroupFiltersChange={handleGroupFiltersChange}
+        onTimeRangeChange={setTimeRange}
+        isLoadingSources={isLoadingSources}
+        isLoadingGroups={isLoadingGroups}
+        disabled={false}
+      />
 
       {/* Bulk Selection Actions */}
       {isSelecting && (
@@ -953,6 +1049,16 @@ const Inbox: React.FC = () => {
         selectedTags={selectedTags}
         onRemoveTag={removeTag}
         onClearAll={resetFilters}
+      />
+
+      {/* Selected Groups Display */}
+      <SelectedFiltersDisplay
+        selectedGroups={groupFilters}
+        groups={groupsForDropdown}
+        onClearGroup={(gid) => {
+          setGroupFilters((prev) => prev.filter((id) => id !== gid));
+        }}
+        onClearAll={() => setGroupFilters([])}
       />
 
       {/* Newsletter List with Infinite Scroll */}
@@ -1023,6 +1129,8 @@ const Inbox: React.FC = () => {
             // Display options
             showTags={true}
             showCheckbox={isSelecting}
+            activeGroupIds={groupFilters}
+            allGroups={newsletterGroups}
           />
         )}
       </div>

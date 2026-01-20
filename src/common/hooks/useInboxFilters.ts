@@ -17,6 +17,7 @@ export interface InboxFiltersState {
   pendingTagUpdates: string[];
   visibleTags: Set<string>;
   allTags: Tag[];
+  groupFilters: string[];
 }
 
 export interface InboxFiltersActions {
@@ -32,12 +33,18 @@ export interface InboxFiltersActions {
   resetFilters: () => void;
   updateTagDebounced: (tagIds: string[]) => void;
   handleTagClick: (tagId: string) => void;
+  setGroupFilters: (groupIds: string[]) => void;
+  toggleGroup: (groupId: string) => void;
+  addGroup: (groupId: string) => void;
+  removeGroup: (groupId: string) => void;
+  clearGroups: () => void;
 }
 
 export interface UseInboxFiltersOptions {
   debounceMs?: number;
   autoLoadTags?: boolean;
   preserveUrlOnActions?: boolean;
+  initialGroupFilters?: string[];
 }
 
 export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersActions {
@@ -55,6 +62,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     debounceMs = 300,
     autoLoadTags = true,
     // preserveUrlOnActions = true, // Commented out unused parameter
+    initialGroupFilters = [],
   } = options;
 
   const log = useLogger();
@@ -79,6 +87,9 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const [debouncedTagIds, setDebouncedTagIds] = useState<string[]>(tagIds);
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<Tag[]>([]);
+
+  // Local state for group filters
+  const [groupFilters, setGroupFiltersState] = useState<string[]>(initialGroupFilters);
 
   // Refs for debouncing
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
@@ -317,8 +328,58 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const enhancedResetFilters = useCallback(() => {
     setPendingTagUpdates([]);
     setDebouncedTagIds([]);
+    setGroupFiltersState([]);
     resetFilters();
   }, [resetFilters]);
+
+  // Group filter actions
+  const setGroupFilters = useCallback((groupIds: string[]) => {
+    log.debug('Setting group filters', {
+      action: 'set_group_filters',
+      metadata: {
+        groupIds,
+        previousGroups: groupFilters,
+        changeCount: Math.abs(groupIds.length - groupFilters.length),
+      },
+    });
+    setGroupFiltersState(groupIds);
+  }, [groupFilters, log]);
+
+  const toggleGroup = useCallback((groupId: string) => {
+    const currentGroups = groupFilters;
+    const isCurrentlySelected = currentGroups.includes(groupId);
+    const newGroups = isCurrentlySelected
+      ? currentGroups.filter((id) => id !== groupId)
+      : [...currentGroups, groupId];
+
+    log.debug('Group toggle result', {
+      action: 'toggle_group',
+      metadata: {
+        groupId,
+        wasSelected: isCurrentlySelected,
+        operation: isCurrentlySelected ? 'REMOVE' : 'ADD',
+        oldGroups: currentGroups,
+        newGroups,
+        changeCount: Math.abs(newGroups.length - currentGroups.length),
+      },
+    });
+
+    setGroupFiltersState(newGroups);
+  }, [groupFilters, log]);
+
+  const addGroup = useCallback((groupId: string) => {
+    setGroupFiltersState(currentGroups =>
+      currentGroups.includes(groupId) ? currentGroups : [...currentGroups, groupId]
+    );
+  }, []);
+
+  const removeGroup = useCallback((groupId: string) => {
+    setGroupFiltersState(currentGroups => currentGroups.filter((id) => id !== groupId));
+  }, []);
+
+  const clearGroups = useCallback(() => {
+    setGroupFiltersState([]);
+  }, []);
 
   // Custom isFilterActive that considers debounced state
   const enhancedIsFilterActive = useCallback(
@@ -335,26 +396,29 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
         case 'debouncedTagIds':
         case 'pendingTagUpdates':
           return debouncedTagIds.length > 0 || pendingTagUpdates.length > 0;
+        case 'groupFilters':
+          return groupFilters.length > 0;
         default:
           return false;
       }
     },
-    [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]
+    [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates, groupFilters]
   );
 
   // Enhanced hasActiveFilters that considers debounced state
   const enhancedHasActiveFilters = useMemo(() => {
     // 'unread' is the default. A filter is active if it's not 'unread' OR if other filters are set.
     // Or, more simply, if any filter is different from its default state.
-    // Default for filter is 'unread', sourceFilter is null, timeRange is 'all', tags are empty.
+    // Default for filter is 'unread', sourceFilter is null, timeRange is 'all', tags are empty, groups are empty.
     return (
       filter !== 'unread' || // Active if status filter is not 'unread'
       sourceFilter !== null ||
       timeRange !== 'all' ||
       debouncedTagIds.length > 0 ||
-      pendingTagUpdates.length > 0
+      pendingTagUpdates.length > 0 ||
+      groupFilters.length > 0
     );
-  }, [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates]);
+  }, [filter, sourceFilter, timeRange, debouncedTagIds, pendingTagUpdates, groupFilters]);
 
   // Create newsletter filter that conditionally excludes tagIds based on useLocalTagFiltering
   const enhancedNewsletterFilter = useMemo(() => {
@@ -366,18 +430,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     // Remove tagIds from the filter for client-side filtering
     const { tagIds: _tagIds, ...filterWithoutTags } = newsletterFilter;
     return filterWithoutTags;
-  }, [
-    useLocalTagFiltering,
-    newsletterFilter.isRead,
-    newsletterFilter.isArchived,
-    newsletterFilter.isLiked,
-    newsletterFilter.sourceIds,
-    newsletterFilter.dateFrom,
-    newsletterFilter.dateTo,
-    newsletterFilter.orderBy,
-    newsletterFilter.ascending,
-    newsletterFilter.tagIds,
-  ]);
+  }, [useLocalTagFiltering, newsletterFilter]);
 
   const state: InboxFiltersState = {
     filter,
@@ -388,6 +441,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     pendingTagUpdates,
     visibleTags,
     allTags,
+    groupFilters,
   };
 
   const actions: InboxFiltersActions = {
@@ -403,6 +457,11 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     resetFilters: enhancedResetFilters,
     updateTagDebounced,
     handleTagClick,
+    setGroupFilters,
+    toggleGroup,
+    addGroup,
+    removeGroup,
+    clearGroups,
   };
 
   return {
@@ -429,6 +488,7 @@ export const useInboxFilterState = (options?: UseInboxFiltersOptions) => {
     tagIds: filters.tagIds,
     debouncedTagIds: filters.debouncedTagIds,
     pendingTagUpdates: filters.pendingTagUpdates,
+    groupFilters: filters.groupFilters,
     newsletterFilter: filters.newsletterFilter,
     hasActiveFilters: filters.hasActiveFilters,
     isFilterActive: filters.isFilterActive,
@@ -457,5 +517,10 @@ export const useInboxFilterActions = (options?: UseInboxFiltersOptions) => {
     resetFilters: filters.resetFilters,
     updateTagDebounced: filters.updateTagDebounced,
     handleTagClick: filters.handleTagClick,
+    setGroupFilters: filters.setGroupFilters,
+    toggleGroup: filters.toggleGroup,
+    addGroup: filters.addGroup,
+    removeGroup: filters.removeGroup,
+    clearGroups: filters.clearGroups,
   };
 };

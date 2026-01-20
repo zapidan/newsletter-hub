@@ -73,11 +73,50 @@ const NewsletterDetail = memo(() => {
       targetRoute = '/queue';
     }
 
-    // Navigate directly to the target route
-    navigate(targetRoute, {
-      replace: true,
-    });
-  }, [navigate, location.state, log]);
+    // Preserve URL parameters when navigating back to inbox
+    if (targetRoute === '/inbox') {
+      const currentParams = new URLSearchParams();
+
+      // Preserve groups parameter if it exists
+      const groupsParam = searchParams.get('groups');
+      if (groupsParam) {
+        currentParams.set('groups', groupsParam);
+      }
+
+      // Preserve other filter parameters
+      const filterParam = searchParams.get('filter');
+      if (filterParam) {
+        currentParams.set('filter', filterParam);
+      }
+
+      const sourceParam = searchParams.get('source');
+      if (sourceParam) {
+        currentParams.set('source', sourceParam);
+      }
+
+      const tagsParam = searchParams.get('tags');
+      if (tagsParam) {
+        currentParams.set('tags', tagsParam);
+      }
+
+      const timeParam = searchParams.get('time');
+      if (timeParam) {
+        currentParams.set('time', timeParam);
+      }
+
+      const paramString = currentParams.toString();
+      const finalUrl = paramString ? `${targetRoute}?${paramString}` : targetRoute;
+
+      navigate(finalUrl, {
+        replace: true,
+      });
+    } else {
+      // For reading queue, navigate directly without preserving params
+      navigate(targetRoute, {
+        replace: true,
+      });
+    }
+  }, [navigate, location.state, log, searchParams]);
 
   useTags();
 

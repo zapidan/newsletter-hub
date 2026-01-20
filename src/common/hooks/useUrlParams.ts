@@ -1,3 +1,14 @@
+import {
+  inboxFilterValidator,
+  orderDirectionValidator,
+  positiveIntegerValidator,
+  sanitizeUrlParam,
+  sortFieldValidator,
+  timeRangeValidator,
+  uuidArrayValidator,
+  uuidValidator,
+  type Validator
+} from '@common/utils/urlParamValidation';
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -9,6 +20,8 @@ export interface ParamConfig<T extends Record<string, ParamValue>> {
     serialize?: (value: T[keyof T]) => string | null;
     deserialize?: (value: string) => T[keyof T];
     omitIfDefault?: boolean;
+    validator?: Validator<any>;
+    sanitize?: boolean;
   };
 }
 
@@ -29,10 +42,21 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
     const result = {} as T;
 
     for (const [key, paramConfig] of Object.entries(config)) {
-      const urlValue = searchParams.get(key);
+      let urlValue = searchParams.get(key);
+
+      // Sanitize the URL value if sanitization is enabled
+      if (urlValue && paramConfig.sanitize) {
+        urlValue = sanitizeUrlParam(urlValue);
+      }
 
       if (urlValue === null) {
         result[key as keyof T] = paramConfig.defaultValue as T[keyof T];
+      } else if (paramConfig.validator) {
+        // Use custom validator if provided
+        const validationResult = paramConfig.validator(urlValue, paramConfig.defaultValue);
+        result[key as keyof T] = validationResult.isValid && validationResult.value !== undefined
+          ? validationResult.value
+          : paramConfig.defaultValue as T[keyof T];
       } else if (paramConfig.deserialize) {
         result[key as keyof T] = paramConfig.deserialize(urlValue);
       } else {
@@ -181,18 +205,26 @@ export function useInboxUrlParams() {
     filter: {
       defaultValue: 'all' as const,
       omitIfDefault: true,
+      validator: inboxFilterValidator,
+      sanitize: true,
     },
     source: {
       defaultValue: null as string | null,
       omitIfDefault: true,
+      validator: uuidValidator,
+      sanitize: true,
     },
     time: {
       defaultValue: 'all' as const,
       omitIfDefault: true,
+      validator: timeRangeValidator,
+      sanitize: true,
     },
     tags: {
       defaultValue: [] as string[],
       omitIfDefault: true,
+      validator: uuidArrayValidator,
+      sanitize: true,
       serialize: (value: ParamValue) =>
         Array.isArray(value) && value.length > 0 ? value.join(',') : null,
       deserialize: (value: string) => (value ? value.split(',').filter(Boolean) : []),
@@ -206,15 +238,21 @@ export function useReadingQueueUrlParams() {
     page: {
       defaultValue: 1,
       omitIfDefault: true,
+      validator: positiveIntegerValidator,
+      sanitize: true,
       deserialize: (value: string) => Math.max(1, parseInt(value, 10) || 1),
     },
     sort: {
       defaultValue: 'created_at' as const,
       omitIfDefault: true,
+      validator: sortFieldValidator,
+      sanitize: true,
     },
     order: {
       defaultValue: 'desc' as const,
       omitIfDefault: true,
+      validator: orderDirectionValidator,
+      sanitize: true,
     },
   });
 }

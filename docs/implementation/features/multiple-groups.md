@@ -159,6 +159,12 @@ Phase 3: Display and navigation updates
 Phase 4: Mobile responsiveness and advanced features
 Phase 5: Performance optimization and validation
 
+Implementation Priority
+High: Enhance useInboxFilters hook with multi-group support
+Medium: Mobile filter panel and newsletter detail navigation
+Medium: Group badges display and bulk actions integration
+Low: Filter validation and performance optimizations
+
 ### 1. Group Management Components
 
 - `GroupList` – list groups with **source** counts
@@ -206,10 +212,85 @@ Phase 5: Performance optimization and validation
 3. Deploy frontend (source-based group UI)
 4. Monitor and consider a feature flag
 
-## Future Enhancements
+## Missing Implementation Items (Priority Order)
 
-1. Bulk assign/remove sources across groups
-2. Nested groups/categories
-3. Group sharing
-4. Group templates
-5. Import/export of group configuration
+### HIGH PRIORITY
+
+#### 1. Group Badges on Newsletter Rows
+
+- **Status**: ❌ Missing
+- **Files**: `src/web/components/NewsletterRow*.tsx`
+- **Details**: Newsletter rows should display group badges when `groupFilters.length > 0`, showing intersection with newsletter's source.groups
+- **Impact**: Users cannot see which groups filtered newsletters belong to
+
+#### 2. Filter Validation Utility
+
+- **Status**: ❌ Missing
+- **Files**: `src/common/utils/filterValidation.ts` (new)
+- **Details**: Validate groups URL parameter against available groups, guard against pathological selections
+- **Impact**: Invalid group IDs in URLs could cause unexpected behavior
+
+### MEDIUM PRIORITY
+
+#### 3. Enhanced Bulk Actions with Group Context
+
+- **Status**: ⚠️ Partial
+- **Files**: `src/web/components/BulkSelectionActions.tsx`
+- **Details**: Bulk actions should respect group filter context where applicable
+- **Impact**: Bulk operations may not work correctly with group filters applied
+
+#### 4. Group Management UI Components
+
+- **Status**: ⚠️ Partial
+- **Files**: Need components for group CRUD operations
+- **Details**:
+  - `GroupList` – list groups with source counts
+  - `GroupForm` – create/edit group with color picker and source multi-select
+  - `GroupBadge` – visual group label (exists but needs integration)
+  - `GroupSelect` – multi-select for groups when editing a source
+- **Impact**: Users cannot create/edit groups through the UI
+
+### LOW PRIORITY
+
+#### 5. Performance Optimizations
+
+- **Status**: ✅ Mostly Complete
+- **Files**: `src/common/utils/queryKeyFactory.ts`
+- **Details**: Query keys already sort arrays for stability, but could add more optimizations
+- **Impact**: Minor performance improvements
+
+#### 6. Advanced Group Features
+
+- **Status**: ❌ Missing
+- **Details**:
+  - Bulk assign/remove sources across groups
+  - Nested groups/categories
+  - Group sharing
+  - Group templates
+  - Import/export of group configuration
+- **Impact**: Advanced user workflows not supported
+
+## Implementation Status Summary
+
+| Feature                             | Status      | Notes                                                  |
+| ----------------------------------- | ----------- | ------------------------------------------------------ |
+| **Core State Management**           | ✅ Complete | `useInboxFilters` supports `groupFilters: string[]`    |
+| **Multi-select Filter Component**   | ✅ Complete | `InboxFilters.tsx` has `MultiGroupFilterDropdown`      |
+| **URL Parameter Handling**          | ✅ Complete | `?groups=id1,id2` format supported                     |
+| **Mobile Filter Panel**             | ✅ Complete | `MobileFilterPanel.tsx` supports multi-group selection |
+| **Selected Filters Display**        | ✅ Complete | `SelectedFiltersDisplay.tsx` implemented               |
+| **Navigation Preservation**         | ✅ Complete | NewsletterDetail preserves groups parameter            |
+| **Query Key Stability**             | ✅ Complete | Arrays sorted in `queryKeyFactory.ts`                  |
+| **Group Badges on Newsletter Rows** | ❌ Missing  | Need to add group badges to NewsletterRow components   |
+| **Filter Validation**               | ❌ Missing  | Need `filterValidation.ts` utility                     |
+| **Group Management UI**             | ⚠️ Partial  | Backend ready, frontend needs CRUD components          |
+| **Bulk Actions Integration**        | ⚠️ Partial  | Needs group filter context awareness                   |
+
+## Next Steps (Recommended Order)
+
+1. **Implement Group Badges** (High) - Add visual feedback for filtered newsletters
+2. **Add Filter Validation** (High) - Improve robustness of URL parameter handling
+3. **Complete Group Management UI** (Medium) - Enable full CRUD operations
+4. **Enhance Bulk Actions** (Medium) - Ensure group filter compatibility
+5. **Performance Review** (Low) - Optimize any remaining bottlenecks
+6. **Advanced Features** (Low) - Plan future enhancements based on user feedback

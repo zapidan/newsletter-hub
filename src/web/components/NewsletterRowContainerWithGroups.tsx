@@ -1,10 +1,9 @@
-import { NewsletterWithRelations, Tag } from "@common/types";
+import { NewsletterGroup, NewsletterWithRelations, Tag } from "@common/types";
 import React from "react";
 import NewsletterRowPresentation from "./NewsletterRowPresentation";
 
-interface NewsletterRowContainerProps {
+interface NewsletterRowContainerWithGroupsProps {
   newsletter: NewsletterWithRelations;
-  'data-testid'?: string;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onTagClick: (tag: Tag, e: React.MouseEvent) => void;
@@ -34,17 +33,28 @@ interface NewsletterRowContainerProps {
   isUpdatingTags?: boolean;
   tagUpdateError?: string | null;
   onDismissTagError?: () => void;
-  // Group badges context
+  // Group context
   activeGroupIds?: string[];
-  allGroups?: { id: string; name: string }[];
+  newsletterGroups?: NewsletterGroup[];
+  onGroupClick?: (groupId: string) => void;
+  'data-testid'?: string;
 }
 
-const NewsletterRowContainer: React.FC<NewsletterRowContainerProps> = (props) => {
-  const { newsletter, onToggleSelect, ...rest } = props;
-  // Wrap onToggleSelect to match the expected () => void signature
+const NewsletterRowContainerWithGroups: React.FC<NewsletterRowContainerWithGroupsProps> = (props) => {
+  const { newsletter, onToggleSelect, 'data-testid': dataTestId, ...rest } = props;
   const handleToggleSelect = onToggleSelect ? () => onToggleSelect(newsletter.id) : undefined;
   return (
-    <div data-testid={props['data-testid']}>
+    <div
+      data-testid={dataTestId}
+      data-props={JSON.stringify({
+        newsletter,
+        isSelected: props.isSelected,
+        showCheckbox: props.showCheckbox,
+        showTags: props.showTags,
+        visibleTags: props.visibleTags,
+        isInReadingQueue: props.isInReadingQueue
+      })}
+    >
       <NewsletterRowPresentation
         {...rest}
         newsletter={newsletter}
@@ -54,4 +64,4 @@ const NewsletterRowContainer: React.FC<NewsletterRowContainerProps> = (props) =>
   );
 };
 
-export default NewsletterRowContainer;
+export default NewsletterRowContainerWithGroups;
