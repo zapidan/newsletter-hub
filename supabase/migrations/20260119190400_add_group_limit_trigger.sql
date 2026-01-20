@@ -20,10 +20,18 @@ END;
 $$;
 
 -- Trigger to set user_id on insert
-CREATE TRIGGER IF NOT EXISTS set_newsletter_source_group_member_user_id_trigger
-BEFORE INSERT ON public.newsletter_source_group_members
-FOR EACH ROW
-EXECUTE FUNCTION public.set_newsletter_source_group_member_user_id();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger 
+    WHERE tgname = 'set_newsletter_source_group_member_user_id_trigger'
+  ) THEN
+    CREATE TRIGGER set_newsletter_source_group_member_user_id_trigger
+    BEFORE INSERT ON public.newsletter_source_group_members
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_newsletter_source_group_member_user_id();
+  END IF;
+END $$;
 
 -- Function to enforce max 10 groups per source
 CREATE OR REPLACE FUNCTION public.check_newsletter_source_group_limit()
@@ -59,10 +67,18 @@ END;
 $$;
 
 -- Create the trigger for the group limit
-CREATE TRIGGER IF NOT EXISTS check_newsletter_source_group_limit_trigger
-BEFORE INSERT ON public.newsletter_source_group_members
-FOR EACH ROW
-EXECUTE FUNCTION public.check_newsletter_source_group_limit();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger 
+    WHERE tgname = 'check_newsletter_source_group_limit_trigger'
+  ) THEN
+    CREATE TRIGGER check_newsletter_source_group_limit_trigger
+    BEFORE INSERT ON public.newsletter_source_group_members
+    FOR EACH ROW
+    EXECUTE FUNCTION public.check_newsletter_source_group_limit();
+  END IF;
+END $$;
 
 -- Update RLS policy to include source ownership check
 DROP POLICY IF EXISTS "Users can add members to their groups" ON public.newsletter_source_group_members;
