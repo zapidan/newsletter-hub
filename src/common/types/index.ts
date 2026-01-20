@@ -70,6 +70,7 @@ export interface NewsletterSourceGroup {
   id: string;
   user_id: string;
   name: string;
+  color?: string;
   created_at: string;
   updated_at: string;
   sources?: NewsletterSource[];
@@ -84,6 +85,7 @@ export interface NewsletterSourceGroupMember {
   source_id: string;
   created_at: string;
   source?: NewsletterSource;
+  group?: NewsletterSourceGroup;
 }
 
 export interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {
