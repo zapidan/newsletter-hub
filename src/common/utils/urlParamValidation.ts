@@ -329,17 +329,24 @@ export function validateParams(
  * Sanitizes URL parameters by removing potentially dangerous characters
  */
 export function sanitizeUrlParam(value: string): string {
-  return value
-    .trim()
-    // Remove any script or HTML tags
-    .replace(/<script[^>]*>.*?<\/script>/gi, '')
-    .replace(/<[^>]*>/g, '')
-    // Remove potential XSS patterns
-    .replace(/javascript:/gi, '')
-    .replace(/data:/gi, '')
-    .replace(/vbscript:/gi, '')
-    // Limit length to prevent abuse
-    .slice(0, 1000);
+  // Normalize whitespace first
+  value = value.trim();
+
+  let previous: string;
+  do {
+    previous = value;
+    value = value
+      // Remove any script or HTML tags
+      .replace(/<script[^>]*>.*?<\/script>/gi, '')
+      .replace(/<[^>]*>/g, '')
+      // Remove potential XSS patterns
+      .replace(/javascript:/gi, '')
+      .replace(/data:/gi, '')
+      .replace(/vbscript:/gi, '');
+  } while (value !== previous);
+
+  // Limit length to prevent abuse
+  return value.slice(0, 1000);
 }
 
 /**
