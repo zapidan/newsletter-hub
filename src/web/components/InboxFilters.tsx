@@ -285,6 +285,12 @@ const MultiGroupFilterDropdown: FC<{
       return `${selectedGroupIds.length} Groups`;
     })();
 
+    const selectedUnreadTotal = useMemo(() => {
+      if (!Array.isArray(groups) || groups.length === 0) return 0;
+      const set = new Set(selectedGroupIds);
+      return groups.reduce((sum, g) => sum + (set.has(g.id) ? (g.count || 0) : 0), 0);
+    }, [groups, selectedGroupIds]);
+
     return (
       <div className="relative">
         <button
@@ -305,8 +311,8 @@ const MultiGroupFilterDropdown: FC<{
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <span className="truncate">{label}</span>
             {selectedGroupIds.length > 0 && (
-              <span className="bg-blue-100 text-blue-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
-                {selectedGroupIds.length}
+              <span className="bg-white text-gray-700 border border-gray-200 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                {selectedUnreadTotal}
               </span>
             )}
           </div>
@@ -334,15 +340,17 @@ const MultiGroupFilterDropdown: FC<{
                       key={group.id}
                       type="button"
                       onClick={(e) => toggleOne(group.id, e)}
-                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${checked ? 'bg-blue-50 text-blue-800 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${checked ? 'bg-neutral-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
                     >
                       <span className="truncate pr-2">{group.name}</span>
-                      <span className={`flex items-center justify-center h-4 w-4 rounded ${checked ? 'bg-blue-600' : 'bg-gray-200'}`}></span>
-                      {showCounts && group.count !== undefined && group.count > 0 && (
-                        <span className="bg-blue-100 text-blue-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2">
-                          {group.count}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-2 flex-shrink-0">
+                        {showCounts && group.count !== undefined && group.count > 0 && (
+                          <span className="bg-gray-200 text-gray-700 text-xs font-medium px-1.5 py-0.5 rounded-full">
+                            {group.count}
+                          </span>
+                        )}
+                        <span className={`inline-block w-4 text-blue-600 ${checked ? 'opacity-100' : 'opacity-0'}`}>✓</span>
+                      </span>
                     </button>
                   );
                 })}

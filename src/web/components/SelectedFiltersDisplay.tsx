@@ -26,14 +26,14 @@ export const SelectedFiltersDisplay: React.FC<SelectedFiltersDisplayProps> = ({
         return (
           <span
             key={groupId}
-            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-sm rounded-full"
+            className="inline-flex items-center gap-1 px-2 py-1 bg-neutral-100 text-neutral-800 border border-neutral-200 text-sm rounded-full"
             data-testid={`selected-group-chip-${groupId}`}
           >
             {group.name}
             <button
               type="button"
               onClick={() => onClearGroup(groupId)}
-              className="ml-1 text-blue-700 hover:text-blue-900"
+              className="ml-1 text-neutral-600 hover:text-neutral-800"
               aria-label={`Remove ${group.name} filter`}
             >
               ×

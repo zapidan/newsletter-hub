@@ -45,7 +45,8 @@ const GroupBadge: React.FC<GroupBadgeProps> = ({
           ? `bg-opacity-100 border-2 ring-2 ring-offset-1`
           : `bg-opacity-60 border border-opacity-50 hover:bg-opacity-80`;
       case 'preview':
-        return `bg-opacity-80`;
+        // Use subtle background similar to inactive filter chips for readability
+        return `bg-opacity-60 border border-opacity-40`;
       default:
         return `bg-opacity-100`;
     }
@@ -66,11 +67,21 @@ const GroupBadge: React.FC<GroupBadgeProps> = ({
   };
 
   const badgeStyle = {
-    backgroundColor: variant === 'filter' && !isActive
-      ? `${color}30`
-      : `${color}${isActive ? 'FF' : 'CC'}`,
+    backgroundColor:
+      // Inactive filter chips are light tinted
+      (variant === 'filter' && !isActive)
+        ? `${color}30`
+        // Preview chips in rows should also be light tinted for contrast
+        : (variant === 'preview')
+          ? `${color}30`
+          // Default: solid color, typically for active state
+          : `${color}${isActive ? 'FF' : 'CC'}`,
     borderColor: color,
-    color: isActive ? '#FFFFFF' : color,
+    color:
+      // For light tinted backgrounds, keep colored text
+      (variant === 'filter' && !isActive) || variant === 'preview'
+        ? color
+        : (isActive ? '#FFFFFF' : color),
     ringColor: isActive ? color : undefined,
   };
 

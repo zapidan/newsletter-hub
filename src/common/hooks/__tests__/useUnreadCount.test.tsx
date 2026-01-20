@@ -475,7 +475,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
   describe('Cache invalidation behavior', () => {
     it('should not refetch when optimistic updates are applied', async () => {
-      const { result } = renderUseUnreadCount();
+      renderUseUnreadCount();
 
       // Wait for initial data to load
       await act(async () => {
@@ -571,59 +571,64 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
         await result.current.invalidateUnreadCount();
       });
 
-      // Should maintain the optimistic count even on error
-      expect(result.current.unreadCount).toBe(8);
-    });
-  });
-
-  describe('Performance optimizations', () => {
-    it('should use stale time to prevent unnecessary refetches', async () => {
-      const { result } = renderUseUnreadCount();
-
-      // Wait for initial data to load
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      // Wait for error to be processed
+      await waitFor(() => {
+        expect(result.current.isError).toBe(true);
       });
 
-      const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+      // Should fallback to 0 on error since API failed
+      expect(result.current.unreadCount).toBe(0);
+    });
 
-      // Trigger a re-render
-      await act(async () => {
-        // This would normally trigger a refetch, but stale time should prevent it
-        queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
-          total: 10,
-          bySource: { 'source-1': 10 },
+    describe('Performance optimizations', () => {
+      it('should use stale time to prevent unnecessary refetches', async () => {
+        renderUseUnreadCount();
+
+        // Wait for initial data to load
+        await act(async () => {
+          await new Promise(resolve => setTimeout(resolve, 0));
         });
+
+        const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+
+        // Trigger a re-render
+        await act(async () => {
+          // This would normally trigger a refetch, but stale time should prevent it
+          queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
+            total: 10,
+            bySource: { 'source-1': 10 },
+          });
+        });
+
+        // Should not have made additional API calls due to stale time
+        expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
       });
 
-      // Should not have made additional API calls due to stale time
-      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
-    });
+      it('should debounce invalidations', async () => {
+        const { result } = renderUseUnreadCount();
 
-    it('should debounce invalidations', async () => {
-      const { result } = renderUseUnreadCount();
+        // Wait for initial data to load
+        await act(async () => {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        });
 
-      // Wait for initial data to load
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 0));
+        const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+
+        // Call invalidate multiple times quickly
+        await act(async () => {
+          result.current.invalidateUnreadCount();
+          result.current.invalidateUnreadCount();
+          result.current.invalidateUnreadCount();
+        });
+
+        // Wait for debounce delay
+        await act(async () => {
+          await new Promise(resolve => setTimeout(resolve, 600)); // Debounce delay is 500ms
+        });
+
+        // Should only have made one additional call due to debouncing
+        expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount + 1);
       });
-
-      const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
-
-      // Call invalidate multiple times quickly
-      await act(async () => {
-        result.current.invalidateUnreadCount();
-        result.current.invalidateUnreadCount();
-        result.current.invalidateUnreadCount();
-      });
-
-      // Wait for debounce delay
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 600)); // Debounce delay is 500ms
-      });
-
-      // Should only have made one additional call due to debouncing
-      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount + 1);
     });
   });
 });

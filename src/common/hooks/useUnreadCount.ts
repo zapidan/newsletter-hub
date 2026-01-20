@@ -155,7 +155,7 @@ export const useUnreadCount = (sourceId?: string | null) => {
         refetchType: 'active', // Only refetch active queries
       });
     }, DEBOUNCE_DELAY);
-  }, [queryClient, log]);
+  }, [queryClient, log, queryKey]);
 
   // Listen for newsletter updates and invalidate unread count with debouncing
   useEffect(() => {
@@ -185,9 +185,11 @@ export const useUnreadCount = (sourceId?: string | null) => {
     };
   }, [user, debouncedInvalidate, log]);
 
-  // Return 0 during initial load, then return actual count or fallback to previous count
-  const displayCount =
-    unreadCount !== undefined
+  // Return 0 during initial load or when there's an error, then return actual count or fallback to previous count
+  // When there's an error, we should return 0 regardless of what the selector returns
+  const displayCount = isError
+    ? 0
+    : unreadCount !== undefined
       ? unreadCount
       : previousCount.current !== null
         ? previousCount.current
