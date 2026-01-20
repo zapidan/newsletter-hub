@@ -120,6 +120,24 @@ export {
   default as newsletterSourceGroupService,
 } from "./newsletterSourceGroupApi";
 
+// Newsletter Group API (source-based: groups contain sources; newsletters inherit from source)
+export {
+  newsletterGroupApi,
+  getAllNewsletterGroups,
+  getNewsletterGroupById,
+  createNewsletterGroup,
+  updateNewsletterGroup,
+  deleteNewsletterGroup,
+  addSourcesToGroup,
+  removeSourcesFromGroup,
+  getGroupSources,
+  getSourceGroups,
+  updateSourceGroups,
+  getNewsletterGroupStats,
+  searchNewsletterGroups,
+  default as newsletterGroupService,
+} from "./newsletterGroupApi";
+
 // User API
 export {
   userApi,
@@ -181,6 +199,8 @@ export type {
   UpdateTagParams,
   CreateNewsletterSourceGroupParams,
   UpdateNewsletterSourceGroupParams,
+  CreateNewsletterGroupParams,
+  UpdateNewsletterGroupParams,
   DatabaseOperation,
   CacheInvalidationParams,
   AuthenticatedOperation,

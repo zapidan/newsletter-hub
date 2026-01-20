@@ -7,6 +7,7 @@ export * from './tag/TagService';
 export * from './readingQueue/ReadingQueueService';
 export * from './newsletterSource/NewsletterSourceService';
 export * from './newsletterSourceGroup/NewsletterSourceGroupService';
+export * from './newsletterGroup/NewsletterGroupService';
 export * from './user/UserService';
 
 // Legacy exports (if needed)

@@ -153,6 +153,19 @@ export interface UpdateNewsletterSourceGroupParams {
   source_ids?: string[];
 }
 
+export interface CreateNewsletterGroupParams {
+  name: string;
+  color?: string;
+  sourceIds?: string[];
+}
+
+export interface UpdateNewsletterGroupParams {
+  id: string;
+  name?: string;
+  color?: string;
+  sourceIds?: string[];
+}
+
 // Database Operation Types
 export interface DatabaseOperation {
   table: string;
