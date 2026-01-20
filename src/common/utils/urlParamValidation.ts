@@ -7,6 +7,7 @@
 
 import type { InboxFilterType } from '@common/hooks/useInboxFilters';
 import type { TimeRange } from '@web/components/TimeFilter';
+import sanitizeHtml from 'sanitize-html';
 
 // Validation result interface
 export interface ValidationResult<T = unknown> {
@@ -332,21 +333,26 @@ export function sanitizeUrlParam(value: string): string {
   // Normalize whitespace first
   value = value.trim();
 
-  let previous: string;
-  do {
-    previous = value;
-    value = value
-      // Remove any script or HTML tags
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, '')
-      .replace(/<[^>]*>/g, '')
-      // Remove potential XSS patterns
-      .replace(/javascript:/gi, '')
-      .replace(/data:/gi, '')
-      .replace(/vbscript:/gi, '');
-  } while (value !== previous);
+  // Use a robust HTML sanitizer to strip any HTML/script content.
+  // We don't allow any HTML; treat everything as plain text.
+  let sanitized = sanitizeHtml(value, {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
+
+  // As a defensive fallback, strip any remaining angle brackets and
+  // obvious dangerous protocol / script patterns that could survive
+  // unexpected encodings or malformed input.
+  sanitized = sanitized
+    .replace(/</g, '')
+    .replace(/>/g, '')
+    .replace(/javascript:/gi, '')
+    .replace(/vbscript:/gi, '')
+    .replace(/data:/gi, '')
+    .replace(/script/gi, '');
 
   // Limit length to prevent abuse
-  return value.slice(0, 1000);
+  return sanitized.slice(0, 1000);
 }
 
 /**
