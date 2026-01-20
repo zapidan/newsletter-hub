@@ -633,7 +633,7 @@ describe('NewsletterDetail (source and group display)', () => {
     renderPage();
     expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('Source: Test Source');
     expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('test@example.com');
-    expect(await screen.findByTestId('newsletter-source-group')).toHaveTextContent('Source Group: None');
+    expect(await screen.findByTestId('newsletter-source-group')).toHaveTextContent('Source Groups: None');
   });
 
   it('renders None if no group found', async () => {
@@ -673,7 +673,7 @@ describe('NewsletterDetail (source and group display)', () => {
     renderPage();
     expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('Source: Other Source');
     expect(await screen.findByTestId('newsletter-source')).toHaveTextContent('other@example.com');
-    expect(await screen.findByTestId('newsletter-source-group')).toHaveTextContent('Source Group: None');
+    expect(await screen.findByTestId('newsletter-source-group')).toHaveTextContent('Source Groups: None');
   });
 });
 

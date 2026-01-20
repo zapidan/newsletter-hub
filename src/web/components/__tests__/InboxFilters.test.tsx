@@ -36,6 +36,65 @@ describe('InboxFilters', () => {
     vi.clearAllMocks();
   });
 
+  describe('Multi-group selection mode', () => {
+    test('renders multi-group dropdown when groupFilters prop is provided', () => {
+      const onGroupFiltersChange = vi.fn();
+      render(
+        <InboxFilters
+          {...defaultProps}
+          groupFilters={[]}
+          onGroupFiltersChange={onGroupFiltersChange}
+        />
+      );
+      // Multi dropdown uses the same aria-label text
+      const groupButtons = screen.getAllByLabelText('Filter by groups');
+      expect(groupButtons.length).toBeGreaterThan(0);
+    });
+
+    test('disables source filter when any group is selected (multi)', () => {
+      const onGroupFiltersChange = vi.fn();
+      render(
+        <InboxFilters
+          {...defaultProps}
+          sourceFilter={null}
+          groupFilters={["group1"]}
+          onGroupFiltersChange={onGroupFiltersChange}
+        />
+      );
+      const sourceButtons = screen
+        .getAllByLabelText('Filter by newsletter source')
+        .filter((btn) => btn.offsetParent !== null);
+      sourceButtons.forEach((btn) => expect(btn).toBeDisabled());
+    });
+
+    test('toggling multi-group items calls onGroupFiltersChange with updated arrays', () => {
+      const onGroupFiltersChange = vi.fn();
+      render(
+        <InboxFilters
+          {...defaultProps}
+          groupFilters={[]}
+          onGroupFiltersChange={onGroupFiltersChange}
+        />
+      );
+
+      // Open the multi-select dropdown (aria-label shared)
+      const groupButtons = screen.getAllByLabelText('Filter by groups');
+      fireEvent.click(groupButtons[0]);
+
+      // Click first group (Work)
+      fireEvent.click(screen.getByText('Work'));
+      expect(onGroupFiltersChange).toHaveBeenLastCalledWith(['group1']);
+
+      // Click second group (Personal)
+      fireEvent.click(screen.getByText('Personal'));
+      expect(onGroupFiltersChange).toHaveBeenLastCalledWith(['group2']);
+
+      // Click first again to unselect
+      fireEvent.click(screen.getByText('Work'));
+      expect(onGroupFiltersChange).toHaveBeenLastCalledWith(['group1']);
+    });
+  });
+
   test('renders correctly with default props', () => {
     render(<InboxFilters {...defaultProps} />);
     expect(screen.getAllByLabelText('Filter by time range').length).toBeGreaterThan(0);
@@ -136,36 +195,70 @@ describe('InboxFilters', () => {
 
   test('renders group filter dropdown', () => {
     render(<InboxFilters {...defaultProps} />);
-    expect(screen.getAllByLabelText('Filter by group').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('Filter by groups').length).toBeGreaterThan(0);
   });
 
   test('opens group filter dropdown and calls onGroupFilterChange', () => {
-    render(<InboxFilters {...defaultProps} />);
-    const groupButtons = screen.getAllByLabelText('Filter by group');
+    const onGroupFiltersChange = vi.fn();
+    render(
+      <InboxFilters
+        {...defaultProps}
+        groupFilters={[]}
+        onGroupFiltersChange={onGroupFiltersChange}
+      />
+    );
+    const groupButtons = screen.getAllByLabelText('Filter by groups');
     fireEvent.click(groupButtons[0]);
-    expect(screen.getByText('Work')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Work'));
-    expect(mockOnGroupFilterChange).toHaveBeenCalledWith('group1');
+
+    // Find the Work button in the dropdown - try multiple approaches
+    let workButton: HTMLElement | null = null;
+    const workTexts = screen.getAllByText('Work');
+    workButton = workTexts.find(text => text.closest('.absolute')) || workTexts[1] || null;
+
+    expect(workButton).toBeInTheDocument();
+    if (workButton) {
+      fireEvent.click(workButton);
+    }
+    expect(onGroupFiltersChange).toHaveBeenCalledWith(['group1']);
   });
 
   test('selects "All Groups" from dropdown', () => {
-    render(<InboxFilters {...defaultProps} groupFilter="group1" />);
-    const groupButtons = screen.getAllByLabelText('Filter by group');
+    const onGroupFiltersChange = vi.fn();
+    render(
+      <InboxFilters
+        {...defaultProps}
+        groupFilters={['group1']}
+        onGroupFiltersChange={onGroupFiltersChange}
+      />
+    );
+    const groupButtons = screen.getAllByLabelText('Filter by groups');
     fireEvent.click(groupButtons[0]);
-    expect(screen.getByText('All Groups')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('All Groups'));
-    expect(mockOnGroupFilterChange).toHaveBeenCalledWith(null);
+
+    // Find All Groups button in dropdown - try multiple approaches
+    let allGroupsButton: HTMLElement | null = null;
+    try {
+      allGroupsButton = screen.getByText('Clear All Groups').closest('div')?.parentElement?.querySelector('button') || null;
+    } catch {
+      // Fallback to finding All Groups button
+      const buttons = screen.getAllByText('All Groups');
+      allGroupsButton = buttons.find(btn => btn.closest('.absolute')) || buttons[1] || null;
+    }
+    expect(allGroupsButton).toBeInTheDocument();
+    if (allGroupsButton) {
+      fireEvent.click(allGroupsButton);
+    }
+    expect(onGroupFiltersChange).toHaveBeenCalledWith([]);
   });
 
   test('group filter is enabled when no source is selected, and disabled when source is selected', () => {
     // Enabled when no source is selected
     render(<InboxFilters {...defaultProps} groupFilter={null} sourceFilter={null} />);
-    const groupButtons = screen.getAllByLabelText('Filter by group').filter(btn => btn.offsetParent !== null);
+    const groupButtons = screen.getAllByLabelText('Filter by groups').filter(btn => btn.offsetParent !== null);
     groupButtons.forEach(btn => expect(btn).not.toBeDisabled());
 
     // Disabled when source is selected
     render(<InboxFilters {...defaultProps} groupFilter={null} sourceFilter="source1" />);
-    const groupButtons2 = screen.getAllByLabelText('Filter by group').filter(btn => btn.offsetParent !== null);
+    const groupButtons2 = screen.getAllByLabelText('Filter by groups').filter(btn => btn.offsetParent !== null);
     groupButtons2.forEach(btn => expect(btn).toBeDisabled());
   });
 

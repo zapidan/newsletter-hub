@@ -6,8 +6,7 @@ import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterAct
 import { useSimpleNewsletterNavigation } from '@common/hooks/useSimpleNewsletterNavigation';
 import { useTags } from '@common/hooks/useTags';
 import { newsletterService } from '@common/services';
-import { findGroupBySourceId, newsletterSourceGroupService } from '@common/services/newsletterSourceGroup/NewsletterSourceGroupService';
-import type { NewsletterWithRelations, Tag } from '@common/types';
+import type { NewsletterSourceGroup, NewsletterWithRelations, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { useMutation } from '@tanstack/react-query';
 import TagSelector from '@web/components/TagSelector';
@@ -73,11 +72,50 @@ const NewsletterDetail = memo(() => {
       targetRoute = '/queue';
     }
 
-    // Navigate directly to the target route
-    navigate(targetRoute, {
-      replace: true,
-    });
-  }, [navigate, location.state, log]);
+    // Preserve URL parameters when navigating back to inbox
+    if (targetRoute === '/inbox') {
+      const currentParams = new URLSearchParams();
+
+      // Preserve groups parameter if it exists
+      const groupsParam = searchParams.get('groups');
+      if (groupsParam) {
+        currentParams.set('groups', groupsParam);
+      }
+
+      // Preserve other filter parameters
+      const filterParam = searchParams.get('filter');
+      if (filterParam) {
+        currentParams.set('filter', filterParam);
+      }
+
+      const sourceParam = searchParams.get('source');
+      if (sourceParam) {
+        currentParams.set('source', sourceParam);
+      }
+
+      const tagsParam = searchParams.get('tags');
+      if (tagsParam) {
+        currentParams.set('tags', tagsParam);
+      }
+
+      const timeParam = searchParams.get('time');
+      if (timeParam) {
+        currentParams.set('time', timeParam);
+      }
+
+      const paramString = currentParams.toString();
+      const finalUrl = paramString ? `${targetRoute}?${paramString}` : targetRoute;
+
+      navigate(finalUrl, {
+        replace: true,
+      });
+    } else {
+      // For reading queue, navigate directly without preserving params
+      navigate(targetRoute, {
+        replace: true,
+      });
+    }
+  }, [navigate, location.state, log, searchParams]);
 
   useTags();
 
@@ -495,8 +533,9 @@ const NewsletterDetail = memo(() => {
                     )}
                   </div>
                   <div data-testid="newsletter-source-group" className="text-sm text-gray-600 mt-1">
-                    <span className="font-medium">Source Group:</span>{' '}
+                    <span className="font-medium">Source Groups:</span>{' '}
                     <SourceGroupDropdown newsletter={newsletter} groups={groups} onGroupChange={refetch} />
+                    <span className="ml-2 text-xs text-gray-400">(up to 10)</span>
                   </div>
                 </div>
               </div>
@@ -655,19 +694,34 @@ const NewsletterDetail = memo(() => {
 });
 
 // Inline Source Group Dropdown component
-function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter: NewsletterWithRelations, groups: any[], onGroupChange?: () => void }) {
+function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter: NewsletterWithRelations, groups: NewsletterSourceGroup[], onGroupChange?: () => void }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [groupLoading] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [groupUpdating, setGroupUpdating] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const currentGroup = newsletter.source?.id ? findGroupBySourceId(groups, newsletter.source.id) : null;
-  const currentGroupName = currentGroup ? currentGroup.name : 'None';
+  const { addSourcesToGroup, removeSourcesFromGroup } = useNewsletterSourceGroups();
+  const sourceId = newsletter.source?.id;
+  const currentGroupIds: string[] = useMemo(() => {
+    if (!sourceId) return [];
+    return groups
+      .filter((g) => Array.isArray(g.sources) && g.sources.some((s: { id: string }) => s.id === sourceId))
+      .map((g) => g.id);
+  }, [groups, sourceId]);
+  const currentGroupNames = useMemo(() => {
+    const idsToDisplay = showDropdown ? currentGroupIds : (selectedGroupIds.length ? selectedGroupIds : currentGroupIds);
+    if (!idsToDisplay.length) return 'None';
+    const names = groups
+      .filter((g) => idsToDisplay.includes(g.id))
+      .map((g) => g.name);
+    return names.join(', ');
+  }, [groups, currentGroupIds, selectedGroupIds, showDropdown]);
 
   useEffect(() => {
-    setSelectedGroupId(currentGroup ? currentGroup.id : '');
-  }, [currentGroup?.id]);
+    // Sync local selection when the computed current groups change or dropdown opens
+    setSelectedGroupIds(currentGroupIds);
+  }, [currentGroupIds]);
 
   useEffect(() => {
     if (!showDropdown) return;
@@ -680,25 +734,30 @@ function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showDropdown]);
 
-  const handleGroupChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newGroupId = e.target.value;
-    if (!newsletter.source?.id) return;
+  const toggleSelection = (groupId: string) => {
+    setSelectedGroupIds((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]
+    );
+  };
+
+  const handleSave = async () => {
+    if (!sourceId) return;
     setGroupUpdating(true);
     setGroupError(null);
     try {
-      // Remove from previous group if needed
-      if (currentGroup && currentGroup.id !== newGroupId) {
-        await newsletterSourceGroupService.removeSourcesFromGroup(currentGroup.id, [newsletter.source.id]);
-      }
-      // Add to new group if not already in it
-      if (newGroupId && (!currentGroup || currentGroup.id !== newGroupId)) {
-        await newsletterSourceGroupService.addSourcesToGroup(newGroupId, [newsletter.source.id]);
-      }
-      setSelectedGroupId(newGroupId);
+      const toAdd = selectedGroupIds.filter((id) => !currentGroupIds.includes(id));
+      const toRemove = currentGroupIds.filter((id) => !selectedGroupIds.includes(id));
+
+      // Perform additions and removals
+      await Promise.all([
+        ...toAdd.map((gid) => addSourcesToGroup.mutateAsync({ groupId: gid, sourceIds: [sourceId] })),
+        ...toRemove.map((gid) => removeSourcesFromGroup.mutateAsync({ groupId: gid, sourceIds: [sourceId] })),
+      ]);
+
       setShowDropdown(false);
       if (onGroupChange) onGroupChange();
     } catch (_err) {
-      setGroupError('Failed to update group');
+      setGroupError('Failed to update groups');
     } finally {
       setGroupUpdating(false);
     }
@@ -714,24 +773,49 @@ function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter
           disabled={groupLoading || groupUpdating || !groups.length}
           aria-label="Edit source group"
         >
-          {currentGroupName}
+          {currentGroupNames}
         </button>
       ) : (
-        <select
-          id="source-group-select"
-          className="border rounded px-2 py-1 text-sm min-w-[120px]"
-          value={selectedGroupId || ''}
-          onChange={handleGroupChange}
-          disabled={groupLoading || groupUpdating || !groups.length}
-          style={{ minWidth: 120 }}
-          autoFocus
-          onBlur={() => setShowDropdown(false)}
-        >
-          <option value="">None</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>{group.name}</option>
-          ))}
-        </select>
+        <div className="border rounded px-3 py-2 bg-white shadow-sm text-sm" style={{ minWidth: 220 }}>
+          <div className="max-h-48 overflow-auto pr-1">
+            {groups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                className={`w-full flex items-center justify-between py-1 text-left hover:bg-neutral-50 rounded px-1 ${selectedGroupIds.includes(group.id) ? 'text-blue-700 font-medium' : ''}`}
+                onClick={() => toggleSelection(group.id)}
+                disabled={groupLoading || groupUpdating}
+              >
+                <span>{group.name}</span>
+                <span className={`ml-2 text-xs ${selectedGroupIds.includes(group.id) ? 'opacity-100' : 'opacity-0'}`}>✓</span>
+              </button>
+            ))}
+            {groups.length === 0 && (
+              <div className="text-neutral-500">No groups</div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              className="px-2 py-1 text-neutral-600 hover:bg-neutral-100 rounded"
+              onClick={() => {
+                setSelectedGroupIds(currentGroupIds);
+                setShowDropdown(false);
+              }}
+              disabled={groupUpdating}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+              onClick={handleSave}
+              disabled={groupUpdating}
+            >
+              Save
+            </button>
+          </div>
+        </div>
       )}
       {(groupLoading || groupUpdating) && (
         <span className="ml-2 text-xs text-gray-400">Updating...</span>

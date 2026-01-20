@@ -1,6 +1,7 @@
-import { NewsletterWithRelations, Tag } from "@common/types";
+import { NewsletterGroup, NewsletterWithRelations, Tag } from "@common/types";
 import { Loader2, Tag as TagIcon } from "lucide-react";
 import React, { useCallback } from "react";
+import GroupBadgeList from "./GroupBadgeList";
 import NewsletterActions from "./NewsletterActions";
 import TagSelector from "./TagSelector";
 
@@ -35,6 +36,9 @@ interface NewsletterRowPresentationProps {
   tagUpdateError?: string | null;
   onDismissTagError?: () => void;
   className?: string;
+  activeGroupIds?: string[];
+  newsletterGroups?: NewsletterGroup[];
+  onGroupClick?: (groupId: string) => void;
 }
 
 const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
@@ -61,6 +65,9 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
   tagUpdateError,
   onDismissTagError,
   className,
+  activeGroupIds,
+  newsletterGroups,
+  onGroupClick,
 }) => {
   const handleRowClick = useCallback(
     (e: React.MouseEvent) => {
@@ -203,13 +210,26 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                   _errorTogglingLike={errorTogglingLike}
                   isInReadingQueue={isInReadingQueue}
                   compact={true}
-                  onToggleTagVisibility={onToggleTagVisibility}
+                  _onToggleTagVisibility={onToggleTagVisibility}
                 />
               </div>
             </div>
             <div className="text-sm text-gray-700 mb-2 line-clamp-2">
               {newsletter.summary}
             </div>
+
+            {newsletterGroups && newsletterGroups.length > 0 && (
+              <div className="mb-2" data-testid="row-group-badges">
+                <GroupBadgeList
+                  groups={newsletterGroups}
+                  activeGroupIds={activeGroupIds}
+                  variant="preview"
+                  size="sm"
+                  onGroupClick={onGroupClick}
+                  maxVisible={3}
+                />
+              </div>
+            )}
 
             {/* Tags display */}
             {visibleTags.has(newsletter.id) && (

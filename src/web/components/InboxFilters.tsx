@@ -13,13 +13,19 @@ export interface NewsletterSourceWithCount extends NewsletterSource {
 interface InboxFiltersProps {
   filter: FilterType;
   sourceFilter: string | null;
+  // Legacy single-select (kept for backward compatibility if callers still pass it)
   groupFilter?: string | null;
+  // New multi-select groups
+  groupFilters?: string[];
   timeRange: TimeRange;
   newsletterSources: NewsletterSourceWithCount[];
   newsletterGroups?: { id: string; name: string; count?: number }[];
   onFilterChange: (filter: FilterType) => void;
   onSourceFilterChange: (sourceId: string | null) => void;
+  // Legacy single-select handler (optional)
   onGroupFilterChange?: (groupId: string | null) => void;
+  // New multi-select handler
+  onGroupFiltersChange?: (groupIds: string[]) => void;
   onTimeRangeChange: (range: TimeRange) => void;
   isLoading?: boolean;
   isLoadingSources?: boolean;
@@ -225,6 +231,138 @@ const SourceFilterDropdown: FC<{
   },
 );
 
+// Multi-Group Filter Dropdown Component (checkbox-style selection)
+const MultiGroupFilterDropdown: FC<{
+  groups: { id: string; name: string; count?: number }[];
+  selectedGroupIds: string[];
+  onGroupSelect: (groupIds: string[]) => void;
+  isLoading?: boolean;
+  disabled?: boolean;
+  compact?: boolean;
+  showCounts?: boolean;
+}> = memo(
+  ({
+    groups,
+    selectedGroupIds,
+    onGroupSelect,
+    isLoading = false,
+    disabled = false,
+    compact = false,
+    showCounts = false,
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    const handleToggle = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!disabled && !isLoading) {
+        setIsOpen(!isOpen);
+      }
+    };
+
+    const toggleOne = (groupId: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = selectedGroupIds.includes(groupId)
+        ? selectedGroupIds.filter((id) => id !== groupId)
+        : [...selectedGroupIds, groupId];
+      onGroupSelect(next);
+    };
+
+    const clearAll = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onGroupSelect([]);
+      setIsOpen(false);
+    };
+
+    const label = (() => {
+      if (selectedGroupIds.length === 0) return 'All Groups';
+      if (selectedGroupIds.length === 1) {
+        const g = groups.find((x) => x.id === selectedGroupIds[0]);
+        return g?.name || '1 Group';
+      }
+      return `${selectedGroupIds.length} Groups`;
+    })();
+
+    const selectedUnreadTotal = useMemo(() => {
+      if (!Array.isArray(groups) || groups.length === 0) return 0;
+      const set = new Set(selectedGroupIds);
+      return groups.reduce((sum, g) => sum + (set.has(g.id) ? (g.count || 0) : 0), 0);
+    }, [groups, selectedGroupIds]);
+
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled || isLoading}
+          className={`
+            flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg
+            ${compact ? 'px-2 py-1 text-xs min-w-[120px]' : 'px-3 py-1.5 text-sm min-w-[140px]'}
+            text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
+            focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
+            disabled:opacity-50 disabled:cursor-not-allowed
+            ${disabled || isLoading ? 'bg-gray-50' : 'hover:bg-gray-50'}
+          `}
+          aria-label="Filter by groups"
+          aria-expanded={isOpen}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="truncate">{label}</span>
+            {selectedGroupIds.length > 0 && (
+              <span className="bg-white text-gray-700 border border-gray-200 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                {selectedUnreadTotal}
+              </span>
+            )}
+          </div>
+          <ChevronDown
+            className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'transform rotate-180' : ''}`}
+          />
+        </button>
+
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+            <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-50 border border-gray-200 max-h-60 overflow-y-auto">
+              <div className="py-1">
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  Clear All Groups
+                </button>
+                {groups.map((group) => {
+                  const checked = selectedGroupIds.includes(group.id);
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={(e) => toggleOne(group.id, e)}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${checked ? 'bg-neutral-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <span className="truncate pr-2">{group.name}</span>
+                      <span className="flex items-center gap-2 flex-shrink-0">
+                        {showCounts && group.count !== undefined && group.count > 0 && (
+                          <span className="bg-gray-200 text-gray-700 text-xs font-medium px-1.5 py-0.5 rounded-full">
+                            {group.count}
+                          </span>
+                        )}
+                        <span className={`inline-block w-4 text-blue-600 ${checked ? 'opacity-100' : 'opacity-0'}`}>✓</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  },
+);
+
 // Group Filter Dropdown Component
 const GroupFilterDropdown: FC<{
   groups: { id: string; name: string; count?: number }[];
@@ -409,12 +547,14 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
     filter,
     sourceFilter,
     groupFilter = null,
+    groupFilters = [],
     timeRange,
     newsletterSources,
     newsletterGroups = [],
     onFilterChange,
     onSourceFilterChange,
     onGroupFilterChange = () => { },
+    onGroupFiltersChange = () => { },
     onTimeRangeChange,
     isLoading = false,
     isLoadingSources = false,
@@ -430,6 +570,10 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
   }) => {
     // Only one of source or group can be selected at a time
     // If groupFilter is set, sourceFilter is ignored and vice versa
+    // Prefer multi-select props if provided; fall back to legacy single-select
+    const hasMulti = Array.isArray(groupFilters);
+    const isAnyGroupSelected = hasMulti ? groupFilters.length > 0 : isFilterSelected(groupFilter);
+
     return (
       <div className={`w-full ${className}`}>
         {/* Mobile: Multi-row layout */}
@@ -463,15 +607,26 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
-                selectedSourceId={isFilterSelected(groupFilter) ? null : sourceFilter}
+                selectedSourceId={isAnyGroupSelected ? null : sourceFilter}
                 onSourceSelect={onSourceFilterChange}
                 isLoading={isLoadingSources}
-                disabled={disabled || isLoading || isFilterSelected(groupFilter)}
+                disabled={disabled || isLoading || isAnyGroupSelected}
                 compact={compact}
                 showCounts={showFilterCounts}
               />
             )}
-            {showGroupFilter && (
+            {showGroupFilter && hasMulti && (
+              <MultiGroupFilterDropdown
+                groups={newsletterGroups}
+                selectedGroupIds={groupFilters}
+                onGroupSelect={onGroupFiltersChange}
+                isLoading={isLoadingGroups}
+                disabled={disabled || isLoading || isFilterSelected(sourceFilter)}
+                compact={compact}
+                showCounts={showFilterCounts}
+              />
+            )}
+            {showGroupFilter && !hasMulti && (
               <GroupFilterDropdown
                 groups={newsletterGroups}
                 selectedGroupId={groupFilter}
@@ -524,15 +679,26 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
-                selectedSourceId={isFilterSelected(groupFilter) ? null : sourceFilter}
+                selectedSourceId={isAnyGroupSelected ? null : sourceFilter}
                 onSourceSelect={onSourceFilterChange}
                 isLoading={isLoadingSources}
-                disabled={disabled || isLoading || isFilterSelected(groupFilter)}
+                disabled={disabled || isLoading || isAnyGroupSelected}
                 compact={compact}
                 showCounts={showFilterCounts}
               />
             )}
-            {showGroupFilter && (
+            {showGroupFilter && hasMulti && (
+              <MultiGroupFilterDropdown
+                groups={newsletterGroups}
+                selectedGroupIds={groupFilters}
+                onGroupSelect={onGroupFiltersChange}
+                isLoading={isLoadingGroups}
+                disabled={disabled || isLoading || isFilterSelected(sourceFilter)}
+                compact={compact}
+                showCounts={showFilterCounts}
+              />
+            )}
+            {showGroupFilter && !hasMulti && (
               <GroupFilterDropdown
                 groups={newsletterGroups}
                 selectedGroupId={groupFilter}

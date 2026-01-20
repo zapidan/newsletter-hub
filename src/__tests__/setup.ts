@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom";
-import { beforeAll, afterEach, afterAll, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { server } from "./mocks/server.js";
 
 // Mock global objects
@@ -185,6 +185,41 @@ vi.mock("@common/utils/logger", () => {
       component: React.ComponentType<P>
     ) => component,
     default: loggerMock,
+  };
+});
+
+// Mock useLogger from the specific path used by NewsletterActions
+vi.mock("@common/utils/logger/useLogger", () => {
+  const mockFn = vi.fn();
+  return {
+    useLogger: () => ({
+      debug: mockFn,
+      info: mockFn,
+      warn: mockFn,
+      error: mockFn,
+      auth: mockFn,
+      api: mockFn,
+      ui: mockFn,
+      logUserAction: mockFn,
+      logComponentError: mockFn,
+      startTimer: () => ({ stop: mockFn }),
+    }),
+    useLoggerStatic: () => ({
+      debug: mockFn,
+      info: mockFn,
+      warn: mockFn,
+      error: mockFn,
+      auth: mockFn,
+      api: mockFn,
+      ui: mockFn,
+      logUserAction: mockFn,
+      logApiRequest: mockFn,
+      logApiResponse: mockFn,
+      logNavigation: mockFn,
+      startTimer: () => ({ stop: mockFn }),
+      setContext: mockFn,
+      clearContext: mockFn,
+    }),
   };
 });
 

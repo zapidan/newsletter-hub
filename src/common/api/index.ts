@@ -1,8 +1,8 @@
 import {
   ApiError,
   ApiResponse,
-  CrudOperations,
   BaseQueryParams,
+  CrudOperations,
   PaginationParams,
 } from "../types/api";
 import { setupGlobalErrorHandling } from "./errorHandling";
@@ -14,191 +14,67 @@ import supabase, {
 
 // Core Supabase client and utilities
 export {
-  supabase,
-  handleSupabaseError,
-  getCurrentUser,
-  getCurrentSession,
-  requireAuth,
-  checkConnection,
-  withPerformanceLogging,
-  SupabaseError,
-  default as supabaseClient,
+  checkConnection, getCurrentSession, getCurrentUser, handleSupabaseError, requireAuth, supabase, default as supabaseClient, SupabaseError, withPerformanceLogging
 } from "./supabaseClient";
 
 // Newsletter API
 export {
-  newsletterApi,
-  getAllNewsletters,
-  getNewsletterById,
-  createNewsletter,
-  updateNewsletter,
-  deleteNewsletter,
-  bulkUpdateNewsletters,
-  markAsRead,
-  markAsUnread,
-  toggleArchive,
   bulkArchive,
-  bulkUnarchive,
-  toggleLike,
-  getNewslettersByTag,
-  getNewslettersBySource,
-  searchNewsletters,
-  getNewsletterStats,
-  default as newsletterService,
+  bulkUnarchive, bulkUpdateNewsletters, createNewsletter, deleteNewsletter, getAllNewsletters,
+  getNewsletterById, getNewslettersBySource, getNewslettersByTag, getNewsletterStats, markAsRead,
+  markAsUnread, newsletterApi, default as newsletterService, searchNewsletters, toggleArchive, toggleLike, updateNewsletter
 } from "./newsletterApi";
 
 // Newsletter Source API
 export {
-  newsletterSourceApi,
-  getAllNewsletterSources,
-  getNewsletterSourceById,
-  createNewsletterSource,
-  updateNewsletterSource,
-  deleteNewsletterSource,
-  archiveNewsletterSource,
-  unarchiveNewsletterSource,
-  toggleArchiveNewsletterSource,
-  bulkArchiveNewsletterSources,
-  bulkUnarchiveNewsletterSources,
-  searchNewsletterSources,
-  getNewsletterSourcesWithCounts,
-  getActiveNewsletterSources,
-  getArchivedNewsletterSources,
-  getNewsletterSourceStats,
-  default as newsletterSourceService,
+  archiveNewsletterSource, bulkArchiveNewsletterSources,
+  bulkUnarchiveNewsletterSources, createNewsletterSource, deleteNewsletterSource, getActiveNewsletterSources, getAllNewsletterSources, getArchivedNewsletterSources, getNewsletterSourceById, getNewsletterSourceStats, getNewsletterSourcesWithCounts, newsletterSourceApi, default as newsletterSourceService, searchNewsletterSources, toggleArchiveNewsletterSource, unarchiveNewsletterSource, updateNewsletterSource
 } from "./newsletterSourceApi";
 
 // Reading Queue API
 export {
-  readingQueueApi,
-  getReadingQueue,
-  addToReadingQueue,
-  removeFromReadingQueue,
-  reorderReadingQueue,
-  clearReadingQueue,
-  getReadingQueueItemById,
-  isNewsletterInQueue,
-  getReadingQueueStats,
-  moveQueueItemToPosition,
-  default as readingQueueService,
+  addToReadingQueue, clearReadingQueue, getReadingQueue, getReadingQueueItemById, getReadingQueueStats, isNewsletterInQueue, moveQueueItemToPosition, readingQueueApi, default as readingQueueService, removeFromReadingQueue,
+  reorderReadingQueue
 } from "./readingQueueApi";
 
 // Tag API
 export {
-  tagApi,
-  getAllTags,
-  getTagById,
-  createTag,
-  updateTag,
-  deleteTag,
-  getTagsForNewsletter,
-  updateNewsletterTags,
-  addTagToNewsletter,
-  removeTagFromNewsletter,
-  getOrCreateTag,
-  bulkCreateTags,
-  getTagUsageStats,
-  searchTags,
-  getPaginatedTags,
-  default as tagService,
+  addTagToNewsletter, bulkCreateTags, createTag, deleteTag, getAllTags, getOrCreateTag, getPaginatedTags, getTagById, getTagsForNewsletter, getTagUsageStats, removeTagFromNewsletter, searchTags, tagApi, default as tagService, updateNewsletterTags, updateTag
 } from "./tagApi";
 
 // Newsletter Source Group API
 export {
-  newsletterSourceGroupApi,
-  getAllNewsletterSourceGroups,
-  getNewsletterSourceGroupById,
-  createNewsletterSourceGroup,
-  updateNewsletterSourceGroup,
-  deleteNewsletterSourceGroup,
-  addSourcesToGroup,
-  removeSourcesFromGroup,
-  getGroupSources,
-  getSourceGroups,
-  getNewsletterSourceGroupStats,
-  searchNewsletterSourceGroups,
-  default as newsletterSourceGroupService,
+  createNewsletterSourceGroup, deleteNewsletterSourceGroup, getAllNewsletterSourceGroups,
+  getNewsletterSourceGroupById, getNewsletterSourceGroupStats, newsletterSourceGroupApi, default as newsletterSourceGroupService, searchNewsletterSourceGroups, updateNewsletterSourceGroup
 } from "./newsletterSourceGroupApi";
+
+// Newsletter Group API (source-based: groups contain sources; newsletters inherit from source)
+export {
+  addSourcesToGroup, createNewsletterGroup, deleteNewsletterGroup, getAllNewsletterGroups, getGroupSources, getNewsletterGroupById, getNewsletterGroupStats, getSourceGroups, newsletterGroupApi, default as newsletterGroupService, removeSourcesFromGroup, searchNewsletterGroups, updateNewsletterGroup, updateSourceGroups
+} from "./newsletterGroupApi";
 
 // User API
 export {
-  userApi,
-  getUserProfile,
-  updateUserProfile,
-  generateEmailAlias,
-  getUserEmailAlias,
-  updateEmailAlias,
-  isEmailAliasAvailable,
-  deleteUserAccount,
-  getUserStats,
-  updateUserPreferences,
-  getUserPreferences,
-  default as userService,
+  deleteUserAccount, generateEmailAlias,
+  getUserEmailAlias, getUserPreferences, getUserProfile, getUserStats, isEmailAliasAvailable, updateEmailAlias, updateUserPreferences, updateUserProfile, userApi, default as userService
 } from "./userApi";
 
 // Error handling
 export {
-  AppError,
-  NetworkError,
-  AuthenticationError,
-  ValidationError,
-  NotFoundError,
-  PermissionError,
-  ErrorType,
-  ErrorSeverity,
-  transformSupabaseError,
-  getUserFriendlyMessage,
-  logError,
-  withRetry,
-  handleAsyncError,
-  createValidationError,
-  validateRequired,
-  validateEmail,
-  validateMinLength,
-  useErrorHandler,
-  setupGlobalErrorHandling,
-  simulateError,
+  AppError, AuthenticationError, createValidationError, ErrorSeverity, ErrorType, getUserFriendlyMessage, handleAsyncError, logError, NetworkError, NotFoundError,
+  PermissionError, setupGlobalErrorHandling,
+  simulateError, transformSupabaseError, useErrorHandler, validateEmail,
+  validateMinLength, validateRequired, ValidationError, withRetry
 } from "./errorHandling";
 
 // API types - re-export from types
 export type {
-  ApiResponse,
-  ApiError,
-  ApiResult,
-  PaginationParams,
-  PaginatedResponse,
-  BaseQueryParams,
-  FilterParams,
+  ApiError, ApiResponse, ApiResult, ApiValidationError, AuthenticatedOperation, BaseQueryParams, BatchOperation,
+  BatchResult, BulkUpdateNewsletterParams, CacheInvalidationParams, CreateNewsletterGroupParams, CreateNewsletterParams, CreateNewsletterSourceGroupParams, CreateNewsletterSourceParams, CreateParams, CreateTagParams, CrudOperations, DatabaseOperation, FileUploadParams,
+  FileUploadResult, FilterParams,
   NewsletterQueryParams,
-  NewsletterSourceQueryParams,
-  TagQueryParams,
-  CreateNewsletterParams,
-  UpdateNewsletterParams,
-  BulkUpdateNewsletterParams,
-  CreateNewsletterSourceParams,
-  UpdateNewsletterSourceParams,
-  CreateTagParams,
-  UpdateTagParams,
-  CreateNewsletterSourceGroupParams,
-  UpdateNewsletterSourceGroupParams,
-  DatabaseOperation,
-  CacheInvalidationParams,
-  AuthenticatedOperation,
-  RealtimeSubscriptionParams,
-  ValidationError as ValidationErrorType,
-  ApiValidationError,
-  PerformanceMetrics,
-  BatchOperation,
-  BatchResult,
-  FileUploadParams,
-  FileUploadResult,
-  SearchParams,
-  SearchResult,
-  WithoutId,
-  WithOptionalId,
-  UpdateParams,
-  CreateParams,
-  CrudOperations,
+  NewsletterSourceQueryParams, PaginatedResponse, PaginationParams, PerformanceMetrics, RealtimeSubscriptionParams, SearchParams,
+  SearchResult, TagQueryParams, UpdateNewsletterGroupParams, UpdateNewsletterParams, UpdateNewsletterSourceGroupParams, UpdateNewsletterSourceParams, UpdateParams, UpdateTagParams, ValidationError as ValidationErrorType, WithOptionalId, WithoutId
 } from "../types/api";
 
 // Convenience API factory for creating new services

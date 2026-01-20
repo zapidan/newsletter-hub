@@ -48,6 +48,30 @@ vi.mock('@web/components/InboxFilters', () => ({
   NewsletterSourceWithCount: {},
 }));
 
+vi.mock('@web/components/MobileFilterPanel', () => ({
+  __esModule: true,
+  default: ({ isOpen, onClose, onApply, onClearAll }: {
+    isOpen: boolean;
+    onClose: () => void;
+    onApply: () => void;
+    onClearAll: () => void;
+  }) => (
+    isOpen ? (
+      <div data-testid="mobile-filter-panel">
+        <button onClick={onClose} data-testid="mobile-filter-close">
+          Close
+        </button>
+        <button onClick={onApply} data-testid="mobile-filter-apply">
+          Apply
+        </button>
+        <button onClick={onClearAll} data-testid="mobile-filter-clear">
+          Clear All
+        </button>
+      </div>
+    ) : null
+  ),
+}));
+
 vi.mock('@web/components/BulkSelectionActions', () => ({
   __esModule: true,
   default: BulkSelectionActionsMock,

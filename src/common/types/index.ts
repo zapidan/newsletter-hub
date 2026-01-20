@@ -70,6 +70,7 @@ export interface NewsletterSourceGroup {
   id: string;
   user_id: string;
   name: string;
+  color?: string;
   created_at: string;
   updated_at: string;
   sources?: NewsletterSource[];
@@ -84,6 +85,29 @@ export interface NewsletterSourceGroupMember {
   source_id: string;
   created_at: string;
   source?: NewsletterSource;
+  group?: NewsletterSourceGroup;
+}
+
+export interface NewsletterGroup {
+  id: string;
+  name: string;
+  color: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  /** Sources in this group. Newsletters inherit group membership from their source. */
+  sources?: NewsletterSource[];
+  _count?: { sources: number };
+}
+
+export interface NewsletterGroupMember {
+  id: string;
+  source_id: string;
+  group_id: string;
+  user_id: string;
+  created_at: string;
+  source?: NewsletterSource;
+  group?: NewsletterGroup;
 }
 
 export interface NewsletterWithRelations extends Omit<Newsletter, 'source' | 'tags'> {

@@ -1,7 +1,7 @@
 import { Clock } from 'lucide-react';
 import { FC, useEffect, useRef, useState } from 'react';
 
-export type TimeRange = 'day' | '2days' | 'week' | 'month' | 'last7' | 'last30' | 'all';
+export type TimeRange = 'day' | '2days' | 'week' | 'month' | 'all';
 
 interface TimeFilterProps {
   selectedRange: TimeRange;
@@ -20,9 +20,7 @@ export const TimeFilter: FC<TimeFilterProps> = ({
   const options: { value: TimeRange; label: string }[] = [
     { value: 'day', label: 'Today' },
     { value: '2days', label: 'Last 2 days' },
-    { value: 'last7', label: 'Last 7 days' },
     { value: 'week', label: 'This week' },
-    { value: 'last30', label: 'Last 30 days' },
     { value: 'month', label: 'This month' },
     { value: 'all', label: 'All time' },
   ];
@@ -67,8 +65,8 @@ export const TimeFilter: FC<TimeFilterProps> = ({
               key={option.value}
               onClick={() => handleSelect(option.value)}
               className={`w-full text-left px-4 py-2 text-sm ${selectedRange === option.value
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-700 hover:bg-gray-100'
+                ? 'bg-primary-50 text-primary-700'
+                : 'text-gray-700 hover:bg-gray-100'
                 }`}
             >
               {option.label}

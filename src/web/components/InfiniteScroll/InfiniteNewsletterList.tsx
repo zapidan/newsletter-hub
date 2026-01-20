@@ -1,7 +1,8 @@
 import React from "react";
 import { useInfiniteScroll } from "../../../common/hooks/infiniteScroll/useInfiniteScroll";
-import { NewsletterWithRelations, Tag } from "../../../common/types";
-import NewsletterRowContainer from '../NewsletterRowContainer';
+import { NewsletterGroup, NewsletterWithRelations, Tag } from "../../../common/types";
+import { getNewsletterGroups } from "../../../common/utils/groupUtils";
+import NewsletterRowContainerWithGroups from "../NewsletterRowContainerWithGroups";
 import { LoadingSentinel } from "./LoadingSentinel";
 
 export interface InfiniteNewsletterListProps {
@@ -53,6 +54,9 @@ export interface InfiniteNewsletterListProps {
   threshold?: number;
   rootMargin?: string;
   className?: string;
+  // Optional group context for row badges
+  activeGroupIds?: string[];
+  allGroups?: NewsletterGroup[];
 }
 
 /**
@@ -109,6 +113,8 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
   threshold = 0.1,
   rootMargin = "100px",
   className = "",
+  activeGroupIds,
+  allGroups,
 }) => {
   // Infinite scroll hook
   const { sentinelRef, hasReachedEnd } = useInfiniteScroll({
@@ -213,21 +219,24 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
             (item) => item.newsletter_id === newsletter.id,
           );
 
+          // Get the groups this newsletter belongs to
+          const newsletterGroups = allGroups ? getNewsletterGroups(newsletter, allGroups) : [];
+
           return (
-            <NewsletterRowContainer
+            <NewsletterRowContainerWithGroups
               key={newsletter.id}
               data-testid={`newsletter-row-${newsletter.id}`}
               newsletter={newsletter}
               isSelected={isSelecting && selectedIds.has(newsletter.id)}
-              onToggleSelect={onToggleSelect ? (id) => onToggleSelect(id) : async () => Promise.resolve()}
+              onToggleSelect={onToggleSelect ? (id: string) => onToggleSelect(id) : async () => Promise.resolve()}
               onToggleLike={onToggleLike ? () => onToggleLike(newsletter) : async () => Promise.resolve()}
               onToggleArchive={onToggleArchive ? () => onToggleArchive(newsletter.id) : async () => Promise.resolve()}
               onToggleRead={onToggleRead ? () => onToggleRead(newsletter.id) : async () => Promise.resolve()}
-              onTrash={onTrash ? (id) => onTrash(id) : async () => Promise.resolve()}
+              onTrash={onTrash ? (id: string) => onTrash(id) : async () => Promise.resolve()}
               onToggleQueue={onToggleQueue ? () => onToggleQueue(newsletter.id) : async () => Promise.resolve()}
-              onUpdateTags={onUpdateTags ? (tagIds) => onUpdateTags(newsletter.id, tagIds) : async () => Promise.resolve()}
-              onToggleTagVisibility={onToggleTagVisibility ? (_e) => onToggleTagVisibility(newsletter.id, _e) : async () => Promise.resolve()}
-              onTagClick={onTagClick ? (tag, _e) => onTagClick(tag, _e) : async () => Promise.resolve()}
+              onUpdateTags={onUpdateTags ? (tagIds: string[]) => onUpdateTags(newsletter.id, tagIds) : async () => Promise.resolve()}
+              onToggleTagVisibility={onToggleTagVisibility ? (_e: React.MouseEvent) => onToggleTagVisibility(newsletter.id, _e) : async () => Promise.resolve()}
+              onTagClick={onTagClick ? (tag: Tag, _e: React.MouseEvent) => onTagClick(tag, _e) : async () => Promise.resolve()}
               onRemoveFromQueue={onRemoveFromQueue}
               onNewsletterClick={onNewsletterClick}
               onRowClick={onRowClick}
@@ -244,6 +253,12 @@ export const InfiniteNewsletterList: React.FC<InfiniteNewsletterListProps> = ({
               tagUpdateError={tagUpdateError}
               onDismissTagError={onDismissTagError}
               className=""
+              activeGroupIds={activeGroupIds}
+              newsletterGroups={newsletterGroups}
+              onGroupClick={(groupId) => {
+                // Handle group click if needed
+                console.log('Group clicked:', groupId);
+              }}
             />
           );
         })}
