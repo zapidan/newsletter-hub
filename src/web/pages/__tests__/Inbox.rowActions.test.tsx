@@ -6,7 +6,7 @@
  */
 import { ToastProvider } from '@common/contexts/ToastContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -224,6 +224,54 @@ const renderInbox = () => {
 };
 
 /* ------------------------------------------------------------------ */
+/*                     TEST SETUP & CLEANUP                            */
+/* ------------------------------------------------------------------ */
+
+// Global error handlers to catch unhandled rejections during tests
+let originalConsoleError: typeof console.error;
+let unhandledRejections: Error[] = [];
+
+beforeEach(() => {
+  // Store original console.error
+  originalConsoleError = console.error;
+
+  // Suppress console.error for expected test errors
+  console.error = vi.fn();
+
+  // Track unhandled rejections
+  unhandledRejections = [];
+
+  // Add unhandled rejection handler
+  const handleRejection = (reason: any) => {
+    unhandledRejections.push(reason);
+    // Don't let the rejection go unhandled - just track it
+  };
+
+  process.on('unhandledRejection', handleRejection);
+
+  // Store handler for cleanup
+  (globalThis as any)._testRejectionHandler = handleRejection;
+});
+
+afterEach(() => {
+  // Restore console.error
+  console.error = originalConsoleError;
+
+  // Remove unhandled rejection handler
+  const handler = (globalThis as any)._testRejectionHandler;
+  if (handler) {
+    process.off('unhandledRejection', handler);
+    delete (globalThis as any)._testRejectionHandler;
+  }
+
+  // Clear any pending timeouts
+  vi.clearAllTimers();
+
+  // Reset all mocks
+  vi.clearAllMocks();
+});
+
+/* ------------------------------------------------------------------ */
 /*                         ROW ACTIONS TESTS                         */
 /* ------------------------------------------------------------------ */
 describe('Inbox Row Actions Responsiveness Fix', () => {
@@ -288,9 +336,6 @@ describe('Inbox Row Actions Responsiveness Fix', () => {
     ));
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
 
   describe('Row Action Handler Integration', () => {
     it('should use shared newsletter actions instead of raw mutations', () => {
@@ -380,7 +425,8 @@ describe('Inbox Row Actions Responsiveness Fix', () => {
   describe('Row Action Error Handling', () => {
     it('should handle like action errors gracefully', async () => {
       // Mock a failing like action
-      mockSharedActions.handleToggleLike.mockRejectedValue(new Error('Like failed'));
+      const rejectionError = new Error('Like failed');
+      mockSharedActions.handleToggleLike.mockRejectedValue(rejectionError);
 
       const newsletters = makeNewsletters(1);
       useInfiniteNewslettersMock.mockReturnValue(mkInfiniteNewsletters(newsletters));
@@ -390,7 +436,13 @@ describe('Inbox Row Actions Responsiveness Fix', () => {
 
       // Click the like button
       const likeButton = screen.getByTestId('like-newsletter-0');
-      await user.click(likeButton);
+
+      // Wrap the entire interaction in act to handle React state updates
+      await act(async () => {
+        await user.click(likeButton);
+        // Wait a tick for any async operations to complete
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
 
       // Verify the action was attempted
       expect(mockSharedActions.handleToggleLike).toHaveBeenCalled();
@@ -398,7 +450,8 @@ describe('Inbox Row Actions Responsiveness Fix', () => {
 
     it('should handle archive action errors gracefully', async () => {
       // Mock a failing archive action
-      mockSharedActions.handleToggleArchive.mockRejectedValue(new Error('Archive failed'));
+      const rejectionError = new Error('Archive failed');
+      mockSharedActions.handleToggleArchive.mockRejectedValue(rejectionError);
 
       const newsletters = makeNewsletters(1);
       useInfiniteNewslettersMock.mockReturnValue(mkInfiniteNewsletters(newsletters));
@@ -408,7 +461,13 @@ describe('Inbox Row Actions Responsiveness Fix', () => {
 
       // Click the archive button
       const archiveButton = screen.getByTestId('archive-newsletter-0');
-      await user.click(archiveButton);
+
+      // Wrap the entire interaction in act to handle React state updates
+      await act(async () => {
+        await user.click(archiveButton);
+        // Wait a tick for any async operations to complete
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
 
       // Verify the action was attempted
       expect(mockSharedActions.handleToggleArchive).toHaveBeenCalled();

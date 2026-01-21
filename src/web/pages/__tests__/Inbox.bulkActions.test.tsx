@@ -6,7 +6,7 @@
  */
 import { ToastProvider } from '@common/contexts/ToastContext';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -272,6 +272,54 @@ const renderInbox = () => {
 };
 
 /* ------------------------------------------------------------------ */
+/*                     TEST SETUP & CLEANUP                            */
+/* ------------------------------------------------------------------ */
+
+// Global error handlers to catch unhandled rejections during tests
+let originalConsoleError: typeof console.error;
+let unhandledRejections: Error[] = [];
+
+beforeEach(() => {
+  // Store original console.error
+  originalConsoleError = console.error;
+
+  // Suppress console.error for expected test errors
+  console.error = vi.fn();
+
+  // Track unhandled rejections
+  unhandledRejections = [];
+
+  // Add unhandled rejection handler
+  const handleRejection = (reason: any) => {
+    unhandledRejections.push(reason);
+    // Don't let the rejection go unhandled - just track it
+  };
+
+  process.on('unhandledRejection', handleRejection);
+
+  // Store handler for cleanup
+  (globalThis as any)._testRejectionHandler = handleRejection;
+});
+
+afterEach(() => {
+  // Restore console.error
+  console.error = originalConsoleError;
+
+  // Remove unhandled rejection handler
+  const handler = (globalThis as any)._testRejectionHandler;
+  if (handler) {
+    process.off('unhandledRejection', handler);
+    delete (globalThis as any)._testRejectionHandler;
+  }
+
+  // Clear any pending timeouts
+  vi.clearAllTimers();
+
+  // Reset all mocks
+  vi.clearAllMocks();
+});
+
+/* ------------------------------------------------------------------ */
 /*                         BULK ACTIONS TESTS                        */
 /* ------------------------------------------------------------------ */
 describe('Inbox Bulk Actions Bug Fix', () => {
@@ -337,9 +385,6 @@ describe('Inbox Bulk Actions Bug Fix', () => {
     );
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
 
   describe('Selection State Management', () => {
     it('should show Select button to enable selection mode', async () => {
@@ -558,7 +603,8 @@ describe('Inbox Bulk Actions Bug Fix', () => {
   describe('Error Handling', () => {
     it('should handle bulk action errors gracefully', async () => {
       // Mock a failing bulk action
-      mockSharedActions.handleBulkArchive.mockRejectedValue(new Error('Network error'));
+      const rejectionError = new Error('Network error');
+      mockSharedActions.handleBulkArchive.mockRejectedValue(rejectionError);
 
       const newsletters = makeNewsletters(2);
       useInfiniteNewslettersMock.mockReturnValue(mkInfiniteNewsletters(newsletters));
@@ -568,18 +614,32 @@ describe('Inbox Bulk Actions Bug Fix', () => {
 
       // Click the Select button to enable selection mode
       const selectButton = screen.getByTestId('select-button');
-      await user.click(selectButton);
+
+      // Wrap the entire interaction in act to handle React state updates
+      await act(async () => {
+        await user.click(selectButton);
+        // Wait a tick for any async operations to complete
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
 
       // Select newsletters
-      await user.click(screen.getByTestId('checkbox-newsletter-0'));
-      await user.click(screen.getByTestId('checkbox-newsletter-1'));
+      await act(async () => {
+        await user.click(screen.getByTestId('checkbox-newsletter-0'));
+        await user.click(screen.getByTestId('checkbox-newsletter-1'));
+        // Wait a tick for any async operations to complete
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('bulk-actions')).toBeInTheDocument();
       });
 
       // Click "Archive" (this should fail)
-      await user.click(screen.getByTestId('archive'));
+      await act(async () => {
+        await user.click(screen.getByTestId('archive'));
+        // Wait a tick for any async operations to complete
+        await new Promise(resolve => setTimeout(resolve, 0));
+      });
 
       // Verify the handler was called
       expect(mockSharedActions.handleBulkArchive).toHaveBeenCalled();
