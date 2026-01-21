@@ -34,7 +34,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden pointer-events-auto"
+                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden pointer-events-auto"
                 onClick={toggleSidebar}
                 aria-hidden="true"
               />
@@ -50,7 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       )}
 
       {/* Main content area */}
-      <div className={`flex flex-col flex-1 overflow-hidden ${isSidebarOpen ? 'pointer-events-none md:pointer-events-auto' : ''}`}>
+      <div className={`flex flex-col flex-1 overflow-hidden ${isSidebarOpen ? 'pointer-events-none lg:pointer-events-auto' : ''}`}>
         {user && <Header onMenuToggle={toggleSidebar} />}
         <main className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
           <motion.div

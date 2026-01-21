@@ -112,7 +112,7 @@ const SidebarContent: React.FC<{
                   window.dispatchEvent(new Event("inbox:refresh-newsletters"));
                 }
                 // On mobile, clicking a link should close the sidebar
-                if (window.innerWidth < 768 && isControlled) {
+                if (window.innerWidth < 1024 && isControlled) {
                   toggleSidebar();
                 }
               }}
@@ -146,7 +146,7 @@ const SidebarContent: React.FC<{
               data-testid={`sidebar-link-${link.to.replace('/', '')}`}
               className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
               onClick={() => {
-                if (window.innerWidth < 768 && isControlled) {
+                if (window.innerWidth < 1024 && isControlled) {
                   toggleSidebar();
                 }
               }}
@@ -228,7 +228,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
           animate={{ x: 0 }}
           exit={{ x: '-100%' }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs bg-white/95 backdrop-blur-md border-r border-slate-200/60 flex flex-col shadow-xl md:hidden"
+          className="fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs bg-white/95 backdrop-blur-md border-r border-slate-200/60 flex flex-col shadow-xl lg:hidden"
           aria-label="Main navigation"
         >
           <div className="h-14 flex items-center px-4 border-b border-slate-200/60 flex-shrink-0">
@@ -257,7 +257,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
   const desktopSidebar = (
     <aside
       data-testid="sidebar"
-      className="static inset-y-0 left-0 z-40 w-72 bg-white/95 backdrop-blur-md border-r border-slate-200/60 md:border-r-0 flex flex-col shadow-none hidden md:flex"
+      className="static inset-y-0 left-0 z-40 w-72 bg-white/95 backdrop-blur-md border-r border-slate-200/60 lg:border-r-0 flex flex-col shadow-none hidden lg:flex"
       aria-label="Main navigation"
     >
       <SidebarContent
