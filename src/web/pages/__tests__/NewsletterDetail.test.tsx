@@ -426,9 +426,10 @@ describe('NewsletterDetail (fast version)', () => {
     expect(screen.getByTestId('loading')).toBeInTheDocument();
   });
 
-  it('renders content html when loaded', () => {
+  it('renders newsletter detail container and title when loaded', () => {
     renderPage();
-    expect(screen.getByText('C')).toBeInTheDocument();
+    expect(screen.getByTestId('newsletter-detail')).toBeInTheDocument();
+    expect(screen.getByTestId('newsletter-detail-title')).toHaveTextContent('T');
   });
 
   it('calls handleMarkAsRead on "mark as read" click', async () => {
@@ -512,8 +513,8 @@ describe('NewsletterDetail (fast version)', () => {
 
     renderPage();
 
-    // Verify content renders
-    expect(screen.getByText('C')).toBeInTheDocument();
+    // Verify the detail container renders (content is isolated in Shadow DOM)
+    expect(screen.getByTestId('newsletter-detail')).toBeInTheDocument();
 
     // Fast-forward time by 3 seconds to trigger auto-archive
     await act(async () => {

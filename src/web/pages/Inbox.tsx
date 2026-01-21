@@ -955,7 +955,7 @@ const Inbox: React.FC = () => {
   const showArchived = filter === 'archived';
 
   return (
-    <div className="px-0 sm:px-6 py-6 bg-neutral-50 min-h-screen">
+    <div className="px-0 sm:px-6 py-6">
       {/* Header */}
       <div className="flex flex-col space-y-4 mb-6">
         <div className="flex flex-col w-full">
@@ -1130,7 +1130,7 @@ const Inbox: React.FC = () => {
             showTags={true}
             showCheckbox={isSelecting}
             activeGroupIds={groupFilters}
-            allGroups={newsletterGroups}
+            allGroups={newsletterGroups as any}
           />
         )}
       </div>
