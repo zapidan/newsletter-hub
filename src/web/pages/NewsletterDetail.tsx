@@ -16,6 +16,44 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import NavigationArrows from '../../components/NewsletterDetail/NavigationArrows';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
 
+// Lightweight Shadow DOM renderer to isolate newsletter HTML styles from app theme/layout
+function ShadowHtml({ html }: { html: string }) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const shadowRef = useRef<ShadowRoot | null>(null);
+
+  useEffect(() => {
+    if (!hostRef.current) return;
+    if (!shadowRef.current) {
+      shadowRef.current = hostRef.current.attachShadow({ mode: 'open' });
+      // Base styles to keep host transparent and inherit fonts/colors
+      const style = document.createElement('style');
+      style.textContent = `
+        :host { all: initial; contain: content; }
+        .nh-content { font-family: inherit; color: inherit; line-height: 1.6; background: transparent; }
+        .nh-content img { max-width: 100%; height: auto; }
+        .nh-content a { color: #2563EB; text-decoration: underline; }
+      `;
+      shadowRef.current.appendChild(style);
+    }
+    if (shadowRef.current) {
+      // Wrap html inside a container to apply base styles
+      const wrapper = document.createElement('div');
+      wrapper.className = 'nh-content';
+      wrapper.innerHTML = html;
+      // Clear previous content except the first style element
+      const nodes = Array.from(shadowRef.current.childNodes);
+      nodes.forEach((n, idx) => {
+        // keep the first node if it's our style tag
+        if (idx === 0 && n.nodeName.toLowerCase() === 'style') return;
+        shadowRef.current?.removeChild(n);
+      });
+      shadowRef.current.appendChild(wrapper);
+    }
+  }, [html]);
+
+  return <div ref={hostRef} />;
+}
+
 const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
   const { id } = useParams<{ id: string }>();
@@ -501,7 +539,7 @@ const NewsletterDetail = memo(() => {
 
   // Add key to force remount when ID changes
   return (
-    <div data-testid="newsletter-detail" className="min-h-screen bg-gray-50">
+    <div data-testid="newsletter-detail">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}
         <button
@@ -618,7 +656,7 @@ const NewsletterDetail = memo(() => {
             )}
 
             {/* Newsletter Content */}
-            <div className="prose max-w-none mb-6">
+            <div className="mb-6">
               {newsletter?.received_at && (
                 <div className="text-sm text-gray-500 mb-6">
                   <div>
@@ -639,7 +677,7 @@ const NewsletterDetail = memo(() => {
                 </div>
               )}
               {newsletter?.content && (
-                <div dangerouslySetInnerHTML={{ __html: newsletter.content }} />
+                <ShadowHtml html={newsletter.content} />
               )}
             </div>
 
