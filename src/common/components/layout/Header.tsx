@@ -49,7 +49,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           <button
             onClick={onMenuToggle}
             data-testid="hamburger-menu-button"
-            className="block sm:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 hover:text-slate-800"
+            className="block lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 hover:text-slate-800"
             aria-label="Toggle menu"
           >
             <Menu size={20} />
@@ -62,7 +62,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
         {/* Right side - Search and user menu */}
         <div className="flex items-center gap-2">
           {pathname !== "/search" && (
-            <form onSubmit={handleSearch} className="hidden sm:block">
+            <form onSubmit={handleSearch} className="hidden lg:block">
               <div className="flex items-center gap-2">
                 <Search size={20} className="text-slate-400" />
                 <input
