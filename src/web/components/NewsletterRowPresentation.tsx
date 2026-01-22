@@ -130,9 +130,11 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
       onClick={handleRowClick}
       onMouseEnter={handleMouseEnter}
       className={`w-full px-0 mx-0 flex items-start cursor-pointer transition-all duration-200
-        ${!newsletter.is_read ? "bg-blue-50/60 border-l-3 border-blue-500 hover:bg-blue-100/50" : "bg-white hover:bg-neutral-50"}
+        ${!newsletter.is_read
+          ? "bg-blue-50/60 dark:bg-blue-900/20 border-l-3 border-blue-500 hover:bg-blue-100/50 dark:hover:bg-blue-900/30"
+          : "bg-white dark:bg-neutral-900/70 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"}
         ${isSelected ? "ring-2 ring-primary-400" : ""}
-        border border-neutral-200
+        border border-neutral-200 dark:border-neutral-800
         sm:rounded-lg sm:p-4
         ${className || ""}`}
     >
@@ -151,13 +153,13 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-base truncate">
+                <div className="font-semibold text-base truncate text-slate-800 dark:text-slate-100">
                   {newsletter.title || "No subject"}
                 </div>
-                <div className="text-sm text-gray-500 truncate">
+                <div className="text-sm text-gray-500 dark:text-slate-400 truncate">
                   {newsletter.source?.name || "Unknown Source"}
                   {newsletter.source?.from && (
-                    <span className="text-gray-400 ml-2">
+                    <span className="text-gray-400 dark:text-slate-500 ml-2">
                       • {newsletter.source.from}
                     </span>
                   )}
@@ -214,7 +216,7 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                 />
               </div>
             </div>
-            <div className="text-sm text-gray-700 mb-2 line-clamp-2">
+            <div className="text-sm text-gray-700 dark:text-slate-300 mb-2 line-clamp-2">
               {newsletter.summary}
             </div>
 
@@ -235,12 +237,12 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
             {visibleTags.has(newsletter.id) && (
               <div className="w-full mt-2" onClick={(e) => e.stopPropagation()}>
                 {tagUpdateError && (
-                  <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md">
-                    <p className="text-sm text-red-600">{tagUpdateError}</p>
+                  <div className="mb-2 p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-md">
+                    <p className="text-sm text-red-600 dark:text-red-400">{tagUpdateError}</p>
                     {onDismissTagError && (
                       <button
                         type="button"
-                        className="text-xs text-red-500 hover:text-red-700 underline mt-1"
+                        className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline mt-1"
                         onClick={onDismissTagError}
                       >
                         Dismiss
@@ -262,7 +264,7 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                   disabled={isUpdatingTags}
                 />
                 {isUpdatingTags && (
-                  <div className="flex items-center mt-2 text-sm text-gray-500">
+                  <div className="flex items-center mt-2 text-sm text-gray-500 dark:text-slate-400">
                     <Loader2 size={14} className="animate-spin mr-2" />
                     Updating tags...
                   </div>
@@ -289,7 +291,7 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                   </span>
                 ))}
               </div>
-              <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
+              <span className="text-xs text-gray-400 dark:text-slate-400 ml-2 whitespace-nowrap">
                 {new Date(newsletter.received_at).toLocaleDateString()} ·{" "}
                 {newsletter.estimated_read_time} min read
               </span>

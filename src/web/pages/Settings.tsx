@@ -243,7 +243,7 @@ const Settings = () => {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+        <h2 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
           Settings
         </h2>
         <Link
@@ -265,7 +265,7 @@ const Settings = () => {
                   onClick={() => handleTabChange(tab.id)}
                   className={`btn w-full justify-start gap-3 mb-1 ${activeTab === tab.id
                     ? "btn-primary text-white"
-                    : "btn-ghost text-slate-700 hover:bg-slate-50"
+                    : "btn-ghost text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                     }`}
                 >
                   {tab.icon}
@@ -273,10 +273,10 @@ const Settings = () => {
                 </button>
               ))}
 
-              <div className="border-t border-slate-200 mt-4 pt-4">
+              <div className="border-t border-slate-200 dark:border-neutral-800 mt-4 pt-4">
                 <button
                   onClick={signOut}
-                  className="btn btn-ghost btn-danger w-full justify-start gap-3 text-red-600 hover:bg-red-50"
+                  className="btn btn-ghost btn-danger w-full justify-start gap-3 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                   data-testid="logout-button"
                 >
                   <LogOut size={18} />
@@ -299,61 +299,61 @@ const Settings = () => {
             <div className="card-body">
               {activeTab === "account" && (
                 <div>
-                  <h3 className="text-2xl font-semibold mb-8 text-slate-800">
+                  <h3 className="text-2xl font-semibold mb-8 text-slate-800 dark:text-slate-100">
                     Account Settings
                   </h3>
 
                   <div className="space-y-8">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Email Address
                       </label>
                       <input
                         type="email"
                         value={user?.email || ""}
                         readOnly
-                        className="input-field bg-slate-50 cursor-not-allowed"
+                        className="input-field bg-slate-50 dark:bg-neutral-800 dark:text-slate-200 cursor-not-allowed"
                       />
-                      <p className="mt-2 text-sm text-slate-500">
+                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                         This is your account email used for login and account
                         notifications.
                       </p>
                     </div>
 
-                    <div className="border-t border-slate-200 pt-8">
+                    <div className="border-t border-slate-200 dark:border-neutral-800 pt-8">
                       <div className="mb-6">
-                        <h4 className="text-lg font-semibold text-slate-800 mb-2">
+                        <h4 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">
                           Your Newsletter Email Alias
                         </h4>
-                        <p className="text-sm text-slate-600 mb-6">
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
                           Use this email to subscribe to newsletters. All emails
                           sent to this address will be delivered to your inbox.
                         </p>
 
                         {emailLoading ? (
-                          <div className="flex items-center gap-3 text-sm text-slate-500 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                          <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-neutral-900 p-4 rounded-lg border border-slate-200 dark:border-neutral-800">
                             <RefreshCw className="w-5 h-5 animate-spin text-blue-500" />
                             <span>Loading your email address...</span>
                           </div>
                         ) : emailError ? (
-                          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-4 rounded-lg">
+                          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-400 px-4 py-4 rounded-lg">
                             <p>
                               Error loading email address. Please refresh the
                               page.
                             </p>
                           </div>
                         ) : emailAlias ? (
-                          <div className="bg-gradient-to-r from-slate-50 to-blue-50/50 p-4 rounded-lg border border-slate-200">
+                          <div className="bg-gradient-to-r from-slate-50 to-blue-50/50 dark:from-neutral-900 dark:to-neutral-900/60 p-4 rounded-lg border border-slate-200 dark:border-neutral-800">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center">
-                                <Mail className="w-4 h-4 mr-2 text-gray-500 flex-shrink-0" />
-                                <span className="font-mono text-sm overflow-auto break-all pr-2">
+                                <Mail className="w-4 h-4 mr-2 text-gray-500 dark:text-slate-300 flex-shrink-0" />
+                                <span className="font-mono text-sm overflow-auto break-all pr-2 dark:text-slate-200">
                                   {emailAlias}
                                 </span>
                               </div>
                               <button
                                 onClick={handleCopyEmailAlias}
-                                className="p-1 text-neutral-600 hover:text-neutral-800 rounded-md ml-2 flex-shrink-0"
+                                className="p-1 text-neutral-600 dark:text-slate-300 hover:text-neutral-800 dark:hover:text-white rounded-md ml-2 flex-shrink-0"
                                 title={copied ? "Copied!" : "Copy to clipboard"}
                                 disabled={copied}
                               >
@@ -367,7 +367,7 @@ const Settings = () => {
                                 )}
                               </button>
                             </div>
-                            <p className="mt-2 text-xs text-neutral-500">
+                            <p className="mt-2 text-xs text-neutral-500 dark:text-slate-400">
                               This is automatically generated from your email
                               address and cannot be changed.
                             </p>
@@ -386,12 +386,12 @@ const Settings = () => {
                   </h3>
 
                   <div className="space-y-4">
-                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                      <div className="p-4 border-b border-gray-200">
-                        <h4 className="font-medium text-gray-900">
+                    <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 dark:border-neutral-800">
+                        <h4 className="font-medium text-gray-900 dark:text-slate-100">
                           Manage Newsletter Sources
                         </h4>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
                           Toggle to archive/unarchive newsletter sources.
                           Archived sources won't appear in your main newsletters
                           list.
@@ -403,30 +403,30 @@ const Settings = () => {
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                         </div>
                       ) : newsletterSources.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">
+                        <div className="p-8 text-center text-gray-500 dark:text-slate-400">
                           No newsletter sources found.
                         </div>
                       ) : (
-                        <ul className="divide-y divide-gray-200 w-full">
+                        <ul className="divide-y divide-gray-200 dark:divide-neutral-800 w-full">
                           {newsletterSources.map((source) => (
                             <li
                               key={source.id}
-                              className="px-2 sm:px-4 py-3 hover:bg-gray-50 w-full"
+                              className="px-2 sm:px-4 py-3 hover:bg-gray-50 dark:hover:bg-neutral-800/60 w-full"
                             >
                               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full gap-2">
                                 <div className="flex flex-col w-full">
                                   <div className="flex items-center">
-                                    <span className="text-sm font-medium text-gray-900 break-all">
+                                    <span className="text-sm font-medium text-gray-900 dark:text-slate-100 break-all">
                                       {source.name}
                                     </span>
                                     {source.from && (
-                                      <span className="ml-2 text-xs text-gray-500 break-all">
+                                      <span className="ml-2 text-xs text-gray-500 dark:text-slate-400 break-all">
                                         ({source.from})
                                       </span>
                                     )}
                                   </div>
                                   <div className="flex flex-row flex-wrap gap-2 mt-1">
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
                                       {source.newsletter_count || 0}{" "}
                                       {(source.newsletter_count || 0) === 1
                                         ? "newsletter"
@@ -434,8 +434,8 @@ const Settings = () => {
                                     </span>
                                     <span
                                       className={`text-xs px-2 py-0.5 rounded-full ${(source.unread_count || 0) > 0
-                                        ? "bg-orange-100 text-orange-800"
-                                        : "bg-gray-100 text-gray-600"
+                                        ? "bg-orange-100 text-orange-800 dark:bg-orange-950/30 dark:text-orange-300"
+                                        : "bg-gray-100 text-gray-600 dark:bg-neutral-800 dark:text-slate-300"
                                         }`}
                                     >
                                       {(source.unread_count || 0) > 0
@@ -448,7 +448,7 @@ const Settings = () => {
                                   <button
                                     type="button"
                                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${source.is_archived
-                                      ? "bg-gray-200"
+                                      ? "bg-gray-200 dark:bg-neutral-800"
                                       : "bg-blue-600"
                                       }`}
                                     role="switch"
@@ -468,7 +468,7 @@ const Settings = () => {
                                     </span>
                                     <span
                                       aria-hidden="true"
-                                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${source.is_archived
+                                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-neutral-200 shadow ring-0 transition duration-200 ease-in-out ${source.is_archived
                                         ? "translate-x-0"
                                         : "translate-x-5"
                                         }`}

@@ -20,6 +20,33 @@ import NewsletterDetailActions from '../../components/NewsletterDetail/Newslette
 function ShadowHtml({ html }: { html: string }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const shadowRef = useRef<ShadowRoot | null>(null);
+  const darkStyleRef = useRef<HTMLStyleElement | null>(null);
+
+  const setTheme = useCallback((mode: 'light' | 'dark') => {
+    if (!shadowRef.current) return;
+    if (!darkStyleRef.current) {
+      darkStyleRef.current = document.createElement('style');
+      shadowRef.current.appendChild(darkStyleRef.current);
+    }
+    // Base light styles are handled by the first style tag. Here we set overrides for dark.
+    darkStyleRef.current.textContent = mode === 'dark' ? `
+      .nh-content { color: #e5e7eb; background: transparent; }
+      /* Force-override common inline white backgrounds from email HTML */
+      .nh-content, .nh-content * { background-color: transparent !important; }
+      .nh-content h1, .nh-content h2, .nh-content h3, .nh-content h4, .nh-content h5, .nh-content h6 { color: #f3f4f6; }
+      .nh-content p, .nh-content li, .nh-content span, .nh-content div { color: #e5e7eb; }
+      .nh-content a { color: #93c5fd; }
+      .nh-content blockquote { color: #d1d5db; border-left: 4px solid #374151; background: rgba(55,65,81,0.3); }
+      /* Re-apply explicit dark backgrounds for code/pre after global transparent override */
+      .nh-content code { background: rgba(75,85,99,0.4) !important; color: #f9fafb; padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
+      .nh-content pre { background: rgba(31,41,55,0.8) !important; color: #f3f4f6; padding: 0.75rem; border-radius: 0.5rem; overflow: auto; }
+      .nh-content table { color: #e5e7eb; }
+      .nh-content th { background: rgba(31,41,55,0.8) !important; }
+      .nh-content td, .nh-content th { border-color: #374151; }
+      .nh-content hr { border-color: #374151; }
+      .nh-content img { background: transparent; }
+    ` : '';
+  }, []);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -34,22 +61,38 @@ function ShadowHtml({ html }: { html: string }) {
         .nh-content a { color: #2563EB; text-decoration: underline; }
       `;
       shadowRef.current.appendChild(style);
+      // Initialize theme based on current document state
+      const isDark = document.documentElement.classList.contains('dark');
+      setTheme(isDark ? 'dark' : 'light');
+      // Listen for theme changes
+      const handler = (e: Event) => {
+        try {
+          const detail = (e as CustomEvent).detail as { mode?: 'light' | 'dark' };
+          if (detail && detail.mode) setTheme(detail.mode);
+        } catch {
+          // no-op
+        }
+      };
+      window.addEventListener('nh-theme-change', handler as EventListener);
+      // Cleanup on unmount
+      hostRef.current.addEventListener('DOMNodeRemovedFromDocument', () => {
+        window.removeEventListener('nh-theme-change', handler as EventListener);
+      });
     }
     if (shadowRef.current) {
       // Wrap html inside a container to apply base styles
       const wrapper = document.createElement('div');
       wrapper.className = 'nh-content';
       wrapper.innerHTML = html;
-      // Clear previous content except the first style element
+      // Clear previous content except the first two style elements (base + dark)
       const nodes = Array.from(shadowRef.current.childNodes);
       nodes.forEach((n, idx) => {
-        // keep the first node if it's our style tag
-        if (idx === 0 && n.nodeName.toLowerCase() === 'style') return;
+        if (idx <= 1 && n.nodeName.toLowerCase() === 'style') return;
         shadowRef.current?.removeChild(n);
       });
       shadowRef.current.appendChild(wrapper);
     }
-  }, [html]);
+  }, [html, setTheme]);
 
   return <div ref={hostRef} />;
 }
@@ -521,7 +564,7 @@ const NewsletterDetail = memo(() => {
       <div key={`error-${id}`} className="max-w-6xl w-full mx-auto px-4 py-8">
         <button
           onClick={handleBack}
-          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
+          className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-slate-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 rounded-md flex items-center gap-1.5 mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           {getBackButtonText()}
@@ -553,27 +596,27 @@ const NewsletterDetail = memo(() => {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Main content */}
           <div className="flex-1">
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm p-6 mb-6 border border-slate-200/60 dark:border-neutral-800">
               <div className="mb-6">
                 <h1
                   data-testid="newsletter-detail-title"
-                  className="text-2xl font-bold text-gray-900 mb-4"
+                  className="text-2xl font-bold text-gray-900 dark:text-slate-100 mb-4"
                 >
                   {newsletter?.title}
                 </h1>
                 {/* Newsletter Source and Group */}
                 <div className="mb-2">
-                  <div data-testid="newsletter-source" className="text-sm text-gray-600">
+                  <div data-testid="newsletter-source" className="text-sm text-gray-600 dark:text-slate-400">
                     <span className="font-medium">Source:</span>{' '}
                     {newsletter?.source?.name || 'Unknown'}
                     {newsletter?.source?.from && (
-                      <span className="ml-2 text-gray-400">({newsletter.source.from})</span>
+                      <span className="ml-2 text-gray-400 dark:text-slate-500">({newsletter.source.from})</span>
                     )}
                   </div>
-                  <div data-testid="newsletter-source-group" className="text-sm text-gray-600 mt-1">
+                  <div data-testid="newsletter-source-group" className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                     <span className="font-medium">Source Groups:</span>{' '}
                     <SourceGroupDropdown newsletter={newsletter} groups={groups} onGroupChange={refetch} />
-                    <span className="ml-2 text-xs text-gray-400">(up to 10)</span>
+                    <span className="ml-2 text-xs text-gray-400 dark:text-slate-500">(up to 10)</span>
                   </div>
                 </div>
               </div>
@@ -656,9 +699,9 @@ const NewsletterDetail = memo(() => {
             )}
 
             {/* Newsletter Content */}
-            <div className="mb-6">
+            <div className="mb-6 rounded-xl p-4 bg-white dark:bg-neutral-950 border border-slate-200/60 dark:border-neutral-900">
               {newsletter?.received_at && (
-                <div className="text-sm text-gray-500 mb-6">
+                <div className="text-sm text-gray-500 dark:text-slate-400 mb-6">
                   <div>
                     {new Date(newsletter.received_at).toLocaleDateString('en-US', {
                       year: 'numeric',
@@ -669,7 +712,7 @@ const NewsletterDetail = memo(() => {
                     })}
                   </div>
                   {newsletter.estimated_read_time > 0 && (
-                    <div className="mt-1 text-gray-400">
+                    <div className="mt-1 text-gray-400 dark:text-slate-500">
                       {newsletter.estimated_read_time} min read •{' '}
                       {newsletter.word_count.toLocaleString()} words
                     </div>
@@ -682,9 +725,9 @@ const NewsletterDetail = memo(() => {
             </div>
 
             {/* Context & Insights - Moved below newsletter content */}
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              <h3 className="font-medium text-gray-900 mb-4">Context & Insights</h3>
-              <div className="text-sm text-gray-600">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm p-6 mb-6 border border-slate-200/60 dark:border-neutral-800">
+              <h3 className="font-medium text-gray-900 dark:text-slate-100 mb-4">Context & Insights</h3>
+              <div className="text-sm text-gray-600 dark:text-slate-400">
                 {/* Intentionally left empty as per requirements */}
               </div>
             </div>
@@ -704,8 +747,8 @@ const NewsletterDetail = memo(() => {
           </div>
           {/* Sidebar */}
           <div className="lg:w-80 flex-shrink-0">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="font-medium text-gray-900 mb-4">Related Topics</h3>
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm p-6 border border-slate-200/60 dark:border-neutral-800">
+              <h3 className="font-medium text-gray-900 dark:text-slate-100 mb-4">Related Topics</h3>
               <div className="flex flex-wrap gap-2">
                 {[
                   { id: '1', name: 'Tech News', count: 5 },
@@ -716,10 +759,10 @@ const NewsletterDetail = memo(() => {
                   <button
                     key={topic.id}
                     onClick={() => navigate(`/inbox?topic=${topic.name.toLowerCase()}`)}
-                    className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full flex items-center gap-1.5"
+                    className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 text-gray-700 dark:text-slate-200 rounded-full flex items-center gap-1.5"
                   >
                     <span>{topic.name}</span>
-                    <span className="text-xs text-gray-500">{topic.count}</span>
+                    <span className="text-xs text-gray-500 dark:text-slate-400">{topic.count}</span>
                   </button>
                 ))}
               </div>
