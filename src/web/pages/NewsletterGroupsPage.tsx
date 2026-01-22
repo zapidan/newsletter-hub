@@ -533,14 +533,14 @@ const NewsletterGroupsPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <main className="max-w-6xl w-full mx-auto p-6 bg-neutral-50">
+      <main className="max-w-6xl w-full mx-auto p-6 bg-neutral-50 dark:bg-neutral-900 rounded-xl border border-transparent dark:border-neutral-800">
         <button
           onClick={(e) => {
             e.preventDefault();
             // Use React Router's navigate for client-side navigation
             navigate('/inbox');
           }}
-          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-6"
+          className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-slate-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 rounded-md flex items-center gap-1.5 mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Inbox
@@ -548,8 +548,8 @@ const NewsletterGroupsPage: React.FC = () => {
 
         <header className="mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-primary-900">Manage Newsletter Groups</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-3xl font-bold text-primary-900 dark:text-slate-100">Manage Newsletter Groups</h1>
+            <p className="text-gray-600 dark:text-slate-400 mt-1">
               Organize your newsletter sources into groups for easier management.
             </p>
           </div>
@@ -559,7 +559,7 @@ const NewsletterGroupsPage: React.FC = () => {
         <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold text-gray-800">Your Groups</h2>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-slate-100">Your Groups</h2>
             </div>
             <div
               style={{
@@ -607,14 +607,14 @@ const NewsletterGroupsPage: React.FC = () => {
           </div>
 
           {isLoadingGroups ? (
-            <div className="flex items-center text-gray-500">
+            <div className="flex items-center text-gray-500 dark:text-slate-400">
               <Loader2 className="animate-spin mr-2 h-4 w-4" />
               Loading groups...
             </div>
           ) : isGroupsError ? (
             <div className="text-red-600 text-sm">Error loading groups</div>
           ) : groups.length === 0 ? (
-            <div className="text-gray-500 text-sm">No groups created yet</div>
+            <div className="text-gray-500 dark:text-slate-400 text-sm">No groups created yet</div>
           ) : (
             <SourceGroupsList
               key={JSON.stringify(modalStateKey)}
@@ -662,11 +662,11 @@ const NewsletterGroupsPage: React.FC = () => {
                   leaveFrom="opacity-100 translate-y-0 sm:scale-100"
                   leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                 >
-                  <Dialog.Panel className="w-full bg-white rounded-lg overflow-hidden shadow-xl transform transition-all">
+                  <Dialog.Panel className="w-full bg-white dark:bg-neutral-900 rounded-lg overflow-hidden shadow-xl transform transition-all border border-slate-200/60 dark:border-neutral-800">
                     <div className="p-6">
                       <Dialog.Title
                         as="h3"
-                        className="text-lg font-medium leading-6 text-gray-900 mb-4"
+                        className="text-lg font-medium leading-6 text-gray-900 dark:text-slate-100 mb-4"
                       >
                         Edit Newsletter Source
                       </Dialog.Title>
@@ -674,14 +674,14 @@ const NewsletterGroupsPage: React.FC = () => {
                         <div className="mb-4">
                           <label
                             htmlFor="name"
-                            className="block text-sm font-medium text-gray-700 mb-1"
+                            className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1"
                           >
                             Name
                           </label>
                           <input
                             type="text"
                             id="name"
-                            className="w-full rounded-md border border-gray-300 p-2 focus:ring focus:ring-blue-200"
+                            className="w-full rounded-md border border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-slate-100 p-2 focus:ring focus:ring-blue-200"
                             value={formData.name}
                             onChange={handleInputChange}
                             name="name"
@@ -689,10 +689,10 @@ const NewsletterGroupsPage: React.FC = () => {
                           />
                         </div>
                         <div className="mb-4">
-                          <label htmlFor="from" className="block text-sm font-medium text-gray-700">
+                          <label htmlFor="from" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
                             From Email
                           </label>
-                          <div className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 p-2 text-sm text-gray-600">
+                          <div className="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-100 dark:bg-neutral-800 p-2 text-sm text-gray-600 dark:text-slate-300">
                             {formData.from}
                           </div>
                         </div>
@@ -700,8 +700,8 @@ const NewsletterGroupsPage: React.FC = () => {
                           <button
                             type="submit"
                             className={`inline-flex items-center px-4 py-2 font-semibold rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${isUpdating
-                              ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-300'
+                              ? 'bg-gray-200 dark:bg-neutral-800 text-gray-700 dark:text-slate-300 cursor-not-allowed'
+                              : 'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-neutral-700 focus:ring-gray-300'
                               }`}
                             disabled={isUpdating}
                           >
@@ -719,7 +719,7 @@ const NewsletterGroupsPage: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 font-semibold rounded-md shadow-sm hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
+                            className="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-slate-200 font-semibold rounded-md shadow-sm hover:bg-gray-200 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
                             onClick={() => {
                               setShowEditModal(false);
                               setEditModalSourceId(null);
@@ -774,29 +774,29 @@ const NewsletterGroupsPage: React.FC = () => {
                   leaveFrom="opacity-100 translate-y-0 sm:scale-100"
                   leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
                 >
-                  <Dialog.Panel className="w-full bg-white rounded-lg overflow-hidden shadow-xl transform transition-all">
+                  <Dialog.Panel className="w-full bg-white dark:bg-neutral-900 rounded-lg overflow-hidden shadow-xl transform transition-all border border-gray-200 dark:border-neutral-800">
                     <div className="p-6">
                       <Dialog.Title
                         as="h3"
-                        className="text-lg font-medium leading-6 text-gray-900 mb-4"
+                        className="text-lg font-medium leading-6 text-gray-900 dark:text-slate-100 mb-4"
                       >
                         Delete Newsletter Source
                       </Dialog.Title>
-                      <p className="text-sm text-gray-500 mb-6">
+                      <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">
                         Are you sure you want to delete this source? This will archive all
                         newsletters from this source.
                       </p>
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
-                          className="inline-flex items-center px-4 py-2 font-semibold rounded-md shadow-sm bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
+                          className="inline-flex items-center px-4 py-2 font-semibold rounded-md shadow-sm bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-300"
                           onClick={cancelDelete}
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
-                          className="inline-flex items-center px-4 py-2 font-semibold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="inline-flex items-center px-4 py-2 font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                           onClick={confirmDelete}
                         >
                           Delete

@@ -69,12 +69,12 @@ const TimeFilterDropdown: FC<{
         onChange={(e) => onChange(e.target.value as TimeRange)}
         disabled={disabled}
         className={`
-          appearance-none bg-white border border-gray-200 rounded-lg
+          appearance-none bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
           ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}
-          text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
+          text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
           focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
           disabled:opacity-50 disabled:cursor-not-allowed
-          ${disabled ? "bg-gray-50" : "hover:bg-gray-50"}
+          ${disabled ? "bg-gray-50 dark:bg-neutral-900" : "hover:bg-gray-50 dark:hover:bg-neutral-800/60"}
         `}
         aria-label="Filter by time range"
       >
@@ -144,12 +144,12 @@ const SourceFilterDropdown: FC<{
           onClick={handleToggle}
           disabled={disabled || isLoading}
           className={`
-            flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg
+            flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
             ${compact ? "px-2 py-1 text-xs min-w-[120px]" : "px-3 py-1.5 text-sm min-w-[140px]"}
-            text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
+            text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
-            ${disabled || isLoading ? "bg-gray-50" : "hover:bg-gray-50"}
+            ${disabled || isLoading ? "bg-gray-50 dark:bg-neutral-900" : "hover:bg-gray-50 dark:hover:bg-neutral-800/60"}
           `}
           aria-label="Filter by newsletter source"
           aria-expanded={isOpen}
@@ -171,7 +171,7 @@ const SourceFilterDropdown: FC<{
               showCounts &&
               selectedSource.count !== undefined &&
               selectedSource.count > 0 && (
-                <span className="bg-orange-100 text-orange-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                <span className="bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
                   {selectedSource.count}
                 </span>
               )}
@@ -190,14 +190,14 @@ const SourceFilterDropdown: FC<{
               onClick={() => setIsOpen(false)}
             />
             {/* Dropdown menu */}
-            <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-50 border border-gray-200 max-h-60 overflow-y-auto">
+            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800 max-h-60 overflow-y-auto">
               <div className="py-1">
                 <button
                   type="button"
                   onClick={(e) => handleSelect(null, e)}
                   className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedSourceId
-                    ? "bg-blue-50 text-blue-800 font-medium"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
+                    : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
                     }`}
                 >
                   <span>All Sources</span>
@@ -208,15 +208,15 @@ const SourceFilterDropdown: FC<{
                     type="button"
                     onClick={(e) => handleSelect(source.id, e)}
                     className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedSourceId === source.id
-                      ? "bg-blue-50 text-blue-800 font-medium"
-                      : "text-gray-700 hover:bg-gray-100"
+                      ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
+                      : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
                       }`}
                   >
                     <span className="truncate pr-2">{source.name}</span>
                     {showCounts &&
                       source.count !== undefined &&
                       source.count > 0 && (
-                        <span className="bg-orange-100 text-orange-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        <span className="bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
                           {source.count}
                         </span>
                       )}
@@ -298,12 +298,12 @@ const MultiGroupFilterDropdown: FC<{
           onClick={handleToggle}
           disabled={disabled || isLoading}
           className={`
-            flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg
+            flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
             ${compact ? 'px-2 py-1 text-xs min-w-[120px]' : 'px-3 py-1.5 text-sm min-w-[140px]'}
-            text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
+            text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
-            ${disabled || isLoading ? 'bg-gray-50' : 'hover:bg-gray-50'}
+            ${disabled || isLoading ? 'bg-gray-50 dark:bg-neutral-900' : 'hover:bg-gray-50 dark:hover:bg-neutral-800/60'}
           `}
           aria-label="Filter by groups"
           aria-expanded={isOpen}
@@ -311,7 +311,7 @@ const MultiGroupFilterDropdown: FC<{
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <span className="truncate">{label}</span>
             {selectedGroupIds.length > 0 && (
-              <span className="bg-white text-gray-700 border border-gray-200 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+              <span className="bg-white dark:bg-neutral-900 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-neutral-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
                 {selectedUnreadTotal}
               </span>
             )}
@@ -324,12 +324,12 @@ const MultiGroupFilterDropdown: FC<{
         {isOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-            <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-50 border border-gray-200 max-h-60 overflow-y-auto">
+            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800 max-h-60 overflow-y-auto">
               <div className="py-1">
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
                 >
                   Clear All Groups
                 </button>
@@ -340,12 +340,12 @@ const MultiGroupFilterDropdown: FC<{
                       key={group.id}
                       type="button"
                       onClick={(e) => toggleOne(group.id, e)}
-                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${checked ? 'bg-neutral-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${checked ? 'bg-neutral-100 dark:bg-neutral-800 text-gray-900 dark:text-slate-100 font-medium' : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60'}`}
                     >
                       <span className="truncate pr-2">{group.name}</span>
                       <span className="flex items-center gap-2 flex-shrink-0">
                         {showCounts && group.count !== undefined && group.count > 0 && (
-                          <span className="bg-gray-200 text-gray-700 text-xs font-medium px-1.5 py-0.5 rounded-full">
+                          <span className="bg-gray-200 text-gray-700 dark:bg-neutral-700 dark:text-slate-200 text-xs font-medium px-1.5 py-0.5 rounded-full">
                             {group.count}
                           </span>
                         )}
@@ -406,12 +406,12 @@ const GroupFilterDropdown: FC<{
           onClick={handleToggle}
           disabled={disabled || isLoading}
           className={`
-            flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-lg
+            flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
             ${compact ? "px-2 py-1 text-xs min-w-[120px]" : "px-3 py-1.5 text-sm min-w-[140px]"}
-            text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2
+            text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
-            ${disabled || isLoading ? "bg-gray-50" : "hover:bg-gray-50"}
+            ${disabled || isLoading ? "bg-gray-50 dark:bg-neutral-900" : "hover:bg-gray-50 dark:hover:bg-neutral-800/60"}
           `}
           aria-label="Filter by group"
           aria-expanded={isOpen}
@@ -436,14 +436,14 @@ const GroupFilterDropdown: FC<{
         {isOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-            <div className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-50 border border-gray-200 max-h-60 overflow-y-auto">
+            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800 max-h-60 overflow-y-auto">
               <div className="py-1">
                 <button
                   type="button"
                   onClick={(e) => handleSelect(null, e)}
                   className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedGroupId
-                    ? "bg-blue-50 text-blue-800 font-medium"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
+                    : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
                     }`}
                 >
                   <span>All Groups</span>
@@ -454,13 +454,13 @@ const GroupFilterDropdown: FC<{
                     type="button"
                     onClick={(e) => handleSelect(group.id, e)}
                     className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedGroupId === group.id
-                      ? "bg-blue-50 text-blue-800 font-medium"
-                      : "text-gray-700 hover:bg-gray-100"
+                      ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
+                      : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
                       }`}
                   >
                     <span className="truncate pr-2">{group.name}</span>
                     {showCounts && group.count !== undefined && group.count > 0 && (
-                      <span className="bg-blue-100 text-blue-700 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
                         {group.count}
                       </span>
                     )}

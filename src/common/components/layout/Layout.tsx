@@ -22,7 +22,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const showSidebar = user && !loading && !location.pathname.startsWith('/login');
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50/30">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50/30 dark:from-neutral-950 dark:to-neutral-900/40 dark:bg-neutral-950">
       {/* Sidebar - Always render, but only toggle on mobile */}
       {showSidebar && (
         <>

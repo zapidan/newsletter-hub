@@ -1,3 +1,4 @@
+import ThemeToggle from "@common/components/ThemeToggle";
 import { useAuth } from "@common/contexts/AuthContext";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, Search, User } from "lucide-react";
@@ -42,7 +43,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm w-full px-0 sm:px-0 border-b border-slate-200/60 shadow-sm md:border-b-0 md:shadow-none">
+    <header className="sticky top-0 z-40 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm w-full px-0 sm:px-0 border-b border-slate-200/60 dark:border-neutral-800 shadow-sm md:border-b-0 md:shadow-none">
       <div className="px-0 py-3 flex items-center justify-between w-full">
         {/* Left side - Hamburger menu and title */}
         <div className="flex items-center gap-3">
@@ -54,7 +55,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           >
             <Menu size={20} />
           </button>
-          <h1 className="text-lg font-semibold text-slate-800 truncate">
+          <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100 truncate">
             {getPageTitle()}
           </h1>
         </div>
@@ -76,14 +77,16 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
             </form>
           )}
 
+          <ThemeToggle />
+
           <div className="relative">
             <button
-              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
               onClick={toggleDropdown}
               aria-expanded={showDropdown}
               aria-haspopup="true"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-700 font-semibold text-sm shadow-sm border border-blue-200/50">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/40 dark:to-blue-800/30 flex items-center justify-center text-blue-700 dark:text-blue-200 font-semibold text-sm shadow-sm border border-blue-200/50 dark:border-blue-800/50">
                 {user?.email?.charAt(0).toUpperCase() || <User size={16} />}
               </div>
             </button>
@@ -100,28 +103,28 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.95 }}
                     transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
-                    className="absolute right-0 mt-2 w-52 py-2 bg-white rounded-xl shadow-xl border border-slate-200/60 z-20 backdrop-blur-sm"
+                    className="absolute right-0 mt-2 w-52 py-2 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-slate-200/60 dark:border-neutral-800 z-20 backdrop-blur-sm"
                   >
                     <div className="px-4 py-3 border-b border-slate-100">
-                      <p className="text-sm font-medium text-slate-800 truncate">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">
                         {user?.email}
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         Account settings
                       </p>
                     </div>
                     <button
-                      className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                      className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex items-center gap-2"
                       onClick={() => {
                         navigate("/settings");
                         setShowDropdown(false);
                       }}
                     >
-                      <User size={16} className="text-slate-400" />
+                      <User size={16} className="text-slate-400 dark:text-slate-300" />
                       Settings
                     </button>
                     <button
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 border-t border-slate-100 mt-1"
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center gap-2 border-t border-slate-100 dark:border-neutral-800 mt-1"
                       onClick={signOut}
                     >
                       <svg

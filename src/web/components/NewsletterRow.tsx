@@ -116,10 +116,10 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
     <div
       data-testid={`newsletter-row-main-${newsletter.id}`}
       className={`
-        group relative bg-white rounded-xl border border-slate-200/60 shadow-sm
-        hover:shadow-md hover:border-slate-300/60 transition-all duration-200
+        group relative bg-white dark:bg-neutral-900/70 rounded-xl border border-slate-200/60 dark:border-neutral-800 shadow-sm
+        hover:shadow-md hover:border-slate-300/60 dark:hover:border-neutral-700 transition-all duration-200
         ${isSelected ? "ring-2 ring-blue-500 ring-primary-400 ring-offset-2" : ""}
-        ${isRead ? "" : "bg-blue-50/60"}
+        ${isRead ? "" : "bg-blue-50/60 dark:bg-blue-900/20"}
         ${className}
       `}
       onClick={handleClick}
@@ -201,7 +201,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
           <h3
             data-testid="newsletter-title"
             className={`
-              font-medium leading-tight text-slate-800 group-hover:text-slate-900 transition-colors
+              font-medium leading-tight text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white transition-colors
               ${compact ? "text-sm" : "text-base"}
               ${isRead ? "font-normal" : "font-semibold"}
               line-clamp-2
@@ -210,7 +210,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
             {newsletter.title}
           </h3>
           {newsletter.summary && (
-            <div className="text-xs text-gray-600 mt-1 line-clamp-2">{newsletter.summary}</div>
+            <div className="text-xs text-gray-600 dark:text-slate-300 mt-1 line-clamp-2">{newsletter.summary}</div>
           )}
         </div>
 
@@ -262,7 +262,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
 
           {/* Date and read time on the right */}
           {showDate && (
-            <span className="text-xs text-gray-400 ml-2 whitespace-nowrap">
+            <span className="text-xs text-gray-400 dark:text-slate-400 ml-2 whitespace-nowrap">
               {new Date(newsletter.received_at).toLocaleDateString()} ·{" "}
               {newsletter.estimated_read_time} min read
             </span>
@@ -291,7 +291,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
 
         {/* Loading State */}
         {Object.keys(loadingStates).length > 0 && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-xl flex items-center justify-center">
+          <div className="absolute inset-0 bg-white/80 dark:bg-neutral-900/70 backdrop-blur-sm rounded-xl flex items-center justify-center">
             <div className="flex items-center gap-2 text-blue-600">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span className="text-sm font-medium">Updating...</span>

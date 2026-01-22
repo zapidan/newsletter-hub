@@ -125,9 +125,8 @@ export const CreateSourceGroupModal = ({
       }}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden p-6 relative"
+        className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden p-6 relative border border-gray-200 dark:border-neutral-800"
         style={{
-          backgroundColor: "white",
           borderRadius: "1rem",
           width: "100%",
           maxWidth: "32rem",
@@ -138,13 +137,13 @@ export const CreateSourceGroupModal = ({
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
         }}
       >
-        <div className="flex justify-between items-center pb-4 border-b">
-          <h2 className="text-xl font-semibold">
+        <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-neutral-800">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
             {groupToEdit ? "Edit Group" : "Create New Group"}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-500 hover:text-gray-700 dark:text-slate-300 dark:hover:text-white"
             aria-label="Close"
           >
             <X size={20} />
@@ -159,7 +158,7 @@ export const CreateSourceGroupModal = ({
             <div>
               <label
                 htmlFor="group-name"
-                className="block text-base font-medium text-gray-700 mb-2"
+                className="block text-base font-medium text-gray-700 dark:text-slate-300 mb-2"
               >
                 Group Name
               </label>
@@ -168,7 +167,7 @@ export const CreateSourceGroupModal = ({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-300 focus:ring-1 focus:ring-blue-300 transition-colors text-base"
+                className="w-full p-3 border border-gray-200 dark:border-neutral-700 rounded-lg bg-gray-50 dark:bg-neutral-800 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-neutral-800 focus:border-blue-300 focus:ring-1 focus:ring-blue-300 transition-colors text-base"
                 placeholder="e.g., Tech News, Personal, etc."
                 required
                 autoFocus
@@ -177,7 +176,7 @@ export const CreateSourceGroupModal = ({
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="block text-base font-medium text-gray-700">
+                <label className="block text-base font-medium text-gray-700 dark:text-slate-300">
                   Sources ({selectedSourceIds.size} selected)
                 </label>
                 <div className="relative">
@@ -185,19 +184,19 @@ export const CreateSourceGroupModal = ({
                     type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="text-sm p-2 pl-3 pr-8 border border-gray-200 rounded-lg w-56 bg-gray-50 focus:bg-white focus:border-blue-300 focus:ring-1 focus:ring-blue-300 transition-colors"
+                    className="text-sm p-2 pl-3 pr-8 border border-gray-200 dark:border-neutral-700 rounded-lg w-56 bg-gray-50 dark:bg-neutral-800 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-neutral-800 focus:border-blue-300 focus:ring-1 focus:ring-blue-300 transition-colors"
                     placeholder="Search sources..."
                   />
                   {searchTerm ? (
                     <button
                       type="button"
                       onClick={() => setSearchTerm("")}
-                      className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                     >
                       <X size={16} />
                     </button>
                   ) : (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-slate-400">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
@@ -206,18 +205,18 @@ export const CreateSourceGroupModal = ({
                 </div>
               </div>
 
-              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white max-h-60 overflow-y-auto">
+              <div className="border border-gray-200 dark:border-neutral-800 rounded-lg overflow-hidden bg-white dark:bg-neutral-900 max-h-60 overflow-y-auto">
                 {filteredSources.length > 0 ? (
-                  <ul className="divide-y divide-gray-100">
+                  <ul className="divide-y divide-gray-100 dark:divide-neutral-800">
                     {filteredSources.map((source) => (
                       <li
                         key={source.id}
-                        className="hover:bg-gray-50 transition-colors"
+                        className="hover:bg-gray-50 dark:hover:bg-neutral-800/60 transition-colors"
                         onClick={() => toggleSource(source.id)}
                       >
                         <div className="relative flex items-center px-4 py-3 cursor-pointer">
                           <div className="flex items-center h-5">
-                            <div className={`flex items-center justify-center h-5 w-5 rounded border ${selectedSourceIds.has(source.id) ? 'bg-blue-50 border-blue-400' : 'border-gray-300'}`}>
+                            <div className={`flex items-center justify-center h-5 w-5 rounded border ${selectedSourceIds.has(source.id) ? 'bg-blue-50 border-blue-400' : 'border-gray-300 dark:border-neutral-700'}`}>
                               {selectedSourceIds.has(source.id) && (
                                 <svg className="h-3.5 w-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -226,10 +225,10 @@ export const CreateSourceGroupModal = ({
                             </div>
                           </div>
                           <div className="ml-3">
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
                               {source.name}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-gray-500 dark:text-slate-400">
                               {source.from}
                             </div>
                           </div>
@@ -238,7 +237,7 @@ export const CreateSourceGroupModal = ({
                     ))}
                   </ul>
                 ) : (
-                  <div className="p-6 text-center text-sm text-gray-500 bg-gray-50">
+                  <div className="p-6 text-center text-sm text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-neutral-900">
                     {sources.length === 0
                       ? "No sources available. Add some sources first."
                       : "No sources match your search."}
@@ -248,11 +247,11 @@ export const CreateSourceGroupModal = ({
             </div>
           </div>
 
-          <div className="pt-4 pb-2 bg-gray-50 border-t flex justify-end space-x-4">
+          <div className="pt-4 pb-2 bg-gray-50 dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800 flex justify-end space-x-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-5 py-2 text-sm font-medium text-gray-700 dark:text-slate-200 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-sm hover:bg-gray-50 dark:hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               disabled={isSaving}
             >
               Cancel

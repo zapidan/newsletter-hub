@@ -1,9 +1,9 @@
-import { useNavigate } from 'react-router-dom';
-import { Plus, Tag as TagIcon, X, Edit2, Trash2, Check, ArrowLeft } from 'lucide-react';
-import { handleTagClickWithNavigation } from '@common/utils/tagUtils';
+import LoadingScreen from '@common/components/common/LoadingScreen';
 import { useTagsPage } from '@common/hooks/ui/useTagsPage';
 import type { Tag } from '@common/types';
-import LoadingScreen from '@common/components/common/LoadingScreen';
+import { handleTagClickWithNavigation } from '@common/utils/tagUtils';
+import { ArrowLeft, Check, Edit2, Plus, Tag as TagIcon, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const TagsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -49,12 +49,12 @@ const TagsPage: React.FC = () => {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Tags</h1>
-          <p className="text-neutral-500">Manage your newsletter tags</p>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-slate-100">Tags</h1>
+          <p className="text-neutral-500 dark:text-slate-400">Manage your newsletter tags</p>
         </div>
         <button
           onClick={() => navigate('/')}
-          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5"
+          className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-slate-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 rounded-md flex items-center gap-1.5"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Inbox
@@ -62,8 +62,8 @@ const TagsPage: React.FC = () => {
       </div>
 
       {/* Create New Tag */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-6 mb-8">
-        <h2 className="text-lg font-medium mb-4">Create New Tag</h2>
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-800 p-6 mb-8">
+        <h2 className="text-lg font-medium text-neutral-900 dark:text-slate-100 mb-4">Create New Tag</h2>
         {isCreating ? (
           <div className="flex items-center gap-2">
             <div className="flex-1">
@@ -72,7 +72,7 @@ const TagsPage: React.FC = () => {
                 value={newTag.name}
                 onChange={(e) => setNewTag({ ...newTag, name: e.target.value })}
                 placeholder="Tag name"
-                className="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-slate-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 autoFocus
               />
             </div>
@@ -81,7 +81,7 @@ const TagsPage: React.FC = () => {
                 type="color"
                 value={newTag.color}
                 onChange={(e) => setNewTag({ ...newTag, color: e.target.value })}
-                className="w-10 h-10 p-1 border border-neutral-300 rounded-md cursor-pointer"
+                className="w-10 h-10 p-1 border border-neutral-300 dark:border-neutral-700 rounded-md cursor-pointer bg-white dark:bg-neutral-800"
               />
               <button
                 onClick={handleCreateTag}
@@ -92,7 +92,7 @@ const TagsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setIsCreating(false)}
-                className="p-2 text-neutral-500 hover:bg-neutral-100 rounded-md"
+                className="p-2 text-neutral-500 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 rounded-md"
                 title="Cancel"
               >
                 <X size={18} />
@@ -111,20 +111,20 @@ const TagsPage: React.FC = () => {
       </div>
 
       {/* Tags List */}
-      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden">
-        <div className="p-4 border-b border-neutral-200">
-          <h2 className="text-lg font-medium">Your Tags</h2>
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-neutral-200 dark:border-neutral-800 overflow-hidden">
+        <div className="p-4 border-b border-neutral-200 dark:border-neutral-800">
+          <h2 className="text-lg font-medium text-neutral-900 dark:text-slate-100">Your Tags</h2>
         </div>
 
         {tags.length === 0 ? (
-          <div className="p-8 text-center text-neutral-500">
-            <TagIcon className="mx-auto h-12 w-12 text-neutral-300 mb-2" />
+          <div className="p-8 text-center text-neutral-500 dark:text-slate-400">
+            <TagIcon className="mx-auto h-12 w-12 text-neutral-300 dark:text-neutral-700 mb-2" />
             <p>You haven't created any tags yet.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-neutral-200">
+          <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
             {tags?.map((tag: Tag) => (
-              <li key={tag.id} className="p-4 hover:bg-neutral-50">
+              <li key={tag.id} className="p-4 hover:bg-neutral-50 dark:hover:bg-neutral-800/60">
                 {editingTagId === tag.id ? (
                   <div className="flex items-center gap-2">
                     <div
@@ -139,8 +139,8 @@ const TagsPage: React.FC = () => {
                           className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: tag.color }}
                         />
-                        <span className="font-medium">{tag.name}</span>
-                        <span className="text-xs bg-neutral-100 px-2 py-0.5 rounded-full">
+                        <span className="font-medium text-neutral-900 dark:text-slate-100">{tag.name}</span>
+                        <span className="text-xs bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-slate-300 px-2 py-0.5 rounded-full">
                           {tag.newsletter_count}
                         </span>
                       </div>
@@ -155,7 +155,7 @@ const TagsPage: React.FC = () => {
                             name: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-1 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        className="w-full px-3 py-1 border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-slate-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         autoFocus
                         onClick={(e) => e.stopPropagation()}
                       />
@@ -170,7 +170,7 @@ const TagsPage: React.FC = () => {
                             color: e.target.value,
                           })
                         }
-                        className="w-8 h-8 p-1 border border-neutral-300 rounded-md cursor-pointer"
+                        className="w-8 h-8 p-1 border border-neutral-300 dark:border-neutral-700 rounded-md cursor-pointer bg-white dark:bg-neutral-800"
                       />
                       <button
                         onClick={handleUpdateTag}
@@ -184,7 +184,7 @@ const TagsPage: React.FC = () => {
                           setEditingTagId(null);
                           setEditTagData({});
                         }}
-                        className="p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-md"
+                        className="p-1.5 text-neutral-500 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 rounded-md"
                         title="Cancel"
                       >
                         <X size={16} />
@@ -200,7 +200,7 @@ const TagsPage: React.FC = () => {
                           style={{ backgroundColor: tag.color }}
                         />
                         <span
-                          className="font-medium cursor-pointer text-primary-700 hover:underline"
+                          className="font-medium cursor-pointer text-primary-700 hover:underline dark:text-primary-400"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleTagClickWithNavigation(tag, navigate, '/inbox', e);
@@ -208,7 +208,7 @@ const TagsPage: React.FC = () => {
                         >
                           {tag.name}
                         </span>
-                        <span className="text-sm text-neutral-500">
+                        <span className="text-sm text-neutral-500 dark:text-slate-400">
                           {(() => {
                             const count = tagNewsletters[tag.id]?.length ?? tag.newsletter_count;
                             return `Used in ${count} ${count === 1 ? 'newsletter' : 'newsletters'}`;
@@ -221,14 +221,14 @@ const TagsPage: React.FC = () => {
                             setEditingTagId(tag.id);
                             setEditTagData({ name: tag.name, color: tag.color });
                           }}
-                          className="p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-md"
+                          className="p-1.5 text-neutral-500 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 rounded-md"
                           title="Edit tag"
                         >
                           <Edit2 size={16} />
                         </button>
                         <button
                           onClick={() => handleDeleteTag(tag.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-md"
+                          className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md"
                           title="Delete tag"
                         >
                           <Trash2 size={16} />
