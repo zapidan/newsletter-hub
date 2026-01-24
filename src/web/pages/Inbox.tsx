@@ -1068,7 +1068,7 @@ const Inbox: React.FC = () => {
             showTags={true}
             showCheckbox={isSelecting}
             activeGroupIds={groupFilters}
-            allGroups={newsletterGroups.filter(g => g.color).map(g => ({ ...g, color: g.color || '#000000' }))}
+            allGroups={newsletterGroups.map(g => ({ ...g, color: g.color || '#3B82F6' }))}
           />
         )}
       </div>
