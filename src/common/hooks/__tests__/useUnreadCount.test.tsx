@@ -449,12 +449,14 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       const { result: sourceResult } = renderUseUnreadCount('source-1');
 
       // Wait for initial data to load
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      vi.useRealTimers();
+      await waitFor(() => {
+        expect(totalResult.current.unreadCount).toBe(10);
+        expect(sourceResult.current.unreadCount).toBe(5);
       });
 
       // Simulate optimistic update
-      await act(async () => {
+      act(() => {
         queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
           total: 8,
           bySource: {
@@ -475,17 +477,18 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
 
   describe('Cache invalidation behavior', () => {
     it('should not refetch when optimistic updates are applied', async () => {
-      renderUseUnreadCount();
+      const { result } = renderUseUnreadCount();
 
       // Wait for initial data to load
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      vi.useRealTimers();
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(10);
       });
 
       const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
 
       // Simulate optimistic update
-      await act(async () => {
+      act(() => {
         queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
           total: 8,
           bySource: { 'source-1': 8 },
@@ -493,35 +496,49 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       });
 
       // Wait a bit to see if any refetches occur
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      vi.useFakeTimers();
+      act(() => {
+        vi.advanceTimersByTime(100);
       });
+      vi.useRealTimers();
 
       // Should not have made additional API calls
       expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
     });
 
     it('should handle manual invalidation correctly', async () => {
+      vi.useFakeTimers();
+
       const { result } = renderUseUnreadCount();
 
-      // Wait for initial data to load
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      // Wait for initial data to load using real timers
+      vi.useRealTimers();
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(10);
       });
 
-      expect(result.current.unreadCount).toBe(10);
+      // Switch back to fake timers for controlled invalidation
+      vi.useFakeTimers();
 
       // Manually invalidate the cache
-      await act(async () => {
-        await result.current.invalidateUnreadCount();
+      act(() => {
+        result.current.invalidateUnreadCount();
       });
+
+      // Advance timers past the debounce delay (500ms)
+      act(() => {
+        vi.advanceTimersByTime(600);
+      });
+
+      // Switch back to real timers for the waitFor
+      vi.useRealTimers();
 
       // Wait for the unreadCount to be updated after invalidation
       await waitFor(() => {
         expect(result.current.unreadCount).toBe(10);
       });
 
-      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(1);
+      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(2); // Initial load + invalidation
     });
   });
 
@@ -544,14 +561,12 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       const { result } = renderUseUnreadCount();
 
       // Wait for initial data to load
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 0));
+      await waitFor(() => {
+        expect(result.current.unreadCount).toBe(10);
       });
 
-      expect(result.current.unreadCount).toBe(10);
-
       // Simulate optimistic update
-      await act(async () => {
+      act(() => {
         queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
           total: 8,
           bySource: { 'source-1': 8 },
@@ -567,32 +582,37 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(new Error('API Error'));
 
       // Manually invalidate to trigger error
+      act(() => {
+        result.current.invalidateUnreadCount();
+      });
+
+      // Wait for debounce delay
       await act(async () => {
-        await result.current.invalidateUnreadCount();
+        await new Promise(resolve => setTimeout(resolve, 600));
       });
 
       // Wait for error to be processed
       await waitFor(() => {
         expect(result.current.isError).toBe(true);
       });
-
       // Should fallback to 0 on error since API failed
       expect(result.current.unreadCount).toBe(0);
     });
 
     describe('Performance optimizations', () => {
       it('should use stale time to prevent unnecessary refetches', async () => {
-        renderUseUnreadCount();
+        const { result } = renderUseUnreadCount();
 
         // Wait for initial data to load
-        await act(async () => {
-          await new Promise(resolve => setTimeout(resolve, 0));
+        vi.useRealTimers();
+        await waitFor(() => {
+          expect(result.current.unreadCount).toBe(10);
         });
 
         const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
 
         // Trigger a re-render
-        await act(async () => {
+        act(() => {
           // This would normally trigger a refetch, but stale time should prevent it
           queryClient.setQueryData(['unreadCount', 'all', mockUser.id], {
             total: 10,
@@ -605,25 +625,31 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       });
 
       it('should debounce invalidations', async () => {
+        vi.useFakeTimers();
+
         const { result } = renderUseUnreadCount();
 
-        // Wait for initial data to load
-        await act(async () => {
-          await new Promise(resolve => setTimeout(resolve, 0));
+        // Wait for initial data to load using real timers
+        vi.useRealTimers();
+        await waitFor(() => {
+          expect(result.current.unreadCount).toBe(10);
         });
 
         const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
 
+        // Switch back to fake timers for controlled invalidation
+        vi.useFakeTimers();
+
         // Call invalidate multiple times quickly
-        await act(async () => {
+        act(() => {
           result.current.invalidateUnreadCount();
           result.current.invalidateUnreadCount();
           result.current.invalidateUnreadCount();
         });
 
         // Wait for debounce delay
-        await act(async () => {
-          await new Promise(resolve => setTimeout(resolve, 600)); // Debounce delay is 500ms
+        act(() => {
+          vi.advanceTimersByTime(600); // Debounce delay is 500ms
         });
 
         // Should only have made one additional call due to debouncing
