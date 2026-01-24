@@ -19,6 +19,7 @@ const {
   useReadingQueueMock,
   useSharedNewsletterActionsMock,
   useNewslettersMock,
+  useGroupCountsMock,
   MockInboxFilters,
 } = vi.hoisted(() => ({
   /* hooks */
@@ -27,6 +28,7 @@ const {
   useReadingQueueMock: vi.fn(),
   useSharedNewsletterActionsMock: vi.fn(),
   useNewslettersMock: vi.fn(),
+  useGroupCountsMock: vi.fn(() => ({})),
 
   /* visual InboxFilters stub – must be **named** export[1] */
   MockInboxFilters: vi.fn(
@@ -101,6 +103,11 @@ vi.mock('@common/hooks/useSharedNewsletterActions', () => ({
 vi.mock('@common/hooks/useNewsletters', () => ({
   __esModule: true,
   useNewsletters: useNewslettersMock,
+}));
+
+vi.mock('@web/hooks/useGroupCounts', () => ({
+  __esModule: true,
+  useGroupCounts: useGroupCountsMock,
 }));
 
 /* misc context & util stubs ------------------------------------------------ */
@@ -248,6 +255,7 @@ describe('Inbox page', () => {
     useReadingQueueMock.mockReturnValue(mkReadingQueue());
     useSharedNewsletterActionsMock.mockReturnValue(mkSharedActions());
     useNewslettersMock.mockReturnValue(mkNewsletters());
+    useGroupCountsMock.mockReturnValue({});
   });
 
   afterEach(() => vi.clearAllMocks());
