@@ -32,27 +32,27 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
   onDelete,
   onCancel,
 }) => (
-  <div className="w-full bg-blue-50 px-4 py-2 rounded-lg border border-gray-200 shadow-sm">
+  <div className="w-full bg-blue-50 dark:bg-gray-800 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
       <div className="flex flex-wrap items-center gap-3 justify-center w-full sm:w-auto">
-        <span className="text-sm text-gray-700">{selectedCount} selected</span>
+        <span className="text-sm text-gray-700 dark:text-gray-300">{selectedCount} selected</span>
         <div className="flex flex-wrap items-center gap-2 justify-center">
           <button
             onClick={onSelectAll}
-            className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-2 py-1 hover:bg-blue-100 dark:hover:bg-blue-900 rounded"
           >
             {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
           </button>
-          <span className="text-gray-300">|</span>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
           <button
             onClick={onSelectRead}
-            className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-2 py-1 hover:bg-blue-100 dark:hover:bg-blue-900 rounded"
           >
             Select Read
           </button>
           <button
             onClick={onSelectUnread}
-            className="text-sm text-blue-600 hover:text-blue-700 px-2 py-1 hover:bg-blue-100 rounded"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-2 py-1 hover:bg-blue-100 dark:hover:bg-blue-900 rounded"
           >
             Select Unread
           </button>
@@ -62,14 +62,14 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
         <button
           onClick={onMarkAsRead}
           disabled={selectedCount === 0}
-          className="px-3 py-1 bg-green-100 text-gray-800 rounded text-sm hover:bg-green-200 disabled:opacity-50"
+          className="px-3 py-1 bg-green-100 dark:bg-green-900 text-gray-800 dark:text-green-200 rounded text-sm hover:bg-green-200 dark:hover:bg-green-800 disabled:opacity-50"
         >
           Mark as Read
         </button>
         <button
           onClick={onMarkAsUnread}
           disabled={selectedCount === 0}
-          className="px-3 py-1 bg-blue-100 text-gray-800 rounded text-sm hover:bg-blue-200 disabled:opacity-50"
+          className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-gray-800 dark:text-blue-200 rounded text-sm hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
         >
           Mark as Unread
         </button>
@@ -78,7 +78,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
             <button
               onClick={onUnarchive}
               disabled={selectedCount === 0 || isBulkActionLoading}
-              className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm hover:bg-green-200 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded text-sm hover:bg-green-200 dark:hover:bg-green-800 disabled:opacity-50 flex items-center gap-1"
             >
               <ArchiveX className="h-4 w-4" />
               <span>Unarchive</span>
@@ -86,7 +86,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
             <button
               onClick={onDelete}
               disabled={selectedCount === 0 || isBulkActionLoading}
-              className="px-3 py-1 bg-red-100 text-red-800 rounded text-sm hover:bg-red-200 disabled:opacity-50 flex items-center gap-1"
+              className="px-3 py-1 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded text-sm hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50 flex items-center gap-1"
               title="Delete selected permanently"
             >
               <Trash className="h-4 w-4" />
@@ -97,7 +97,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
           <button
             onClick={onArchive}
             disabled={selectedCount === 0 || isBulkActionLoading}
-            className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm hover:bg-amber-200 disabled:opacity-50 flex items-center gap-1"
+            className="px-3 py-1 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 rounded text-sm hover:bg-amber-200 dark:hover:bg-amber-800 disabled:opacity-50 flex items-center gap-1"
           >
             <Archive className="h-4 w-4" />
             <span>Archive</span>
@@ -105,7 +105,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
         )}
         <button
           onClick={onCancel}
-          className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded text-sm ml-2"
+          className="px-3 py-1 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm ml-2"
         >
           Cancel
         </button>
