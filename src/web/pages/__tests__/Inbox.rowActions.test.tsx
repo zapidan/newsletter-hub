@@ -20,6 +20,7 @@ const {
   useReadingQueueMock,
   useSharedNewsletterActionsMock,
   useNewslettersMock,
+  useGroupCountsMock,
   MockInboxFilters,
   MockInfiniteNewsletterList,
 } = vi.hoisted(() => ({
@@ -28,6 +29,7 @@ const {
   useReadingQueueMock: vi.fn(),
   useSharedNewsletterActionsMock: vi.fn(),
   useNewslettersMock: vi.fn(),
+  useGroupCountsMock: vi.fn(() => ({})),
   MockInboxFilters: vi.fn(() => <div data-testid="inbox-filters" />),
   MockInfiniteNewsletterList: vi.fn(),
 }));
@@ -76,6 +78,11 @@ vi.mock('@common/hooks/useSharedNewsletterActions', () => ({
 vi.mock('@common/hooks/useNewsletters', () => ({
   __esModule: true,
   useNewsletters: useNewslettersMock,
+}));
+
+vi.mock('@web/hooks/useGroupCounts', () => ({
+  __esModule: true,
+  useGroupCounts: useGroupCountsMock,
 }));
 
 /* context & util stubs ---------------------------------------------------- */
@@ -285,6 +292,7 @@ describe('Inbox Row Actions Responsiveness Fix', () => {
     // Set up default mock returns
     useInboxFiltersMock.mockReturnValue(mkInboxFilters());
     useReadingQueueMock.mockReturnValue(mkReadingQueue());
+    useGroupCountsMock.mockReturnValue({});
 
     mockSharedActions = mkSharedActions();
     mockNewsletters = mkNewsletters();

@@ -20,6 +20,7 @@ const {
   useReadingQueueMock,
   useSharedNewsletterActionsMock,
   useNewslettersMock,
+  useGroupCountsMock,
   BulkSelectionActionsMock,
   MockInboxFilters,
 } = vi.hoisted(() => ({
@@ -28,6 +29,7 @@ const {
   useReadingQueueMock: vi.fn(),
   useSharedNewsletterActionsMock: vi.fn(),
   useNewslettersMock: vi.fn(),
+  useGroupCountsMock: vi.fn(() => ({})),
   BulkSelectionActionsMock: vi.fn(),
   MockInboxFilters: vi.fn(({ onSelectClick }) => (
     <div data-testid="inbox-filters">
@@ -127,6 +129,11 @@ vi.mock('@common/hooks/useSharedNewsletterActions', () => ({
 vi.mock('@common/hooks/useNewsletters', () => ({
   __esModule: true,
   useNewsletters: useNewslettersMock,
+}));
+
+vi.mock('@web/hooks/useGroupCounts', () => ({
+  __esModule: true,
+  useGroupCounts: useGroupCountsMock,
 }));
 
 /* context & util stubs ---------------------------------------------------- */
@@ -334,6 +341,7 @@ describe('Inbox Bulk Actions Bug Fix', () => {
     useInboxFiltersMock.mockReturnValue(mkInboxFilters());
     useInfiniteNewslettersMock.mockReturnValue(mkInfiniteNewsletters());
     useReadingQueueMock.mockReturnValue(mkReadingQueue());
+    useGroupCountsMock.mockReturnValue({});
 
     mockSharedActions = mkSharedActions();
     mockNewsletters = mkNewsletters();
