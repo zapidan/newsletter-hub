@@ -9,6 +9,7 @@ import LoadingScreen from '@common/components/common/LoadingScreen';
 import { InfiniteNewsletterList } from '@web/components/InfiniteScroll';
 
 import { useInfiniteNewsletters } from '@common/hooks/infiniteScroll';
+import { useGroupCounts } from '@web/hooks/useGroupCounts';
 import { useErrorHandling } from '@common/hooks/useErrorHandling';
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useBulkLoadingStates } from '@common/hooks/useLoadingStates';
@@ -150,21 +151,6 @@ const Inbox: React.FC = () => {
     resetFilters();
   }, [setFilter, setSourceFilter, setGroupFilters, setTimeRange, resetFilters]);
 
-  // Prepare group dropdown data
-  const groupsForDropdown = useMemo(
-    () =>
-      newsletterGroups.map((g) => ({
-        id: g.id,
-        name: g.name,
-        count:
-          g.sources?.reduce((sum, s) => {
-            const source = newsletterSources.find((ns) => ns.id === s.id);
-            return sum + (source?.unread_count || 0);
-          }, 0) || 0,
-      })),
-    [newsletterGroups, newsletterSources]
-  );
-
   // Compute source IDs for the selected groups (union)
   const selectedGroupSourceIds = useMemo(() => {
     if (!groupFilters || groupFilters.length === 0) return undefined;
@@ -280,6 +266,35 @@ const Inbox: React.FC = () => {
 
     return filtered;
   }, [rawNewsletters, useLocalTagFiltering, debouncedTagIds, filter]);
+
+  // Prepare group dropdown data with correct counts based on current filter (server-aligned)
+  const groupCountsBaseFilter = useMemo(
+    () => ({
+      search: contextNewsletterFilter.search,
+      isRead: contextNewsletterFilter.isRead,
+      isArchived: contextNewsletterFilter.isArchived,
+      isLiked: contextNewsletterFilter.isLiked,
+      tagIds: contextNewsletterFilter.tagIds,
+      dateFrom: contextNewsletterFilter.dateFrom,
+      dateTo: contextNewsletterFilter.dateTo,
+    }),
+    [
+      contextNewsletterFilter.search,
+      contextNewsletterFilter.isRead,
+      contextNewsletterFilter.isArchived,
+      contextNewsletterFilter.isLiked,
+      contextNewsletterFilter.tagIds,
+      contextNewsletterFilter.dateFrom,
+      contextNewsletterFilter.dateTo,
+    ]
+  );
+
+  const groupCounts = useGroupCounts(newsletterGroups, groupCountsBaseFilter);
+
+  const groupsForDropdown = useMemo(
+    () => newsletterGroups.map((g) => ({ id: g.id, name: g.name, count: groupCounts[g.id] ?? 0 })),
+    [newsletterGroups, groupCounts]
+  );
 
   // Reading queue
   const { readingQueue = [], removeFromQueue } = useReadingQueue() || {};
