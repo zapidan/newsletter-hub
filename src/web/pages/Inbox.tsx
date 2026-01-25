@@ -9,7 +9,6 @@ import LoadingScreen from '@common/components/common/LoadingScreen';
 import { InfiniteNewsletterList } from '@web/components/InfiniteScroll';
 
 import { useInfiniteNewsletters } from '@common/hooks/infiniteScroll';
-import { useGroupCounts } from '@web/hooks/useGroupCounts';
 import { useErrorHandling } from '@common/hooks/useErrorHandling';
 import { useInboxFilters } from '@common/hooks/useInboxFilters';
 import { useBulkLoadingStates } from '@common/hooks/useLoadingStates';
@@ -17,6 +16,7 @@ import { useNewsletters } from '@common/hooks/useNewsletters';
 import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGroups';
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
+import { useGroupCounts } from '@web/hooks/useGroupCounts';
 
 import { useAuth } from '@common/contexts';
 import { useToast } from '@common/contexts/ToastContext';
@@ -1087,6 +1087,7 @@ const Inbox: React.FC = () => {
           />
         )}
       </div>
+      {/* ScrollToTop is now mounted globally in Layout */}
     </div>
   );
 };
