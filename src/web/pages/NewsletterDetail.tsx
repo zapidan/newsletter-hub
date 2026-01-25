@@ -9,10 +9,10 @@ import { newsletterService } from '@common/services';
 import type { NewsletterSourceGroup, NewsletterWithRelations, Tag } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { useMutation } from '@tanstack/react-query';
+import BackButton from '@web/components/BackButton';
 import TagSelector from '@web/components/TagSelector';
-import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import NavigationArrows from '../../components/NewsletterDetail/NavigationArrows';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
 
@@ -101,7 +101,6 @@ const NewsletterDetail = memo(() => {
   const [tagSelectorKey, setTagSelectorKey] = useState(0);
   const { id } = useParams<{ id: string }>();
   const log = useLogger();
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
@@ -114,89 +113,6 @@ const NewsletterDetail = memo(() => {
       (typeof document.referrer === 'string' && document.referrer.includes('reading-queue'))
     );
   }, [location.state]);
-
-  // Helper function to get the correct back button text
-  const getBackButtonText = useCallback(() => {
-    if (isFromReadingQueue) {
-      return 'Back to Reading Queue';
-    } else {
-      return 'Back to Inbox';
-    }
-  }, [isFromReadingQueue]);
-
-  const handleBack = useCallback(() => {
-    log.debug('Navigation state for back action', {
-      action: 'navigate_back',
-      metadata: {
-        locationState: location.state,
-        documentReferrer: document.referrer,
-      },
-    });
-
-    // Check if we came from reading queue
-    const fromReadingQueue =
-      location.state?.fromReadingQueue === true ||
-      location.state?.from === '/reading-queue' ||
-      (typeof document.referrer === 'string' && document.referrer.includes('reading-queue')) ||
-      (typeof location.state?.from === 'string' && location.state.from.includes('reading-queue'));
-
-    log.debug('Determined navigation context', {
-      action: 'navigate_back',
-      metadata: {
-        fromReadingQueue,
-      },
-    });
-
-    // Determine target route
-    let targetRoute = '/inbox';
-    if (fromReadingQueue) {
-      targetRoute = '/queue';
-    }
-
-    // Preserve URL parameters when navigating back to inbox
-    if (targetRoute === '/inbox') {
-      const currentParams = new URLSearchParams();
-
-      // Preserve groups parameter if it exists
-      const groupsParam = searchParams.get('groups');
-      if (groupsParam) {
-        currentParams.set('groups', groupsParam);
-      }
-
-      // Preserve other filter parameters
-      const filterParam = searchParams.get('filter');
-      if (filterParam) {
-        currentParams.set('filter', filterParam);
-      }
-
-      const sourceParam = searchParams.get('source');
-      if (sourceParam) {
-        currentParams.set('source', sourceParam);
-      }
-
-      const tagsParam = searchParams.get('tags');
-      if (tagsParam) {
-        currentParams.set('tags', tagsParam);
-      }
-
-      const timeParam = searchParams.get('time');
-      if (timeParam) {
-        currentParams.set('time', timeParam);
-      }
-
-      const paramString = currentParams.toString();
-      const finalUrl = paramString ? `${targetRoute}?${paramString}` : targetRoute;
-
-      navigate(finalUrl, {
-        replace: true,
-      });
-    } else {
-      // For reading queue, navigate directly without preserving params
-      navigate(targetRoute, {
-        replace: true,
-      });
-    }
-  }, [navigate, location.state, log, searchParams]);
 
   useTags();
 
@@ -562,13 +478,7 @@ const NewsletterDetail = memo(() => {
   if (isError) {
     return (
       <div key={`error-${id}`} className="max-w-6xl w-full mx-auto px-4 py-8">
-        <button
-          onClick={handleBack}
-          className="px-4 py-2 text-sm font-medium text-neutral-700 dark:text-slate-200 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 rounded-md flex items-center gap-1.5 mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {getBackButtonText()}
-        </button>
+        <BackButton className="mb-4" />
         <div className="bg-red-100 text-red-700 px-4 py-3 rounded-md mb-6">
           {fetchError?.message || 'Failed to load newsletter. Please try again.'}
         </div>
@@ -585,13 +495,7 @@ const NewsletterDetail = memo(() => {
     <div data-testid="newsletter-detail">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}
-        <button
-          onClick={handleBack}
-          className="px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 rounded-md flex items-center gap-1.5 mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {getBackButtonText()}
-        </button>
+        <BackButton className="mb-4" />
 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Main content */}

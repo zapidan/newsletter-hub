@@ -9,6 +9,16 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
+
+// Mock BackButton component BEFORE importing ReadingQueuePage
+vi.mock('@web/components/BackButton', () => ({
+  default: ({ className }: { className?: string }) => (
+    <button className={className} data-testid="back-button">
+      Back to Inbox
+    </button>
+  ),
+}));
+
 import ReadingQueuePage from '../ReadingQueuePage';
 
 // Mock hooks
