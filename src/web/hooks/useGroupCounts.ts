@@ -18,8 +18,34 @@ type BaseFilter = {
 export function useGroupCounts(groups: GroupLike[] = [], baseFilter: BaseFilter = {}) {
   const [counts, setCounts] = useState<Record<string, number>>({});
 
+  // Create stable dependencies to prevent infinite re-renders
+  const groupsKey = useMemo(() => {
+    return JSON.stringify(groups.map(g => ({ id: g.id, sourceCount: g.sources?.length || 0 })));
+  }, [groups.length, groups.map(g => g.id).join(',')]);
+
+  const filterKey = useMemo(() => {
+    const sortedTagIds = baseFilter.tagIds ? [...baseFilter.tagIds].sort() : [];
+    return JSON.stringify({
+      search: baseFilter.search,
+      isRead: baseFilter.isRead,
+      isArchived: baseFilter.isArchived,
+      isLiked: baseFilter.isLiked,
+      tagIds: sortedTagIds,
+      dateFrom: baseFilter.dateFrom,
+      dateTo: baseFilter.dateTo
+    });
+  }, [
+    baseFilter.search,
+    baseFilter.isRead,
+    baseFilter.isArchived,
+    baseFilter.isLiked,
+    baseFilter.tagIds ? [...baseFilter.tagIds].sort().join(',') : '',
+    baseFilter.dateFrom,
+    baseFilter.dateTo
+  ]);
+
   // Stable snapshot of inputs
-  const input = useMemo(() => ({ groups, baseFilter }), [groups, baseFilter]);
+  const input = useMemo(() => ({ groups, baseFilter }), [groupsKey, filterKey]);
 
   useEffect(() => {
     let cancelled = false;
