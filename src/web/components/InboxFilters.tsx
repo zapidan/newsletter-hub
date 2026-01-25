@@ -648,9 +648,9 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
         </div>
 
         {/* Desktop: Single row layout with all filters */}
-        <div className="hidden sm:flex flex-row items-center gap-x-3 w-full justify-between">
+        <div className="hidden sm:flex flex-row items-center justify-between w-full">
           {/* Left side: Status filters + Time filter */}
-          <div className="flex items-center gap-x-3">
+          <div className="flex items-center gap-x-1">
             {/* Time filter - at the left, before status filters */}
             {showTimeFilter && (
               <TimeFilterDropdown
@@ -675,7 +675,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
           </div>
 
           {/* Right side: Source filter + Group filter + Select button */}
-          <div className="flex items-center gap-x-3">
+          <div className="flex items-center gap-x-1">
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
