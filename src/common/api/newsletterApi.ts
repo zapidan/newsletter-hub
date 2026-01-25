@@ -580,50 +580,117 @@ export const newsletterApi = {
     });
   },
 
-  // Bulk update newsletters
+  // Bulk update newsletters - ENHANCED WITH BATCH PROCESSING
   async bulkUpdate(
     params: BulkUpdateNewsletterParams
   ): Promise<BatchResult<NewsletterWithRelations>> {
     return withPerformanceLogging('newsletters.bulkUpdate', async () => {
-      const user = await requireAuth();
+      const { ids } = params;
 
-      const { ids, updates } = params;
-      const results: (NewsletterWithRelations | null)[] = [];
-      const errors: (Error | null)[] = [];
-
-      const { data, error } = await supabase
-        .from('newsletters')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
-        .in('id', ids)
-        .eq('user_id', user.id)
-        .select();
-
-      if (error) {
-        // If bulk update fails, record error for all items
-        ids.forEach(() => {
-          results.push(null);
-          errors.push(new Error(error.message));
-        });
-      } else {
-        // Transform successful results
-        const transformedResults = (data || []).map(transformNewsletterResponse);
-        ids.forEach((id) => {
-          const result = transformedResults.find((r) => r.id === id);
-          results.push(result || null);
-          errors.push(result ? null : new Error('Newsletter not found or not updated'));
-        });
+      // For small batches, use the original approach
+      if (ids.length <= 50) {
+        return this._originalBulkUpdate(params);
       }
 
-      return {
-        results,
-        errors,
-        successCount: results.filter((r) => r !== null).length,
-        errorCount: errors.filter((e) => e !== null).length,
-      };
+      // For large batches, use the new batched approach
+      return this._batchedBulkUpdate(params);
     });
+  },
+
+  // Original bulk update for small batches
+  async _originalBulkUpdate(
+    params: BulkUpdateNewsletterParams
+  ): Promise<BatchResult<NewsletterWithRelations>> {
+    const user = await requireAuth();
+    const { ids, updates } = params;
+    const results: (NewsletterWithRelations | null)[] = [];
+    const errors: (Error | null)[] = [];
+
+    const { data, error } = await supabase
+      .from('newsletters')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .in('id', ids)
+      .eq('user_id', user.id)
+      .select();
+
+    if (error) {
+      // If bulk update fails, record error for all items
+      ids.forEach(() => {
+        results.push(null);
+        errors.push(new Error(error.message));
+      });
+    } else {
+      // Transform successful results
+      const transformedResults = (data || []).map(transformNewsletterResponse);
+      ids.forEach((id) => {
+        const result = transformedResults.find((r) => r.id === id);
+        results.push(result || null);
+        errors.push(result ? null : new Error('Newsletter not found or not updated'));
+      });
+    }
+
+    return {
+      results,
+      errors,
+      successCount: results.filter((r) => r !== null).length,
+      errorCount: errors.filter((e) => e !== null).length,
+    };
+  },
+
+  // New batched bulk update for large batches
+  async _batchedBulkUpdate(
+    params: BulkUpdateNewsletterParams
+  ): Promise<BatchResult<NewsletterWithRelations>> {
+    const { ids, updates } = params;
+    const BATCH_SIZE = 50;
+    const BATCH_DELAY = 100;
+
+    // Split into batches
+    const batches: string[][] = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      batches.push(ids.slice(i, i + BATCH_SIZE));
+    }
+
+    const allResults: (NewsletterWithRelations | null)[] = [];
+    const allErrors: (Error | null)[] = [];
+
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+
+      try {
+        const batchResult = await this._originalBulkUpdate({
+          ids: batch,
+          updates,
+        });
+
+        // Add batch results to overall results
+        allResults.push(...batchResult.results);
+        allErrors.push(...batchResult.errors);
+
+        // Add delay between batches (except for the last one)
+        if (i < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+        }
+
+      } catch (error) {
+        // If entire batch fails, mark all items as failed
+        batch.forEach(() => {
+          allResults.push(null);
+          allErrors.push(error instanceof Error ? error : new Error('Batch operation failed'));
+        });
+      }
+    }
+
+    return {
+      results: allResults,
+      errors: allErrors,
+      successCount: allResults.filter((r) => r !== null).length,
+      errorCount: allErrors.filter((e) => e !== null).length,
+    };
   },
 
   // Mark as read

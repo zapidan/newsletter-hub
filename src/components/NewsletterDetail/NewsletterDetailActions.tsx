@@ -129,7 +129,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
     }
     checkDebounceRef.current = setTimeout(checkQueueStatus, 250);
     return () => { mounted = false; clearTimeout(timeoutId); if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current); };
-  }, [newsletter?.id]);
+  }, [newsletter?.id, checkIsInQueue, isFromReadingQueue, localNewsletter?.id, log]);
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingReadStatus) return;
