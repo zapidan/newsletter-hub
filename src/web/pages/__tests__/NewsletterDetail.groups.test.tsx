@@ -233,9 +233,9 @@ describe('NewsletterDetail - Groups Parameter Preservation', () => {
     // Click back button
     fireEvent.click(backButton);
 
-    // Should navigate to queue without preserving groups
+    // Should navigate to queue with preserved groups
     expect(mockNavigate).toHaveBeenCalledWith(
-      '/queue',
+      '/queue?groups=group1%2Cgroup2',
       { replace: true }
     );
   });
