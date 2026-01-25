@@ -157,31 +157,9 @@ const NewsletterDetail = memo(() => {
     if (targetRoute === '/inbox') {
       const currentParams = new URLSearchParams();
 
-      // Preserve groups parameter if it exists
-      const groupsParam = searchParams.get('groups');
-      if (groupsParam) {
-        currentParams.set('groups', groupsParam);
-      }
-
-      // Preserve other filter parameters
-      const filterParam = searchParams.get('filter');
-      if (filterParam) {
-        currentParams.set('filter', filterParam);
-      }
-
-      const sourceParam = searchParams.get('source');
-      if (sourceParam) {
-        currentParams.set('source', sourceParam);
-      }
-
-      const tagsParam = searchParams.get('tags');
-      if (tagsParam) {
-        currentParams.set('tags', tagsParam);
-      }
-
-      const timeParam = searchParams.get('time');
-      if (timeParam) {
-        currentParams.set('time', timeParam);
+      // Preserve all existing URL parameters
+      for (const [key, value] of searchParams.entries()) {
+        currentParams.set(key, value);
       }
 
       const paramString = currentParams.toString();
