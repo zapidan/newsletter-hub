@@ -770,7 +770,6 @@ const NewsletterDetail = memo(() => {
           </div>
         </div>
       </div>
-      {/* ScrollToTop is now mounted globally in Layout */}
     </div>
   );
 });
