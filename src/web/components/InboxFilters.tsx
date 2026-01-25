@@ -63,14 +63,17 @@ const TimeFilterDropdown: FC<{
   compact?: boolean;
 }> = memo(({ selectedRange, onChange, disabled = false, compact = false }) => {
   return (
-    <div className="relative">
+    <div className="relative flex items-center">
+      <div className="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+        <Clock className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400`} />
+      </div>
       <select
         value={selectedRange}
         onChange={(e) => onChange(e.target.value as TimeRange)}
         disabled={disabled}
         className={`
           appearance-none bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
-          ${compact ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"}
+          ${compact ? "pl-6 pr-2 py-1 text-xs" : "pl-8 pr-3 py-1.5 text-sm"}
           text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
           focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
           disabled:opacity-50 disabled:cursor-not-allowed
@@ -84,9 +87,6 @@ const TimeFilterDropdown: FC<{
           </option>
         ))}
       </select>
-      <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-        <Clock className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400`} />
-      </div>
     </div>
   );
 });
@@ -648,9 +648,9 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
         </div>
 
         {/* Desktop: Single row layout with all filters */}
-        <div className="hidden sm:flex flex-row items-center gap-x-3 w-full justify-between">
+        <div className="hidden sm:flex flex-row items-center justify-between w-full">
           {/* Left side: Status filters + Time filter */}
-          <div className="flex items-center gap-x-3">
+          <div className="flex items-center gap-x-1">
             {/* Time filter - at the left, before status filters */}
             {showTimeFilter && (
               <TimeFilterDropdown
@@ -675,7 +675,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
           </div>
 
           {/* Right side: Source filter + Group filter + Select button */}
-          <div className="flex items-center gap-x-3">
+          <div className="flex items-center gap-x-1">
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
