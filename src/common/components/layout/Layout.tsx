@@ -1,4 +1,5 @@
 import { useAuth } from '@common/contexts/AuthContext';
+import ScrollToTop from "@web/components/ScrollToTop";
 import { AnimatePresence, motion } from "framer-motion";
 import { ReactNode, useCallback, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
@@ -67,6 +68,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {children || <Outlet />}
           </motion.div>
         </main>
+        {/* Global Scroll To Top button */}
+        <ScrollToTop showThreshold={150} targetSelector="main.overflow-y-auto" />
       </div>
     </div>
   );
