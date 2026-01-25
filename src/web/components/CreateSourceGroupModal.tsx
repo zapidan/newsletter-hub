@@ -143,7 +143,7 @@ export const CreateSourceGroupModal = ({
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-slate-300 dark:hover:text-white"
+            className="text-gray-500 hover:text-gray-700 dark:text-slate-200 dark:hover:text-white"
             aria-label="Close"
           >
             <X size={20} />
@@ -158,7 +158,7 @@ export const CreateSourceGroupModal = ({
             <div>
               <label
                 htmlFor="group-name"
-                className="block text-base font-medium text-gray-700 dark:text-slate-300 mb-2"
+                className="block text-base font-medium text-gray-700 dark:text-slate-200 mb-2"
               >
                 Group Name
               </label>
@@ -176,7 +176,7 @@ export const CreateSourceGroupModal = ({
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="block text-base font-medium text-gray-700 dark:text-slate-300">
+                <label className="block text-base font-medium text-gray-700 dark:text-slate-200">
                   Sources ({selectedSourceIds.size} selected)
                 </label>
                 <div className="relative">
@@ -191,12 +191,12 @@ export const CreateSourceGroupModal = ({
                     <button
                       type="button"
                       onClick={() => setSearchTerm("")}
-                      className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                      className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-300 dark:hover:text-slate-100 transition-colors"
                     >
                       <X size={16} />
                     </button>
                   ) : (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-slate-400">
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-slate-300">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
@@ -225,10 +225,10 @@ export const CreateSourceGroupModal = ({
                             </div>
                           </div>
                           <div className="ml-3">
-                            <div className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                            <div className="text-sm font-medium text-gray-900 dark:text-slate-200">
                               {source.name}
                             </div>
-                            <div className="text-xs text-gray-500 dark:text-slate-400">
+                            <div className="text-xs text-gray-500 dark:text-slate-300">
                               {source.from}
                             </div>
                           </div>
@@ -237,7 +237,7 @@ export const CreateSourceGroupModal = ({
                     ))}
                   </ul>
                 ) : (
-                  <div className="p-6 text-center text-sm text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-neutral-900">
+                  <div className="p-6 text-center text-sm text-gray-500 dark:text-slate-300 bg-gray-50 dark:bg-neutral-900">
                     {sources.length === 0
                       ? "No sources available. Add some sources first."
                       : "No sources match your search."}

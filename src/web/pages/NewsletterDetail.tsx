@@ -754,7 +754,7 @@ function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter
       {!showDropdown ? (
         <button
           type="button"
-          className="font-medium text-blue-700 hover:underline focus:outline-none px-1 rounded"
+          className="font-medium text-blue-700 dark:text-blue-400 hover:underline focus:outline-none px-1 rounded"
           onClick={() => setShowDropdown(true)}
           disabled={groupLoading || groupUpdating || !groups.length}
           aria-label="Edit source group"
@@ -762,13 +762,13 @@ function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter
           {currentGroupNames}
         </button>
       ) : (
-        <div className="border rounded px-3 py-2 bg-white shadow-sm text-sm" style={{ minWidth: 220 }}>
+        <div className="border rounded px-3 py-2 bg-white dark:bg-neutral-900 shadow-sm text-sm border-gray-200 dark:border-neutral-700" style={{ minWidth: 220 }}>
           <div className="max-h-48 overflow-auto pr-1">
             {groups.map((group) => (
               <button
                 key={group.id}
                 type="button"
-                className={`w-full flex items-center justify-between py-1 text-left hover:bg-neutral-50 rounded px-1 ${selectedGroupIds.includes(group.id) ? 'text-blue-700 font-medium' : ''}`}
+                className={`w-full flex items-center justify-between py-1 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded px-1 ${selectedGroupIds.includes(group.id) ? 'text-blue-700 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-slate-200'}`}
                 onClick={() => toggleSelection(group.id)}
                 disabled={groupLoading || groupUpdating}
               >
@@ -777,13 +777,13 @@ function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter
               </button>
             ))}
             {groups.length === 0 && (
-              <div className="text-neutral-500">No groups</div>
+              <div className="text-neutral-500 dark:text-slate-400">No groups</div>
             )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              className="px-2 py-1 text-neutral-600 hover:bg-neutral-100 rounded"
+              className="px-2 py-1 text-neutral-600 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
               onClick={() => {
                 setSelectedGroupIds(currentGroupIds);
                 setShowDropdown(false);
@@ -794,7 +794,7 @@ function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter
             </button>
             <button
               type="button"
-              className="px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+              className="px-2 py-1 bg-blue-600 text-white rounded disabled:opacity-50 hover:bg-blue-700 dark:hover:bg-blue-800"
               onClick={handleSave}
               disabled={groupUpdating}
             >
@@ -804,10 +804,10 @@ function SourceGroupDropdown({ newsletter, groups, onGroupChange }: { newsletter
         </div>
       )}
       {(groupLoading || groupUpdating) && (
-        <span className="ml-2 text-xs text-gray-400">Updating...</span>
+        <span className="ml-2 text-xs text-gray-400 dark:text-slate-400">Updating...</span>
       )}
       {groupError && (
-        <span className="ml-2 text-xs text-red-500">{groupError}</span>
+        <span className="ml-2 text-xs text-red-500 dark:text-red-400">{groupError}</span>
       )}
     </span>
   );
