@@ -21,7 +21,7 @@ export function useGroupCounts(groups: GroupLike[] = [], baseFilter: BaseFilter 
   // Create stable dependencies to prevent infinite re-renders
   const groupsKey = useMemo(() => {
     return JSON.stringify(groups.map(g => ({ id: g.id, sourceCount: g.sources?.length || 0 })));
-  }, [groups.length, groups.map(g => g.id).join(',')]);
+  }, [groups.length, groups.map(g => g.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filterKey = useMemo(() => {
     const sortedTagIds = baseFilter.tagIds ? [...baseFilter.tagIds].sort() : [];
@@ -45,7 +45,7 @@ export function useGroupCounts(groups: GroupLike[] = [], baseFilter: BaseFilter 
   ]);
 
   // Stable snapshot of inputs
-  const input = useMemo(() => ({ groups, baseFilter }), [groupsKey, filterKey]);
+  const input = useMemo(() => ({ groups, baseFilter }), [groupsKey, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
