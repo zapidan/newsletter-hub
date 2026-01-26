@@ -13,6 +13,13 @@ A comprehensive newsletter management platform built with React, TypeScript, and
 - **Real-time Updates**: Live synchronization with Supabase backend
 - **Personal Email Address**: Private email address to subscribe to newsletters
 
+## 🚀 Upcoming Features
+
+- **🤖 Newsletter Summarization**: AI-powered summaries of individual newsletters for quick content consumption
+- **📈 Trending Topics & Themes**: Automatic detection and visualization of trending topics across all your newsletter subscriptions
+- **🔊 Text-to-Speech**: Audio narration of newsletter content for hands-free listening during commutes or workouts
+- **⏰ Scheduled Daily Summary**: Automated daily digest summarizing key highlights from all your subscriptions, delivered at your preferred time
+
 ## 🏗️ Architecture
 
 - **Frontend**: React 18 + TypeScript + Vite
