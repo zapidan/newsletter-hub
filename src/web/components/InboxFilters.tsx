@@ -1,6 +1,6 @@
 import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
 import type { NewsletterSource } from "@common/types";
-import { Archive, Building2, ChevronDown, Clock, Eye, EyeOff, Heart } from "lucide-react";
+import { Archive, Building2, ChevronDown, Clock, Eye, EyeOff, Heart, Search } from "lucide-react";
 import { FC, memo, useMemo, useState } from "react";
 
 export type FilterType = InboxFilterType; // Use the shared type
@@ -111,11 +111,19 @@ const SourceFilterDropdown: FC<{
     showCounts = false,
   }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
-    // Sort sources alphabetically by name
-    const sortedSources = useMemo(
-      () => [...sources].sort((a, b) => a.name.localeCompare(b.name)),
-      [sources]
+    // Filter and sort sources based on search query
+    const filteredSources = useMemo(
+      () => {
+        const filtered = searchQuery.trim()
+          ? sources.filter(source =>
+            source.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+          )
+          : sources;
+        return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+      },
+      [sources, searchQuery]
     );
 
     const selectedSource = selectedSourceId
@@ -135,6 +143,17 @@ const SourceFilterDropdown: FC<{
       e.stopPropagation();
       onSourceSelect(sourceId);
       setIsOpen(false);
+      setSearchQuery(''); // Clear search when selection is made
+    };
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchQuery(e.target.value);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Escape') {
+        setSearchQuery('');
+      }
     };
 
     return (
@@ -190,38 +209,70 @@ const SourceFilterDropdown: FC<{
               onClick={() => setIsOpen(false)}
             />
             {/* Dropdown menu */}
-            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800 max-h-60 overflow-y-auto">
-              <div className="py-1">
-                <button
-                  type="button"
-                  onClick={(e) => handleSelect(null, e)}
-                  className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedSourceId
-                    ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
-                    : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
-                    }`}
-                >
-                  <span>All Sources</span>
-                </button>
-                {sortedSources.map((source) => (
+            <div className="absolute right-0 mt-1 w-64 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800 max-h-80 overflow-hidden flex flex-col">
+              {/* Search input */}
+              <div className="p-3 border-b border-gray-200 dark:border-neutral-800">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Search sources..."
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    autoFocus
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Scrollable source list */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="py-1">
                   <button
-                    key={source.id}
                     type="button"
-                    onClick={(e) => handleSelect(source.id, e)}
-                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedSourceId === source.id
+                    onClick={(e) => handleSelect(null, e)}
+                    className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${!selectedSourceId
                       ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
                       : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
                       }`}
                   >
-                    <span className="truncate pr-2">{source.name}</span>
-                    {showCounts &&
-                      source.count !== undefined &&
-                      source.count > 0 && (
-                        <span className="bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
-                          {source.count}
-                        </span>
-                      )}
+                    <span>All Sources</span>
                   </button>
-                ))}
+                  {filteredSources.length === 0 && searchQuery.trim() && (
+                    <div className="px-4 py-3 text-sm text-gray-500 dark:text-neutral-400 text-center">
+                      No sources found for "{searchQuery.trim()}"
+                    </div>
+                  )}
+                  {filteredSources.map((source) => (
+                    <button
+                      key={source.id}
+                      type="button"
+                      onClick={(e) => handleSelect(source.id, e)}
+                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${selectedSourceId === source.id
+                        ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
+                        : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
+                        }`}
+                    >
+                      <span className="truncate pr-2">{source.name}</span>
+                      {showCounts &&
+                        source.count !== undefined &&
+                        source.count > 0 && (
+                          <span className="bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            {source.count}
+                          </span>
+                        )}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </>
