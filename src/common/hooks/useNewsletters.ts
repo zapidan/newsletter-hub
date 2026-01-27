@@ -438,16 +438,14 @@ export const useNewsletters = (
         // Use invalidateForOperation to properly update UI
         invalidateForOperation(queryClient, 'mark-read', [id]);
 
-        // Also update unread count optimistically for immediate feedback
-        setTimeout(() => {
-          cacheManager.updateUnreadCountOptimistically({
-            type: 'mark-read',
-            newsletterIds: [id],
-          });
+        // Update unread count optimistically for immediate feedback
+        cacheManager.updateUnreadCountOptimistically({
+          type: 'mark-read',
+          newsletterIds: [id],
+        });
 
-          // Notify other components about the read status change
-          window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
-        }, 100);
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
       }
     },
   });
@@ -515,16 +513,14 @@ export const useNewsletters = (
         // Use invalidateForOperation to properly update UI
         invalidateForOperation(queryClient, 'mark-unread', [id]);
 
-        // Also update unread count optimistically for immediate feedback
-        setTimeout(() => {
-          cacheManager.updateUnreadCountOptimistically({
-            type: 'mark-unread',
-            newsletterIds: [id],
-          });
+        // Update unread count optimistically for immediate feedback
+        cacheManager.updateUnreadCountOptimistically({
+          type: 'mark-unread',
+          newsletterIds: [id],
+        });
 
-          // Notify other components about the read status change
-          window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
-        }, 100);
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
       }
     },
   });
@@ -601,16 +597,14 @@ export const useNewsletters = (
         // Use invalidateForOperation to properly update UI
         invalidateForOperation(queryClient, 'bulk-mark-read', ids);
 
-        // Also update unread count optimistically for immediate feedback
-        setTimeout(() => {
-          cacheManager.updateUnreadCountOptimistically({
-            type: 'bulk-mark-read',
-            newsletterIds: ids,
-          });
+        // Update unread count optimistically for immediate feedback
+        cacheManager.updateUnreadCountOptimistically({
+          type: 'bulk-mark-read',
+          newsletterIds: ids,
+        });
 
-          // Notify other components about the read status change
-          window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
-        }, 100);
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
       }
     },
   });
@@ -687,16 +681,14 @@ export const useNewsletters = (
         // Use invalidateForOperation to properly update UI
         invalidateForOperation(queryClient, 'bulk-mark-unread', ids);
 
-        // Also update unread count optimistically for immediate feedback
-        setTimeout(() => {
-          cacheManager.updateUnreadCountOptimistically({
-            type: 'bulk-mark-unread',
-            newsletterIds: ids,
-          });
+        // Update unread count optimistically for immediate feedback
+        cacheManager.updateUnreadCountOptimistically({
+          type: 'bulk-mark-unread',
+          newsletterIds: ids,
+        });
 
-          // Notify other components about the read status change
-          window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
-        }, 100);
+        // Notify other components about the read status change
+        window.dispatchEvent(new CustomEvent('newsletter:read-status-changed'));
       }
     },
   });

@@ -25,7 +25,7 @@ export class OptimizedCacheInvalidator {
   private debounceDelay: number;
   private operationDebounceTimers: Map<string, NodeJS.Timeout>;
 
-  constructor(queryClient: QueryClient, logger: ReturnType<typeof useLogger>, debounceDelay = 100) {
+  constructor(queryClient: QueryClient, logger: ReturnType<typeof useLogger>, debounceDelay = 50) {
     this.queryClient = queryClient;
     this.log = logger;
     this.debounceDelay = debounceDelay;
@@ -177,11 +177,11 @@ export class OptimizedCacheInvalidator {
       clearTimeout(existingTimer);
     }
 
-    // Set new timer
+    // Set new timer - reduce debounce for better responsiveness
     const timer = setTimeout(() => {
       this.operationDebounceTimers.delete(key);
       this.executeOperationInvalidation(operationType, newsletterIds);
-    }, 200); // 200ms debounce for operations
+    }, 50); // Reduced from 200ms to 50ms for faster response
 
     this.operationDebounceTimers.set(key, timer);
   }
@@ -200,21 +200,33 @@ export class OptimizedCacheInvalidator {
       case 'mark-unread':
       case 'bulk-mark-read':
       case 'bulk-mark-unread':
-        // Only invalidate unread count and specific newsletter details
+        // For small operations, only invalidate unread count
+        if (newsletterIds.length <= 10) {
+          invalidations.push({
+            queryKey: ['unreadCount', 'all'],
+            exact: false,
+            refetchType: 'active',
+          });
+          break;
+        }
+
+        // For larger operations, add specific newsletter details
         invalidations.push({
           queryKey: ['unreadCount', 'all'],
           exact: false,
           refetchType: 'active',
         });
 
-        // Invalidate specific newsletter details
-        newsletterIds.forEach((id) => {
-          invalidations.push({
-            queryKey: queryKeyFactory.newsletters.detail(id),
-            exact: true,
-            refetchType: 'active',
+        // Only invalidate specific newsletter details for large batches
+        if (newsletterIds.length > 10) {
+          newsletterIds.forEach((id) => {
+            invalidations.push({
+              queryKey: queryKeyFactory.newsletters.detail(id),
+              exact: true,
+              refetchType: 'active',
+            });
           });
-        });
+        }
         break;
 
       case 'toggle-archive':
@@ -419,7 +431,7 @@ export const invalidateForOperation = (
     ui: (message: string, context = {}) => console.log(message, context),
     logUserAction: (action: string, context = {}) => console.log(action, context),
     logComponentError: (error: Error, context = {}) => console.error(error, context),
-    startTimer: (_timerName: string) => () => {},
+    startTimer: (_timerName: string) => () => { },
   }
 ): void => {
   const invalidator = getCacheInvalidator(queryClient, logger);
