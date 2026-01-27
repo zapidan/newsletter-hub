@@ -65,6 +65,11 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   const log = useLogger();
   const navigate = useNavigate();
   const { isInQueue: checkIsInQueue } = useReadingQueue();
+
+  // Store checkIsInQueue in a ref to prevent dependency issues
+  const checkIsInQueueRef = useRef(checkIsInQueue);
+  checkIsInQueueRef.current = checkIsInQueue;
+
   const {
     handleMarkAsRead, handleMarkAsUnread, handleToggleLike, handleToggleArchive,
     handleDeleteNewsletter, handleToggleInQueue, isMarkingAsRead, isMarkingAsUnread,
@@ -115,7 +120,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
           timeoutId = setTimeout(() => reject(new Error('Timeout')), 2000);
         });
 
-        const queuePromise = checkIsInQueue(newsletter.id);
+        const queuePromise = checkIsInQueueRef.current(newsletter.id);
         const result = await Promise.race([queuePromise, timeoutPromise]);
 
         if (mounted) setIsInQueue(result);
@@ -150,7 +155,6 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
       if (timeoutId) clearTimeout(timeoutId);
       if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newsletter?.id, isFromReadingQueue, localNewsletter?.id]);
 
   const handleToggleReadStatus = useCallback(async () => {
