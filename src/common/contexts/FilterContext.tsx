@@ -49,6 +49,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
 
   // Track last filter state to prevent unnecessary updates
   const lastNewsletterFilterRef = useRef<string>('');
+  const lastFilterStateRef = useRef<string>('');
 
   // Extract filter state from URL params
   const validFilters = ['unread', 'read', 'liked', 'archived'];
@@ -189,8 +190,15 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   useEffect(() => {
     if (onFilterChange) {
       const currentFilterString = JSON.stringify(newsletterFilter);
-      if (lastNewsletterFilterRef.current !== currentFilterString) {
+      const currentFilterStateString = JSON.stringify(filterState);
+
+      // Prevent unnecessary calls if both newsletterFilter and filterState haven't changed
+      if (
+        lastNewsletterFilterRef.current !== currentFilterString ||
+        lastFilterStateRef.current !== currentFilterStateString
+      ) {
         lastNewsletterFilterRef.current = currentFilterString;
+        lastFilterStateRef.current = currentFilterStateString;
         onFilterChange(filterState, newsletterFilter);
       }
     }

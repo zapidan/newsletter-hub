@@ -64,11 +64,7 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
 }) => {
   const log = useLogger();
   const navigate = useNavigate();
-  const { isInQueue: checkIsInQueue } = useReadingQueue();
-
-  // Store checkIsInQueue in a ref to prevent dependency issues
-  const checkIsInQueueRef = useRef(checkIsInQueue);
-  checkIsInQueueRef.current = checkIsInQueue;
+  const { isInQueue: _checkIsInQueue } = useReadingQueue();
 
   const {
     handleMarkAsRead, handleMarkAsUnread, handleToggleLike, handleToggleArchive,
@@ -92,9 +88,8 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const [isInQueue, setIsInQueue] = useState<boolean>(isFromReadingQueue);
-  const [isCheckingQueue, setIsCheckingQueue] = useState(false);
+  const [isCheckingQueue, _setIsCheckingQueue] = useState(false);
   const hasCheckedQueue = useRef<{ [key: string]: boolean }>({});
-  const checkDebounceRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     setLocalNewsletter(newsletter);
@@ -105,57 +100,16 @@ export const NewsletterDetailActions: React.FC<NewsletterDetailActionsProps> = (
   }, [newsletter, localNewsletter?.id]);
 
   useEffect(() => {
-    let mounted = true;
-    let timeoutId: NodeJS.Timeout;
-
-    const checkQueueStatus = async () => {
-      if (!newsletter?.id || !mounted || hasCheckedQueue.current[newsletter.id]) return;
-
-      hasCheckedQueue.current[newsletter.id] = true;
-      setIsCheckingQueue(true);
-
-      try {
-        // Add a timeout to prevent hanging
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error('Timeout')), 2000);
-        });
-
-        const queuePromise = checkIsInQueueRef.current(newsletter.id);
-        const result = await Promise.race([queuePromise, timeoutPromise]);
-
-        if (mounted) setIsInQueue(result);
-      } catch (_error) {
-        if (mounted) {
-          // On any error, use the fallback value
-          setIsInQueue(isFromReadingQueue);
-        }
-      } finally {
-        if (mounted) setIsCheckingQueue(false);
-        if (timeoutId) clearTimeout(timeoutId);
-      }
-    };
-
-    // Clear existing timer
-    if (checkDebounceRef.current) {
-      clearTimeout(checkDebounceRef.current);
-    }
-
-    // If coming from reading queue, we know it's in queue
-    if (newsletter?.id !== localNewsletter?.id && isFromReadingQueue && newsletter?.id) {
+    // If coming from reading queue, we know it's in queue - no need to check
+    if (newsletter?.id && isFromReadingQueue) {
       setIsInQueue(true);
       hasCheckedQueue.current[newsletter.id] = true;
       return;
     }
 
-    // Debounce the check
-    checkDebounceRef.current = setTimeout(checkQueueStatus, 300);
-
-    return () => {
-      mounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
-      if (checkDebounceRef.current) clearTimeout(checkDebounceRef.current);
-    };
-  }, [newsletter?.id, isFromReadingQueue, localNewsletter?.id]);
+    // Queue checking temporarily disabled to prevent navigation loop
+    // TODO: Re-enable once navigation loop is fixed
+  }, [newsletter?.id, isFromReadingQueue]);
 
   const handleToggleReadStatus = useCallback(async () => {
     if (!localNewsletter?.id || isTogglingReadStatus) return;
