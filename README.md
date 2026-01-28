@@ -1,4 +1,4 @@
-# Newsletter Hub
+# Newsletter Hub [![Test Suite](https://github.com/zapidan/newsletter-hub/actions/workflows/test.yml/badge.svg)](https://github.com/zapidan/newsletter-hub/actions/workflows/test.yml)
 
 A comprehensive newsletter management platform built with React, TypeScript, and Supabase. Newsletter Hub helps you organize, read, and manage your newsletter subscriptions efficiently with advanced filtering, tagging, and group management features.
 
