@@ -17,6 +17,7 @@ import { useNewsletterSourceGroups } from '@common/hooks/useNewsletterSourceGrou
 import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useGroupCounts } from '@web/hooks/useGroupCounts';
+import { parseFilterUrlParams, syncFilterUrl } from '@web/utils/filterUrlUtils';
 
 import { useAuth } from '@common/contexts';
 import { useToast } from '@common/contexts/ToastContext';
@@ -109,6 +110,19 @@ const Inbox: React.FC = () => {
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
 
 
+  // Helper function to preserve URL parameters after actions
+  const preserveFilterParams = useCallback(() => {
+    const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
+    syncFilterUrl(
+      currentParams,
+      filter,
+      sourceFilter,
+      groupFilters,
+      debouncedTagIds,
+      timeRange
+    );
+  }, [filter, sourceFilter, groupFilters, debouncedTagIds, timeRange]);
+
   // When group(s) are selected, clear source filter; when source is selected, clear group filters
   const handleSourceFilterChange = useCallback(
     (sourceId: string | null) => {
@@ -122,21 +136,79 @@ const Inbox: React.FC = () => {
     (groupIds: string[]) => {
       setSourceFilter(null);
       setGroupFilters(groupIds);
+      // Immediately sync URL parameters with the new group IDs
+      // Pass the new values directly to avoid async state issues
+      const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
+      syncFilterUrl(
+        currentParams,
+        filter,
+        sourceFilter,
+        groupIds, // Use the new groupIds directly instead of relying on state
+        debouncedTagIds,
+        timeRange
+      );
     },
-    [setSourceFilter]
+    [setSourceFilter, filter, sourceFilter, debouncedTagIds, timeRange]
+  );
+
+  // Handle filter changes while preserving group filters in URL
+  const handleFilterChange = useCallback(
+    (newFilter: string) => {
+      setFilter(newFilter as any); // Type assertion to handle string to InboxFilterType conversion
+      // Sync URL parameters with current state including group filters
+      const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
+      syncFilterUrl(
+        currentParams,
+        newFilter,
+        sourceFilter,
+        groupFilters,
+        debouncedTagIds,
+        timeRange
+      );
+    },
+    [setFilter, sourceFilter, groupFilters, debouncedTagIds, timeRange]
+  );
+
+  // Handle time range changes while preserving group filters in URL
+  const handleTimeRangeChange = useCallback(
+    (newTimeRange: string) => {
+      setTimeRange(newTimeRange as any); // Type assertion to handle string to TimeRange conversion
+      // Sync URL parameters with current state including group filters
+      const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
+      syncFilterUrl(
+        currentParams,
+        filter,
+        sourceFilter,
+        groupFilters,
+        debouncedTagIds,
+        newTimeRange
+      );
+    },
+    [setTimeRange, filter, sourceFilter, groupFilters, debouncedTagIds]
   );
 
 
   // Compute source IDs for the selected groups (union)
   const selectedGroupSourceIds = useMemo(() => {
-    if (!groupFilters || groupFilters.length === 0) return undefined;
+    // Return undefined if no groups are selected
+    if (!groupFilters || groupFilters.length === 0) {
+      return undefined;
+    }
+
+    // Wait for groups to load before converting
+    if (isLoadingGroups || newsletterGroups.length === 0) {
+      return undefined;
+    }
+
     const idSet = new Set<string>();
     groupFilters.forEach((gid) => {
       const g = newsletterGroups.find((x) => x.id === gid);
       g?.sources?.forEach((s) => idSet.add(s.id));
     });
-    return Array.from(idSet);
-  }, [groupFilters, newsletterGroups]);
+
+    const sourceIds = Array.from(idSet);
+    return sourceIds.length > 0 ? sourceIds : undefined;
+  }, [groupFilters, newsletterGroups, isLoadingGroups]);
 
   // Newsletter filter from context
   const { newsletterFilter: contextNewsletterFilter } = useInboxFilters();
@@ -157,26 +229,13 @@ const Inbox: React.FC = () => {
       };
     }
 
-    // Debug: Log filter changes when tags are selected
-    if (process.env.NODE_ENV === 'development' && debouncedTagIds.length > 0) {
-      console.log('[Inbox] Filter changed with tags:', {
-        filter,
-        useLocalTagFiltering,
-        debouncedTagIds,
-        contextFilter: contextNewsletterFilter,
-        serverFilter: filterObj,
-        hasTagsInServerFilter: !!filterObj.tagIds?.length,
-      });
-    }
-
     return filterObj;
   }, [
     contextNewsletterFilter,
     groupFilters,
     selectedGroupSourceIds,
-    filter,
-    debouncedTagIds,
-    useLocalTagFiltering,
+    isLoadingGroups,
+    newsletterGroups.length,
   ]);
 
   // Newsletter data with infinite scroll
@@ -266,7 +325,6 @@ const Inbox: React.FC = () => {
   );
 
   const groupCounts = useGroupCounts(newsletterGroups, groupCountsBaseFilter);
-
   const groupsForDropdown = useMemo(
     () => newsletterGroups.map((g) => ({ id: g.id, name: g.name, count: groupCounts[g.id] ?? 0 })),
     [newsletterGroups, groupCounts]
@@ -331,90 +389,6 @@ const Inbox: React.FC = () => {
       updateNewsletterTags,
     ]
   );
-
-  // Helper function to preserve URL parameters after actions
-  const preserveFilterParams = useCallback(() => {
-    const params = new URLSearchParams(window.location.search);
-    let hasChanges = false;
-
-    // 'unread' is the default. If current filter is 'unread', remove param. Otherwise, set it.
-    if (filter === 'unread') {
-      if (params.has('filter')) {
-        params.delete('filter');
-        hasChanges = true;
-      }
-    } else {
-      if (params.get('filter') !== filter) {
-        params.set('filter', filter);
-        hasChanges = true;
-      }
-    }
-
-    if (sourceFilter) {
-      if (params.get('source') !== sourceFilter) {
-        params.set('source', sourceFilter);
-        hasChanges = true;
-      }
-    } else {
-      if (params.has('source')) {
-        params.delete('source');
-        hasChanges = true;
-      }
-    }
-
-    // Multi-group support
-    if (groupFilters.length > 0) {
-      const tag = params.get('groups');
-      const next = groupFilters.join(',');
-      if (tag !== next) {
-        params.set('groups', next);
-        hasChanges = true;
-      }
-      if (params.has('group')) {
-        params.delete('group');
-        hasChanges = true;
-      }
-    } else {
-      if (params.has('groups')) {
-        params.delete('groups');
-        hasChanges = true;
-      }
-      if (params.has('group')) {
-        params.delete('group');
-        hasChanges = true;
-      }
-    }
-
-    if (timeRange !== 'all') {
-      if (params.get('time') !== timeRange) {
-        params.set('time', timeRange);
-        hasChanges = true;
-      }
-    } else {
-      if (params.has('time')) {
-        params.delete('time');
-        hasChanges = true;
-      }
-    }
-
-    if (debouncedTagIds.length > 0) {
-      const tagString = debouncedTagIds.join(',');
-      if (params.get('tags') !== tagString) {
-        params.set('tags', tagString);
-        hasChanges = true;
-      }
-    } else {
-      if (params.has('tags')) {
-        params.delete('tags');
-        hasChanges = true;
-      }
-    }
-
-    if (hasChanges) {
-      const newUrl = `${window.location.pathname}?${params.toString()}`;
-      window.history.replaceState({}, '', newUrl);
-    }
-  }, [filter, sourceFilter, groupFilters, timeRange, debouncedTagIds]);
 
   // Shared newsletter actions with our enhanced version
   const newsletterActions = useSharedNewsletterActions(mutations, {
@@ -921,7 +895,7 @@ const Inbox: React.FC = () => {
         setSourceFilter(null);
       }
     }
-  }, [setSourceFilter]);
+  }, []); // Empty dependency array - run only on mount
 
   // Create sources with unread counts for the filter dropdown
   const sourcesWithUnreadCounts = useMemo(() => {
@@ -962,10 +936,10 @@ const Inbox: React.FC = () => {
               timeRange={timeRange}
               newsletterSources={sourcesWithUnreadCounts}
               newsletterGroups={groupsForDropdown}
-              onFilterChange={setFilter}
+              onFilterChange={handleFilterChange}
               onSourceFilterChange={handleSourceFilterChange}
               onGroupFiltersChange={handleGroupFiltersChange}
-              onTimeRangeChange={setTimeRange}
+              onTimeRangeChange={handleTimeRangeChange}
               isLoadingSources={isLoadingSources}
               isLoadingGroups={isLoadingGroups}
               showFilterCounts={true}
@@ -974,7 +948,6 @@ const Inbox: React.FC = () => {
           </div>
         </div>
       </div>
-
 
       {/* Bulk Selection Actions */}
       {isSelecting && (
@@ -1009,9 +982,10 @@ const Inbox: React.FC = () => {
         selectedGroups={groupFilters}
         groups={groupsForDropdown}
         onClearGroup={(gid) => {
-          setGroupFilters((prev) => prev.filter((id) => id !== gid));
+          const newGroups = groupFilters.filter((id) => id !== gid);
+          handleGroupFiltersChange(newGroups);
         }}
-        onClearAll={() => setGroupFilters([])}
+        onClearAll={() => handleGroupFiltersChange([])}
       />
 
       {/* Newsletter List with Infinite Scroll */}
