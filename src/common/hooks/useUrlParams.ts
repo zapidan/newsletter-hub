@@ -1,15 +1,11 @@
 import {
-  inboxFilterValidator,
   orderDirectionValidator,
   positiveIntegerValidator,
   sanitizeUrlParam,
   sortFieldValidator,
-  timeRangeValidator,
-  uuidArrayValidator,
-  uuidValidator,
   type Validator
 } from '@common/utils/urlParamValidation';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 export type ParamValue = string | number | boolean | string[] | null | undefined;
@@ -36,6 +32,10 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
 ) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { replace = true } = options;
+
+  // Track last params to prevent unnecessary updates
+  const lastParamsRef = useRef<string>('');
+  const paramsRef = useRef<T>({} as T);
 
   // Parse current URL parameters based on config
   const params = useMemo(() => {
@@ -71,8 +71,18 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
   // Update URL parameters
   const updateParams = useCallback(
     (updates: Partial<T> | ((current: T) => Partial<T>)) => {
-      const currentParams = params;
+      const currentParams = paramsRef.current;
       const newParams = typeof updates === 'function' ? updates(currentParams) : updates;
+
+      // Create string representation to compare with last params
+      const newParamsString = JSON.stringify(newParams);
+
+      // Prevent unnecessary updates if params haven't changed
+      if (lastParamsRef.current === newParamsString) {
+        return;
+      }
+
+      lastParamsRef.current = newParamsString;
 
       setSearchParams(
         (prevParams) => {
@@ -111,26 +121,26 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
         { replace }
       );
     },
-    [params, config, setSearchParams, replace]
+    [config, setSearchParams, replace]
   );
 
   // Update a single parameter
   const updateParam = useCallback(
     <K extends keyof T>(key: K, value: T[K] | ((current: T[K]) => T[K])) => {
-      const currentValue = params[key];
+      const currentValue = paramsRef.current[key];
       const newValue =
         typeof value === 'function' ? (value as (current: T[K]) => T[K])(currentValue) : value;
       updateParams({ [key]: newValue } as Partial<T>);
     },
-    [params, updateParams]
+    [updateParams] // Remove params dependency
   );
 
   // Get a single parameter
   const getParam = useCallback(
     <K extends keyof T>(key: K): T[K] => {
-      return params[key];
+      return paramsRef.current[key];
     },
-    [params]
+    [] // Remove params dependency
   );
 
   // Reset all parameters to defaults
@@ -205,28 +215,21 @@ export function useInboxUrlParams() {
     filter: {
       defaultValue: 'all' as const,
       omitIfDefault: true,
-      validator: inboxFilterValidator,
-      sanitize: true,
     },
     source: {
       defaultValue: null as string | null,
       omitIfDefault: true,
-      validator: uuidValidator,
-      sanitize: true,
+      serialize: (value: string | null) => value || '',
+      deserialize: (value: string) => value || null,
     },
     time: {
       defaultValue: 'all' as const,
       omitIfDefault: true,
-      validator: timeRangeValidator,
-      sanitize: true,
     },
     tags: {
       defaultValue: [] as string[],
       omitIfDefault: true,
-      validator: uuidArrayValidator,
-      sanitize: true,
-      serialize: (value: ParamValue) =>
-        Array.isArray(value) && value.length > 0 ? value.join(',') : null,
+      serialize: (value: string[]) => value.join(','),
       deserialize: (value: string) => (value ? value.split(',').filter(Boolean) : []),
     },
   });
