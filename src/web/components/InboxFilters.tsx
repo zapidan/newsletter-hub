@@ -302,6 +302,7 @@ const MultiGroupFilterDropdown: FC<{
     showCounts = false,
   }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleToggle = (e: React.MouseEvent) => {
       e.preventDefault();
@@ -326,6 +327,29 @@ const MultiGroupFilterDropdown: FC<{
       onGroupSelect([]);
       setIsOpen(false);
     };
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchQuery(e.target.value);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Escape') {
+        setSearchQuery('');
+      }
+    };
+
+    // Filter and sort groups based on search query
+    const filteredGroups = useMemo(
+      () => {
+        const filtered = searchQuery.trim()
+          ? groups.filter(group =>
+            group.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+          )
+          : groups;
+        return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+      },
+      [groups, searchQuery]
+    );
 
     const label = (() => {
       if (selectedGroupIds.length === 0) return 'All Groups';
@@ -375,36 +399,63 @@ const MultiGroupFilterDropdown: FC<{
         {isOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800 max-h-60 overflow-y-auto">
-              <div className="py-1">
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
-                >
-                  Clear All Groups
-                </button>
-                {groups.map((group) => {
-                  const checked = selectedGroupIds.includes(group.id);
-                  return (
+            <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800 max-h-80 overflow-hidden flex flex-col">
+              {/* Search input */}
+              <div className="p-3 border-b border-gray-200 dark:border-neutral-800">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Search groups..."
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    autoFocus
+                  />
+                  {searchQuery && (
                     <button
-                      key={group.id}
-                      type="button"
-                      onClick={(e) => toggleOne(group.id, e)}
-                      className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${checked ? 'bg-neutral-100 dark:bg-neutral-800 text-gray-900 dark:text-slate-100 font-medium' : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60'}`}
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300"
                     >
-                      <span className="truncate pr-2">{group.name}</span>
-                      <span className="flex items-center gap-2 flex-shrink-0">
-                        {showCounts && group.count !== undefined && group.count > 0 && (
-                          <span className="bg-gray-200 text-gray-700 dark:bg-neutral-700 dark:text-slate-200 text-xs font-medium px-1.5 py-0.5 rounded-full">
-                            {group.count}
-                          </span>
-                        )}
-                        <span className={`inline-block w-4 text-blue-600 ${checked ? 'opacity-100' : 'opacity-0'}`}>✓</span>
-                      </span>
+                      ×
                     </button>
-                  );
-                })}
+                  )}
+                </div>
+              </div>
+
+              {/* Scrollable group list */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="py-1">
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
+                  >
+                    Clear All Groups
+                  </button>
+                  {filteredGroups.map((group) => {
+                    const checked = selectedGroupIds.includes(group.id);
+                    return (
+                      <button
+                        key={group.id}
+                        type="button"
+                        onClick={(e) => toggleOne(group.id, e)}
+                        className={`w-full text-left px-4 py-2 text-sm flex items-center justify-between ${checked ? 'bg-neutral-100 dark:bg-neutral-800 text-gray-900 dark:text-slate-100 font-medium' : 'text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60'}`}
+                      >
+                        <span className="truncate pr-2">{group.name}</span>
+                        <span className="flex items-center gap-2 flex-shrink-0">
+                          {showCounts && group.count !== undefined && group.count > 0 && (
+                            <span className="bg-gray-200 text-gray-700 dark:bg-neutral-700 dark:text-slate-200 text-xs font-medium px-1.5 py-0.5 rounded-full">
+                              {group.count}
+                            </span>
+                          )}
+                          <span className={`inline-block w-4 text-blue-600 ${checked ? 'opacity-100' : 'opacity-0'}`}>✓</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </>
