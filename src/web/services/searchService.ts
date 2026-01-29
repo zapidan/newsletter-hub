@@ -2,10 +2,11 @@ import {
   getAllNewsletterSources as apiGetAllNewsletterSources,
   updateNewsletter as apiUpdateNewsletter,
 } from "@common/api";
-import { newsletterService as commonNewsletterService } from "@common/services";
 import type { NewsletterService } from "@common/services";
-import { Newsletter, NewsletterSource } from "@common/types";
-import { ILogger, logger as appLogger } from "@common/utils/logger";
+import { newsletterService as commonNewsletterService } from "@common/services";
+import { newsletterGroupService } from "@common/services/newsletterGroup/NewsletterGroupService";
+import { Newsletter, NewsletterGroup, NewsletterSource } from "@common/types";
+import { logger as appLogger } from "@common/utils/logger";
 import {
   buildSearchParams as utilBuildSearchParams,
   validateSearchFilters as utilValidateSearchFilters,
@@ -15,7 +16,8 @@ export interface SearchServiceDependencies {
   getAllNewsletterSources: typeof apiGetAllNewsletterSources;
   updateNewsletter: typeof apiUpdateNewsletter;
   newsletterService: NewsletterService;
-  logger: ILogger;
+  newsletterGroupService: any; // Using any to avoid complex type issues
+  logger: any; // Using any for now to avoid ILogger import issues
   window: Pick<Window, "location" | "history" | "localStorage">;
   buildSearchParams: typeof utilBuildSearchParams;
   validateSearchFilters: typeof utilValidateSearchFilters;
@@ -23,6 +25,7 @@ export interface SearchServiceDependencies {
 
 export interface SearchFilters {
   selectedSources: string[];
+  selectedGroups: string[];
   readStatus: "all" | "read" | "unread";
   archivedStatus: "all" | "archived" | "active";
   dateFrom: string;
@@ -140,6 +143,26 @@ class SearchService {
         error instanceof Error ? error : new Error(String(error)),
       );
       throw new Error("Failed to load newsletter sources");
+    }
+  }
+
+  /**
+   * Gets all newsletter groups for filtering
+   */
+  async getGroups(): Promise<NewsletterGroup[]> {
+    try {
+      const response = await this.deps.newsletterGroupService.getGroups();
+      return response;
+    } catch (error) {
+      this.log.error(
+        "Failed to load newsletter groups",
+        {
+          action: "get_groups",
+          metadata: {},
+        },
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      throw new Error("Failed to load newsletter groups");
     }
   }
 
@@ -303,6 +326,7 @@ class SearchService {
   createDefaultFilters(): SearchFilters {
     return {
       selectedSources: [],
+      selectedGroups: [],
       readStatus: "all",
       archivedStatus: "active",
       dateFrom: "",
@@ -333,6 +357,7 @@ class SearchService {
 
     return (
       filters.selectedSources.length > 0 ||
+      filters.selectedGroups.length > 0 ||
       filters.readStatus !== defaultFilters.readStatus ||
       filters.archivedStatus !== defaultFilters.archivedStatus ||
       filters.dateFrom !== defaultFilters.dateFrom ||
@@ -481,6 +506,7 @@ export const searchService = (): SearchService => {
       getAllNewsletterSources: apiGetAllNewsletterSources,
       updateNewsletter: apiUpdateNewsletter,
       newsletterService: commonNewsletterService,
+      newsletterGroupService: newsletterGroupService,
       logger: appLogger,
       window: window,
       buildSearchParams: utilBuildSearchParams,
@@ -491,4 +517,5 @@ export const searchService = (): SearchService => {
   return searchServiceInstance;
 };
 
+export { SearchService };
 export default searchService;

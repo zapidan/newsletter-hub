@@ -1,14 +1,10 @@
-import { ILogger } from "@common/utils/logger";
-import {
-  buildSearchParams,
-  validateSearchFilters,
-} from "@web/utils/searchUtils";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSearchService, SearchServiceDependencies } from "../searchService";
 
 // Mock dependencies
 const mockGetAllNewsletterSources = vi.fn();
 const mockUpdateNewsletter = vi.fn();
+const mockNewsletterGroupService = vi.fn();
 const mockNewsletterService = {
   getAll: vi.fn(),
   getById: vi.fn(),
@@ -20,9 +16,42 @@ const mockNewsletterService = {
   getArchivedCount: vi.fn(),
   getFeed: vi.fn(),
   getFavorites: vi.fn(),
-};
+  // Add missing required methods
+  newsletterOptions: vi.fn(),
+  getNewsletter: vi.fn(),
+  getNewsletters: vi.fn(),
+  getNewslettersByTags: vi.fn(),
+  markAsRead: vi.fn(),
+  markAsUnread: vi.fn(),
+  toggleArchive: vi.fn(),
+  toggleLike: vi.fn(),
+  deleteNewsletter: vi.fn(),
+  updateNewsletterTags: vi.fn(),
+  getTagUsageStats: vi.fn(),
+  getAllTags: vi.fn(),
+  createTag: vi.fn(),
+  updateTag: vi.fn(),
+  deleteTag: vi.fn(),
+  getNewsletterSources: vi.fn(),
+  getNewsletterSourceGroups: vi.fn(),
+  createNewsletterSource: vi.fn(),
+  updateNewsletterSource: vi.fn(),
+  deleteNewsletterSource: vi.fn(),
+  getReadingQueue: vi.fn(),
+  addToReadingQueue: vi.fn(),
+  removeFromReadingQueue: vi.fn(),
+  toggleInReadingQueue: vi.fn(),
+  bulkMarkAsRead: vi.fn(),
+  bulkMarkAsUnread: vi.fn(),
+  bulkArchive: vi.fn(),
+  bulkUnarchive: vi.fn(),
+  bulkDeleteNewsletters: vi.fn(),
+  getNewsletterStats: vi.fn(),
+  getRecentNewsletters: vi.fn(),
+  searchNewsletters: vi.fn(),
+} as any;
 
-const mockLogger: ILogger = {
+const mockLogger: any = {
   debug: vi.fn(),
   info: vi.fn(),
   warn: vi.fn(),
@@ -53,16 +82,15 @@ const mockWindow = {
   localStorage: mockLocalStorage,
 };
 
-const mockBuildSearchParams =
-  vi.fn<Parameters<typeof buildSearchParams>[0], any>();
-const mockValidateSearchFilters =
-  vi.fn<Parameters<typeof validateSearchFilters>[0], any>();
+const mockBuildSearchParams = vi.fn();
+const mockValidateSearchFilters = vi.fn();
 
 // Default mock dependencies
 const defaultMockDependencies: SearchServiceDependencies = {
   getAllNewsletterSources: mockGetAllNewsletterSources,
   updateNewsletter: mockUpdateNewsletter,
   newsletterService: mockNewsletterService,
+  newsletterGroupService: mockNewsletterGroupService,
   logger: mockLogger,
   window: mockWindow as any,
   buildSearchParams: mockBuildSearchParams,
@@ -85,10 +113,10 @@ describe("SearchService Simple Tests", () => {
     mockWindow.location.href = "";
     mockValidateSearchFilters.mockReturnValue({ isValid: true, errors: [] });
     mockBuildSearchParams.mockImplementation(
-      (query, filters, pagination) => ({
+      (query: any, filters: any, pagination: any) => ({
         search: query,
-        limit: pagination.itemsPerPage || 20,
-        offset: ((pagination.page || 1) - 1) * (pagination.itemsPerPage || 20),
+        limit: pagination?.itemsPerPage || 20,
+        offset: ((pagination?.page || 1) - 1) * (pagination?.itemsPerPage || 20),
         ...filters,
       }),
     );
@@ -100,6 +128,7 @@ describe("SearchService Simple Tests", () => {
       const filters = serviceInstance.createDefaultFilters();
       expect(filters).toEqual({
         selectedSources: [],
+        selectedGroups: [],
         readStatus: "all",
         archivedStatus: "active",
         dateFrom: "",

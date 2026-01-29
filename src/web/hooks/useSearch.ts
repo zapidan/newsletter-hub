@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { NewsletterGroup } from "@common/types";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { NewsletterSource } from "@common/types";
 import {
-  searchService,
   SearchFilters,
   SearchOptions,
+  searchService,
   SearchState,
 } from "../services/searchService";
-import { generateSearchSuggestions, debounce } from "../utils/searchUtils";
+import { debounce, generateSearchSuggestions } from "../utils/searchUtils";
 
 /**
  * Main search hook that manages search state and operations
@@ -334,6 +334,42 @@ export const useNewsletterSources = () => {
 
   return {
     sources,
+    loading,
+    error,
+  };
+};
+
+/**
+ * Hook for managing newsletter groups for filtering
+ */
+export const useNewsletterGroups = () => {
+  const [groups, setGroups] = useState<NewsletterGroup[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadGroups = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        console.log('Loading groups...');
+        const loadedGroups = await searchService().getGroups();
+        console.log('Groups loaded:', loadedGroups);
+        setGroups(loadedGroups);
+      } catch (err) {
+        console.error('Error loading groups:', err);
+        setError(searchService().formatSearchError(err));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadGroups();
+  }, []);
+
+  return {
+    groups,
     loading,
     error,
   };
