@@ -26,7 +26,6 @@ export interface SearchServiceDependencies {
 export interface SearchFilters {
   selectedSources: string[];
   selectedGroups: string[];
-  readStatus: "all" | "read" | "unread";
   archivedStatus: "all" | "archived" | "active";
   dateFrom: string;
   dateTo: string;
@@ -327,7 +326,6 @@ class SearchService {
     return {
       selectedSources: [],
       selectedGroups: [],
-      readStatus: "all",
       archivedStatus: "active",
       dateFrom: "",
       dateTo: "",
@@ -358,7 +356,6 @@ class SearchService {
     return (
       filters.selectedSources.length > 0 ||
       filters.selectedGroups.length > 0 ||
-      filters.readStatus !== defaultFilters.readStatus ||
       filters.archivedStatus !== defaultFilters.archivedStatus ||
       filters.dateFrom !== defaultFilters.dateFrom ||
       filters.dateTo !== defaultFilters.dateTo

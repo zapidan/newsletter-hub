@@ -217,7 +217,6 @@ export const buildSearchParams = (
   query: string,
   filters: {
     selectedSources?: string[];
-    readStatus?: "all" | "read" | "unread";
     archivedStatus?: "all" | "archived" | "active";
     dateFrom?: string;
     dateTo?: string;
@@ -240,10 +239,6 @@ export const buildSearchParams = (
   // Apply filters
   if (filters.selectedSources?.length) {
     params.sourceIds = filters.selectedSources;
-  }
-
-  if (filters.readStatus !== "all") {
-    params.isRead = filters.readStatus === "read";
   }
 
   if (filters.archivedStatus !== "all") {
