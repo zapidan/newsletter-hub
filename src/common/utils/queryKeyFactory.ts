@@ -55,7 +55,7 @@ export const queryKeyFactory: any = {
       if (filter.dateFrom) filters.dateFrom = filter.dateFrom;
       if (filter.dateTo) filters.dateTo = filter.dateTo;
       if (filter.orderBy) filters.orderBy = filter.orderBy;
-      if (filter.ascending !== undefined) filters.ascending = filter.ascending;
+      if (filter.orderDirection) filters.orderDirection = filter.orderDirection;
 
       return Object.keys(filters).length > 0 ? ([...baseKey, filters] as const) : baseKey;
     },

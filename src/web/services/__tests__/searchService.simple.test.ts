@@ -129,7 +129,6 @@ describe("SearchService Simple Tests", () => {
       expect(filters).toEqual({
         selectedSources: [],
         selectedGroups: [],
-        readStatus: "all",
         archivedStatus: "active",
         dateFrom: "",
         dateTo: "",

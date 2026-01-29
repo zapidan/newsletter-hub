@@ -109,7 +109,6 @@ describe('SearchService - Group Methods', () => {
 
       expect(filters.selectedGroups).toEqual([]);
       expect(filters.selectedSources).toEqual([]);
-      expect(filters.readStatus).toBe('all');
       expect(filters.archivedStatus).toBe('active');
       expect(filters.dateFrom).toBe('');
       expect(filters.dateTo).toBe('');
@@ -121,7 +120,6 @@ describe('SearchService - Group Methods', () => {
       const filters = {
         selectedSources: [],
         selectedGroups: ['group1', 'group2'],
-        readStatus: 'all' as const,
         archivedStatus: 'active' as const,
         dateFrom: '',
         dateTo: '',
@@ -140,7 +138,6 @@ describe('SearchService - Group Methods', () => {
       const filters = {
         selectedSources: [],
         selectedGroups: ['group1'],
-        readStatus: 'all' as const,
         archivedStatus: 'active' as const,
         dateFrom: '',
         dateTo: '',

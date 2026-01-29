@@ -210,7 +210,7 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}, newsletterIds?
 
   // Apply ordering
   const orderColumn = params.orderBy || 'received_at';
-  const ascending = params.ascending ?? false;
+  const ascending = params.orderDirection !== 'desc'; // Convert orderDirection to ascending boolean
   query = query.order(orderColumn, { ascending });
 
   // Apply pagination
@@ -222,6 +222,23 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}, newsletterIds?
     const end = params.limit ? params.offset + params.limit - 1 : params.offset + 50 - 1;
     query = query.range(params.offset, end);
   }
+
+  // Log the final query for debugging
+  console.log('[buildNewsletterQuery] Final query built:', {
+    selectClause,
+    orderColumn,
+    ascending,
+    limit: params.limit,
+    offset: params.offset,
+    filters: {
+      tagIds: params.tagIds,
+      sourceIds: params.sourceIds,
+      isArchived: params.isArchived,
+      isRead: params.isRead,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    }
+  });
 
   // Debug logging
   log.debug('Newsletter query build completed', {
@@ -249,7 +266,6 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}, newsletterIds?
 
 // Newsletter API Service
 export const newsletterApi = {
-  // In newsletterApi.ts - Update the getAll function
   async getAll(
     params: NewsletterQueryParams = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
@@ -291,7 +307,7 @@ export const newsletterApi = {
       const page = Math.floor(offset / limit) + 1;
       const hasMore = count ? offset + limit < count : false;
 
-      return {
+      const result = {
         data: transformedData,
         count: count || 0,
         page,
@@ -300,6 +316,8 @@ export const newsletterApi = {
         nextPage: hasMore ? page + 1 : null,
         prevPage: page > 1 ? page - 1 : null,
       };
+
+      return result;
     });
   },
 

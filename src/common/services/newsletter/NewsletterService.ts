@@ -78,7 +78,8 @@ export class NewsletterService extends BaseService {
         return await this.getNewslettersByTags(processedParams.tagIds, processedParams);
       }
 
-      return await newsletterApi.getAll(processedParams);
+      const result = await newsletterApi.getAll(processedParams);
+      return result;
     }, 'getNewsletters');
   }
 

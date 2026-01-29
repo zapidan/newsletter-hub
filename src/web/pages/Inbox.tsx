@@ -96,6 +96,8 @@ const Inbox: React.FC = () => {
     newsletterSources,
     isLoadingSources,
     useLocalTagFiltering,
+    sortBy,
+    sortOrder,
     // Filter actions
     setFilter,
     setSourceFilter,
@@ -103,6 +105,8 @@ const Inbox: React.FC = () => {
     removeTag,
     resetFilters,
     handleTagClick,
+    setSortBy,
+    setSortOrder,
   } = useInboxFilters();
 
   // Group filters state (multi-select)
@@ -234,8 +238,6 @@ const Inbox: React.FC = () => {
     contextNewsletterFilter,
     groupFilters,
     selectedGroupSourceIds,
-    isLoadingGroups,
-    newsletterGroups.length,
   ]);
 
   // Newsletter data with infinite scroll
@@ -934,12 +936,16 @@ const Inbox: React.FC = () => {
               sourceFilter={sourceFilter}
               groupFilters={groupFilters}
               timeRange={timeRange}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
               newsletterSources={sourcesWithUnreadCounts}
               newsletterGroups={groupsForDropdown}
               onFilterChange={handleFilterChange}
               onSourceFilterChange={handleSourceFilterChange}
               onGroupFiltersChange={handleGroupFiltersChange}
               onTimeRangeChange={handleTimeRangeChange}
+              onSortByChange={setSortBy}
+              onSortOrderChange={setSortOrder}
               isLoadingSources={isLoadingSources}
               isLoadingGroups={isLoadingGroups}
               showFilterCounts={true}
