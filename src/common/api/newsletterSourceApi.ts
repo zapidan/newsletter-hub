@@ -1,17 +1,17 @@
-import {
-  supabase,
-  handleSupabaseError,
-  requireAuth,
-  withPerformanceLogging,
-} from './supabaseClient';
 import { NewsletterSource } from '../types';
 import {
-  NewsletterSourceQueryParams,
-  CreateNewsletterSourceParams,
-  UpdateNewsletterSourceParams,
-  PaginatedResponse,
   BatchResult,
+  CreateNewsletterSourceParams,
+  NewsletterSourceQueryParams,
+  PaginatedResponse,
+  UpdateNewsletterSourceParams,
 } from '../types/api';
+import {
+  handleSupabaseError,
+  requireAuth,
+  supabase,
+  withPerformanceLogging,
+} from './supabaseClient';
 
 // Build query based on parameters
 const buildNewsletterSourceQuery = (params: NewsletterSourceQueryParams = {}) => {
@@ -136,7 +136,7 @@ export const newsletterSourceApi = {
           user.id
         );
 
-        transformedData = data.map((source: any) =>
+        transformedData = data.map((source: NewsletterSource) =>
           transformNewsletterSourceResponse(
             source,
             totalCounts[source.id] || 0,
@@ -144,7 +144,7 @@ export const newsletterSourceApi = {
           )
         );
       } else {
-        transformedData = (data || []).map((source: any) =>
+        transformedData = (data || []).map((source: NewsletterSource) =>
           transformNewsletterSourceResponse(source)
         );
       }

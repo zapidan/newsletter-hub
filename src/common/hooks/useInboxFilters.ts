@@ -106,6 +106,8 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const memoizedGetTags = useCallback(getTags, [getTags]);
   const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
     includeCount: true,
+    excludeArchived: false,
+    limit: 1000, // Override default limit to get all sources for dropdown
   });
 
   // Sync pendingTagUpdates with URL changes - only if they actually differ

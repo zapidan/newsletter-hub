@@ -126,7 +126,7 @@ class SearchService {
   }
 
   /**
-   * Gets all newsletter sources for filtering
+   * Get all newsletter sources for filtering
    */
   async getSources(): Promise<NewsletterSource[]> {
     try {

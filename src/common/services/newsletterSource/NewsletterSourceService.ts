@@ -86,7 +86,8 @@ export class NewsletterSourceService extends BaseService {
     return this.withRetry(async () => {
       // Apply business logic for default parameters
       const processedParams = this.processSourceParams(params);
-      return await newsletterSourceApi.getAll(processedParams);
+      const result = await newsletterSourceApi.getAll(processedParams);
+      return result;
     }, 'getSources');
   }
 
