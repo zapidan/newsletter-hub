@@ -42,13 +42,13 @@ export interface InboxFiltersActions {
   clearGroups: () => void;
   setSortBy: (sortBy: string) => void;
   setSortOrder: (sortOrder: 'asc' | 'desc') => void;
+  setVisibleTags: (tags: Set<string>) => void;
 }
 
 export interface UseInboxFiltersOptions {
   debounceMs?: number;
   autoLoadTags?: boolean;
   preserveUrlOnActions?: boolean;
-  initialGroupFilters?: string[];
 }
 
 export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersActions {
@@ -66,7 +66,6 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     debounceMs = 300,
     autoLoadTags = true,
     // preserveUrlOnActions = true, // Commented out unused parameter
-    initialGroupFilters = [],
   } = options;
 
   const log = useLogger();
@@ -77,6 +76,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     sourceFilter,
     timeRange,
     tagIds,
+    groupFilters,
     sortBy,
     sortOrder,
     newsletterFilter,
@@ -85,6 +85,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     setSourceFilter,
     setTimeRange,
     setTagIds,
+    setGroupFilters,
     setSortBy,
     setSortOrder,
     resetFilters,
@@ -95,9 +96,6 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const [debouncedTagIds, setDebouncedTagIds] = useState<string[]>(tagIds);
   const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
   const [allTags, setAllTags] = useState<Tag[]>([]);
-
-  // Local state for group filters
-  const [groupFilters, setGroupFiltersState] = useState<string[]>(initialGroupFilters);
 
   // Refs for debouncing
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
@@ -336,22 +334,25 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const enhancedResetFilters = useCallback(() => {
     setPendingTagUpdates([]);
     setDebouncedTagIds([]);
-    setGroupFiltersState([]);
+    setGroupFilters([]);
     resetFilters();
   }, [resetFilters]);
 
-  // Group filter actions
-  const setGroupFilters = useCallback((groupIds: string[]) => {
-    log.debug('Setting group filters', {
-      action: 'set_group_filters',
-      metadata: {
-        groupIds,
-        previousGroups: groupFilters,
-        changeCount: Math.abs(groupIds.length - groupFilters.length),
-      },
-    });
-    setGroupFiltersState(groupIds);
-  }, [groupFilters, log]);
+  const addGroup = useCallback((groupId: string) => {
+    const currentGroups = groupFilters;
+    if (!currentGroups.includes(groupId)) {
+      setGroupFilters([...currentGroups, groupId]);
+    }
+  }, [groupFilters, setGroupFilters]);
+
+  const removeGroup = useCallback((groupId: string) => {
+    const currentGroups = groupFilters;
+    setGroupFilters(currentGroups.filter((id) => id !== groupId));
+  }, [groupFilters, setGroupFilters]);
+
+  const clearGroups = useCallback(() => {
+    setGroupFilters([]);
+  }, [setGroupFilters]);
 
   const toggleGroup = useCallback((groupId: string) => {
     const currentGroups = groupFilters;
@@ -372,22 +373,8 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
       },
     });
 
-    setGroupFiltersState(newGroups);
-  }, [groupFilters, log]);
-
-  const addGroup = useCallback((groupId: string) => {
-    setGroupFiltersState(currentGroups =>
-      currentGroups.includes(groupId) ? currentGroups : [...currentGroups, groupId]
-    );
-  }, []);
-
-  const removeGroup = useCallback((groupId: string) => {
-    setGroupFiltersState(currentGroups => currentGroups.filter((id) => id !== groupId));
-  }, []);
-
-  const clearGroups = useCallback(() => {
-    setGroupFiltersState([]);
-  }, []);
+    setGroupFilters(newGroups);
+  }, [groupFilters, setGroupFilters, log]);
 
   // Custom isFilterActive that considers debounced state
   const enhancedIsFilterActive = useCallback(
@@ -474,6 +461,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     clearGroups,
     setSortBy,
     setSortOrder,
+    setVisibleTags,
   };
 
   return {

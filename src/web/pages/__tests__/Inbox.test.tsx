@@ -180,6 +180,9 @@ const mkInboxFilters = () => ({
   allTags: [],
   newsletterSources: [],
   isLoadingSources: false,
+  groupFilters: [], // Add missing groupFilters
+  sortBy: 'received_at',
+  sortOrder: 'desc',
   newsletterFilter: {
     isRead: false,
     isArchived: false,
@@ -190,7 +193,7 @@ const mkInboxFilters = () => ({
     dateFrom: undefined,
     dateTo: undefined,
     orderBy: undefined,
-    ascending: undefined,
+    orderDirection: undefined, // Update to use orderDirection instead of ascending
   },
   /* actions */
   setFilter: vi.fn(),
@@ -199,6 +202,7 @@ const mkInboxFilters = () => ({
   removeTag: vi.fn(),
   resetFilters: vi.fn(),
   handleTagClick: vi.fn(),
+  setGroupFilters: vi.fn(), // Add missing setGroupFilters
 });
 
 const mkInfiniteNewsletters = (newsletters = makeNewsletters()) => ({
