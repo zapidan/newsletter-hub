@@ -17,6 +17,7 @@ const mockLogger = {
 const mockDeps = {
   getAllNewsletterSources: vi.fn(),
   updateNewsletter: vi.fn(),
+
   newsletterService: {} as any,
   newsletterGroupService: mockNewsletterGroupService,
   logger: mockLogger,
@@ -30,6 +31,7 @@ describe('SearchService - Group Methods', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
     searchService = new SearchService(mockDeps);
   });
 
