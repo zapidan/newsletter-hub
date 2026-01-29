@@ -41,6 +41,7 @@ export const useInfiniteNewsletters = (
 ): UseInfiniteNewslettersReturn => {
   const { user } = useAuth();
   const log = useLogger('useInfiniteNewsletters');
+
   const {
     enabled = true,
     _refetchOnWindowFocus = false,
@@ -110,7 +111,7 @@ export const useInfiniteNewsletters = (
     normalizedFilters.dateFrom,
     normalizedFilters.dateTo,
     normalizedFilters.orderBy,
-    normalizedFilters.ascending,
+    normalizedFilters.orderDirection,
     throttledDebug,
   ]);
 
@@ -127,7 +128,7 @@ export const useInfiniteNewsletters = (
       dateTo: normalizedFilters.dateTo,
       limit: pageSize,
       orderBy: normalizedFilters.orderBy || 'received_at',
-      ascending: normalizedFilters.ascending ?? false,
+      orderDirection: normalizedFilters.orderDirection || 'desc',
       includeRelations: true,
       includeTags: true,
       includeSource: true,
@@ -149,7 +150,7 @@ export const useInfiniteNewsletters = (
     normalizedFilters.dateFrom,
     normalizedFilters.dateTo,
     normalizedFilters.orderBy,
-    normalizedFilters.ascending,
+    normalizedFilters.orderDirection,
     pageSize,
     throttledDebug,
   ]);
@@ -171,9 +172,6 @@ export const useInfiniteNewsletters = (
       queryKey,
       queryFn: async ({ pageParam = 0 }) => {
         if (isFetchingRef.current) {
-          throttledDebug('skip_fetch_already_fetching', 'Skipping fetch - already fetching', {
-            pageParam,
-          });
           return { data: [], count: 0, hasMore: false };
         }
 
@@ -420,7 +418,7 @@ export const useInfiniteNewsletters = (
     normalizedFilters.dateFrom,
     normalizedFilters.dateTo,
     normalizedFilters.orderBy,
-    normalizedFilters.ascending,
+    normalizedFilters.orderDirection,
     newsletters.length,
     log,
   ]);

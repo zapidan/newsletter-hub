@@ -156,6 +156,8 @@ export interface NewsletterFilter {
   start_date?: string;
   end_date?: string;
   group_id?: string;
+  orderBy?: string;
+  orderDirection?: 'asc' | 'desc';
 }
 
 export interface NewsletterQueryParams {

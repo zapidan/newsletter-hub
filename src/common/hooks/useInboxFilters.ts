@@ -18,6 +18,8 @@ export interface InboxFiltersState {
   visibleTags: Set<string>;
   allTags: Tag[];
   groupFilters: string[];
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
 }
 
 export interface InboxFiltersActions {
@@ -38,6 +40,8 @@ export interface InboxFiltersActions {
   addGroup: (groupId: string) => void;
   removeGroup: (groupId: string) => void;
   clearGroups: () => void;
+  setSortBy: (sortBy: string) => void;
+  setSortOrder: (sortOrder: 'asc' | 'desc') => void;
 }
 
 export interface UseInboxFiltersOptions {
@@ -73,12 +77,16 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     sourceFilter,
     timeRange,
     tagIds,
+    sortBy,
+    sortOrder,
     newsletterFilter,
     useLocalTagFiltering,
     setFilter,
     setSourceFilter,
     setTimeRange,
     setTagIds,
+    setSortBy,
+    setSortOrder,
     resetFilters,
   } = useFilters();
 
@@ -442,6 +450,8 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     visibleTags,
     allTags,
     groupFilters,
+    sortBy,
+    sortOrder,
   };
 
   const actions: InboxFiltersActions = {
@@ -462,6 +472,8 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     addGroup,
     removeGroup,
     clearGroups,
+    setSortBy,
+    setSortOrder,
   };
 
   return {

@@ -26,7 +26,7 @@ export interface NewsletterFilter {
 
   // Sorting
   orderBy?: string;
-  ascending?: boolean;
+  orderDirection?: 'asc' | 'desc';
 
   // Legacy support - can be used for quick filtering
   status?: "all" | "unread" | "liked" | "archived";

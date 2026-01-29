@@ -1,6 +1,6 @@
 import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
 import type { NewsletterSource } from "@common/types";
-import { Archive, Building2, ChevronDown, Clock, Eye, EyeOff, Heart, Search } from "lucide-react";
+import { Archive, ArrowUpDown, Building2, ChevronDown, Clock, Eye, EyeOff, Heart, Search } from "lucide-react";
 import { FC, memo, useMemo, useState } from "react";
 
 export type FilterType = InboxFilterType; // Use the shared type
@@ -18,6 +18,8 @@ interface InboxFiltersProps {
   // New multi-select groups
   groupFilters?: string[];
   timeRange: TimeRange;
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
   newsletterSources: NewsletterSourceWithCount[];
   newsletterGroups?: { id: string; name: string; count?: number }[];
   onFilterChange: (filter: FilterType) => void;
@@ -27,6 +29,8 @@ interface InboxFiltersProps {
   // New multi-select handler
   onGroupFiltersChange?: (groupIds: string[]) => void;
   onTimeRangeChange: (range: TimeRange) => void;
+  onSortByChange: (sortBy: string) => void;
+  onSortOrderChange: (sortOrder: 'asc' | 'desc') => void;
   isLoading?: boolean;
   isLoadingSources?: boolean;
   isLoadingGroups?: boolean;
@@ -46,6 +50,10 @@ const TIME_RANGE_OPTIONS = [
   { value: "2days" as const, label: "2 Days" },
   { value: "week" as const, label: "This Week" },
   { value: "month" as const, label: "This Month" },
+];
+
+const SORT_OPTIONS = [
+  { value: "received_at" as const, label: "Date" },
 ];
 
 const FILTER_OPTIONS = [
@@ -87,6 +95,112 @@ const TimeFilterDropdown: FC<{
           </option>
         ))}
       </select>
+    </div>
+  );
+});
+
+// Sort Dropdown Component
+const SortDropdown: FC<{
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  onSortByChange: (sortBy: string) => void;
+  onSortOrderChange: (sortOrder: 'asc' | 'desc') => void;
+  disabled?: boolean;
+  compact?: boolean;
+}> = memo(({ sortBy, sortOrder, onSortByChange, onSortOrderChange, disabled = false, compact = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled) {
+      setIsOpen(!isOpen);
+    }
+  };
+
+  const handleSortOrderToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSortOrderChange(sortOrder === 'desc' ? 'asc' : 'desc');
+  };
+
+  const getSortLabel = () => {
+    const sortOption = SORT_OPTIONS.find(option => option.value === sortBy);
+    return sortOption?.label || 'Date';
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={disabled}
+        className={`
+          flex items-center gap-2 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
+          ${compact ? "px-2 py-1 text-xs min-w-[80px]" : "px-3 py-1.5 text-sm min-w-[100px]"}
+          text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
+          focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
+          disabled:opacity-50 disabled:cursor-not-allowed
+          ${disabled ? "bg-gray-50 dark:bg-neutral-900" : "hover:bg-gray-50 dark:hover:bg-neutral-800/60"}
+        `}
+        aria-label="Sort newsletters"
+        aria-expanded={isOpen}
+      >
+        <ArrowUpDown className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400`} />
+        <span className="truncate">{getSortLabel()}</span>
+        <button
+          type="button"
+          onClick={handleSortOrderToggle}
+          className={`
+            ${compact ? "text-xs px-1" : "text-xs px-1.5"}
+            py-0.5 rounded font-medium transition-colors
+            ${sortOrder === 'desc'
+              ? "bg-gray-200 text-gray-700 dark:bg-neutral-700 dark:text-slate-200"
+              : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+            }
+          `}
+          aria-label={`Sort order: ${sortOrder === 'desc' ? 'newest first' : 'oldest first'}`}
+        >
+          {sortOrder === 'desc' ? '↓' : '↑'}
+        </button>
+        <ChevronDown
+          className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-neutral-900 rounded-md shadow-lg z-50 border border-gray-200 dark:border-neutral-800">
+            <div className="py-1">
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSortByChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  className={`
+                    w-full text-left px-4 py-2 text-sm flex items-center justify-between
+                    ${sortBy === option.value
+                      ? "bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 font-medium"
+                      : "text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/60"
+                    }
+                  `}
+                >
+                  <span>{option.label}</span>
+                  {sortBy === option.value && (
+                    <span className="text-blue-600">✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 });
@@ -651,6 +765,8 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
     groupFilter = null,
     groupFilters = [],
     timeRange,
+    sortBy,
+    sortOrder,
     newsletterSources,
     newsletterGroups = [],
     onFilterChange,
@@ -658,6 +774,8 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
     onGroupFilterChange = () => { },
     onGroupFiltersChange = () => { },
     onTimeRangeChange,
+    onSortByChange,
+    onSortOrderChange,
     isLoading = false,
     isLoadingSources = false,
     isLoadingGroups = false,
@@ -696,7 +814,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
               );
             })}
           </div>
-          {/* Row 2: Time, Source, Group, Select (mobile only) */}
+          {/* Row 2: Time, Sort, Source, Group, Select (mobile only) */}
           <div className="flex flex-wrap items-center gap-2 justify-center mt-2">
             {showTimeFilter && (
               <TimeFilterDropdown
@@ -706,6 +824,14 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
                 compact={compact}
               />
             )}
+            <SortDropdown
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortByChange={onSortByChange}
+              onSortOrderChange={onSortOrderChange}
+              disabled={disabled || isLoading}
+              compact={compact}
+            />
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
@@ -751,7 +877,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
 
         {/* Desktop: Single row layout with all filters */}
         <div className="hidden sm:flex flex-row items-center justify-between w-full">
-          {/* Left side: Status filters + Time filter */}
+          {/* Left side: Status filters + Time filter + Sort */}
           <div className="flex items-center gap-x-1">
             {/* Time filter - at the left, before status filters */}
             {showTimeFilter && (
@@ -762,6 +888,15 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
                 compact={compact}
               />
             )}
+            {/* Sort dropdown */}
+            <SortDropdown
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortByChange={onSortByChange}
+              onSortOrderChange={onSortOrderChange}
+              disabled={disabled || isLoading}
+              compact={compact}
+            />
             {/* Status filters */}
             {FILTER_OPTIONS.map((option) => (
               <FilterButton

@@ -14,6 +14,7 @@ const mockSearchService = searchService as any;
 describe('useNewsletterGroups', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
   });
 
   it('should load groups successfully', async () => {
@@ -63,6 +64,7 @@ describe('useNewsletterGroups', () => {
     mockSearchService.mockReturnValue({
       getGroups: vi.fn().mockRejectedValue(new Error(errorMessage)),
       formatSearchError: vi.fn().mockReturnValue(errorMessage),
+
     } as any);
 
     const { result } = renderHook(() => useNewsletterGroups());

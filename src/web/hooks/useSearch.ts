@@ -1,4 +1,4 @@
-import { NewsletterGroup } from "@common/types";
+import { NewsletterGroup, NewsletterSource } from "@common/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
@@ -321,7 +321,9 @@ export const useNewsletterSources = () => {
 
       try {
         const loadedSources = await searchService().getSources();
-        setSources(loadedSources);
+        // Sort sources alphabetically by name
+        const sortedSources = loadedSources.sort((a, b) => a.name.localeCompare(b.name));
+        setSources(sortedSources);
       } catch (err) {
         setError(searchService().formatSearchError(err));
       } finally {

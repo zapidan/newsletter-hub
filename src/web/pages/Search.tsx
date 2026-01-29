@@ -85,13 +85,11 @@ const SearchFilters: React.FC<{
   groupsError: string | null;
   selectedSources: string[];
   selectedGroups: string[];
-  readStatus: "all" | "read" | "unread";
   archivedStatus: "all" | "archived" | "active";
   dateFrom: string;
   dateTo: string;
   onToggleSource: (sourceId: string) => void;
   onToggleGroup: (groupId: string) => void;
-  onReadStatusChange: (status: "all" | "read" | "unread") => void;
   onArchivedStatusChange: (status: "all" | "archived" | "active") => void;
   onDateFromChange: (date: string) => void;
   onDateToChange: (date: string) => void;
@@ -104,18 +102,29 @@ const SearchFilters: React.FC<{
   groupsError,
   selectedSources,
   selectedGroups,
-  readStatus,
   archivedStatus,
   dateFrom,
   dateTo,
   onToggleSource,
   onToggleGroup,
-  onReadStatusChange,
   onArchivedStatusChange,
   onDateFromChange,
   onDateToChange,
   onClearFilters,
 }) => {
+    const [sourceSearchTerm, setSourceSearchTerm] = React.useState("");
+
+    // Filter sources based on search term
+    const filteredSources = sources.filter((source) =>
+      source.name.toLowerCase().includes(sourceSearchTerm.toLowerCase())
+    );
+
+    // Handle clear filters
+    const handleClearFilters = () => {
+      setSourceSearchTerm("");
+      onClearFilters();
+    };
+
     if (!showFilters) return null;
 
     return (
@@ -128,21 +137,28 @@ const SearchFilters: React.FC<{
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-medium text-neutral-800">Search Filters</h4>
           <button
-            onClick={onClearFilters}
+            onClick={handleClearFilters}
             className="text-sm text-neutral-500 hover:text-neutral-700"
           >
             Clear all
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Sources */}
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-2">
               Sources
             </label>
+            <input
+              type="text"
+              value={sourceSearchTerm}
+              onChange={(e) => setSourceSearchTerm(e.target.value)}
+              placeholder="Search sources..."
+              className="w-full px-3 py-2 mb-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
             <div key="sources-list" className="max-h-32 overflow-y-auto space-y-1">
-              {sources.map((source) => (
+              {filteredSources.map((source) => (
                 <label key={source.id} className="flex items-center text-sm">
                   <input
                     type="checkbox"
@@ -170,13 +186,13 @@ const SearchFilters: React.FC<{
                     }}
                   />
                   <span className="truncate">{source.name}</span>
-                  {typeof source.newsletter_count === "number" && (
-                    <span className="ml-auto text-neutral-400">
-                      ({source.newsletter_count})
-                    </span>
-                  )}
                 </label>
               ))}
+              {filteredSources.length === 0 && sourceSearchTerm && (
+                <div className="text-sm text-neutral-500 italic">
+                  No sources found matching "{sourceSearchTerm}"
+                </div>
+              )}
             </div>
           </div>
 
@@ -210,31 +226,10 @@ const SearchFilters: React.FC<{
                       }}
                     />
                     <span className="truncate">{group.name}</span>
-                    {group.sources && (
-                      <span className="ml-auto text-neutral-400">
-                        ({group.sources.length})
-                      </span>
-                    )}
                   </label>
                 ))
               )}
             </div>
-          </div>
-
-          {/* Read Status */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
-              Read Status
-            </label>
-            <select
-              value={readStatus}
-              onChange={(e) => onReadStatusChange(e.target.value as "all" | "read" | "unread")}
-              className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="all">All newsletters</option>
-              <option value="read">Read only</option>
-              <option value="unread">Unread only</option>
-            </select>
           </div>
 
           {/* Archive Status */}
@@ -761,7 +756,6 @@ const Search: React.FC = () => {
           groupsError={groupsError}
           selectedSources={filters.selectedSources}
           selectedGroups={filters.selectedGroups}
-          readStatus={filters.readStatus}
           archivedStatus={filters.archivedStatus}
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
@@ -777,7 +771,6 @@ const Search: React.FC = () => {
               : [...filters.selectedGroups, groupId];
             updateFilters({ selectedGroups: newGroups });
           }}
-          onReadStatusChange={(status) => updateFilters({ readStatus: status })}
           onArchivedStatusChange={(status) =>
             updateFilters({ archivedStatus: status })
           }

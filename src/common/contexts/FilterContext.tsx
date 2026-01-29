@@ -9,6 +9,8 @@ export interface FilterState {
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
 }
 
 export interface FilterActions {
@@ -22,6 +24,8 @@ export interface FilterActions {
   clearTags: () => void;
   resetFilters: () => void;
   updateFilters: (updates: Partial<FilterState>) => void;
+  setSortBy: (sortBy: string) => void;
+  setSortOrder: (sortOrder: 'asc' | 'desc') => void;
 }
 
 export interface FilterContextType extends FilterState, FilterActions {
@@ -62,8 +66,10 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       sourceFilter: (params.source as string) || null,
       timeRange: (params.time as TimeRange) || 'all',
       tagIds: (params.tags as string[]) || [],
+      sortBy: (params.sort as string) || 'received_at',
+      sortOrder: (params.order as 'asc' | 'desc') || 'desc',
     };
-  }, [filter, params.source, params.time, params.tags]);
+  }, [filter, params.source, params.time, params.tags, params.sort, params.order]);
 
   // Generate newsletter filter object with stable memoization
   const newsletterFilter = useMemo(() => {
@@ -152,6 +158,14 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       filters.dateFrom = dateFrom.toISOString();
     }
 
+    // Handle sort parameters
+    if (filterState.sortBy) {
+      filters.orderBy = filterState.sortBy;
+    }
+    if (filterState.sortOrder) {
+      filters.orderDirection = filterState.sortOrder;
+    }
+
     return filters;
   }, [filterState, useLocalTagFiltering]);
 
@@ -162,9 +176,11 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       filterState.filter !== 'unread' ||
       filterState.sourceFilter !== null ||
       filterState.timeRange !== 'all' ||
-      filterState.tagIds.length > 0
+      filterState.tagIds.length > 0 ||
+      filterState.sortBy !== 'received_at' ||
+      filterState.sortOrder !== 'desc'
     );
-  }, [filterState.filter, filterState.sourceFilter, filterState.timeRange, filterState.tagIds]);
+  }, [filterState.filter, filterState.sourceFilter, filterState.timeRange, filterState.tagIds, filterState.sortBy, filterState.sortOrder]);
 
   // Check if a specific filter is active
   const isFilterActive = useCallback(
@@ -179,11 +195,15 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
           return filterState.timeRange !== 'all'; // 'all' time is default
         case 'tagIds':
           return filterState.tagIds.length > 0;
+        case 'sortBy':
+          return filterState.sortBy !== 'received_at';
+        case 'sortOrder':
+          return filterState.sortOrder !== 'desc';
         default:
           return false;
       }
     },
-    [filterState.filter, filterState.sourceFilter, filterState.timeRange, filterState.tagIds]
+    [filterState.filter, filterState.sourceFilter, filterState.timeRange, filterState.tagIds, filterState.sortBy, filterState.sortOrder]
   );
 
   // Only trigger onFilterChange when the newsletterFilter has actually changed
@@ -278,8 +298,25 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       if ('sourceFilter' in updates) urlUpdates.source = updates.sourceFilter;
       if ('timeRange' in updates) urlUpdates.time = updates.timeRange;
       if ('tagIds' in updates) urlUpdates.tags = updates.tagIds;
+      if ('sortBy' in updates) urlUpdates.sort = updates.sortBy;
+      if ('sortOrder' in updates) urlUpdates.order = updates.sortOrder;
 
       updateParams(urlUpdates);
+    },
+    [updateParams]
+  );
+
+  // Sort action creators
+  const setSortBy = useCallback(
+    (sortBy: string) => {
+      updateParams({ sort: sortBy });
+    },
+    [updateParams]
+  );
+
+  const setSortOrder = useCallback(
+    (sortOrder: 'asc' | 'desc') => {
+      updateParams({ order: sortOrder });
     },
     [updateParams]
   );
@@ -303,6 +340,8 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     resetFilters,
     updateFilters,
     isFilterActive,
+    setSortBy,
+    setSortOrder,
   };
 
   return <FilterContext.Provider value={contextValue}>{children}</FilterContext.Provider>;

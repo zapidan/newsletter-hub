@@ -232,6 +232,18 @@ export function useInboxUrlParams() {
       serialize: (value: string[]) => value.join(','),
       deserialize: (value: string) => (value ? value.split(',').filter(Boolean) : []),
     },
+    sort: {
+      defaultValue: 'received_at' as const,
+      omitIfDefault: true,
+      validator: sortFieldValidator,
+      sanitize: true,
+    },
+    order: {
+      defaultValue: 'desc' as const,
+      omitIfDefault: true,
+      validator: orderDirectionValidator,
+      sanitize: true,
+    },
   });
 }
 
