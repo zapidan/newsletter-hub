@@ -1,10 +1,10 @@
-import { useQuery, useMutation, keepPreviousData } from '@tanstack/react-query';
-import { useCallback, useMemo, useContext } from 'react';
-import { NewsletterSource } from '@common/types';
-import { PaginatedResponse, NewsletterSourceQueryParams } from '@common/types/api';
 import { AuthContext } from '@common/contexts/AuthContext';
 import { newsletterSourceService } from '@common/services';
+import { NewsletterSource } from '@common/types';
+import { NewsletterSourceQueryParams, PaginatedResponse } from '@common/types/api';
 import { getCacheManagerSafe } from '@common/utils/cacheUtils';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
+import { useCallback, useContext, useMemo } from 'react';
 
 // Cache time constants (in milliseconds)
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
@@ -47,7 +47,7 @@ export const useNewsletterSources = (params: NewsletterSourceQueryParams = {}) =
   // Default parameters for getting active sources with counts
   const queryParams = useMemo(
     () => ({
-      excludeArchived: true,
+      excludeArchived: false,
       includeCount: true,
       orderBy: 'created_at',
       ascending: false,

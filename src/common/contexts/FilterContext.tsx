@@ -9,6 +9,7 @@ export interface FilterState {
   sourceFilter: string | null;
   timeRange: TimeRange;
   tagIds: string[];
+  groupFilters: string[];
   sortBy: string;
   sortOrder: 'asc' | 'desc';
 }
@@ -18,6 +19,7 @@ export interface FilterActions {
   setSourceFilter: (sourceId: string | null) => void;
   setTimeRange: (range: TimeRange) => void;
   setTagIds: (tagIds: string[]) => void;
+  setGroupFilters: (groupIds: string[]) => void;
   toggleTag: (tagId: string) => void;
   addTag: (tagId: string) => void;
   removeTag: (tagId: string) => void;
@@ -66,10 +68,11 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       sourceFilter: (params.source as string) || null,
       timeRange: (params.time as TimeRange) || 'all',
       tagIds: (params.tags as string[]) || [],
+      groupFilters: (params.groups as string[]) || [],
       sortBy: (params.sort as string) || 'received_at',
       sortOrder: (params.order as 'asc' | 'desc') || 'desc',
     };
-  }, [filter, params.source, params.time, params.tags, params.sort, params.order]);
+  }, [filter, params.source, params.time, params.tags, params.groups, params.sort, params.order]);
 
   // Generate newsletter filter object with stable memoization
   const newsletterFilter = useMemo(() => {
@@ -253,6 +256,13 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     [updateParams]
   );
 
+  const setGroupFilters = useCallback(
+    (groupIds: string[]) => {
+      updateParams({ groups: groupIds });
+    },
+    [updateParams]
+  );
+
   const toggleTag = useCallback(
     (tagId: string) => {
       const currentTags = filterState.tagIds;
@@ -298,6 +308,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       if ('sourceFilter' in updates) urlUpdates.source = updates.sourceFilter;
       if ('timeRange' in updates) urlUpdates.time = updates.timeRange;
       if ('tagIds' in updates) urlUpdates.tags = updates.tagIds;
+      if ('groupFilters' in updates) urlUpdates.groups = updates.groupFilters;
       if ('sortBy' in updates) urlUpdates.sort = updates.sortBy;
       if ('sortOrder' in updates) urlUpdates.order = updates.sortOrder;
 
@@ -309,16 +320,32 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
   // Sort action creators
   const setSortBy = useCallback(
     (sortBy: string) => {
-      updateParams({ sort: sortBy });
+      updateParams(() => ({
+        filter: filterState.filter,
+        source: filterState.sourceFilter,
+        time: filterState.timeRange,
+        tags: filterState.tagIds,
+        groups: filterState.groupFilters,
+        sort: sortBy,
+        order: filterState.sortOrder,
+      }));
     },
-    [updateParams]
+    [updateParams, filterState]
   );
 
   const setSortOrder = useCallback(
     (sortOrder: 'asc' | 'desc') => {
-      updateParams({ order: sortOrder });
+      updateParams(() => ({
+        filter: filterState.filter,
+        source: filterState.sourceFilter,
+        time: filterState.timeRange,
+        tags: filterState.tagIds,
+        groups: filterState.groupFilters,
+        sort: filterState.sortBy,
+        order: sortOrder,
+      }));
     },
-    [updateParams]
+    [updateParams, filterState]
   );
 
   const contextValue: FilterContextType = {
@@ -333,6 +360,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
     setSourceFilter,
     setTimeRange,
     setTagIds,
+    setGroupFilters,
     toggleTag,
     addTag,
     removeTag,

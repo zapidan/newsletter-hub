@@ -122,12 +122,21 @@ describe('queryKeyFactory - Sorting', () => {
         orderDirection: 'desc',
       };
 
+      const filterReadingTime = {
+        orderBy: 'estimated_read_time',
+        orderDirection: 'asc',
+      };
+
       const keyTitle = queryKeyFactory.newsletters.infinite(filterTitle);
       const keyDate = queryKeyFactory.newsletters.infinite(filterDate);
+      const keyReadingTime = queryKeyFactory.newsletters.infinite(filterReadingTime);
 
       expect(keyTitle).not.toEqual(keyDate);
+      expect(keyTitle).not.toEqual(keyReadingTime);
+      expect(keyDate).not.toEqual(keyReadingTime);
       expect(keyTitle[2].orderBy).toBe('title');
       expect(keyDate[2].orderBy).toBe('received_at');
+      expect(keyReadingTime[2].orderBy).toBe('estimated_read_time');
     });
 
     it('should generate same key for identical sort parameters', () => {
@@ -202,6 +211,83 @@ describe('queryKeyFactory - Sorting', () => {
           dateFrom: '2024-01-01',
           dateTo: '2024-12-31',
           orderBy: 'title',
+          orderDirection: 'asc',
+        },
+      ]);
+    });
+
+    it('should handle reading time sorting with ascending order', () => {
+      const filter = {
+        orderBy: 'estimated_read_time',
+        orderDirection: 'asc',
+      };
+
+      const result = queryKeyFactory.newsletters.infinite(filter);
+
+      expect(result).toEqual([
+        'newsletters',
+        'infinite',
+        {
+          orderBy: 'estimated_read_time',
+          orderDirection: 'asc',
+        },
+      ]);
+    });
+
+    it('should handle reading time sorting with descending order', () => {
+      const filter = {
+        orderBy: 'estimated_read_time',
+        orderDirection: 'desc',
+      };
+
+      const result = queryKeyFactory.newsletters.infinite(filter);
+
+      expect(result).toEqual([
+        'newsletters',
+        'infinite',
+        {
+          orderBy: 'estimated_read_time',
+          orderDirection: 'desc',
+        },
+      ]);
+    });
+
+    it('should generate different keys for reading time sort orders', () => {
+      const filterAsc = {
+        orderBy: 'estimated_read_time',
+        orderDirection: 'asc',
+      };
+
+      const filterDesc = {
+        orderBy: 'estimated_read_time',
+        orderDirection: 'desc',
+      };
+
+      const keyAsc = queryKeyFactory.newsletters.infinite(filterAsc);
+      const keyDesc = queryKeyFactory.newsletters.infinite(filterDesc);
+
+      expect(keyAsc).not.toEqual(keyDesc);
+      expect(keyAsc[2].orderDirection).toBe('asc');
+      expect(keyDesc[2].orderDirection).toBe('desc');
+    });
+
+    it('should combine reading time sort with other filters', () => {
+      const filter = {
+        search: 'tech',
+        isRead: false,
+        orderBy: 'estimated_read_time',
+        orderDirection: 'asc',
+      };
+
+      const result = queryKeyFactory.newsletters.infinite(filter);
+
+      expect(result).toEqual([
+        'newsletters',
+        'infinite',
+        {
+          search: 'tech',
+          isRead: false,
+          orderBy: 'estimated_read_time',
           orderDirection: 'asc',
         },
       ]);

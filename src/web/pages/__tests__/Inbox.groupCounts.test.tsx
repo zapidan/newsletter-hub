@@ -46,6 +46,9 @@ vi.mock('@common/hooks/useInboxFilters', () => ({
     allTags: [],
     newsletterSources: [],
     isLoadingSources: false,
+    groupFilters: [], // Add missing groupFilters
+    sortBy: 'received_at',
+    sortOrder: 'desc',
     useLocalTagFiltering: false,
     newsletterFilter: {
       isRead: false,
@@ -57,7 +60,7 @@ vi.mock('@common/hooks/useInboxFilters', () => ({
       dateFrom: undefined,
       dateTo: undefined,
       orderBy: undefined,
-      ascending: undefined,
+      orderDirection: undefined, // Update to use orderDirection instead of ascending
     },
     setFilter: vi.fn(),
     setSourceFilter: vi.fn(),

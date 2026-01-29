@@ -54,6 +54,7 @@ const TIME_RANGE_OPTIONS = [
 
 const SORT_OPTIONS = [
   { value: "received_at" as const, label: "Date" },
+  { value: "estimated_read_time" as const, label: "Reading Time" },
 ];
 
 const FILTER_OPTIONS = [

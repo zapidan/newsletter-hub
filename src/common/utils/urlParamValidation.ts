@@ -282,7 +282,7 @@ export const orderDirectionValidator = createEnumValidator(['asc', 'desc']);
 
 // Common sort fields for newsletters
 export const sortFieldValidator = createStringValidator({
-  allowedValues: ['created_at', 'updated_at', 'title', 'published_at', 'read_at', 'name'],
+  allowedValues: ['created_at', 'updated_at', 'title', 'published_at', 'read_at', 'name', 'received_at', 'estimated_read_time'],
 });
 
 /**

@@ -357,8 +357,9 @@ describe('URL Parameter Validation Utilities', () => {
       expect(sortFieldValidator('created_at')).toEqual({ isValid: true, value: 'created_at' });
       expect(sortFieldValidator('invalid')).toEqual({
         isValid: false,
+        defaultValue: undefined,
         value: undefined,
-        error: 'Invalid value "invalid". Must be one of: created_at, updated_at, title, published_at, read_at, name',
+        error: 'Invalid value "invalid". Must be one of: created_at, updated_at, title, published_at, read_at, name, received_at, estimated_read_time',
       });
     });
   });

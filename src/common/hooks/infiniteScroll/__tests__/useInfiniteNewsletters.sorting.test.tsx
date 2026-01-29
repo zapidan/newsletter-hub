@@ -68,6 +68,7 @@ describe('useInfiniteNewsletters - Sorting', () => {
         id: '1',
         title: orderBy === 'title' && orderDirection === 'asc' ? 'A Newsletter' : 'Z Newsletter',
         received_at: orderBy === 'received_at' && orderDirection === 'asc' ? '2024-01-01' : '2024-12-31',
+        estimated_read_time: orderBy === 'estimated_read_time' && orderDirection === 'asc' ? 2 : 15,
         is_read: false,
         is_archived: false,
         is_liked: false,
@@ -78,6 +79,7 @@ describe('useInfiniteNewsletters - Sorting', () => {
         id: '2',
         title: orderBy === 'title' && orderDirection === 'asc' ? 'B Newsletter' : 'Y Newsletter',
         received_at: orderBy === 'received_at' && orderDirection === 'asc' ? '2024-01-02' : '2024-12-30',
+        estimated_read_time: orderBy === 'estimated_read_time' && orderDirection === 'asc' ? 5 : 10,
         is_read: false,
         is_archived: false,
         is_liked: false,
@@ -212,6 +214,68 @@ describe('useInfiniteNewsletters - Sorting', () => {
       expect(result.current.newsletters).toHaveLength(2);
       expect(result.current.newsletters[0].title).toBe('Z Newsletter');
       expect(result.current.newsletters[1].title).toBe('Y Newsletter');
+    });
+  });
+
+  describe('sort by estimated_read_time', () => {
+    it('should fetch newsletters sorted by estimated_read_time in ascending order', async () => {
+      const mockResponse = createMockResponse('estimated_read_time', 'asc');
+      mockGetAll.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(
+        () => useInfiniteNewsletters({
+          orderBy: 'estimated_read_time',
+          orderDirection: 'asc',
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(mockGetAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: 'estimated_read_time',
+          orderDirection: 'asc',
+          limit: 20,
+          offset: 0,
+        })
+      );
+
+      expect(result.current.newsletters).toHaveLength(2);
+      expect(result.current.newsletters[0].estimated_read_time).toBe(2);
+      expect(result.current.newsletters[1].estimated_read_time).toBe(5);
+    });
+
+    it('should fetch newsletters sorted by estimated_read_time in descending order', async () => {
+      const mockResponse = createMockResponse('estimated_read_time', 'desc');
+      mockGetAll.mockResolvedValue(mockResponse);
+
+      const { result } = renderHook(
+        () => useInfiniteNewsletters({
+          orderBy: 'estimated_read_time',
+          orderDirection: 'desc',
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(mockGetAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: 'estimated_read_time',
+          orderDirection: 'desc',
+          limit: 20,
+          offset: 0,
+        })
+      );
+
+      expect(result.current.newsletters).toHaveLength(2);
+      expect(result.current.newsletters[0].estimated_read_time).toBe(15);
+      expect(result.current.newsletters[1].estimated_read_time).toBe(10);
     });
   });
 

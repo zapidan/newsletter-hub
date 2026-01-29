@@ -3,7 +3,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
-import { InboxFilters, NewsletterSourceWithCount } from '@web/components/InboxFilters';
+import { InboxFilters } from '@web/components/InboxFilters';
 
 import LoadingScreen from '@common/components/common/LoadingScreen';
 import { InfiniteNewsletterList } from '@web/components/InfiniteScroll';
@@ -91,26 +91,42 @@ const Inbox: React.FC = () => {
     filter,
     sourceFilter,
     timeRange,
+    tagIds,
     debouncedTagIds,
+    pendingTagUpdates,
+    visibleTags,
+    setVisibleTags,
     allTags,
-    newsletterSources,
-    isLoadingSources,
-    useLocalTagFiltering,
+    groupFilters,
     sortBy,
     sortOrder,
-    // Filter actions
+    newsletterFilter,
+    hasActiveFilters,
+    isFilterActive,
+    useLocalTagFiltering,
+    newsletterSources,
+    isLoadingSources,
     setFilter,
     setSourceFilter,
     setTimeRange,
+    setTagIds,
+    setPendingTagUpdates,
+    toggleTag,
+    addTag,
     removeTag,
     resetFilters,
+    updateTagDebounced,
     handleTagClick,
+    setGroupFilters,
+    toggleGroup,
+    addGroup,
+    removeGroup,
+    clearGroups,
     setSortBy,
     setSortOrder,
   } = useInboxFilters();
 
   // Group filters state (multi-select)
-  const [groupFilters, setGroupFilters] = useState<string[]>([]);
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
 
 
@@ -140,19 +156,8 @@ const Inbox: React.FC = () => {
     (groupIds: string[]) => {
       setSourceFilter(null);
       setGroupFilters(groupIds);
-      // Immediately sync URL parameters with the new group IDs
-      // Pass the new values directly to avoid async state issues
-      const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
-      syncFilterUrl(
-        currentParams,
-        filter,
-        sourceFilter,
-        groupIds, // Use the new groupIds directly instead of relying on state
-        debouncedTagIds,
-        timeRange
-      );
     },
-    [setSourceFilter, filter, sourceFilter, debouncedTagIds, timeRange]
+    [setSourceFilter, setGroupFilters]
   );
 
   // Handle filter changes while preserving group filters in URL
@@ -407,9 +412,6 @@ const Inbox: React.FC = () => {
   // Selection state (local to component since it's UI-only)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
-
-  // Tag visibility state
-  const [visibleTags, setVisibleTags] = useState<Set<string>>(new Set());
 
   // Tag error handling state
   const [tagUpdateError, setTagUpdateError] = useState<string | null>(null);
@@ -716,7 +718,7 @@ const Inbox: React.FC = () => {
       }
       return newVisibleTags;
     });
-  }, []);
+  }, [setVisibleTags]);
 
   // Tag error handling
   const handleDismissTagError = useCallback(() => {
@@ -902,7 +904,7 @@ const Inbox: React.FC = () => {
   // Create sources with unread counts for the filter dropdown
   const sourcesWithUnreadCounts = useMemo(() => {
     return newsletterSources.map(
-      (source): NewsletterSourceWithCount => ({
+      (source: NewsletterSource): NewsletterSourceWithCount => ({
         ...source,
         count: source.unread_count || 0,
       })
