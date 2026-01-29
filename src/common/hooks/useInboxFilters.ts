@@ -106,7 +106,6 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const memoizedGetTags = useCallback(getTags, [getTags]);
   const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
     includeCount: true,
-    excludeArchived: false,
   });
 
   // Sync pendingTagUpdates with URL changes - only if they actually differ
