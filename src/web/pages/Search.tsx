@@ -13,10 +13,10 @@ import {
 import React from "react";
 
 // Hooks
-import { useNewsletterSources, usePagination, useSearch, useSearchKeyboard, useSearchSuggestions } from "../hooks/useSearch";
+import { useNewsletterGroups, useNewsletterSources, usePagination, useSearch, useSearchKeyboard, useSearchSuggestions } from "../hooks/useSearch";
 
 // Utils
-import { Newsletter, NewsletterSource } from "../../common/index.ts";
+import { Newsletter, NewsletterGroup, NewsletterSource } from "../../common/index.ts";
 import {
   formatPaginationInfo,
   formatResultsCount,
@@ -80,12 +80,17 @@ const SearchInput: React.FC<{
 const SearchFilters: React.FC<{
   showFilters: boolean;
   sources: NewsletterSource[];
+  groups: NewsletterGroup[];
+  groupsLoading: boolean;
+  groupsError: string | null;
   selectedSources: string[];
+  selectedGroups: string[];
   readStatus: "all" | "read" | "unread";
   archivedStatus: "all" | "archived" | "active";
   dateFrom: string;
   dateTo: string;
   onToggleSource: (sourceId: string) => void;
+  onToggleGroup: (groupId: string) => void;
   onReadStatusChange: (status: "all" | "read" | "unread") => void;
   onArchivedStatusChange: (status: "all" | "archived" | "active") => void;
   onDateFromChange: (date: string) => void;
@@ -94,12 +99,17 @@ const SearchFilters: React.FC<{
 }> = ({
   showFilters,
   sources,
+  groups,
+  groupsLoading,
+  groupsError,
   selectedSources,
+  selectedGroups,
   readStatus,
   archivedStatus,
   dateFrom,
   dateTo,
   onToggleSource,
+  onToggleGroup,
   onReadStatusChange,
   onArchivedStatusChange,
   onDateFromChange,
@@ -125,20 +135,39 @@ const SearchFilters: React.FC<{
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Sources */}
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-2">
               Sources
             </label>
-            <div className="max-h-32 overflow-y-auto space-y-1">
+            <div key="sources-list" className="max-h-32 overflow-y-auto space-y-1">
               {sources.map((source) => (
                 <label key={source.id} className="flex items-center text-sm">
                   <input
                     type="checkbox"
                     checked={selectedSources.includes(source.id)}
                     onChange={() => onToggleSource(source.id)}
-                    className="mr-2 rounded"
+                    className="mr-2 h-4 w-4 appearance-none rounded border-2 border-neutral-300 bg-white checked:bg-primary-600 checked:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 relative cursor-pointer transition-all duration-200"
+                    style={{
+                      WebkitAppearance: 'none',
+                      MozAppearance: 'none',
+                      appearance: 'none',
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '4px',
+                      border: '2px solid #d1d5db',
+                      backgroundColor: selectedSources.includes(source.id) ? '#2563eb' : '#ffffff',
+                      backgroundImage: selectedSources.includes(source.id)
+                        ? `url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='m13.854 3.646-7.5 7.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6 10.293l7.146-7.147a.5.5 0 0 1 .708.708z'/%3e%3c/svg%3e")`
+                        : 'none',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat',
+                      backgroundSize: '12px 12px',
+                      outline: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
                   />
                   <span className="truncate">{source.name}</span>
                   {typeof source.newsletter_count === "number" && (
@@ -151,6 +180,47 @@ const SearchFilters: React.FC<{
             </div>
           </div>
 
+          {/* Groups */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              Groups
+              {groupsLoading && <span className="ml-2 text-xs text-neutral-500">Loading...</span>}
+              {groupsError && <span className="ml-2 text-xs text-red-500">Error</span>}
+            </label>
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {groupsLoading ? (
+                <div className="text-sm text-neutral-500">Loading groups...</div>
+              ) : groupsError ? (
+                <div className="text-sm text-red-500">Failed to load groups</div>
+              ) : groups.length === 0 ? (
+                <div className="text-sm text-neutral-500">No groups available</div>
+              ) : (
+                groups.map((group: NewsletterGroup) => (
+                  <label key={group.id} className="flex items-center text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroups.includes(group.id)}
+                      onChange={() => onToggleGroup(group.id)}
+                      className="mr-2 h-4 w-4 appearance-none rounded border-2 border-neutral-300 bg-white checked:bg-primary-600 checked:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 relative cursor-pointer transition-all duration-200"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='m13.854 3.646-7.5 7.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6 10.293l7.146-7.147a.5.5 0 0 1 .708.708z'/%3e%3c/svg%3e")`,
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: '0.75rem 0.75rem'
+                      }}
+                    />
+                    <span className="truncate">{group.name}</span>
+                    {group.sources && (
+                      <span className="ml-auto text-neutral-400">
+                        ({group.sources.length})
+                      </span>
+                    )}
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Read Status */}
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-2">
@@ -159,7 +229,7 @@ const SearchFilters: React.FC<{
             <select
               value={readStatus}
               onChange={(e) => onReadStatusChange(e.target.value as "all" | "read" | "unread")}
-              className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
+              className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="all">All newsletters</option>
               <option value="read">Read only</option>
@@ -175,7 +245,7 @@ const SearchFilters: React.FC<{
             <select
               value={archivedStatus}
               onChange={(e) => onArchivedStatusChange(e.target.value as "all" | "archived" | "active")}
-              className="w-full px-3 py-1 border border-neutral-300 rounded-md text-sm"
+              className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="active">Active only</option>
               <option value="all">All newsletters</option>
@@ -193,14 +263,14 @@ const SearchFilters: React.FC<{
                 type="date"
                 value={dateFrom}
                 onChange={(e) => onDateFromChange(e.target.value)}
-                className="w-full px-2 py-1 border border-neutral-300 rounded text-sm"
+                className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="From"
               />
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => onDateToChange(e.target.value)}
-                className="w-full px-2 py-1 border border-neutral-300 rounded text-sm"
+                className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="To"
               />
             </div>
@@ -597,6 +667,7 @@ const Search: React.FC = () => {
   } = useSearchSuggestions(query);
 
   const { sources } = useNewsletterSources();
+  const { groups, loading: groupsLoading, error: groupsError } = useNewsletterGroups();
 
   // Handlers
   const handleSuggestionSelect = (suggestion: string) => {
@@ -685,7 +756,11 @@ const Search: React.FC = () => {
         <SearchFilters
           showFilters={showFilters}
           sources={sources}
+          groups={groups}
+          groupsLoading={groupsLoading}
+          groupsError={groupsError}
           selectedSources={filters.selectedSources}
+          selectedGroups={filters.selectedGroups}
           readStatus={filters.readStatus}
           archivedStatus={filters.archivedStatus}
           dateFrom={filters.dateFrom}
@@ -695,6 +770,12 @@ const Search: React.FC = () => {
               ? filters.selectedSources.filter((id) => id !== sourceId)
               : [...filters.selectedSources, sourceId];
             updateFilters({ selectedSources: newSources });
+          }}
+          onToggleGroup={(groupId) => {
+            const newGroups = filters.selectedGroups.includes(groupId)
+              ? filters.selectedGroups.filter((id) => id !== groupId)
+              : [...filters.selectedGroups, groupId];
+            updateFilters({ selectedGroups: newGroups });
           }}
           onReadStatusChange={(status) => updateFilters({ readStatus: status })}
           onArchivedStatusChange={(status) =>
