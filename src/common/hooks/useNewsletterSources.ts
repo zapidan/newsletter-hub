@@ -47,7 +47,7 @@ export const useNewsletterSources = (params: NewsletterSourceQueryParams = {}) =
   // Default parameters for getting active sources with counts
   const queryParams = useMemo(
     () => ({
-      excludeArchived: false,
+      excludeArchived: true,
       includeCount: true,
       orderBy: 'created_at',
       ascending: false,
