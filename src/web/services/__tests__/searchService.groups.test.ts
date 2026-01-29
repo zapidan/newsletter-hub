@@ -1,34 +1,35 @@
-import { SearchService } from '../searchService';
 import { NewsletterGroup } from '@common/types';
+import { vi } from 'vitest';
+import { SearchService } from '../searchService';
 
 // Mock dependencies
 const mockNewsletterGroupService = {
-  getGroups: jest.fn(),
+  getGroups: vi.fn(),
 };
 
 const mockLogger = {
-  error: jest.fn(),
-  info: jest.fn(),
-  debug: jest.fn(),
-  warn: jest.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  debug: vi.fn(),
+  warn: vi.fn(),
 };
 
 const mockDeps = {
-  getAllNewsletterSources: jest.fn(),
-  updateNewsletter: jest.fn(),
+  getAllNewsletterSources: vi.fn(),
+  updateNewsletter: vi.fn(),
   newsletterService: {} as any,
   newsletterGroupService: mockNewsletterGroupService,
   logger: mockLogger,
   window: {} as any,
-  buildSearchParams: jest.fn(),
-  validateSearchFilters: jest.fn(),
+  buildSearchParams: vi.fn(),
+  validateSearchFilters: vi.fn(),
 };
 
 describe('SearchService - Group Methods', () => {
   let searchService: SearchService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     searchService = new SearchService(mockDeps);
   });
 

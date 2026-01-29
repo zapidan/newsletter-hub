@@ -1,18 +1,19 @@
-import { renderHook, waitFor } from '@testing-library/react';
-import { useNewsletterGroups } from '../useSearch';
-import { searchService } from '../../services/searchService';
 import { NewsletterGroup } from '@common/types';
+import { renderHook, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
+import { searchService } from '../../services/searchService';
+import { useNewsletterGroups } from '../useSearch';
 
 // Mock the searchService
-jest.mock('../../services/searchService', () => ({
-  searchService: jest.fn(),
+vi.mock('../../services/searchService', () => ({
+  searchService: vi.fn(),
 }));
 
-const mockSearchService = searchService as jest.MockedFunction<typeof searchService>;
+const mockSearchService = searchService as any;
 
 describe('useNewsletterGroups', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('should load groups successfully', async () => {
@@ -38,8 +39,8 @@ describe('useNewsletterGroups', () => {
     ];
 
     mockSearchService.mockReturnValue({
-      getGroups: jest.fn().mockResolvedValue(mockGroups),
-      formatSearchError: jest.fn().mockReturnValue('Error message'),
+      getGroups: vi.fn().mockResolvedValue(mockGroups),
+      formatSearchError: vi.fn().mockReturnValue('Error message'),
     } as any);
 
     const { result } = renderHook(() => useNewsletterGroups());
@@ -60,8 +61,8 @@ describe('useNewsletterGroups', () => {
   it('should handle errors when loading groups', async () => {
     const errorMessage = 'Failed to load groups';
     mockSearchService.mockReturnValue({
-      getGroups: jest.fn().mockRejectedValue(new Error(errorMessage)),
-      formatSearchError: jest.fn().mockReturnValue(errorMessage),
+      getGroups: vi.fn().mockRejectedValue(new Error(errorMessage)),
+      formatSearchError: vi.fn().mockReturnValue(errorMessage),
     } as any);
 
     const { result } = renderHook(() => useNewsletterGroups());
@@ -78,8 +79,8 @@ describe('useNewsletterGroups', () => {
 
   it('should return empty groups array when service returns empty', async () => {
     mockSearchService.mockReturnValue({
-      getGroups: jest.fn().mockResolvedValue([]),
-      formatSearchError: jest.fn().mockReturnValue('Error message'),
+      getGroups: vi.fn().mockResolvedValue([]),
+      formatSearchError: vi.fn().mockReturnValue('Error message'),
     } as any);
 
     const { result } = renderHook(() => useNewsletterGroups());
@@ -105,10 +106,10 @@ describe('useNewsletterGroups', () => {
       },
     ];
 
-    const getGroupsMock = jest.fn().mockResolvedValue(mockGroups);
+    const getGroupsMock = vi.fn().mockResolvedValue(mockGroups);
     mockSearchService.mockReturnValue({
       getGroups: getGroupsMock,
-      formatSearchError: jest.fn().mockReturnValue('Error message'),
+      formatSearchError: vi.fn().mockReturnValue('Error message'),
     } as any);
 
     const { result, rerender } = renderHook(() => useNewsletterGroups());
