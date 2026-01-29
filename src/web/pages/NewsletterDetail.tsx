@@ -11,6 +11,7 @@ import { useLogger } from '@common/utils/logger/useLogger';
 import { useMutation } from '@tanstack/react-query';
 import BackButton from '@web/components/BackButton';
 import TagSelector from '@web/components/TagSelector';
+import { parseFilterUrlParams, urlParamsToNewsletterFilter } from '@web/utils/filterUrlUtils';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import NavigationArrows from '../../components/NewsletterDetail/NavigationArrows';
@@ -436,33 +437,19 @@ const NewsletterDetail = memo(() => {
   const { groups = [] } = useNewsletterSourceGroups();
   // Get navigation filter from location state or URL params
   const navigationFilter = useMemo(() => {
-    // Prefer URL params over location state for filter
-    const filterParam = searchParams.get('filter') || location.state?.currentFilter;
-    const sourceParam = searchParams.get('source') || location.state?.sourceFilter;
-    const tagsParam = searchParams.get('tags');
+    // Parse URL parameters using centralized utility
+    const urlParams = parseFilterUrlParams(searchParams);
 
-    if (filterParam) {
-      // Convert filter string to NewsletterFilter format
-      const filter: Partial<import('@common/types/cache').NewsletterFilter> = {};
-      if (filterParam === 'unread') {
-        filter.isRead = false;
-        filter.isArchived = false;
-      }
-      if (filterParam === 'archived') filter.isArchived = true;
-      if (filterParam === 'liked') {
-        filter.isLiked = true;
-        // Don't set isArchived for liked filter - show all liked newsletters
-      }
-      if (sourceParam) filter.sourceIds = [sourceParam];
-      if (tagsParam) {
-        filter.tagIds = tagsParam.split(',').filter(Boolean);
-      } else if (location.state?.tagIds?.length > 0) {
-        filter.tagIds = location.state.tagIds;
-      }
-      return filter;
+    // Convert to newsletter filter format
+    const filter = urlParamsToNewsletterFilter(urlParams);
+
+    // Also check location state for backward compatibility
+    if (location.state?.tagIds?.length > 0 && !filter.tagIds) {
+      filter.tagIds = location.state.tagIds;
     }
-    return {};
-  }, [location.state, searchParams]);
+
+    return filter;
+  }, [searchParams, location.state]);
 
   // Setup navigation
   const navigation = useSimpleNewsletterNavigation(id || '', {
