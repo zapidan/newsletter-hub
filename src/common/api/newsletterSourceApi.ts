@@ -63,42 +63,30 @@ const getNewsletterCountsForSources = async (
     return { totalCounts: {}, unreadCounts: {} };
   }
 
-  // Get total counts (non-archived newsletters)
-  const { data: totalData, error: totalError } = await supabase
+  // Optimized: Single query with aggregation instead of multiple round trips
+  const { data: aggregatedData, error: aggregatedError } = await supabase
     .from('newsletters')
-    .select('newsletter_source_id')
+    .select('newsletter_source_id, is_read, is_archived')
     .eq('user_id', userId)
-    .eq('is_archived', false)
     .in('newsletter_source_id', sourceIds);
 
-  if (totalError) handleSupabaseError(totalError);
+  if (aggregatedError) handleSupabaseError(aggregatedError);
 
-  // Get unread counts
-  const { data: unreadData, error: unreadError } = await supabase
-    .from('newsletters')
-    .select('newsletter_source_id')
-    .eq('user_id', userId)
-    .eq('is_archived', false)
-    .eq('is_read', false)
-    .in('newsletter_source_id', sourceIds);
-
-  if (unreadError) handleSupabaseError(unreadError);
-
-  // Count newsletters by source
+  // Process counts in application code (single pass)
   const totalCounts: Record<string, number> = {};
   const unreadCounts: Record<string, number> = {};
 
-  totalData?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+  aggregatedData?.forEach((newsletter: { newsletter_source_id: string | null; is_read: boolean; is_archived: boolean }) => {
     if (newsletter.newsletter_source_id) {
+      // Total count (all newsletters)
       totalCounts[newsletter.newsletter_source_id] =
         (totalCounts[newsletter.newsletter_source_id] || 0) + 1;
-    }
-  });
 
-  unreadData?.forEach((newsletter: { newsletter_source_id: string | null }) => {
-    if (newsletter.newsletter_source_id) {
-      unreadCounts[newsletter.newsletter_source_id] =
-        (unreadCounts[newsletter.newsletter_source_id] || 0) + 1;
+      // Unread count (only unarchived and unread)
+      if (!newsletter.is_archived && !newsletter.is_read) {
+        unreadCounts[newsletter.newsletter_source_id] =
+          (unreadCounts[newsletter.newsletter_source_id] || 0) + 1;
+      }
     }
   });
 
