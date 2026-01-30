@@ -202,14 +202,21 @@ export class NewsletterService extends BaseService {
         const batchProcessor = this.createBatchProcessor(
           this.newsletterOptions.batchSize!,
           async (batch: string[]) => {
-            const results = await Promise.allSettled(
-              batch.map((id) => newsletterApi.markAsRead(id))
-            );
-            return results.map((result, index) => ({
+            // Use true bulk database operation instead of N individual calls
+            const bulkResult = await newsletterApi.bulkUpdate({
+              ids: batch,
+              updates: { is_read: true }
+            });
+
+            if (bulkResult.errorCount > 0) {
+              throw new Error(`Bulk update failed: ${bulkResult.errorCount} errors occurred`);
+            }
+
+            return bulkResult.results?.map((result: NewsletterWithRelations | null, index: number) => ({
               id: batch[index],
-              success: result.status === 'fulfilled' && result.value,
-              error: result.status === 'rejected' ? result.reason?.message : undefined,
-            }));
+              success: result !== null,
+              error: result === null ? 'Update failed' : undefined,
+            })) || [];
           }
         );
 
@@ -247,14 +254,21 @@ export class NewsletterService extends BaseService {
         const batchProcessor = this.createBatchProcessor(
           this.newsletterOptions.batchSize!,
           async (batch: string[]) => {
-            const results = await Promise.allSettled(
-              batch.map((id) => newsletterApi.markAsUnread(id))
-            );
-            return results.map((result, index) => ({
+            // Use true bulk database operation instead of N individual calls
+            const bulkResult = await newsletterApi.bulkUpdate({
+              ids: batch,
+              updates: { is_read: false }
+            });
+
+            if (bulkResult.errorCount > 0) {
+              throw new Error(`Bulk update failed: ${bulkResult.errorCount} errors occurred`);
+            }
+
+            return bulkResult.results?.map((result: NewsletterWithRelations | null, index: number) => ({
               id: batch[index],
-              success: result.status === 'fulfilled' && result.value,
-              error: result.status === 'rejected' ? result.reason?.message : undefined,
-            }));
+              success: result !== null,
+              error: result === null ? 'Update failed' : undefined,
+            })) || [];
           }
         );
 

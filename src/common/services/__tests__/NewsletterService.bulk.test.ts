@@ -11,6 +11,7 @@ vi.mock('@common/api/newsletterApi', () => ({
     getAll: vi.fn(),
     markAsRead: vi.fn(),
     markAsUnread: vi.fn(),
+    bulkUpdate: vi.fn(),
   },
 }));
 
@@ -27,6 +28,8 @@ vi.mock('@common/utils/logger/useLogger', () => ({
 describe('NewsletterService Bulk Operations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clear all mock call counts
+    vi.clearAllTimers();
   });
 
   describe('bulkArchive', () => {
@@ -79,16 +82,23 @@ describe('NewsletterService Bulk Operations', () => {
   });
 
   describe('bulkMarkAsRead', () => {
-    it('should call markAsRead API for each ID', async () => {
+    it('should call bulkUpdate API for each ID', async () => {
       const { newsletterApi } = await import('@common/api/newsletterApi');
-      const mockMarkAsRead = vi.mocked(newsletterApi.markAsRead);
-      mockMarkAsRead.mockResolvedValue({ success: true } as any);
+      const mockBulkUpdate = vi.mocked(newsletterApi.bulkUpdate);
+      mockBulkUpdate.mockResolvedValue({
+        results: [{ success: true }, { success: true }],
+        errors: [null, null],
+        successCount: 2,
+        errorCount: 0,
+      } as any);
 
       const result = await newsletterService.bulkMarkAsRead(['nl1', 'nl2']);
 
-      expect(mockMarkAsRead).toHaveBeenCalledTimes(2);
-      expect(mockMarkAsRead).toHaveBeenCalledWith('nl1');
-      expect(mockMarkAsRead).toHaveBeenCalledWith('nl2');
+      expect(mockBulkUpdate).toHaveBeenCalledTimes(1);
+      expect(mockBulkUpdate).toHaveBeenCalledWith({
+        ids: ['nl1', 'nl2'],
+        updates: { is_read: true }
+      });
       expect(result.success).toBe(true);
       expect(result.processedCount).toBe(2);
       expect(result.failedCount).toBe(0);
@@ -96,32 +106,46 @@ describe('NewsletterService Bulk Operations', () => {
 
     it('should handle partial failures', async () => {
       const { newsletterApi } = await import('@common/api/newsletterApi');
-      const mockMarkAsRead = vi.mocked(newsletterApi.markAsRead);
-      mockMarkAsRead
-        .mockResolvedValueOnce({ success: true } as any)
-        .mockRejectedValueOnce(new Error('Failed'))
-        .mockResolvedValueOnce({ success: true } as any);
+      const mockBulkUpdate = vi.mocked(newsletterApi.bulkUpdate);
+      mockBulkUpdate.mockResolvedValue({
+        results: [{ success: true }, null, { success: true }],
+        errors: [null, new Error('Failed'), null],
+        successCount: 2,
+        errorCount: 1,
+      } as any);
 
-      const result = await newsletterService.bulkMarkAsRead(['nl1', 'nl2', 'nl3']);
+      // The service throws an error when there are bulk update failures
+      // Due to retry mechanism (maxRetries: 3), it will be called 4 times (1 initial + 3 retries)
+      await expect(newsletterService.bulkMarkAsRead(['nl1', 'nl2', 'nl3'])).rejects.toThrow(
+        'Bulk update failed: 1 errors occurred'
+      );
 
-      expect(mockMarkAsRead).toHaveBeenCalledTimes(3);
-      expect(result.success).toBe(false); // When there are failures, success is false
-      expect(result.processedCount).toBe(2);
-      expect(result.failedCount).toBe(1);
+      expect(mockBulkUpdate).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
+      expect(mockBulkUpdate).toHaveBeenCalledWith({
+        ids: ['nl1', 'nl2', 'nl3'],
+        updates: { is_read: true }
+      });
     });
   });
 
   describe('bulkMarkAsUnread', () => {
-    it('should call markAsUnread API for each ID', async () => {
+    it('should call bulkUpdate API for each ID', async () => {
       const { newsletterApi } = await import('@common/api/newsletterApi');
-      const mockMarkAsUnread = vi.mocked(newsletterApi.markAsUnread);
-      mockMarkAsUnread.mockResolvedValue({ success: true } as any);
+      const mockBulkUpdate = vi.mocked(newsletterApi.bulkUpdate);
+      mockBulkUpdate.mockResolvedValue({
+        results: [{ success: true }, { success: true }],
+        errors: [null, null],
+        successCount: 2,
+        errorCount: 0,
+      } as any);
 
       const result = await newsletterService.bulkMarkAsUnread(['nl1', 'nl2']);
 
-      expect(mockMarkAsUnread).toHaveBeenCalledTimes(2);
-      expect(mockMarkAsUnread).toHaveBeenCalledWith('nl1');
-      expect(mockMarkAsUnread).toHaveBeenCalledWith('nl2');
+      expect(mockBulkUpdate).toHaveBeenCalledTimes(1);
+      expect(mockBulkUpdate).toHaveBeenCalledWith({
+        ids: ['nl1', 'nl2'],
+        updates: { is_read: false }
+      });
       expect(result.success).toBe(true);
       expect(result.processedCount).toBe(2);
       expect(result.failedCount).toBe(0);
