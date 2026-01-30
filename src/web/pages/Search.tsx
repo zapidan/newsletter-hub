@@ -13,11 +13,11 @@ import {
 import React from "react";
 
 // Hooks
-import { useNewsletterGroups, useNewsletterSources, usePagination, useSearch, useSearchKeyboard, useSearchSuggestions } from "../hooks/useSearch";
-
-// Utils
-import { useSourceSearch } from "../../common/hooks/useSourceSearch.ts";
+import { useNewsletterSources, useSourceSearch } from '@common/hooks';
 import { Newsletter, NewsletterGroup, NewsletterSource } from "../../common/index.ts";
+import { useNewsletterGroups, usePagination, useSearch, useSearchKeyboard, useSearchSuggestions } from "../hooks/useSearch";
+
+// Components
 import {
   formatPaginationInfo,
   formatResultsCount,
@@ -25,7 +25,6 @@ import {
   highlightSearchTerms,
 } from "../utils/searchUtils";
 
-// Components
 const SearchInput: React.FC<{
   query: string;
   onQueryChange: (query: string) => void;
@@ -118,7 +117,7 @@ const SearchFilters: React.FC<{
     // Global search hook for sources
     const {
       searchResults: sourceSearchResults,
-      isSearching: _isSearchingSources,
+      isSearching: isSearchingSources,
       setSearchQuery: setGlobalSourceSearchQuery,
       clearSearch: clearGlobalSourceSearch,
     } = useSourceSearch({ debounceMs: 300, minQueryLength: 2 });
@@ -191,7 +190,7 @@ const SearchFilters: React.FC<{
               type="text"
               value={sourceSearchTerm}
               onChange={handleSourceSearchChange}
-              placeholder={_isSearchingSources ? "Searching all sources..." : "Search sources..."}
+              placeholder={isSearchingSources ? "Searching all sources..." : "Search sources..."}
               className="w-full px-3 py-2 mb-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             {sourceSearchTerm && (
@@ -205,7 +204,7 @@ const SearchFilters: React.FC<{
                 <X className="h-4 w-4" />
               </button>
             )}
-            {_isSearchingSources && (
+            {isSearchingSources && (
               <div className="absolute right-3 top-2">
                 <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full border-t-transparent"></div>
               </div>
@@ -225,26 +224,7 @@ const SearchFilters: React.FC<{
                     type="checkbox"
                     checked={selectedSources.includes(source.id)}
                     onChange={() => onToggleSource(source.id)}
-                    className="mr-2 h-4 w-4 appearance-none rounded border-2 border-neutral-300 bg-white checked:bg-primary-600 checked:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 relative cursor-pointer transition-all duration-200"
-                    style={{
-                      WebkitAppearance: 'none',
-                      MozAppearance: 'none',
-                      appearance: 'none',
-                      width: '16px',
-                      height: '16px',
-                      borderRadius: '4px',
-                      border: '2px solid #d1d5db',
-                      backgroundColor: selectedSources.includes(source.id) ? '#2563eb' : '#ffffff',
-                      backgroundImage: selectedSources.includes(source.id)
-                        ? `url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='m13.854 3.646-7.5 7.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6 10.293l7.146-7.147a.5.5 0 0 1 .708.708z'/%3e%3c/svg%3e")`
-                        : 'none',
-                      backgroundPosition: 'center',
-                      backgroundRepeat: 'no-repeat',
-                      backgroundSize: '12px 12px',
-                      outline: 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
+                    className="mr-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
                   />
                   <span className="truncate">{source.name}</span>
                 </label>
@@ -252,6 +232,11 @@ const SearchFilters: React.FC<{
               {filteredSources.length === 0 && sourceSearchTerm && (
                 <div className="text-sm text-neutral-500 italic">
                   No sources found matching "{sourceSearchTerm}"
+                </div>
+              )}
+              {!sourceSearchTerm && sources.length >= 20 && (
+                <div className="text-xs text-neutral-500 mt-2 italic">
+                  Showing first 20 sources. Search to find more.
                 </div>
               )}
             </div>
@@ -722,7 +707,13 @@ const Search: React.FC = () => {
     hideSuggestions,
   } = useSearchSuggestions(query);
 
-  const { sources } = useNewsletterSources();
+  const { newsletterSources: sources } = useNewsletterSources({
+    includeCount: false, // No counts needed for search page
+    excludeArchived: false,
+    limit: 20, // Smart loading: only load 20 sources initially
+    orderBy: 'name',
+    orderDirection: 'asc',
+  });
   const { groups, loading: groupsLoading, error: groupsError } = useNewsletterGroups();
 
   // Handlers

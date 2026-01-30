@@ -1009,3 +1009,6 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
 );
 
 InboxFilters.displayName = "InboxFilters";
+
+// Export SourceFilterDropdown for use in other components
+export { SourceFilterDropdown };
