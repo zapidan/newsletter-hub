@@ -67,6 +67,7 @@ export interface NewsletterSourceQueryParams extends BaseQueryParams, Pagination
   includeCount?: boolean;
   excludeArchived?: boolean;
   search?: string;
+  orderDirection?: 'asc' | 'desc';
 }
 
 export interface TagQueryParams extends BaseQueryParams, PaginationParams {

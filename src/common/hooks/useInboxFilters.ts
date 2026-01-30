@@ -107,7 +107,9 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
     includeCount: true,
     excludeArchived: false,
-    limit: 1000, // Override default limit to get all sources for dropdown
+    limit: 1000, // Load all sources for dropdown with counts
+    orderBy: 'name',
+    orderDirection: 'asc',
   });
 
   // Sync pendingTagUpdates with URL changes - only if they actually differ
@@ -338,7 +340,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     setDebouncedTagIds([]);
     setGroupFilters([]);
     resetFilters();
-  }, [resetFilters]);
+  }, [resetFilters, setGroupFilters]);
 
   const addGroup = useCallback((groupId: string) => {
     const currentGroups = groupFilters;

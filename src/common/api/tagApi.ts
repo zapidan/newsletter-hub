@@ -1,10 +1,10 @@
+import { Tag, TagCreate, TagUpdate } from '../types';
 import {
-  supabase,
   handleSupabaseError,
   requireAuth,
+  supabase,
   withPerformanceLogging,
 } from './supabaseClient';
-import { Tag, TagCreate, TagUpdate } from '../types';
 
 // Tag API Service
 export const tagApi = {
@@ -15,7 +15,7 @@ export const tagApi = {
 
       const { data, error } = await supabase
         .from('tags')
-        .select('*')
+        .select('id, name, color, created_at, updated_at, user_id')
         .eq('user_id', user.id)
         .order('name');
 
@@ -31,7 +31,7 @@ export const tagApi = {
 
       const { data, error } = await supabase
         .from('tags')
-        .select('*')
+        .select('id, name, color, created_at, updated_at, user_id')
         .eq('id', id)
         .eq('user_id', user.id)
         .single();
@@ -229,7 +229,7 @@ export const tagApi = {
       // Try to find existing tag
       const { data: existingTag } = await supabase
         .from('tags')
-        .select('*')
+        .select('id, name, color, created_at, updated_at, user_id')
         .eq('name', name.trim())
         .eq('user_id', user.id)
         .single();
@@ -242,9 +242,9 @@ export const tagApi = {
       const tagColor =
         color ||
         '#' +
-          Math.floor(Math.random() * 16777215)
-            .toString(16)
-            .padStart(6, '0');
+        Math.floor(Math.random() * 16777215)
+          .toString(16)
+          .padStart(6, '0');
 
       return this.create({
         name: name.trim(),
@@ -276,7 +276,7 @@ export const tagApi = {
       // First get all tags
       const { data: tags, error: tagsError } = await supabase
         .from('tags')
-        .select('*')
+        .select('id, name, color, created_at, updated_at, user_id')
         .eq('user_id', user.id)
         .order('name');
 
@@ -352,7 +352,7 @@ export const tagApi = {
 
       const { data, error } = await supabase
         .from('tags')
-        .select('*')
+        .select('id, name, color, created_at, updated_at, user_id')
         .eq('user_id', user.id)
         .ilike('name', `%${query}%`)
         .order('name');
@@ -380,7 +380,7 @@ export const tagApi = {
       const user = await requireAuth();
       const { limit = 50, offset = 0, search, orderBy = 'name', ascending = true } = options;
 
-      let query = supabase.from('tags').select('*', { count: 'exact' }).eq('user_id', user.id);
+      let query = supabase.from('tags').select('id, name, color, created_at, updated_at, user_id', { count: 'exact' }).eq('user_id', user.id);
 
       if (search) {
         query = query.ilike('name', `%${search}%`);

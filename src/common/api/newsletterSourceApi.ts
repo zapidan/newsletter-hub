@@ -15,7 +15,15 @@ import {
 
 // Build query based on parameters
 const buildNewsletterSourceQuery = (params: NewsletterSourceQueryParams = {}) => {
-  let query = supabase.from('newsletter_sources').select('*');
+  let query = supabase.from('newsletter_sources').select(`
+    id,
+    name,
+    from,
+    is_archived,
+    created_at,
+    updated_at,
+    user_id
+  `);
 
   // Apply filters
   if (params.search) {
@@ -172,7 +180,15 @@ export const newsletterSourceApi = {
 
       const { data, error } = await supabase
         .from('newsletter_sources')
-        .select('*')
+        .select(`
+          id,
+          name,
+          from,
+          is_archived,
+          created_at,
+          updated_at,
+          user_id
+        `)
         .eq('id', id)
         .eq('user_id', user.id)
         .single();
@@ -230,7 +246,15 @@ export const newsletterSourceApi = {
           user_id: user.id,
           is_archived: false,
         })
-        .select()
+        .select(`
+          id,
+          name,
+          from,
+          is_archived,
+          created_at,
+          updated_at,
+          user_id
+        `)
         .single();
 
       if (error) handleSupabaseError(error);
@@ -282,7 +306,15 @@ export const newsletterSourceApi = {
         })
         .eq('id', id)
         .eq('user_id', user.id)
-        .select()
+        .select(`
+          id,
+          name,
+          from,
+          is_archived,
+          created_at,
+          updated_at,
+          user_id
+        `)
         .single();
 
       if (error) handleSupabaseError(error);
@@ -360,7 +392,15 @@ export const newsletterSourceApi = {
         })
         .in('id', ids)
         .eq('user_id', user.id)
-        .select();
+        .select(`
+          id,
+          name,
+          from,
+          is_archived,
+          created_at,
+          updated_at,
+          user_id
+        `);
 
       if (error) {
         // If bulk update fails, record error for all items
@@ -405,7 +445,15 @@ export const newsletterSourceApi = {
         })
         .in('id', ids)
         .eq('user_id', user.id)
-        .select();
+        .select(`
+          id,
+          name,
+          from,
+          is_archived,
+          created_at,
+          updated_at,
+          user_id
+        `);
 
       if (error) {
         // If bulk update fails, record error for all items
@@ -547,7 +595,15 @@ export const newsletterSourceApi = {
             })
             .eq('id', update.id)
             .eq('user_id', user.id)
-            .select()
+            .select(`
+              id,
+              name,
+              from,
+              is_archived,
+              created_at,
+              updated_at,
+              user_id
+            `)
             .single();
 
           if (error) {

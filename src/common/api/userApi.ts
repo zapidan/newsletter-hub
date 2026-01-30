@@ -36,7 +36,11 @@ export const userApi = {
   // Get user by ID
   async getById(id: string): Promise<UserProfile | null> {
     return withPerformanceLogging('user.getById', async () => {
-      const { data, error } = await supabase.from('users').select('*').eq('id', id).single();
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, full_name, created_at, updated_at')
+        .eq('id', id)
+        .single();
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -54,7 +58,11 @@ export const userApi = {
     return withPerformanceLogging('user.getCurrentUser', async () => {
       const user = await requireAuth();
 
-      const { data, error } = await supabase.from('users').select('*').eq('id', user.id).single();
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, full_name, created_at, updated_at')
+        .eq('id', user.id)
+        .single();
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -248,7 +256,7 @@ export const userApi = {
               const randomSuffix = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
               const baseAlias = emailAlias.split('@')[0];
               emailAlias = `${baseAlias}${randomSuffix}@${emailAlias.split('@')[1]}`;
-              
+
               log.info('Email alias already exists, trying with suffix', {
                 component: 'UserApi',
                 metadata: {
@@ -582,25 +590,25 @@ export const userApi = {
       // Get newsletters count
       const { count: newslettersCount } = await supabase
         .from('newsletters')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', targetUserId);
 
       // Get tags count
       const { count: tagsCount } = await supabase
         .from('tags')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', targetUserId);
 
       // Get sources count
       const { count: sourcesCount } = await supabase
         .from('newsletter_sources')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', targetUserId);
 
       // Get reading queue count
       const { count: readingQueueCount } = await supabase
         .from('reading_queue')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', targetUserId);
 
       // Get user profile for join date
@@ -629,7 +637,7 @@ export const userApi = {
 
       let searchQuery = supabase
         .from('users')
-        .select('*')
+        .select('id, email, full_name, created_at, updated_at')
         .or(`full_name.ilike.%${query}%,email.ilike.%${query}%`)
         .order('full_name');
 
@@ -697,10 +705,10 @@ export const userApi = {
 
         // Get all user data
         const [newsletters, tags, sources, readingQueue] = await Promise.all([
-          supabase.from('newsletters').select('*').eq('user_id', userId),
-          supabase.from('tags').select('*').eq('user_id', userId),
-          supabase.from('newsletter_sources').select('*').eq('user_id', userId),
-          supabase.from('reading_queue').select('*').eq('user_id', userId),
+          supabase.from('newsletters').select('id').eq('user_id', userId),
+          supabase.from('tags').select('id').eq('user_id', userId),
+          supabase.from('newsletter_sources').select('id').eq('user_id', userId),
+          supabase.from('reading_queue').select('id').eq('user_id', userId),
         ]);
 
         return {

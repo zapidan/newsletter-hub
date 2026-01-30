@@ -1,11 +1,11 @@
-import {
-  supabase,
-  handleSupabaseError,
-  requireAuth,
-  withPerformanceLogging,
-} from './supabaseClient';
 import { ReadingQueueItem, Tag } from '../types';
 import { logger } from '../utils/logger';
+import {
+  handleSupabaseError,
+  requireAuth,
+  supabase,
+  withPerformanceLogging,
+} from './supabaseClient';
 
 // Initialize logger
 const log = logger;
@@ -616,7 +616,7 @@ export const readingQueueApi = {
           priority: params.priority || 'normal',
           notes: params.notes,
         })
-        .select('*')
+        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
         .single();
 
       if (error) handleSupabaseError(error);
@@ -639,7 +639,7 @@ export const readingQueueApi = {
         .update(updateData)
         .eq('id', params.id)
         .eq('user_id', user.id)
-        .select('*')
+        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
         .single();
 
       if (error) handleSupabaseError(error);
@@ -725,7 +725,7 @@ export const readingQueueApi = {
 
       const { data, error } = await supabase
         .from('reading_queue')
-        .select('*')
+        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
         .eq('user_id', user.id)
         .eq('newsletter_id', newsletterId)
         .single();
@@ -758,7 +758,7 @@ export const readingQueueApi = {
         })
         .eq('id', id)
         .eq('user_id', user.id)
-        .select('*')
+        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
         .single();
 
       if (error) handleSupabaseError(error);
@@ -774,7 +774,7 @@ export const readingQueueApi = {
 
       let query = supabase
         .from('reading_queue')
-        .select('*')
+        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
         .eq('user_id', user.id)
         .eq('priority', priority)
         .order('position', { ascending: true });

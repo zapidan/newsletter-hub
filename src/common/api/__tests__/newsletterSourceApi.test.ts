@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { newsletterSourceApi } from '../newsletterSourceApi';
-import { supabase } from '../supabaseClient';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NewsletterSource } from '../../types';
 import {
-  NewsletterSourceQueryParams,
   CreateNewsletterSourceParams,
+  NewsletterSourceQueryParams,
   UpdateNewsletterSourceParams,
 } from '../../types/api';
+import { newsletterSourceApi } from '../newsletterSourceApi';
+import { supabase } from '../supabaseClient';
 
 // Mock dependencies
 vi.mock('../supabaseClient');
@@ -94,7 +94,15 @@ describe('newsletterSourceApi', () => {
       const result = await newsletterSourceApi.getAll();
 
       expect(mockSupabase.from).toHaveBeenCalledWith('newsletter_sources');
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith('*');
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(`
+    id,
+    name,
+    from,
+    is_archived,
+    created_at,
+    updated_at,
+    user_id
+  `);
       expect(mockQueryBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
       expect(result.data).toEqual(mockData);
       expect(result.count).toBe(1);
