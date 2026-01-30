@@ -16,6 +16,7 @@ import React from "react";
 import { useNewsletterGroups, useNewsletterSources, usePagination, useSearch, useSearchKeyboard, useSearchSuggestions } from "../hooks/useSearch";
 
 // Utils
+import { useSourceSearch } from "../../common/hooks/useSourceSearch.ts";
 import { Newsletter, NewsletterGroup, NewsletterSource } from "../../common/index.ts";
 import {
   formatPaginationInfo,
@@ -114,14 +115,50 @@ const SearchFilters: React.FC<{
 }) => {
     const [sourceSearchTerm, setSourceSearchTerm] = React.useState("");
 
+    // Global search hook for sources
+    const {
+      searchResults: sourceSearchResults,
+      isSearching: _isSearchingSources,
+      setSearchQuery: setGlobalSourceSearchQuery,
+      clearSearch: clearGlobalSourceSearch,
+    } = useSourceSearch({ debounceMs: 300, minQueryLength: 2 });
+
+    // Combine loaded sources and search results
+    const allSources = React.useMemo(() => {
+      const sourceMap = new Map(sources.map(s => [s.id, s]));
+
+      // Add search results (avoid duplicates)
+      sourceSearchResults.forEach((result: NewsletterSource) => {
+        if (!sourceMap.has(result.id)) {
+          sourceMap.set(result.id, result);
+        }
+      });
+
+      return Array.from(sourceMap.values());
+    }, [sources, sourceSearchResults]);
+
     // Filter sources based on search term
-    const filteredSources = sources.filter((source) =>
-      source.name.toLowerCase().includes(sourceSearchTerm.toLowerCase())
-    );
+    const filteredSources = React.useMemo(() => {
+      const filtered = sourceSearchTerm.trim()
+        ? allSources.filter((source) =>
+          source.name.toLowerCase().includes(sourceSearchTerm.toLowerCase())
+        )
+        : allSources;
+      return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    }, [allSources, sourceSearchTerm]);
+
+    // Handle search input changes
+    const handleSourceSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const query = e.target.value;
+      setSourceSearchTerm(query);
+      setGlobalSourceSearchQuery(query);
+    };
 
     // Handle clear filters
     const handleClearFilters = () => {
       setSourceSearchTerm("");
+      setGlobalSourceSearchQuery("");
+      clearGlobalSourceSearch();
       onClearFilters();
     };
 
@@ -153,10 +190,34 @@ const SearchFilters: React.FC<{
             <input
               type="text"
               value={sourceSearchTerm}
-              onChange={(e) => setSourceSearchTerm(e.target.value)}
-              placeholder="Search sources..."
+              onChange={handleSourceSearchChange}
+              placeholder={_isSearchingSources ? "Searching all sources..." : "Search sources..."}
               className="w-full px-3 py-2 mb-2 bg-white border border-neutral-300 rounded-md text-sm text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
+            {sourceSearchTerm && (
+              <button
+                onClick={() => {
+                  setSourceSearchTerm("");
+                  setGlobalSourceSearchQuery("");
+                }}
+                className="absolute right-3 top-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {_isSearchingSources && (
+              <div className="absolute right-3 top-2">
+                <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full border-t-transparent"></div>
+              </div>
+            )}
+            {sourceSearchTerm.trim().length >= 2 && (
+              <div className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-200 dark:border-neutral-800">
+                <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                  <SearchIcon className="h-3 w-3" />
+                  <span>Found {sourceSearchResults.length} additional sources</span>
+                </div>
+              </div>
+            )}
             <div key="sources-list" className="max-h-32 overflow-y-auto space-y-1">
               {filteredSources.map((source) => (
                 <label key={source.id} className="flex items-center text-sm">

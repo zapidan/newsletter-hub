@@ -1,12 +1,13 @@
+import { useSourceSearch } from '@common/hooks';
 import type { InboxFilterType } from "@common/hooks/useInboxFilters"; // Import the shared type
-import type { NewsletterSource } from "@common/types";
+import type { NewsletterSource as NewsletterSourceType } from "@common/types";
 import { Archive, ArrowUpDown, Building2, ChevronDown, Clock, Eye, EyeOff, Heart, Search } from "lucide-react";
 import { FC, memo, useMemo, useState } from "react";
 
 export type FilterType = InboxFilterType; // Use the shared type
 export type TimeRange = "all" | "day" | "2days" | "week" | "month";
 
-export interface NewsletterSourceWithCount extends NewsletterSource {
+export interface NewsletterSourceWithCount extends NewsletterSourceType {
   count?: number;
 }
 
@@ -228,21 +229,44 @@ const SourceFilterDropdown: FC<{
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Global search hook
+    const {
+      searchResults,
+      isSearching: _isSearching,
+      setSearchQuery: setGlobalSearchQuery,
+      clearSearch: clearGlobalSearch,
+      searchError: _searchError,
+    } = useSourceSearch({ debounceMs: 300, minQueryLength: 2 });
+
+    // Combine loaded sources and search results
+    const allSources = useMemo(() => {
+      const sourceMap = new Map(sources.map(s => [s.id, s]));
+
+      // Add search results (avoid duplicates)
+      searchResults.forEach((result: NewsletterSourceType) => {
+        if (!sourceMap.has(result.id)) {
+          sourceMap.set(result.id, { ...result, count: undefined });
+        }
+      });
+
+      return Array.from(sourceMap.values());
+    }, [sources, searchResults]);
+
     // Filter and sort sources based on search query
     const filteredSources = useMemo(
       () => {
         const filtered = searchQuery.trim()
-          ? sources.filter(source =>
+          ? allSources.filter(source =>
             source.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
           )
-          : sources;
+          : allSources;
         return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
       },
-      [sources, searchQuery]
+      [allSources, searchQuery]
     );
 
     const selectedSource = selectedSourceId
-      ? sources.find((s) => s.id === selectedSourceId)
+      ? allSources.find((s) => s.id === selectedSourceId)
       : null;
 
     const handleToggle = (e: React.MouseEvent) => {
@@ -259,15 +283,20 @@ const SourceFilterDropdown: FC<{
       onSourceSelect(sourceId);
       setIsOpen(false);
       setSearchQuery(''); // Clear search when selection is made
+      setGlobalSearchQuery(''); // Clear global search
     };
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchQuery(e.target.value);
+      const query = e.target.value;
+      setSearchQuery(query);
+      setGlobalSearchQuery(query);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Escape') {
         setSearchQuery('');
+        setGlobalSearchQuery('');
+        clearGlobalSearch();
       }
     };
 
@@ -334,20 +363,38 @@ const SourceFilterDropdown: FC<{
                     value={searchQuery}
                     onChange={handleSearchChange}
                     onKeyDown={handleKeyDown}
-                    placeholder="Search sources..."
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder={_isSearching ? "Searching all sources..." : "Search sources..."}
+                    className="w-full pl-10 pr-10 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-slate-100 placeholder-gray-500 dark:placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     autoFocus
                   />
                   {searchQuery && (
                     <button
-                      onClick={() => setSearchQuery('')}
+                      onClick={() => {
+                        setSearchQuery('');
+                        setGlobalSearchQuery('');
+                      }}
                       className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300"
                     >
                       ×
                     </button>
                   )}
+                  {_isSearching && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full border-t-transparent"></div>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Search results indicator */}
+              {searchQuery.trim().length >= 2 && (
+                <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-200 dark:border-neutral-800">
+                  <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400">
+                    <Search className="h-3 w-3" />
+                    <span>Searching all {searchResults.length} sources...</span>
+                  </div>
+                </div>
+              )}
 
               {/* Scrollable source list */}
               <div className="flex-1 overflow-y-auto">
