@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { userApi } from '../userApi';
-import { supabase } from '../supabaseClient';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { User } from '../../types';
 import { CreateUserParams, UpdateUserParams } from '../../types/api';
+import { supabase } from '../supabaseClient';
+import { userApi } from '../userApi';
 
 // Mock dependencies
 vi.mock('../supabaseClient');
@@ -103,7 +103,7 @@ describe('userApi', () => {
       const result = await userApi.getById('user-123');
 
       expect(mockSupabase.from).toHaveBeenCalledWith('users');
-      expect(mockQueryBuilder.select).toHaveBeenCalledWith('*');
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith('id, email, full_name, created_at, updated_at');
       expect(mockQueryBuilder.eq).toHaveBeenCalledWith('id', 'user-123');
       expect(result).toEqual(mockUser);
     });

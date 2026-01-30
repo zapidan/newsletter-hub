@@ -368,7 +368,7 @@ export const newsletterApi = {
           user_id: user.id,
           received_at: new Date().toISOString(),
         })
-        .select()
+        .select('id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id')
         .single();
 
       if (newsletterError) handleSupabaseError(newsletterError);
@@ -427,7 +427,7 @@ export const newsletterApi = {
         })
         .eq('id', id)
         .eq('user_id', user.id)
-        .select()
+        .select('id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id')
         .single();
 
       if (updateError) handleSupabaseError(updateError);
@@ -632,7 +632,7 @@ export const newsletterApi = {
       })
       .in('id', ids)
       .eq('user_id', user.id)
-      .select();
+      .select('id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id');
 
     if (error) {
       // If bulk update fails, record error for all items

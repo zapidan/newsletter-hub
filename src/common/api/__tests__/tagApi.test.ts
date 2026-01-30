@@ -1,6 +1,6 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { tagApi } from '../tagApi';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Tag, TagCreate, TagUpdate } from '../../types';
+import { tagApi } from '../tagApi';
 
 // Hoisted mock for createQueryBuilder, similar to newsletterApi.test.ts
 const { createQueryBuilder, mockUser } = vi.hoisted(() => {
@@ -57,7 +57,6 @@ vi.mock('../supabaseClient', () => {
 });
 
 // Import after mocks
-import { tagApi } from '../tagApi';
 import * as supabaseClientModule from '../supabaseClient';
 
 describe('tagApi', () => {
@@ -91,7 +90,7 @@ describe('tagApi', () => {
       const result = await tagApi.getAll();
 
       expect(supabaseClientModule.supabase.from).toHaveBeenCalledWith('tags');
-      expect(currentQueryBuilder.select).toHaveBeenCalledWith('*');
+      expect(currentQueryBuilder.select).toHaveBeenCalledWith('id, name, color, created_at, updated_at, user_id');
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
       expect(currentQueryBuilder.order).toHaveBeenCalledWith('name');
       expect(result).toEqual(mockTags);
@@ -124,7 +123,7 @@ describe('tagApi', () => {
 
       const result = await tagApi.getById('1');
       expect(supabaseClientModule.supabase.from).toHaveBeenCalledWith('tags');
-      expect(currentQueryBuilder.select).toHaveBeenCalledWith('*');
+      expect(currentQueryBuilder.select).toHaveBeenCalledWith('id, name, color, created_at, updated_at, user_id');
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('id', '1');
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
       expect(currentQueryBuilder.single).toHaveBeenCalledTimes(1);
