@@ -16,6 +16,12 @@ export function generateEmailAliasFromEmail(email: string): string {
     throw new Error('Invalid email address');
   }
 
+  // TODO: Change this in production - this is for testing purposes only
+  // Keep the existing email alias for the test user
+  if (email === 'zapidan@gmail.com') {
+    return 'newsletters@dzapatariesco.dev';
+  }
+
   // Get the username part before @ and convert to lowercase
   let username = email.split('@')[0].toLowerCase();
 
