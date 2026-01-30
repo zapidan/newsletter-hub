@@ -75,7 +75,10 @@ describe('Service Integration Tests', () => {
     mockTagApi.getAll.mockResolvedValue([]);
     mockTagApi.getById.mockResolvedValue(null);
     mockReadingQueueApi.getAll.mockResolvedValue([]);
-    mockNewsletterApi.getAll.mockResolvedValue({ data: [], total: 0 });
+    mockNewsletterApi.getAll.mockResolvedValue({ data: [], count: 0 });
+
+    // Add bulkUpdate mock since the service now uses it
+    mockNewsletterApi.bulkUpdate = vi.fn();
 
     newsletterService = new NewsletterService();
     tagService = new TagService();
@@ -147,7 +150,7 @@ describe('Service Integration Tests', () => {
     it('should add newsletter to reading queue and manage position', async () => {
       // Setup mocks
       mockNewsletterApi.getById.mockResolvedValue(mockNewsletter);
-      mockReadingQueueApi.add.mockResolvedValue(true); // Should return boolean success
+      mockReadingQueueApi.add.mockResolvedValue(mockReadingQueueItem); // Should return ReadingQueueItem
       mockReadingQueueApi.getAll
         .mockResolvedValueOnce([]) // First call for duplicate check in addToQueue
         .mockResolvedValueOnce([mockReadingQueueItem]) // Second call for getting new item
@@ -262,11 +265,17 @@ describe('Service Integration Tests', () => {
     });
 
     it('should handle bulk operations across services', async () => {
-      // Setup mocks - bulk operations use individual API calls
-      mockNewsletterApi.markAsRead = vi.fn().mockResolvedValue({
-        ...mockNewsletter,
-        is_read: true,
-      });
+      // Setup mocks - bulk operations use bulkUpdate
+      mockNewsletterApi.bulkUpdate.mockResolvedValue({
+        results: [
+          { ...mockNewsletter, is_read: true },
+          { ...mockNewsletter, is_read: true },
+          { ...mockNewsletter, is_read: true },
+        ],
+        errors: [null, null, null],
+        successCount: 3,
+        errorCount: 0,
+      } as any);
       mockTagApi.create = vi.fn().mockResolvedValue(mockTag);
 
       // Bulk mark as read
@@ -286,7 +295,11 @@ describe('Service Integration Tests', () => {
       expect(tagResult.processedCount).toBe(1);
 
       // Verify API calls
-      expect(mockNewsletterApi.markAsRead).toHaveBeenCalledTimes(3);
+      expect(mockNewsletterApi.bulkUpdate).toHaveBeenCalledTimes(1);
+      expect(mockNewsletterApi.bulkUpdate).toHaveBeenCalledWith({
+        ids: ['newsletter-1', 'newsletter-2', 'newsletter-3'],
+        updates: { is_read: true }
+      });
       expect(mockTagApi.create).toHaveBeenCalledWith({
         name: 'Bulk Tag 1',
         color: '#3b82f6',
@@ -404,11 +417,27 @@ describe('Service Integration Tests', () => {
         id: `newsletter-${i + 1}`,
       }));
 
-      // Setup mocks for batch processing - bulk operations use individual API calls
-      mockNewsletterApi.markAsRead = vi.fn().mockResolvedValue({
-        ...mockNewsletter,
-        is_read: true,
-      });
+      // Setup mocks for batch processing - bulk operations use bulkUpdate
+      // Mock different results for each batch call
+      mockNewsletterApi.bulkUpdate
+        .mockResolvedValueOnce({
+          results: newsletters.slice(0, 10).map(nl => ({ ...nl, is_read: true })),
+          errors: newsletters.slice(0, 10).map(() => null),
+          successCount: 10,
+          errorCount: 0,
+        } as any)
+        .mockResolvedValueOnce({
+          results: newsletters.slice(10, 20).map(nl => ({ ...nl, is_read: true })),
+          errors: newsletters.slice(10, 20).map(() => null),
+          successCount: 10,
+          errorCount: 0,
+        } as any)
+        .mockResolvedValueOnce({
+          results: newsletters.slice(20, 25).map(nl => ({ ...nl, is_read: true })),
+          errors: newsletters.slice(20, 25).map(() => null),
+          successCount: 5,
+          errorCount: 0,
+        } as any);
 
       // Process in batches
       const batchPromises = [];
@@ -428,6 +457,9 @@ describe('Service Integration Tests', () => {
       // Verify total processed count
       const totalProcessed = results.reduce((sum, result) => sum + result.processedCount, 0);
       expect(totalProcessed).toBe(25);
+
+      // Verify bulkUpdate was called for each batch
+      expect(mockNewsletterApi.bulkUpdate).toHaveBeenCalledTimes(3); // 25 items / 10 batch size = 3 batches
     });
   });
 

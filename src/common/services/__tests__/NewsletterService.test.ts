@@ -55,6 +55,9 @@ describe("NewsletterService", () => {
   beforeEach(() => {
     service = new NewsletterService();
     vi.clearAllMocks();
+
+    // Add bulkUpdate mock since the service now uses it
+    mockNewsletterApi.bulkUpdate = vi.fn();
   });
 
   afterEach(() => {
@@ -315,10 +318,12 @@ describe("NewsletterService", () => {
 
   describe("bulkMarkAsRead", () => {
     it("should mark multiple newsletters as read", async () => {
-      mockNewsletterApi.markAsRead.mockResolvedValue({
-        ...mockNewsletter,
-        is_read: true,
-      });
+      mockNewsletterApi.bulkUpdate.mockResolvedValue({
+        results: [mockNewsletter, mockNewsletter],
+        errors: [null, null],
+        successCount: 2,
+        errorCount: 0,
+      } as any);
 
       const result = await service.bulkMarkAsRead([
         "newsletter-1",
@@ -328,27 +333,32 @@ describe("NewsletterService", () => {
       expect(result.success).toBe(true);
       expect(result.processedCount).toBe(2);
       expect(result.failedCount).toBe(0);
-      expect(mockNewsletterApi.markAsRead).toHaveBeenCalledTimes(2);
+      expect(mockNewsletterApi.bulkUpdate).toHaveBeenCalledTimes(1);
+      expect(mockNewsletterApi.bulkUpdate).toHaveBeenCalledWith({
+        ids: ["newsletter-1", "newsletter-2"],
+        updates: { is_read: true }
+      });
     });
 
     it("should handle partial failures", async () => {
-      mockNewsletterApi.markAsRead
-        .mockResolvedValueOnce({
-          ...mockNewsletter,
-          is_read: true,
-        })
-        .mockRejectedValueOnce(new Error("API Error"));
+      mockNewsletterApi.bulkUpdate.mockResolvedValue({
+        results: [mockNewsletter, null],
+        errors: [null, new Error("API Error")],
+        successCount: 1,
+        errorCount: 1,
+      } as any);
 
-      const result = await service.bulkMarkAsRead([
+      // The service throws an error when there are bulk update failures
+      await expect(service.bulkMarkAsRead([
         "newsletter-1",
         "newsletter-2",
-      ]);
+      ])).rejects.toThrow("Bulk update failed: 1 errors occurred");
 
-      expect(result.success).toBe(false);
-      expect(result.processedCount).toBe(1);
-      expect(result.failedCount).toBe(1);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].id).toBe("newsletter-2");
+      expect(mockNewsletterApi.bulkUpdate).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
+      expect(mockNewsletterApi.bulkUpdate).toHaveBeenCalledWith({
+        ids: ["newsletter-1", "newsletter-2"],
+        updates: { is_read: true }
+      });
     });
 
     it("should validate input array", async () => {
