@@ -37,7 +37,7 @@ ALTER COLUMN updated_at SET DEFAULT now();
 
 -- Fix daily_counts table defaults
 ALTER TABLE daily_counts 
-ALTER COLUMN date SET DEFAULT (now() AT TIME ZONE 'utc')::date,  -- Optimized UTC date calc
+ALTER COLUMN date SET DEFAULT (now() AT TIME ZONE 'UTC')::date,  -- Use UTC timezone for date calculations
 ALTER COLUMN created_at SET DEFAULT now(),
 ALTER COLUMN updated_at SET DEFAULT now();
 
@@ -50,11 +50,11 @@ ALTER COLUMN updated_at SET DEFAULT now();
 DROP FUNCTION IF EXISTS public.handle_updated_at() CASCADE;
 DROP FUNCTION IF EXISTS public.reset_daily_counts() CASCADE;
 DROP FUNCTION IF EXISTS public.safe_reset_daily_counts() CASCADE;
-DROP FUNCTION IF EXISTS public.get_user_limits(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.can_add_source(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.can_receive_newsletter(UUID, TEXT, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.increment_received_newsletter(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.increment_source_count(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.handle_incoming_email_transaction(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) CASCADE;
 
 -- --------------------------------------------------------------------
 -- STEP 3: Recreate Core Utility Functions with Correct UTC Syntax
@@ -79,7 +79,7 @@ RETURNS VOID AS $$
 BEGIN
     -- Use optimized UTC date calculation instead of expensive timezone() function
     DELETE FROM public.daily_counts
-    WHERE date < (now() AT TIME ZONE 'utc' - interval '30 days')::date;
+    WHERE date < (now() AT TIME ZONE 'UTC' - interval '30 days')::date;
     
     RAISE LOG 'Reset daily counts at %', now();
 END;
@@ -108,7 +108,7 @@ CREATE OR REPLACE FUNCTION public.increment_received_newsletter(user_id_param UU
 RETURNS VOID AS $$
 DECLARE
     -- Use optimized UTC date calculation without expensive timezone() function
-    current_date DATE := now() AT TIME ZONE 'utc'::date;
+    current_date DATE := (now() AT TIME ZONE 'UTC')::date;
 BEGIN
     INSERT INTO public.daily_counts (user_id, date, newsletters_count, sources_count)
     VALUES (user_id_param, current_date, 1, 0)
@@ -124,7 +124,7 @@ CREATE OR REPLACE FUNCTION public.increment_source_count(user_id_param UUID)
 RETURNS VOID AS $$
 DECLARE
     -- Use optimized UTC date calculation without expensive timezone() function
-    current_date DATE := now() AT TIME ZONE 'utc'::date;
+    current_date DATE := (now() AT TIME ZONE 'UTC')::date;
 BEGIN
     INSERT INTO public.daily_counts (user_id, date, sources_count, newsletters_count)
     VALUES (user_id_param, current_date, 1, 0)
@@ -148,7 +148,7 @@ DECLARE
     current_sources_count INTEGER;
     max_sources_allowed INTEGER;
     -- Use optimized UTC date calculation without expensive timezone() function
-    current_date DATE := now() AT TIME ZONE 'utc'::date;
+    current_date DATE := (now() AT TIME ZONE 'UTC')::date;
 BEGIN
     -- Get user's current subscription plan
     SELECT sp.max_sources INTO max_sources_allowed
@@ -188,7 +188,7 @@ DECLARE
     current_newsletters_count INTEGER;
     max_newsletters_allowed INTEGER;
     -- Use optimized UTC date calculation without expensive timezone() function
-    current_date DATE := now() AT TIME ZONE 'utc'::date;
+    current_date DATE := (now() AT TIME ZONE 'UTC')::date;
     is_duplicate BOOLEAN := FALSE;
     duplicate_info JSONB := '{}';
     similarity_threshold FLOAT := 0.9;
@@ -278,8 +278,8 @@ BEGIN
     JOIN public.user_subscriptions us ON sp.id = us.plan_id
     WHERE us.user_id = user_id_param
     AND us.status = 'active'
-    AND us.current_period_start <= now() AT TIME ZONE 'utc'  -- Optimized UTC comparison
-    AND us.current_period_end > now() AT TIME ZONE 'utc'
+    AND us.current_period_start <= now()  -- Already in UTC
+    AND us.current_period_end > now()
     LIMIT 1;
 
     -- If no subscription found, use free tier limits
@@ -373,7 +373,168 @@ GRANT EXECUTE ON FUNCTION public.can_receive_newsletter(UUID, TEXT, TEXT) TO aut
 GRANT EXECUTE ON FUNCTION public.can_add_source(UUID) TO authenticated, service_role;
 
 -- --------------------------------------------------------------------
--- STEP 8: Documentation for Future Developers
+-- STEP 9: Recreate handle_incoming_email_transaction with Correct UTC Syntax
+-- --------------------------------------------------------------------
+-- This function is called by the edge function to process incoming emails.
+-- It was missing from the original migration, causing silent failures.
+
+CREATE OR REPLACE FUNCTION public.handle_incoming_email_transaction(
+    p_user_id UUID,
+    p_from_email TEXT,
+    p_from_name TEXT,
+    p_subject TEXT,
+    p_content TEXT,
+    p_excerpt TEXT,
+    p_raw_headers TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_source_id uuid;
+  v_newsletter_id uuid;
+  v_result jsonb;
+  v_word_count integer;
+  v_estimated_read_time integer;
+  v_clean_content text;
+  v_source_name text;
+  v_source_email text;
+BEGIN
+  -- Validate user_id is provided
+  IF p_user_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'user_id is required - all sources must be user-scoped'
+    );
+  END IF;
+  
+  -- Use the full from email as the source identifier
+  v_source_email := lower(trim(p_from_email));
+  v_source_name := COALESCE(NULLIF(trim(p_from_name), ''), split_part(v_source_email, '@', 1));
+
+  -- Find existing source by NAME only (not email) for this user
+  SELECT id INTO v_source_id 
+  FROM public.newsletter_sources 
+  WHERE name = v_source_name 
+  AND user_id = p_user_id
+  LIMIT 1;
+
+  -- If no source exists, create a new one
+  IF v_source_id IS NULL THEN
+    INSERT INTO public.newsletter_sources (
+      user_id,
+      name,
+      "from",
+      created_at,
+      updated_at
+    ) VALUES (
+      p_user_id,
+      v_source_name,
+      p_from_email,
+      now(),
+      now()
+    )
+    ON CONFLICT (name, user_id)
+    DO UPDATE SET 
+      "from" = EXCLUDED."from", -- Update email if it changed
+      updated_at = now()
+    RETURNING id INTO v_source_id;
+  ELSE
+    -- Update the email if it's different (newsletters can use multiple emails)
+    UPDATE public.newsletter_sources 
+    SET "from" = p_from_email, updated_at = now()
+    WHERE id = v_source_id AND "from" != p_from_email;
+  END IF;
+
+  -- Calculate word count and read time
+  v_clean_content := regexp_replace(COALESCE(p_content, ''), '<[^>]+>', ' ', 'g');
+  v_word_count := LENGTH(REGEXP_REPLACE(v_clean_content, '\s+', ' ', 'g')) - LENGTH(REPLACE(REGEXP_REPLACE(v_clean_content, '\s+', ' ', 'g'), ' ', '')) + 1;
+  v_estimated_read_time := GREATEST(1, CEIL(v_word_count / 200.0));
+
+  -- Create a new newsletter entry
+  INSERT INTO public.newsletters (
+    user_id,
+    title,
+    content,
+    summary,
+    newsletter_source_id,
+    word_count,
+    estimated_read_time,
+    is_read,
+    is_archived,
+    is_liked,
+    received_at,
+    created_at,
+    updated_at
+  ) VALUES (
+    p_user_id,
+    p_subject,
+    p_content,
+    p_excerpt,
+    v_source_id,
+    v_word_count,
+    v_estimated_read_time,
+    false,  -- is_read
+    false,  -- is_archived
+    false,  -- is_liked
+    now(),  -- received_at
+    now(),  -- created_at
+    now()   -- updated_at
+  )
+  RETURNING id INTO v_newsletter_id;
+
+  -- Increment the received newsletter count
+  PERFORM public.increment_received_newsletter(p_user_id);
+
+  -- Return the result
+  RETURN jsonb_build_object(
+    'success', true,
+    'newsletter_id', v_newsletter_id,
+    'source_id', v_source_id,
+    'word_count', v_word_count,
+    'estimated_read_time', v_estimated_read_time
+  );
+EXCEPTION WHEN OTHERS THEN
+  RETURN jsonb_build_object(
+    'success', false,
+    'error', SQLERRM,
+    'context', 'handle_incoming_email_transaction function',
+    'detail', SQLSTATE
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant permissions for the handle_incoming_email_transaction function
+GRANT EXECUTE ON FUNCTION public.handle_incoming_email_transaction(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
+
+-- --------------------------------------------------------------------
+-- STEP 9.5: Fix all table defaults with problematic UTC syntax
+-- --------------------------------------------------------------------
+-- Fix all instances of timezone('utc'::text, now()) in table defaults
+
+-- 1. Fix subscription_plans table
+ALTER TABLE public.subscription_plans 
+  ALTER COLUMN created_at SET DEFAULT now(),
+  ALTER COLUMN updated_at SET DEFAULT now();
+
+-- 2. Fix user_subscriptions table
+ALTER TABLE public.user_subscriptions
+  ALTER COLUMN created_at SET DEFAULT now(),
+  ALTER COLUMN updated_at SET DEFAULT now();
+
+-- 3. Fix daily_counts table
+ALTER TABLE public.daily_counts 
+  ALTER COLUMN date SET DEFAULT (now() AT TIME ZONE 'utc')::date,
+  ALTER COLUMN created_at SET DEFAULT now(),
+  ALTER COLUMN updated_at SET DEFAULT now();
+
+-- Add comments to document the changes
+COMMENT ON COLUMN public.daily_counts.date IS 'Fixed default value to use correct UTC syntax (previously used timezone(''utc''::text, now()))';
+COMMENT ON COLUMN public.subscription_plans.created_at IS 'Fixed default value to use now() directly (previously used timezone(''utc''::text, now()))';
+COMMENT ON COLUMN public.subscription_plans.updated_at IS 'Fixed default value to use now() directly (previously used timezone(''utc''::text, now()))';
+COMMENT ON COLUMN public.user_subscriptions.created_at IS 'Fixed default value to use now() directly (previously used timezone(''utc''::text, now()))';
+COMMENT ON COLUMN public.user_subscriptions.updated_at IS 'Fixed default value to use now() directly (previously used timezone(''utc''::text, now()))';
+
+-- --------------------------------------------------------------------
+-- STEP 10: Documentation for Future Developers
 -- --------------------------------------------------------------------
 -- Clear explanation of what this migration fixes and why it's needed.
 
@@ -394,7 +555,7 @@ SOLUTION APPROACH:
 2. Use CASCADE to forcefully remove all broken functions/dependencies  
 3. Recreate everything with optimized UTC syntax:
    - now() for TIMESTAMPTZ columns (correct type, no casting)
-   - now() AT TIME ZONE 'utc'::date for DATE columns (performance optimized)
+   - (now() AT TIME ZONE 'UTC')::date for DATE columns (performance optimized)
 
 WHY THIS IS FUTURE-PROOF:
 - Works even if old migrations fail completely
@@ -409,6 +570,6 @@ PERFORMANCE IMPACT:
 
 DEVELOPER NOTES:
 - Always use now() for TIMESTAMPTZ columns
-- Always use now() AT TIME ZONE 'utc'::date for DATE columns  
+- Always use (now() AT TIME ZONE 'UTC')::date for DATE columns  
 - Never use timezone('utc'::text, now()) in new code
 */
