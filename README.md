@@ -249,6 +249,23 @@ This project is private and proprietary.
 3. **Dependencies**: Try `rm -rf node_modules package-lock.json && npm install`
 4. **Port Conflicts**: Kill dev server with `npm run kill-dev-server`
 
+### Testing Database Changes
+
+After modifying database migrations or tables, test the `handle_incoming_email_transaction` function directly:
+
+```sql
+-- Test the handle_incoming_email_transaction function
+SELECT * FROM public.handle_incoming_email_transaction(
+    p_user_id := '16190e6c-2519-4c36-9178-71ce2843e59c',
+    p_from_email := 'test@example.com',
+    p_from_name := 'Test Sender',
+    p_subject := 'Test Email',
+    p_content := 'Test content',
+    p_excerpt := 'Test excerpt',
+    p_raw_headers := '{}'
+);
+```
+
 ### Getting Help
 
 - Check the `docs/` directory for detailed documentation
