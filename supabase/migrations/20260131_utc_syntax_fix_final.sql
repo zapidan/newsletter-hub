@@ -273,7 +273,7 @@ BEGIN
     END IF;
 
     -- Get user's current subscription plan for newsletter limits
-    SELECT sp.max_sources INTO max_newsletters_allowed
+    SELECT sp.max_newsletters_per_day INTO max_newsletters_allowed
     FROM public.subscription_plans sp
     JOIN public.user_subscriptions us ON sp.id = us.plan_id
     WHERE us.user_id = user_id_param
@@ -284,7 +284,16 @@ BEGIN
 
     -- If no subscription found, use free tier limits
     IF max_newsletters_allowed IS NULL THEN
-        max_newsletters_allowed := 10; -- Free tier limit
+        -- Get the free plan's max_newsletters_per_day limit
+        SELECT max_newsletters_per_day INTO max_newsletters_allowed
+        FROM public.subscription_plans
+        WHERE name = 'Free'
+        LIMIT 1;
+        
+        -- Fallback to 5 if free plan not found
+        IF max_newsletters_allowed IS NULL THEN
+            max_newsletters_allowed := 5; -- Free tier limit
+        END IF;
     END IF;
 
     -- Get today's newsletter count for this user
