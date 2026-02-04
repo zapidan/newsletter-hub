@@ -133,12 +133,33 @@ BEGIN
         END IF;
     END IF;
 
-    -- Get today's newsletter count for this user
-    SELECT COALESCE(newsletters_count, 0) INTO current_newsletters_count
+    -- Get today's newsletter count for this user, defaulting to 0 if no entry exists yet
+    SELECT COALESCE(SUM(newsletters_count), 0) INTO current_newsletters_count
     FROM public.daily_counts
     WHERE user_id = user_id_param
-    AND date = current_date
-    LIMIT 1;
+    AND date = current_date;
+
+    -- Ensure we have a daily_counts entry for today
+    INSERT INTO public.daily_counts (
+        user_id,
+        date,
+        sources_count,
+        newsletters_count,
+        created_at,
+        updated_at
+    )
+    SELECT 
+        user_id_param,
+        current_date,
+        0,  -- Default sources_count
+        0,  -- Start with 0 count if new entry
+        now() AT TIME ZONE 'UTC',
+        now() AT TIME ZONE 'UTC'
+    WHERE NOT EXISTS (
+        SELECT 1 FROM public.daily_counts 
+        WHERE user_id = user_id_param 
+        AND date = current_date
+    );
 
     -- Check if user can receive more newsletters today
     IF current_newsletters_count < max_newsletters_allowed THEN
@@ -180,3 +201,119 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant execute permissions
 GRANT EXECUTE ON FUNCTION public.can_receive_newsletter(UUID, TEXT, TEXT) TO authenticated, service_role;
+
+
+
+-- ====================================================================
+-- ADD: increment_newsletter_count Function
+-- ====================================================================
+-- 
+-- This function safely increments the newsletter count for a user on the current UTC date.
+-- It creates the daily_counts entry if it doesn't exist.
+--
+-- Features:
+-- - Atomic updates using INSERT ... ON CONFLICT DO UPDATE
+-- - Proper timezone handling (UTC)
+-- - Error handling and logging
+-- ====================================================================
+
+-- Drop the function if it exists (for idempotency)
+DROP FUNCTION IF EXISTS public.increment_newsletter_count(UUID) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.increment_newsletter_count(user_id_param UUID)
+RETURNS VOID AS $$
+DECLARE
+    current_utc_date DATE := (now() AT TIME ZONE 'UTC')::date;
+BEGIN
+    -- Increment the count, creating the entry if it doesn't exist
+    INSERT INTO public.daily_counts (
+        user_id,
+        date,
+        newsletters_count,
+        sources_count,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        user_id_param,
+        current_utc_date,
+        1,  -- Initial count
+        0,  -- Default sources_count
+        now() AT TIME ZONE 'UTC',
+        now() AT TIME ZONE 'UTC'
+    )
+    ON CONFLICT (user_id, date) 
+    DO UPDATE SET 
+        newsletters_count = daily_counts.newsletters_count + 1,
+        updated_at = now() AT TIME ZONE 'UTC';
+    
+    -- Log the update
+    RAISE LOG 'Incremented newsletter count for user % on %', 
+        user_id_param, 
+        current_utc_date;
+EXCEPTION WHEN OTHERS THEN
+    -- Log any errors
+    RAISE WARNING 'Failed to increment newsletter count for user %: %', 
+        user_id_param, 
+        SQLERRM;
+    
+    -- Re-raise the exception to ensure the transaction is rolled back
+    RAISE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION public.increment_newsletter_count(UUID) TO authenticated, service_role;
+
+-- Add a comment
+COMMENT ON FUNCTION public.increment_newsletter_count(UUID) IS 
+    'Safely increments the newsletter count for a user on the current UTC date. 
+     Creates the daily_counts entry if it does not exist.';
+
+-- ====================================================================
+-- UPDATE: increment_received_newsletter Function
+-- ====================================================================
+-- 
+-- Update the existing increment_received_newsletter function to include created_at
+-- and ensure consistency with increment_newsletter_count
+-- ====================================================================
+
+-- Drop and recreate the function with proper timestamps
+DROP FUNCTION IF EXISTS public.increment_received_newsletter(UUID) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.increment_received_newsletter(user_id_param UUID)
+RETURNS VOID AS $$
+DECLARE
+    -- Use optimized UTC date calculation without expensive timezone() function
+    current_date DATE := (now() AT TIME ZONE 'UTC')::date;
+BEGIN
+    INSERT INTO public.daily_counts (
+        user_id, 
+        date, 
+        newsletters_count, 
+        sources_count,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        user_id_param, 
+        current_date, 
+        1, 
+        0,
+        now() AT TIME ZONE 'UTC',
+        now() AT TIME ZONE 'UTC'
+    )
+    ON CONFLICT (user_id, date)
+    DO UPDATE SET 
+        newsletters_count = daily_counts.newsletters_count + 1,
+        updated_at = now() AT TIME ZONE 'UTC';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permissions
+GRANT EXECUTE ON FUNCTION public.increment_received_newsletter(UUID) TO authenticated, service_role;
+
+-- Add a comment
+COMMENT ON FUNCTION public.increment_received_newsletter(UUID) IS 
+    'Safely increments the newsletter count for a user on the current UTC date. 
+     Creates the daily_counts entry if it does not exist.';

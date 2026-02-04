@@ -242,4 +242,160 @@ describe('Newsletter Limit Bug Fix', () => {
       expect(result.data.max_allowed).toBeGreaterThan(0); // Should have a valid limit
     });
   });
+
+  describe('increment_newsletter_count Function', () => {
+    it('should increment newsletter count for user with existing daily entry', async () => {
+      const userId = 'test-user-id';
+
+      // Mock successful increment
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: null, // Function returns VOID
+        error: null
+      });
+
+      const result = await mockSupabase.rpc('increment_newsletter_count', {
+        user_id_param: userId
+      });
+
+      expect(result.error).toBeNull();
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('increment_newsletter_count', {
+        user_id_param: userId
+      });
+    });
+
+    it('should create daily entry if it does not exist', async () => {
+      const userId = 'new-user-id';
+
+      // Mock successful increment with entry creation
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: null,
+        error: null
+      });
+
+      const result = await mockSupabase.rpc('increment_newsletter_count', {
+        user_id_param: userId
+      });
+
+      expect(result.error).toBeNull();
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('increment_newsletter_count', {
+        user_id_param: userId
+      });
+    });
+
+    it('should handle concurrent increments atomically', async () => {
+      const userId = 'concurrent-user-id';
+
+      // Mock successful increment
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: null,
+        error: null
+      });
+
+      // Simulate multiple concurrent calls
+      const promises = Array.from({ length: 5 }, () =>
+        mockSupabase.rpc('increment_newsletter_count', {
+          user_id_param: userId
+        })
+      );
+
+      const results = await Promise.all(promises);
+
+      results.forEach(result => {
+        expect(result.error).toBeNull();
+      });
+    });
+
+    it('should handle errors gracefully', async () => {
+      const userId = 'error-user-id';
+
+      // Mock error
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Database error' }
+      });
+
+      const result = await mockSupabase.rpc('increment_newsletter_count', {
+        user_id_param: userId
+      });
+
+      expect(result.error).toBeTruthy();
+      expect(result.error.message).toBe('Database error');
+    });
+  });
+
+  describe('NULL current_newsletters_count Fix', () => {
+    it('should handle NULL current_newsletters_count by defaulting to 0', async () => {
+      const userId = 'null-count-user-id';
+
+      // Mock: No daily_counts entry exists (returns NULL)
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: {
+          can_receive: true,
+          current_count: 0, // Should be 0, not NULL
+          max_allowed: 1000000,
+          current_date: new Date().toISOString().split('T')[0]
+        },
+        error: null
+      });
+
+      const result = await mockSupabase.rpc('can_receive_newsletter', {
+        user_id_param: userId,
+        title: 'Test Newsletter',
+        content: 'Test content'
+      });
+
+      expect(result.error).toBeNull();
+      expect(result.data.can_receive).toBe(true);
+      expect(result.data.current_count).toBe(0); // Should be 0, not NULL
+    });
+
+    it('should create daily_counts entry when checking can_receive_newsletter', async () => {
+      const userId = 'create-entry-user-id';
+
+      // Mock: First call creates entry
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: {
+          can_receive: true,
+          current_count: 0,
+          max_allowed: 1000000,
+          current_date: new Date().toISOString().split('T')[0]
+        },
+        error: null
+      });
+
+      const result = await mockSupabase.rpc('can_receive_newsletter', {
+        user_id_param: userId,
+        title: 'Test Newsletter',
+        content: 'Test content'
+      });
+
+      expect(result.error).toBeNull();
+      expect(result.data.current_count).toBe(0);
+    });
+
+    it('should not reject unlimited users due to NULL count', async () => {
+      const unlimitedUserId = '16190e6c-2519-4c36-9178-71ce2843e59c';
+
+      // Mock: Even with NULL count, unlimited users should be able to receive
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: {
+          can_receive: true,
+          current_count: 0, // Should be 0 after fix
+          max_allowed: 1000000,
+          current_date: new Date().toISOString().split('T')[0]
+        },
+        error: null
+      });
+
+      const result = await mockSupabase.rpc('can_receive_newsletter', {
+        user_id_param: unlimitedUserId,
+        title: 'Test Newsletter',
+        content: 'Test content'
+      });
+
+      expect(result.error).toBeNull();
+      expect(result.data.can_receive).toBe(true);
+      expect(result.data.reason).not.toBe('daily_limit_exceeded');
+    });
+  });
 });
