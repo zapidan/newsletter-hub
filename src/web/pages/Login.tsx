@@ -109,7 +109,8 @@ const Login = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="input-field pl-10 pr-4 py-3"
+                  className="input-field pr-4 py-3"
+                  style={{ paddingLeft: '2.5rem' }}
                   placeholder="you@example.com"
                   data-testid="email-input"
                 />
@@ -143,7 +144,8 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="input-field pl-10 pr-4 py-3"
+                  className="input-field pr-4 py-3"
+                  style={{ paddingLeft: '2.5rem' }}
                   placeholder={isSignUp ? "Create a password" : "••••••••"}
                   minLength={8}
                   data-testid="password-input"
