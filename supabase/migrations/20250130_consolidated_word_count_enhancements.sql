@@ -66,7 +66,7 @@ BEGIN
   clean_text := regexp_replace(clean_text, $re$\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b$re$, ' ', 'gi');
   
   -- Clean up non-alphabetic characters (keep letters, apostrophes, hyphens)
-  clean_text := regexp_replace(clean_text, $re$[^a-zA-Z\s'\-]$re$, ' ', 'g');
+  clean_text := regexp_replace(clean_text, $re$[^[:alpha:]\s'\-]$re$, ' ', 'g');
   
   -- Remove single letters except a, A, I
   clean_text := regexp_replace(clean_text, $re$\b[b-hj-zB-HJ-Z]\b$re$, ' ', 'g');
