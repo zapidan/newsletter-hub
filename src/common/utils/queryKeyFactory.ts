@@ -52,6 +52,7 @@ export const queryKeyFactory: any = {
       if (filter.isLiked !== undefined) filters.isLiked = filter.isLiked;
       if (filter.tagIds?.length) filters.tagIds = [...filter.tagIds].sort();
       if (filter.sourceIds?.length) filters.sourceIds = [...filter.sourceIds].sort();
+      if (filter.groupIds?.length) filters.groupIds = [...filter.groupIds].sort();
       if (filter.dateFrom) filters.dateFrom = filter.dateFrom;
       if (filter.dateTo) filters.dateTo = filter.dateTo;
       if (filter.orderBy) filters.orderBy = filter.orderBy;

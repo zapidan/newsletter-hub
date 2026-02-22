@@ -65,7 +65,7 @@ export const useInfiniteNewsletters = (
   const DEBUG_THROTTLE_MS = 100; // Only log debug messages every 100ms
 
   const throttledDebug = useCallback(
-    (action: string, message: string, metadata?: any) => {
+    (action: string, message: string, metadata?: Record<string, unknown>) => {
       if (!debug) return;
 
       const now = Date.now();
@@ -102,16 +102,8 @@ export const useInfiniteNewsletters = (
     });
     return key;
   }, [
-    normalizedFilters.search,
-    normalizedFilters.isRead,
-    normalizedFilters.isArchived,
-    normalizedFilters.isLiked,
-    normalizedFilters.tagIds,
-    normalizedFilters.sourceIds,
-    normalizedFilters.dateFrom,
-    normalizedFilters.dateTo,
-    normalizedFilters.orderBy,
-    normalizedFilters.orderDirection,
+    filters,
+    normalizedFilters,
     throttledDebug,
   ]);
 
@@ -141,16 +133,7 @@ export const useInfiniteNewsletters = (
 
     return params;
   }, [
-    normalizedFilters.search,
-    normalizedFilters.isRead,
-    normalizedFilters.isArchived,
-    normalizedFilters.isLiked,
-    normalizedFilters.tagIds,
-    normalizedFilters.sourceIds,
-    normalizedFilters.dateFrom,
-    normalizedFilters.dateTo,
-    normalizedFilters.orderBy,
-    normalizedFilters.orderDirection,
+    normalizedFilters,
     pageSize,
     throttledDebug,
   ]);
@@ -163,7 +146,7 @@ export const useInfiniteNewsletters = (
       userId: user?.id,
       enabledCondition: enabled && !!user,
     });
-  }, [enabled, user?.id, throttledDebug]);
+  }, [enabled, user, throttledDebug]);
 
   // Infinite query for newsletters
   // In useInfiniteNewsletters.ts
@@ -273,14 +256,14 @@ export const useInfiniteNewsletters = (
   }, [
     debug,
     enabled,
-    user?.id,
+    user,
     isLoading,
     error,
     hasNextPage,
     isFetchingNextPage,
     log,
     queryKey,
-    data?.pages?.length,
+    data,
   ]);
 
   // Flatten all pages into a single array of newsletters
@@ -316,7 +299,7 @@ export const useInfiniteNewsletters = (
     }
 
     return allNewsletters;
-  }, [data?.pages?.length, debug, log]);
+  }, [data, debug, log]);
 
   // Calculate metadata
   const totalCount = data?.pages[0]?.count || 0;
@@ -353,7 +336,7 @@ export const useInfiniteNewsletters = (
     isFetchingNextPage,
     debug,
     log,
-    data?.pages?.length,
+    data,
   ]);
 
   // Update current page when data changes
@@ -364,7 +347,7 @@ export const useInfiniteNewsletters = (
         setCurrentPage(newCurrentPage);
       }
     }
-  }, [data?.pages?.length, currentPage]);
+  }, [data, currentPage]);
 
   // Enhanced fetch next page with error handling
   const handleFetchNextPage = useCallback(() => {
@@ -409,16 +392,7 @@ export const useInfiniteNewsletters = (
   }, [
     refetch,
     debug,
-    normalizedFilters.search,
-    normalizedFilters.isRead,
-    normalizedFilters.isArchived,
-    normalizedFilters.isLiked,
-    normalizedFilters.tagIds,
-    normalizedFilters.sourceIds,
-    normalizedFilters.dateFrom,
-    normalizedFilters.dateTo,
-    normalizedFilters.orderBy,
-    normalizedFilters.orderDirection,
+    normalizedFilters,
     newsletters.length,
     log,
   ]);
