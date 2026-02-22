@@ -18,6 +18,8 @@ export const NavigationArrows: React.FC<NavigationArrowsProps> = ({
   isLoading = false,
   className = '',
 }) => {
+  console.log('🎯 NavigationArrows props:', { hasPrevious, hasNext, isLoading, className });
+
   return (
     <div className={`flex items-center justify-between ${className}`}>
       {/* Previous Arrow */}
