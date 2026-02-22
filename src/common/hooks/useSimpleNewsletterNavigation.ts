@@ -1,7 +1,7 @@
 import type { NewsletterWithRelations } from '@common/types';
 import type { NewsletterFilter } from '@common/types/cache';
 import { useLogger } from '@common/utils/logger/useLogger';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useNewsletters } from './useNewsletters';
 import { useReadingQueue } from './useReadingQueue';
@@ -10,6 +10,7 @@ interface NavigationOptions {
   isReadingQueue?: boolean;
   filter?: NewsletterFilter;
   sourceId?: string;
+  originalFilter?: NewsletterFilter; // Frozen filter for navigation context
 }
 
 interface UseSimpleNewsletterNavigationResult {
@@ -27,43 +28,127 @@ export function useSimpleNewsletterNavigation(
   const navigate = useNavigate();
   const location = useLocation();
   const log = useLogger('useSimpleNewsletterNavigation');
-  const { isReadingQueue, filter, sourceId } = options;
+  const { isReadingQueue, filter, sourceId, originalFilter } = options;
+
+  console.log('🚀 useSimpleNewsletterNavigation called:', {
+    currentNewsletterId,
+    options,
+    isReadingQueue,
+    filter: JSON.stringify(filter),
+    sourceId
+  });
+
+  log.debug('Navigation options:', { isReadingQueue, filter: JSON.stringify(filter), sourceId });
 
   // Get newsletters based on context
   const readingQueueQuery = useReadingQueue();
 
-  log.debug('useSimpleNewsletterNavigation filter', { filter, isReadingQueue });
-
-  const newslettersQuery = useNewsletters(filter || {}, {
+  // For navigation, we need newsletters that match the current filter context
+  // This ensures navigation works correctly whether user is viewing archived, unarchived, or filtered newsletters
+  // Navigation should work for ANY filter context - no default exclusions
+  // Use originalFilter if provided to maintain frozen navigation context, otherwise use current filter
+  const navigationFilter = originalFilter || filter;
+  const allNewslettersQuery = useNewsletters(navigationFilter || {}, {
     enabled: !isReadingQueue,
   });
 
-  // Get newsletters from data source
+  // Get newsletters from data source - use ALL newsletters for navigation
   const newsletters = useMemo(() => {
     if (isReadingQueue) {
+      log.debug('Using reading queue for newsletters:', readingQueueQuery.readingQueue);
       return readingQueueQuery.readingQueue?.map((item) => item.newsletter) || [];
+    } else {
+      log.debug('Using all newsletters query:', allNewslettersQuery.newsletters);
+      const newsletters = allNewslettersQuery.newsletters || [];
+      log.debug('All newsletters returned:', newsletters.map(n => ({ id: n.id, title: n.title, is_read: n.is_read, is_archived: n.is_archived })));
+      return newsletters;
     }
-    return newslettersQuery.newsletters || [];
-  }, [isReadingQueue, readingQueueQuery.readingQueue, newslettersQuery.newsletters]);
+  }, [isReadingQueue, readingQueueQuery.readingQueue, allNewslettersQuery.newsletters, log]);
 
-  const isLoading = isReadingQueue ? readingQueueQuery.isLoading : newslettersQuery.isLoading;
+  log.debug('Processed newsletters for navigation:', newsletters);
 
-  // Find current newsletter index
+  const isLoading = isReadingQueue ? readingQueueQuery.isLoading : allNewslettersQuery.isLoadingNewsletters;
+
+  // Find current newsletter index and debug navigation state
   const currentIndex = useMemo(() => {
-    if (!currentNewsletterId || !newsletters.length) return -1;
-    return newsletters.findIndex((n: NewsletterWithRelations) => n.id === currentNewsletterId);
-  }, [currentNewsletterId, newsletters]);
+    if (!currentNewsletterId || !newsletters.length) {
+      log.debug('Navigation debug: No current newsletter ID or empty newsletters array', {
+        currentNewsletterId,
+        newslettersCount: newsletters.length,
+        isReadingQueue,
+        isLoading,
+      });
+      return -1;
+    }
 
-  // Determine if there are previous/next newsletters
-  const hasPrevious = currentIndex > 0;
-  const hasNext = currentIndex >= 0 && currentIndex < newsletters.length - 1;
+    // Don't calculate index if still loading
+    if (isLoading) {
+      log.debug('Navigation debug: Still loading, skipping index calculation', {
+        currentNewsletterId,
+        newslettersCount: newsletters.length,
+        isReadingQueue,
+        isLoading,
+      });
+      return -1;
+    }
+
+    const index = newsletters.findIndex((n: NewsletterWithRelations) => n.id === currentNewsletterId);
+    log.debug('Navigation debug: Current index calculation', {
+      currentNewsletterId,
+      newslettersCount: newsletters.length,
+      foundIndex: index,
+      newsletterIds: newsletters.map(n => n.id),
+      isReadingQueue,
+      isLoading,
+    });
+    return index;
+  }, [currentNewsletterId, newsletters, isReadingQueue, isLoading, log]);
+
+  // Determine if there are previous/next newsletters and debug
+  const hasPrevious = currentIndex > 0 || (currentIndex === -1 && newsletters.length > 0);
+  const hasNext = (currentIndex >= 0 && currentIndex < newsletters.length - 1) || (currentIndex === -1 && newsletters.length > 0);
+
+  console.log('🔍 Navigation state debug:', {
+    currentNewsletterId,
+    currentIndex,
+    newslettersCount: newsletters.length,
+    hasPrevious,
+    hasNext,
+    isReadingQueue,
+    isLoading,
+    newsletterIds: newsletters.map(n => n.id),
+  });
+
+  // Debug navigation state
+  useEffect(() => {
+    log.debug('Navigation state update', {
+      currentNewsletterId,
+      currentIndex,
+      newslettersCount: newsletters.length,
+      hasPrevious,
+      hasNext,
+      isReadingQueue,
+      isLoading,
+      newsletterIds: newsletters.map(n => n.id),
+    });
+  }, [currentNewsletterId, currentIndex, newsletters, hasPrevious, hasNext, isReadingQueue, isLoading, log]);
 
   // Navigate to previous newsletter
   const navigateToPrevious = useCallback(() => {
-    if (!hasPrevious || currentIndex <= 0) return;
+    console.log('🚀 navigateToPrevious called', { hasPrevious, currentIndex, newslettersCount: newsletters.length });
+    if (!hasPrevious) {
+      console.log('❌ navigateToPrevious blocked', { hasPrevious, currentIndex });
+      return;
+    }
 
-    const previousNewsletter = newsletters[currentIndex - 1];
-    if (!previousNewsletter) return;
+    const previousNewsletter = currentIndex === -1
+      ? newsletters[newsletters.length - 1] // Go to last newsletter if current is not in list
+      : newsletters[currentIndex - 1];
+
+    if (!previousNewsletter) {
+      console.log('❌ No previous newsletter found');
+      return;
+    }
 
     log.debug('Navigating to previous newsletter', {
       from: currentNewsletterId,
@@ -105,10 +190,20 @@ export function useSimpleNewsletterNavigation(
 
   // Navigate to next newsletter
   const navigateToNext = useCallback(() => {
-    if (!hasNext || currentIndex < 0) return;
+    console.log('🚀 navigateToNext called', { hasNext, currentIndex, newslettersCount: newsletters.length });
+    if (!hasNext) {
+      console.log('❌ navigateToNext blocked', { hasNext, currentIndex });
+      return;
+    }
 
-    const nextNewsletter = newsletters[currentIndex + 1];
-    if (!nextNewsletter) return;
+    const nextNewsletter = currentIndex === -1
+      ? newsletters[0] // Go to first newsletter if current is not in list
+      : newsletters[currentIndex + 1];
+
+    if (!nextNewsletter) {
+      console.log('❌ No next newsletter found');
+      return;
+    }
 
     log.debug('Navigating to next newsletter', {
       from: currentNewsletterId,

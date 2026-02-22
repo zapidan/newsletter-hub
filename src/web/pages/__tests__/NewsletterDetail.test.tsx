@@ -51,10 +51,27 @@ vi.mock('react-modal', () => ({
 /* 2️⃣  Stub useNewsletters to avoid cache-manager startup  */
 vi.mock('@common/hooks/useNewsletters', () => ({
   useNewsletters: () => ({
-    data: [],
-    isLoading: false,
-    isError: false,
+    newsletters: [],
+    isLoadingNewsletters: false,
+    isLoadingMore: false,
     error: null,
+    hasNextPage: false,
+    fetchNextPage: vi.fn(),
+    refetch: vi.fn(),
+    totalCount: 0,
+    markAsRead: vi.fn(),
+    markAsUnread: vi.fn(),
+    toggleLike: vi.fn(),
+    toggleArchive: vi.fn(),
+    deleteNewsletter: vi.fn(),
+    bulkMarkAsRead: vi.fn(),
+    bulkMarkAsUnread: vi.fn(),
+    bulkArchive: vi.fn(),
+    bulkUnarchive: vi.fn(),
+    bulkLike: vi.fn(),
+    bulkUnlike: vi.fn(),
+    bulkDeleteNewsletters: vi.fn(),
+    updateNewsletterTags: vi.fn(),
   }),
 }));
 
@@ -1070,9 +1087,8 @@ describe('NewsletterDetail - TagSelector Interactions', () => {
 
   test('updates TagSelector key (forcing rerender) after successful tag update', async () => {
     mockUpdateNewsletterTags.mockResolvedValue(true); // Ensure success
-    const { rerender } = renderPage();
 
-    const initialKey = screen.getByTestId('tag-selector').getAttribute('key');
+    renderPage();
 
     const addTagButtonInMockedSelector = screen.getByTestId('add-tag');
     fireEvent.click(addTagButtonInMockedSelector);

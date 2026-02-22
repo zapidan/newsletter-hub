@@ -13,7 +13,7 @@ import BackButton from '@web/components/BackButton';
 import TagSelector from '@web/components/TagSelector';
 import { parseFilterUrlParams, urlParamsToNewsletterFilter } from '@web/utils/filterUrlUtils';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import NavigationArrows from '../../components/NewsletterDetail/NavigationArrows';
 import NewsletterDetailActions from '../../components/NewsletterDetail/NewsletterDetailActions';
 
@@ -104,6 +104,7 @@ const NewsletterDetail = memo(() => {
   const log = useLogger();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // Check if we came from the reading queue using multiple indicators
   const isFromReadingQueue = useMemo(() => {
@@ -451,10 +452,16 @@ const NewsletterDetail = memo(() => {
     return filter;
   }, [searchParams, location.state]);
 
+  // Freeze the original filter state when component mounts (before auto-archive)
+  // Use a ref to avoid re-initializing with changing memoized value
+  const navigationFilterRef = useRef(navigationFilter);
+  const [originalNavigationFilter] = useState(navigationFilterRef.current);
+
   // Setup navigation
   const navigation = useSimpleNewsletterNavigation(id || '', {
     isReadingQueue: isFromReadingQueue,
     filter: navigationFilter,
+    originalFilter: originalNavigationFilter, // Freeze original filter context
     sourceId: sourceId,
   });
 

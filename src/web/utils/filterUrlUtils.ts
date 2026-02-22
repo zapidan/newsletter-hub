@@ -1,3 +1,4 @@
+
 /**
  * Centralized URL parameter management for newsletter filters
  * Provides consistent handling of filter parameters across the application
@@ -9,6 +10,8 @@ export interface FilterUrlParams {
   groups?: string[];
   tags?: string[];
   time?: string;
+  isRead?: boolean;
+  isArchived?: boolean;
 }
 
 export interface ParsedUrlParams extends FilterUrlParams {
@@ -28,6 +31,8 @@ export const parseFilterUrlParams = (searchParams: URLSearchParams): ParsedUrlPa
   const groups = searchParams.get('groups');
   const tags = searchParams.get('tags');
   const time = searchParams.get('time');
+  const isRead = searchParams.get('isRead');
+  const isArchived = searchParams.get('isArchived');
 
   if (filter) {
     params.filter = filter;
@@ -51,6 +56,16 @@ export const parseFilterUrlParams = (searchParams: URLSearchParams): ParsedUrlPa
 
   if (time && time !== 'all') {
     params.time = time;
+    params.hasParams = true;
+  }
+
+  if (isRead !== null) {
+    params.isRead = isRead === 'true';
+    params.hasParams = true;
+  }
+
+  if (isArchived !== null) {
+    params.isArchived = isArchived === 'true';
     params.hasParams = true;
   }
 
@@ -81,6 +96,14 @@ export const buildFilterUrlParams = (params: FilterUrlParams): URLSearchParams =
 
   if (params.time && params.time !== 'all') {
     searchParams.set('time', params.time);
+  }
+
+  if (params.isRead !== undefined) {
+    searchParams.set('isRead', params.isRead.toString());
+  }
+
+  if (params.isArchived !== undefined) {
+    searchParams.set('isArchived', params.isArchived.toString());
   }
 
   return searchParams;
@@ -139,8 +162,9 @@ export const syncFilterUrl = (
 /**
  * Convert URL parameters to newsletter filter object
  */
-export const urlParamsToNewsletterFilter = (params: ParsedUrlParams) => {
-  const filter: any = {};
+import type { NewsletterFilter } from '../../common/types/cache';
+export const urlParamsToNewsletterFilter = (params: ParsedUrlParams): NewsletterFilter => {
+  const filter: NewsletterFilter = {};
 
   if (!params.hasParams) {
     return filter;
@@ -150,9 +174,11 @@ export const urlParamsToNewsletterFilter = (params: ParsedUrlParams) => {
     switch (params.filter) {
       case 'unread':
         filter.isRead = false;
+        filter.isArchived = false;
         break;
       case 'read':
         filter.isRead = true;
+        filter.isArchived = false;
         break;
       case 'archived':
         filter.isArchived = true;
@@ -161,6 +187,15 @@ export const urlParamsToNewsletterFilter = (params: ParsedUrlParams) => {
         filter.isLiked = true;
         break;
     }
+  }
+
+  // Handle separate isRead and isArchived parameters (override filter if present)
+  if (params.isRead !== undefined) {
+    filter.isRead = params.isRead;
+  }
+
+  if (params.isArchived !== undefined) {
+    filter.isArchived = params.isArchived;
   }
 
   if (params.source) {
@@ -173,6 +208,57 @@ export const urlParamsToNewsletterFilter = (params: ParsedUrlParams) => {
 
   if (params.groups && params.groups.length > 0) {
     filter.groupIds = params.groups;
+  }
+
+  if (params.time && params.time !== 'all') {
+    // Use local time for date calculations so 'day' reflects the user's local day
+    const now = new Date();
+    let dateFrom: Date;
+
+    switch (params.time) {
+      case 'day': {
+        // Start of the local day (local midnight)
+        const startOfLocalDay = new Date(now);
+        startOfLocalDay.setHours(0, 0, 0, 0);
+        dateFrom = startOfLocalDay;
+        break;
+      }
+      case 'week': {
+        // Start of the current week (Monday 00:00 local time)
+        const startOfWeek = new Date(now);
+        startOfWeek.setHours(0, 0, 0, 0);
+        const day = startOfWeek.getDay(); // 0=Sun,1=Mon,...6=Sat
+        const diffSinceMonday = (day + 6) % 7; // days since Monday
+        startOfWeek.setDate(startOfWeek.getDate() - diffSinceMonday);
+        dateFrom = startOfWeek;
+        break;
+      }
+      case 'month': {
+        // Start of the current month at local midnight
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        dateFrom = startOfMonth;
+        break;
+      }
+      case '2days': {
+        // Rolling 2 days (48 hours) based on local time
+        const twoDaysAgo = new Date(now);
+        twoDaysAgo.setDate(now.getDate() - 2);
+        dateFrom = twoDaysAgo;
+        break;
+      }
+      default: {
+        // For unsupported values, fall back to start of current week
+        const startOfWeek = new Date(now);
+        startOfWeek.setHours(0, 0, 0, 0);
+        const day = startOfWeek.getDay();
+        const diffSinceMonday = (day + 6) % 7;
+        startOfWeek.setDate(startOfWeek.getDate() - diffSinceMonday);
+        dateFrom = startOfWeek;
+      }
+    }
+
+    filter.dateFrom = dateFrom.toISOString();
   }
 
   return filter;

@@ -89,39 +89,39 @@ const Inbox: React.FC = () => {
   // Filter management using our new context and hooks
   const {
     filter,
+    setFilter,
     sourceFilter,
+    setSourceFilter,
     timeRange,
-    tagIds,
+    _tagIds,
     debouncedTagIds,
-    pendingTagUpdates,
+    _pendingTagUpdates,
     visibleTags,
     setVisibleTags,
     allTags,
     groupFilters,
     sortBy,
     sortOrder,
-    newsletterFilter,
-    hasActiveFilters,
-    isFilterActive,
+    _newsletterFilter,
+    _hasActiveFilters,
+    _isFilterActive,
     useLocalTagFiltering,
     newsletterSources,
     isLoadingSources,
-    setFilter,
-    setSourceFilter,
     setTimeRange,
-    setTagIds,
-    setPendingTagUpdates,
-    toggleTag,
-    addTag,
+    _setTagIds,
+    _setPendingTagUpdates,
+    _toggleTag,
+    _addTag,
     removeTag,
     resetFilters,
-    updateTagDebounced,
+    _updateTagDebounced,
     handleTagClick,
     setGroupFilters,
-    toggleGroup,
-    addGroup,
-    removeGroup,
-    clearGroups,
+    _toggleGroup,
+    _addGroup,
+    _removeGroup,
+    _clearGroups,
     setSortBy,
     setSortOrder,
   } = useInboxFilters();
@@ -141,7 +141,7 @@ const Inbox: React.FC = () => {
       debouncedTagIds,
       timeRange
     );
-  }, [filter, sourceFilter, groupFilters, debouncedTagIds, timeRange]);
+  }, [filter, sourceFilter, groupFilters, timeRange, debouncedTagIds]);
 
   // When group(s) are selected, clear source filter; when source is selected, clear group filters
   const handleSourceFilterChange = useCallback(
@@ -149,7 +149,7 @@ const Inbox: React.FC = () => {
       setGroupFilters([]);
       setSourceFilter(sourceId);
     },
-    [setSourceFilter]
+    [setGroupFilters, setSourceFilter] // Added setSourceFilter as required by linter
   );
 
   const handleGroupFiltersChange = useCallback(
@@ -157,13 +157,13 @@ const Inbox: React.FC = () => {
       setSourceFilter(null);
       setGroupFilters(groupIds);
     },
-    [setSourceFilter, setGroupFilters]
+    [setGroupFilters, setSourceFilter] // Added setSourceFilter as required by linter
   );
 
   // Handle filter changes while preserving group filters in URL
   const handleFilterChange = useCallback(
     (newFilter: string) => {
-      setFilter(newFilter as any); // Type assertion to handle string to InboxFilterType conversion
+      setFilter(newFilter as InboxFilterType); // Type assertion to handle string to InboxFilterType conversion
       // Sync URL parameters with current state including group filters
       const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
       syncFilterUrl(
@@ -175,13 +175,13 @@ const Inbox: React.FC = () => {
         timeRange
       );
     },
-    [setFilter, sourceFilter, groupFilters, debouncedTagIds, timeRange]
+    [sourceFilter, groupFilters, debouncedTagIds, timeRange, setFilter] // Added setFilter back as dependency
   );
 
   // Handle time range changes while preserving group filters in URL
   const handleTimeRangeChange = useCallback(
     (newTimeRange: string) => {
-      setTimeRange(newTimeRange as any); // Type assertion to handle string to TimeRange conversion
+      setTimeRange(newTimeRange as TimeRange); // Type assertion to handle string to TimeRange conversion
       // Sync URL parameters with current state including group filters
       const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
       syncFilterUrl(
@@ -193,7 +193,7 @@ const Inbox: React.FC = () => {
         newTimeRange
       );
     },
-    [setTimeRange, filter, sourceFilter, groupFilters, debouncedTagIds]
+    [filter, sourceFilter, groupFilters, debouncedTagIds, setTimeRange]
   );
 
 
@@ -424,7 +424,7 @@ const Inbox: React.FC = () => {
     return debouncedTagIds
       .map((tagId) => allTags.find((tag) => tag.id === tagId))
       .filter((tag): tag is NonNullable<typeof tag> => tag !== undefined);
-  }, [debouncedTagIds, allTags]);
+  }, [allTags, debouncedTagIds]);
 
   // Selection handlers
   const clearSelection = useCallback(() => {
@@ -558,12 +558,28 @@ const Inbox: React.FC = () => {
       // Navigate immediately to avoid async issues
       // Build URL with query parameters to preserve filter context
       const params = new URLSearchParams();
+
+      // Set separate read/unread and archived/unarchived parameters
+      if (filter === 'unread') {
+        params.set('isRead', 'false');
+        params.set('isArchived', 'false');
+      } else if (filter === 'read') {
+        params.set('isRead', 'true');
+        params.set('isArchived', 'false');
+      } else if (filter === 'archived') {
+        params.set('isArchived', 'true');
+      } else if (filter === 'liked') {
+        params.set('filter', 'liked'); // Keep filter parameter for liked
+      }
+
+      // Also keep the original filter parameter for backward compatibility
       if (filter && filter !== 'unread') {
         params.set('filter', filter);
       } else if (filter === 'unread') {
         // Explicitly set unread filter in URL for navigation
         params.set('filter', 'unread');
       }
+
       if (sourceFilter) {
         params.set('source', sourceFilter);
       }
@@ -679,7 +695,7 @@ const Inbox: React.FC = () => {
       sourceFilter,
       groupFilters,
       timeRange,
-      debouncedTagIds,
+      debouncedTagIds
     ]
   );
 
@@ -899,7 +915,7 @@ const Inbox: React.FC = () => {
         setSourceFilter(null);
       }
     }
-  }, []); // Empty dependency array - run only on mount
+  }, [setGroupFilters, setSourceFilter]); // Added back dependencies as required by linter
 
   // Create sources with unread counts for the filter dropdown
   const sourcesWithUnreadCounts = useMemo(() => {
