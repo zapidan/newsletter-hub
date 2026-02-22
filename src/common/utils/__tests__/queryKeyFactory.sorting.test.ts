@@ -292,5 +292,96 @@ describe('queryKeyFactory - Sorting', () => {
         },
       ]);
     });
+
+    it('should include groupIds in query key', () => {
+      const filter = {
+        groupIds: ['group1', 'group2'],
+      };
+
+      const result = queryKeyFactory.newsletters.infinite(filter);
+
+      expect(result).toEqual([
+        'newsletters',
+        'infinite',
+        {
+          groupIds: ['group1', 'group2'],
+        },
+      ]);
+    });
+
+    it('should generate different keys for different groupIds', () => {
+      const filterGroup1 = {
+        groupIds: ['group1'],
+      };
+
+      const filterGroup2 = {
+        groupIds: ['group2'],
+      };
+
+      const filterBoth = {
+        groupIds: ['group1', 'group2'],
+      };
+
+      const keyGroup1 = queryKeyFactory.newsletters.infinite(filterGroup1);
+      const keyGroup2 = queryKeyFactory.newsletters.infinite(filterGroup2);
+      const keyBoth = queryKeyFactory.newsletters.infinite(filterBoth);
+
+      expect(keyGroup1).not.toEqual(keyGroup2);
+      expect(keyGroup1).not.toEqual(keyBoth);
+      expect(keyGroup2).not.toEqual(keyBoth);
+      expect(keyGroup1[2].groupIds).toEqual(['group1']);
+      expect(keyGroup2[2].groupIds).toEqual(['group2']);
+      expect(keyBoth[2].groupIds).toEqual(['group1', 'group2']);
+    });
+
+    it('should sort groupIds in query key for consistency', () => {
+      const filterUnsorted = {
+        groupIds: ['group2', 'group1', 'group3'],
+      };
+
+      const filterSorted = {
+        groupIds: ['group1', 'group2', 'group3'],
+      };
+
+      const keyUnsorted = queryKeyFactory.newsletters.infinite(filterUnsorted);
+      const keySorted = queryKeyFactory.newsletters.infinite(filterSorted);
+
+      expect(keyUnsorted).toEqual(keySorted);
+      expect(keyUnsorted[2].groupIds).toEqual(['group1', 'group2', 'group3']);
+    });
+
+    it('should combine groupIds with other filters', () => {
+      const filter = {
+        search: 'newsletter',
+        isRead: false,
+        groupIds: ['group1', 'group2'],
+        orderBy: 'title',
+        orderDirection: 'asc',
+      };
+
+      const result = queryKeyFactory.newsletters.infinite(filter);
+
+      expect(result).toEqual([
+        'newsletters',
+        'infinite',
+        {
+          search: 'newsletter',
+          isRead: false,
+          groupIds: ['group1', 'group2'],
+          orderBy: 'title',
+          orderDirection: 'asc',
+        },
+      ]);
+    });
+
+    it('should exclude empty groupIds array from query key', () => {
+      const filter = {
+        groupIds: [],
+      };
+
+      const result = queryKeyFactory.newsletters.infinite(filter);
+
+      expect(result).toEqual(['newsletters', 'infinite']);
+    });
   });
 });
