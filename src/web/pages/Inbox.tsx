@@ -2,11 +2,26 @@ import { Mail } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// Custom useEffect wrapper that validates dependencies
+function useEffectWithValidation(effect: React.EffectCallback, deps?: React.DependencyList) {
+  // Validate dependencies to prevent infinite loops
+  if ((process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && deps && deps.length > 0) {
+    // This useEffect should NEVER have dependencies - if it does, it will cause infinite loops
+    throw new Error(
+      'CRITICAL: useEffect for group filter initialization has dependencies that will cause infinite loops. ' +
+      'The dependencies array must remain [] (empty). ' +
+      'Found dependencies: ' + JSON.stringify(deps.map(dep => typeof dep === 'function' ? dep.name || 'anonymous function' : dep))
+    );
+  }
+
+  return React.useEffect(effect, deps);
+}
+
 import BulkSelectionActions from '@web/components/BulkSelectionActions';
-import { InboxFilters } from '@web/components/InboxFilters';
+import { TimeRange } from '@web/components/TimeFilter';
 
 import LoadingScreen from '@common/components/common/LoadingScreen';
-import { InfiniteNewsletterList } from '@web/components/InfiniteScroll';
+import { InboxFilterType, InfiniteNewsletterList } from '@web/components/InfiniteScroll';
 
 import { useInfiniteNewsletters } from '@common/hooks/infiniteScroll';
 import { useErrorHandling } from '@common/hooks/useErrorHandling';
@@ -18,6 +33,11 @@ import { useReadingQueue } from '@common/hooks/useReadingQueue';
 import { useSharedNewsletterActions } from '@common/hooks/useSharedNewsletterActions';
 import { useGroupCounts } from '@web/hooks/useGroupCounts';
 import { parseFilterUrlParams, syncFilterUrl } from '@web/utils/filterUrlUtils';
+declare global {
+  interface Window {
+    __inboxGroupFilterInitRun?: boolean;
+  }
+}
 
 import { useAuth } from '@common/contexts';
 import { useToast } from '@common/contexts/ToastContext';
@@ -27,6 +47,7 @@ import SelectedTagsDisplay from '@web/components/SelectedTagsDisplay';
 
 import type { NewsletterWithRelations, Tag } from '@common/types';
 import { getCacheManager } from '@common/utils/cacheUtils';
+import { InboxFilters } from '../components/InboxFilters.tsx';
 
 // Separate component for empty state
 const EmptyState: React.FC<{
@@ -905,8 +926,11 @@ const Inbox: React.FC = () => {
   }, [cacheManager, user?.id]);
 
   // Initialize group filters from URL on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+  // IMPORTANT: This useEffect MUST have empty dependencies [] to prevent infinite loops.
+  // DO NOT add setGroupFilters or setSourceFilter to the dependencies array.
+
+  useEffectWithValidation(() => {
+    const params = new URLSearchParams((window as typeof globalThis).location.search);
     const groupsParam = params.get('groups');
     if (groupsParam) {
       const ids = groupsParam.split(',').map((s) => s.trim()).filter(Boolean);
@@ -915,7 +939,7 @@ const Inbox: React.FC = () => {
         setSourceFilter(null);
       }
     }
-  }, [setGroupFilters, setSourceFilter]); // Added back dependencies as required by linter
+  }, []); // Intentionally empty - run only once on mount to prevent infinite loops
 
   // Create sources with unread counts for the filter dropdown
   const sourcesWithUnreadCounts = useMemo(() => {
