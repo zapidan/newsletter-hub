@@ -15,3 +15,4 @@ This directory contains development guides, API documentation, and technical ref
 - [Migrations](./migrations.md)
 - [Optimization Guide](./optimization-guide.md)
 - [Word Count Implementation](./word-count.md)
+- [Dependency Validation](./dependency-validation.md)
