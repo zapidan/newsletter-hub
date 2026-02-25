@@ -2,10 +2,10 @@ import { useFilters } from '@common/contexts/FilterContext';
 import { useNewsletterSources } from '@common/hooks/useNewsletterSources';
 import { useTags } from '@common/hooks/useTags';
 import type { NewsletterSource, Tag } from '@common/types';
-import { DependencyValidator, ValidationRules } from '@common/utils/dependencyValidation';
 import { useLogger } from '@common/utils/logger/useLogger';
 import type { TimeRange } from '@web/components/TimeFilter';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DependencyValidator, ValidationRules } from '../utils/dependencyValidation.ts';
 
 export type InboxFilterType = 'unread' | 'read' | 'liked' | 'archived';
 
@@ -106,30 +106,20 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     [getTags]
   );
 
-  // Local state for debounced tag updates
-  const [pendingTagUpdates, setPendingTagUpdates] = useState<string[]>(tagIds);
-  const [_debouncedTagIds, _setDebouncedTagIds] = useState<string[]>(tagIds);
-  const [_visibleTags, _setVisibleTags] = useState<Set<string>>(new Set());
-  const [_allTags, _setAllTags] = useState<Tag[]>([]);
-
-  // Refs for debouncing
-  const _debounceTimeoutRef = useRef<NodeJS.Timeout>();
-  const _lastFilterStateRef = useRef<string>('');
-
-  // Hooks - memoize getTags to prevent infinite loops
-  // IMPORTANT: This useCallback MUST have minimal dependencies [getTags] to prevent infinite re-renders.
-  // DO NOT add other dependencies that could cause this function to be recreated.
+  // Memoize getTags to prevent infinite loops
   const memoizedGetTags = useCallback(getTags, [getTags]);
+
   // Validate dependencies to prevent infinite loops
   dependencyValidator.validate('memoizedGetTags', [getTags]);
 
-  const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
-    includeCount: true,
-    excludeArchived: false,
-    limit: 1000, // Load all sources for dropdown with counts
-    orderBy: 'name',
-    orderDirection: 'asc',
-  });
+  // Refs for debouncing
+  const _initialTagIdsRef = useRef<string[]>(tagIds);
+
+  // Local state for debounced tag updates
+  const [pendingTagUpdates, setPendingTagUpdates] = useState<string[]>(_initialTagIdsRef.current);
+  const [_debouncedTagIds, _setDebouncedTagIds] = useState<string[]>(_initialTagIdsRef.current);
+  const [_visibleTags, _setVisibleTags] = useState<Set<string>>(new Set());
+  const [_allTags, _setAllTags] = useState<Tag[]>([]);
 
   // Load tags if enabled
   const [isLoadingTags, setIsLoadingTags] = useState(false);
@@ -172,6 +162,14 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     }
   }, [autoLoadTags, hasLoadedTags, isLoadingTags, memoizedGetTags, log]);
 
+  const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
+    includeCount: true,
+    excludeArchived: false,
+    limit: 1000, // Load all sources for dropdown with counts
+    orderBy: 'name',
+    orderDirection: 'asc',
+  });
+
   // Enhanced filter actions that work with debounced tags
   const enhancedToggleTag = useCallback(
     (tagId: string) => {
@@ -208,9 +206,10 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     setFilter('unread');
     setSourceFilter(null);
     setTimeRange('all');
+    setTagIds([]); // Clear context tagIds
     setPendingTagUpdates([]);
     setGroupFilters([]);
-  }, [setFilter, setSourceFilter, setTimeRange, setGroupFilters]);
+  }, [setFilter, setSourceFilter, setTimeRange, setTagIds, setGroupFilters]);
 
   const handleTagClick = useCallback(
     (tagId: string) => {
@@ -226,8 +225,10 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
   const updateTagDebounced = useCallback(
     (newTagIds: string[]) => {
       setPendingTagUpdates(newTagIds);
+      _setDebouncedTagIds(newTagIds);
+      setTagIds(newTagIds);
     },
-    []
+    [setTagIds]
   );
 
   // Group filter actions

@@ -237,6 +237,7 @@ describe('useInboxFilters - Multi-group support', () => {
       result.current.resetFilters();
     });
 
-    expect(mockFilterContext.resetFilters).toHaveBeenCalled();
+    // The hook's resetFilters calls individual setters, including setGroupFilters
+    expect(mockFilterContext.setGroupFilters).toHaveBeenCalledWith([]);
   });
 });
