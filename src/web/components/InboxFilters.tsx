@@ -923,10 +923,10 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
           </div>
         </div>
 
-        {/* Desktop: Single row layout with all filters */}
-        <div className="hidden sm:flex flex-row items-center justify-between w-full">
+        {/* Desktop: Single row layout with all filters - responsive for medium screens */}
+        <div className="hidden sm:flex flex-col sm:flex-row items-start sm:items-center justify-between w-full gap-2">
           {/* Left side: Status filters + Time filter + Sort */}
-          <div className="flex items-center gap-x-1">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 w-full sm:w-auto">
             {/* Time filter - at the left, before status filters */}
             {showTimeFilter && (
               <TimeFilterDropdown
@@ -946,21 +946,23 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
               compact={compact}
             />
             {/* Status filters */}
-            {FILTER_OPTIONS.map((option) => (
-              <FilterButton
-                key={option.value}
-                option={option}
-                isActive={filter === option.value}
-                onClick={() => onFilterChange(option.value)}
-                disabled={disabled || isLoading}
-                compact={compact}
-                showCount={showFilterCounts}
-              />
-            ))}
+            <div className="flex flex-wrap items-center gap-1">
+              {FILTER_OPTIONS.map((option) => (
+                <FilterButton
+                  key={option.value}
+                  option={option}
+                  isActive={filter === option.value}
+                  onClick={() => onFilterChange(option.value)}
+                  disabled={disabled || isLoading}
+                  compact={compact}
+                  showCount={showFilterCounts}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Right side: Source filter + Group filter + Select button */}
-          <div className="flex items-center gap-x-1">
+          <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto">
             {showSourceFilter && (
               <SourceFilterDropdown
                 sources={newsletterSources}
