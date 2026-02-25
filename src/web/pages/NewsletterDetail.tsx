@@ -31,21 +31,25 @@ function ShadowHtml({ html }: { html: string }) {
     }
     // Base light styles are handled by the first style tag. Here we set overrides for dark.
     darkStyleRef.current.textContent = mode === 'dark' ? `
-      .nh-content { color: #e5e7eb; background: transparent; }
+      .nh-content { color: #f1f5f9; background: transparent; }
       /* Force-override common inline white backgrounds from email HTML */
       .nh-content, .nh-content * { background-color: transparent !important; }
-      .nh-content h1, .nh-content h2, .nh-content h3, .nh-content h4, .nh-content h5, .nh-content h6 { color: #f3f4f6; }
-      .nh-content p, .nh-content li, .nh-content span, .nh-content div { color: #e5e7eb; }
-      .nh-content a { color: #93c5fd; }
-      .nh-content blockquote { color: #d1d5db; border-left: 4px solid #374151; background: rgba(55,65,81,0.3); }
+      .nh-content h1, .nh-content h2, .nh-content h3, .nh-content h4, .nh-content h5, .nh-content h6 { color: #ffffff !important; font-weight: 600 !important; }
+      .nh-content p, .nh-content li, .nh-content span, .nh-content div { color: #f1f5f9; }
+      .nh-content a { color: #3b82f6 !important; text-decoration: underline !important; font-weight: 500 !important; }
+      .nh-content a:hover { color: #60a5fa !important; }
+      .nh-content strong { color: #ffffff !important; font-weight: 700 !important; }
+      .nh-content b { color: #ffffff !important; font-weight: 700 !important; }
+      .nh-content blockquote { color: #e2e8f0; border-left: 4px solid #475569; background: rgba(51,65,85,0.4); }
       /* Re-apply explicit dark backgrounds for code/pre after global transparent override */
-      .nh-content code { background: rgba(75,85,99,0.4) !important; color: #f9fafb; padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
-      .nh-content pre { background: rgba(31,41,55,0.8) !important; color: #f3f4f6; padding: 0.75rem; border-radius: 0.5rem; overflow: auto; }
-      .nh-content table { color: #e5e7eb; }
-      .nh-content th { background: rgba(31,41,55,0.8) !important; }
-      .nh-content td, .nh-content th { border-color: #374151; }
-      .nh-content hr { border-color: #374151; }
+      .nh-content code { background: rgba(100,116,139,0.5); color: #ffffff; padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
+      .nh-content pre { background: rgba(30,41,59,0.9); color: #f8fafc; padding: 0.75rem; border-radius: 0.5rem; overflow: auto; }
+      .nh-content table { color: #f1f5f9; }
+      .nh-content th { background: rgba(30,41,59,0.9); color: #ffffff; font-weight: 600; }
+      .nh-content td, .nh-content th { border-color: #475569; }
+      .nh-content hr { border-color: #475569; }
       .nh-content img { background: transparent; }
+      .nh-content em, .nh-content i { color: #e2e8f0; }
     ` : '';
   }, []);
 

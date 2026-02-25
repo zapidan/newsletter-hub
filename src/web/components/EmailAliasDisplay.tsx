@@ -1,6 +1,6 @@
-import React from 'react';
-import { Copy, RefreshCw } from 'lucide-react';
 import { useEmailAlias } from '@common/hooks/useEmailAlias';
+import { Copy, RefreshCw } from 'lucide-react';
+import React from 'react';
 
 interface EmailAliasDisplayProps {
   showRefresh?: boolean;
@@ -14,7 +14,7 @@ const sizeClasses = {
   lg: 'text-lg',
 };
 
-export const EmailAliasDisplay: React.FC<EmailAliasDisplayProps> = ({ 
+export const EmailAliasDisplay: React.FC<EmailAliasDisplayProps> = ({
   showRefresh = false,
   className = '',
   size = 'md'
@@ -29,7 +29,7 @@ export const EmailAliasDisplay: React.FC<EmailAliasDisplayProps> = ({
 
   const handleRefresh = async () => {
     if (!showRefresh || isRefreshing) return;
-    
+
     setIsRefreshing(true);
     try {
       await refresh();
@@ -60,21 +60,20 @@ export const EmailAliasDisplay: React.FC<EmailAliasDisplayProps> = ({
       <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded break-all">
         {emailAlias}
       </code>
-      
+
       <button
         onClick={handleCopy}
-        className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="p-1 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
         title="Copy to clipboard"
       >
         <Copy className="w-4 h-4" />
       </button>
-      
+
       {showRefresh && (
         <button
           onClick={handleRefresh}
-          className={`p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${
-            isRefreshing ? 'animate-spin' : ''
-          }`}
+          className={`p-1 text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${isRefreshing ? 'animate-spin' : ''
+            }`}
           title="Generate new alias"
           disabled={isRefreshing}
         >
