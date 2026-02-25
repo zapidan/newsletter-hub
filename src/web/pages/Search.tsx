@@ -199,7 +199,7 @@ const SearchFilters: React.FC<{
                   setSourceSearchTerm("");
                   setGlobalSourceSearchQuery("");
                 }}
-                className="absolute right-3 top-2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-2 text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-300"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -434,7 +434,7 @@ const SearchResults: React.FC<{
 
             {result.tags && result.tags.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
-                {result.tags.slice(0, 3).map((tag: any) => (
+                {result.tags.slice(0, 3).map((tag: { id: string; name: string; color: string }) => (
                   <span
                     key={tag.id}
                     className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"

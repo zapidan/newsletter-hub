@@ -35,7 +35,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
   <div className="w-full bg-blue-50 dark:bg-gray-800 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
       <div className="flex flex-wrap items-center gap-3 justify-center w-full sm:w-auto">
-        <span className="text-sm text-gray-700 dark:text-gray-300">{selectedCount} selected</span>
+        <span className="text-sm text-gray-600 dark:text-slate-400">{selectedCount} selected</span>
         <div className="flex flex-wrap items-center gap-2 justify-center">
           <button
             onClick={onSelectAll}
@@ -43,7 +43,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
           >
             {selectedCount === totalCount ? 'Deselect All' : 'Select All'}
           </button>
-          <span className="text-gray-300 dark:text-gray-600">|</span>
+          <span className="text-gray-300 dark:text-gray-500">|</span>
           <button
             onClick={onSelectRead}
             className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-2 py-1 hover:bg-blue-100 dark:hover:bg-blue-900 rounded"
@@ -105,7 +105,7 @@ const BulkSelectionActions: FC<BulkSelectionActionsProps> = ({
         )}
         <button
           onClick={onCancel}
-          className="px-3 py-1 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm ml-2"
+          className="px-3 py-1 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm ml-2"
         >
           Cancel
         </button>

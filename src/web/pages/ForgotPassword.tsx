@@ -1,9 +1,9 @@
 // In ForgotPassword.tsx
+import { useAuth } from '@common/contexts/AuthContext';
+import { motion } from 'framer-motion';
+import { AlertCircle, ArrowLeft, CheckCircle, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Mail, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
-import { useAuth } from '@common/contexts/AuthContext';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -31,32 +31,32 @@ const ForgotPassword = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
         className="sm:mx-auto sm:w-full sm:max-w-md"
       >
         <div className="text-center">
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Forgot your password?
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Enter your email and we'll send you a link to reset your password.
+          <p className="text-gray-600 dark:text-slate-400 mb-6 text-center">
+            <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-slate-100">
+              Forgot your password?
+            </h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+              Enter your email and we'll send you a link to reset your password.
+            </p>
           </p>
         </div>
 
         <div className="mt-8 bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           {message && (
             <div
-              className={`mb-4 p-4 rounded-md ${
-                message.type === 'error' ? 'bg-red-50' : 'bg-green-50'
-              }`}
+              className={`mb-4 p-4 rounded-md ${message.type === 'error' ? 'bg-red-50' : 'bg-green-50'
+                }`}
             >
               <div
-                className={`flex ${
-                  message.type === 'error' ? 'text-red-800' : 'text-green-800'
-                }`}
+                className={`flex ${message.type === 'error' ? 'text-red-800' : 'text-green-800'
+                  }`}
               >
                 {message.type === 'error' ? (
                   <AlertCircle className="h-5 w-5 mr-2" />
@@ -72,7 +72,7 @@ const ForgotPassword = () => {
             <div>
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-gray-700 dark:text-slate-300"
               >
                 Email address
               </label>
@@ -98,9 +98,8 @@ const ForgotPassword = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                  loading ? 'opacity-70 cursor-not-allowed' : ''
-                }`}
+                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${loading ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
               >
                 {loading ? 'Sending...' : 'Send Reset Link'}
               </button>

@@ -1,10 +1,10 @@
 // In ResetPassword.tsx
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { supabase } from '@common/api/supabaseClient';
 import { useAuth } from '@common/contexts/AuthContext';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Check, X } from 'lucide-react';
-import { supabase } from '@common/api/supabaseClient';
+import { Check, Eye, EyeOff, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface Message {
   type: 'success' | 'error';
@@ -29,20 +29,20 @@ const ResetPassword = () => {
     const checkSession = async () => {
       const accessToken = searchParams.get('access_token');
       const refreshToken = searchParams.get('refresh_token');
-      
+
       if (accessToken && refreshToken) {
         const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         });
-        
+
         if (error) {
           console.error('Error setting session from URL:', error);
           navigate('/login');
         }
       }
     };
-    
+
     checkSession();
   }, [navigate, searchParams]);
 
@@ -54,20 +54,20 @@ const ResetPassword = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       setMessage({ type: 'error', text: 'Passwords do not match' });
       return;
     }
 
     const { error } = await updatePassword(password);
-    
+
     if (error) {
       setMessage({ type: 'error', text: error.message });
     } else {
-      setMessage({ 
-        type: 'success', 
-        text: 'Password updated successfully! Redirecting to login...' 
+      setMessage({
+        type: 'success',
+        text: 'Password updated successfully! Redirecting to login...'
       });
       setTimeout(() => navigate('/login'), 2000);
     }
@@ -85,22 +85,20 @@ const ResetPassword = () => {
       >
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-extrabold text-gray-900">Reset Password</h2>
-            <p className="mt-2 text-sm text-gray-600">
+            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-slate-100">Reset Password</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
               Enter your new password below
             </p>
           </div>
 
           {message && (
             <div
-              className={`mb-4 p-4 rounded-md ${
-                message.type === 'error' ? 'bg-red-50' : 'bg-green-50'
-              }`}
+              className={`mb-4 p-4 rounded-md ${message.type === 'error' ? 'bg-red-50' : 'bg-green-50'
+                }`}
             >
               <div
-                className={`flex ${
-                  message.type === 'error' ? 'text-red-800' : 'text-green-800'
-                }`}
+                className={`flex ${message.type === 'error' ? 'text-red-800' : 'text-green-800'
+                  }`}
               >
                 {message.type === 'error' ? (
                   <X className="h-5 w-5 mr-2" />
@@ -116,7 +114,7 @@ const ResetPassword = () => {
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-gray-700 dark:text-slate-300"
               >
                 New Password
               </label>
@@ -135,7 +133,7 @@ const ResetPassword = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                    className="text-gray-500 hover:text-gray-700 dark:hover:text-slate-300 focus:outline-none"
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -154,9 +152,8 @@ const ResetPassword = () => {
                     {passwordRequirements.map((req, index) => (
                       <li
                         key={index}
-                        className={`text-xs flex items-center ${
-                          req.satisfied ? 'text-green-600' : 'text-gray-500'
-                        }`}
+                        className={`text-xs flex items-center ${req.satisfied ? 'text-green-600' : 'text-gray-500'
+                          }`}
                       >
                         {req.satisfied ? (
                           <Check className="h-3 w-3 mr-1" />
@@ -174,7 +171,7 @@ const ResetPassword = () => {
             <div>
               <label
                 htmlFor="confirmPassword"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-sm font-medium text-gray-700 dark:text-slate-300"
               >
                 Confirm New Password
               </label>
@@ -193,7 +190,7 @@ const ResetPassword = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                    className="text-gray-500 hover:text-gray-700 dark:hover:text-slate-300 focus:outline-none"
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -209,11 +206,10 @@ const ResetPassword = () => {
               <button
                 type="submit"
                 disabled={!allRequirementsMet || password !== confirmPassword}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                  !allRequirementsMet || password !== confirmPassword
-                    ? 'bg-indigo-300 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-                }`}
+                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${!allRequirementsMet || password !== confirmPassword
+                  ? 'bg-indigo-300 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  }`}
               >
                 Reset Password
               </button>
