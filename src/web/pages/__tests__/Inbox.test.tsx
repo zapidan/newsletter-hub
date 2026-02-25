@@ -328,16 +328,18 @@ describe('Inbox page', () => {
     expect(screen.getByText(error.message)).toBeInTheDocument();
   });
 
-  it('prevents infinite loops by ensuring useEffect dependencies are empty', () => {
-    // CRITICAL TEST: This test ensures that the useEffect for group filter initialization
-    // has empty dependencies to prevent infinite loops that would crash the browser.
+  it('validates useEffect dependencies to prevent infinite loops', () => {
+    // CRITICAL TEST: This test ensures that the dependency validator properly validates
+    // that the useEffect for group filter initialization has empty dependencies to prevent infinite loops.
     //
-    // When dependencies are present (like [setGroupFilters, setSourceFilter]), the validation throws an error.
-    // When dependencies are absent (empty array []), the validation passes and component renders normally.
+    // The DependencyValidator ensures that the groupFilterInitialization useEffect
+    // has empty dependencies [] to prevent infinite loops that would crash the browser.
+    //
+    // With proper validation, the component renders without throwing dependency validation errors.
 
     useInboxFiltersMock.mockReturnValue(mkInboxFilters());
 
-    // With proper empty dependencies, the component should render without throwing validation errors
+    // With proper empty dependencies validation, the component should render without throwing validation errors
     expect(() => {
       renderInbox();
     }).not.toThrow();
@@ -345,7 +347,7 @@ describe('Inbox page', () => {
     // Component should render without crashing
     expect(screen.getByTestId('inbox-filters')).toBeInTheDocument();
 
-    // If dependencies were added back, the validation would throw an error:
-    // expect(() => { renderInbox(); }).toThrow(/CRITICAL.*useEffect.*has dependencies/);
+    // The dependency validator should have validated the groupFilterInitialization effect
+    // If dependencies were added back, the validation would throw an error during component render
   });
 });

@@ -8,9 +8,6 @@ export default defineConfig({
     setupFiles: ["./src/__tests__/setup.ts"],
     css: true,
     reporters: process.env.CI ? ["junit", "default"] : ["default"],
-    outputFile: {
-      junit: process.env.CI ? "test-results/junit.xml" : undefined
-    },
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "json-summary", "html", "lcov"],

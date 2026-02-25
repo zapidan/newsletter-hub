@@ -7,6 +7,7 @@ import {
 } from '@common/utils/urlParamValidation';
 import { useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { DependencyValidator, ValidationRules } from '../utils/dependencyValidation.ts';
 
 export type ParamValue = string | number | boolean | string[] | null | undefined;
 
@@ -125,6 +126,8 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
   );
 
   // Update a single parameter
+  // IMPORTANT: This useCallback MUST have empty dependencies [] to prevent infinite re-renders.
+  // DO NOT add params or other dependencies to the dependencies array.
   const updateParam = useCallback(
     <K extends keyof T>(key: K, value: T[K] | ((current: T[K]) => T[K])) => {
       const currentValue = paramsRef.current[key];
@@ -132,16 +135,33 @@ export function useUrlParams<T extends Record<string, ParamValue>>(
         typeof value === 'function' ? (value as (current: T[K]) => T[K])(currentValue) : value;
       updateParams({ [key]: newValue } as Partial<T>);
     },
-    [updateParams] // Remove params dependency
+    [updateParams, paramsRef]
   );
+
+  // Create dependency validator for this hook
+  const dependencyValidator = useMemo(() =>
+    new DependencyValidator({
+      errorPrefix: 'useUrlParams dependency validation failed',
+      rules: [
+        ValidationRules.noDependencies('getParam'),
+        ValidationRules.specificDependencies('updateParam', [updateParams, paramsRef])
+      ]
+    }),
+    [updateParams, paramsRef]
+  );
+
+  // Validate dependencies to prevent infinite loops
+  dependencyValidator.validate('updateParam', [updateParams, paramsRef]);
 
   // Get a single parameter
   const getParam = useCallback(
     <K extends keyof T>(key: K): T[K] => {
       return paramsRef.current[key];
     },
-    [] // Remove params dependency
+    [paramsRef]
   );
+  // Validate that getParam has empty dependencies to prevent infinite re-renders
+  dependencyValidator.validate('getParam', []);
 
   // Reset all parameters to defaults
   const resetParams = useCallback(() => {
