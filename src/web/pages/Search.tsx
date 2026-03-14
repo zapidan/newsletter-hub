@@ -15,6 +15,7 @@ import React from "react";
 // Hooks
 import { useNewsletterSources, useSourceSearch } from '@common/hooks';
 import { Newsletter, NewsletterGroup, NewsletterSource } from "../../common/index.ts";
+import { formatReadTime } from "@common/utils/newsletterUtils";
 import { useNewsletterGroups, usePagination, useSearch, useSearchKeyboard, useSearchSuggestions } from "../hooks/useSearch";
 
 // Components
@@ -406,7 +407,7 @@ const SearchResults: React.FC<{
                 )}
                 {!clickedIds.has(result.id) && (
                   <span className="text-neutral-400">
-                    {result.estimated_read_time} min read
+                    {formatReadTime(result.estimated_read_time, result.word_count ?? 0)} read
                   </span>
                 )}
               </div>

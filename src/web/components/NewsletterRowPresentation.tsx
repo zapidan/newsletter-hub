@@ -1,4 +1,5 @@
 import { NewsletterGroup, NewsletterWithRelations, Tag } from "@common/types";
+import { formatReadTime } from "@common/utils/newsletterUtils";
 import { Loader2, Tag as TagIcon } from "lucide-react";
 import React, { useCallback } from "react";
 import GroupBadgeList from "./GroupBadgeList";
@@ -293,7 +294,7 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
               </div>
               <span className="text-xs text-gray-400 dark:text-slate-400 ml-2 whitespace-nowrap">
                 {new Date(newsletter.received_at).toLocaleDateString()} ·{" "}
-                {newsletter.estimated_read_time} min read
+                {formatReadTime(newsletter.estimated_read_time, newsletter.word_count)} read
               </span>
             </div>
           </div>
