@@ -464,8 +464,10 @@ const NewsletterDetail = memo(() => {
   // Setup navigation
   const navigation = useSimpleNewsletterNavigation(id || '', {
     isReadingQueue: isFromReadingQueue,
-    filter: navigationFilter,
-    originalFilter: originalNavigationFilter, // Freeze original filter context
+    filter: {
+      ...originalNavigationFilter, // Keep frozen filter for core state
+      groupIds: navigationFilter.groupIds, // But respect current group filtering
+    },
     sourceId: sourceId,
   });
 

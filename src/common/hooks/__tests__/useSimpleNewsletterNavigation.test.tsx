@@ -778,6 +778,300 @@ describe('useSimpleNewsletterNavigation', () => {
       });
     });
 
+    describe('Group filtering', () => {
+      it('should navigate within newsletters filtered by group', () => {
+        // Create newsletters with different sources (representing different groups)
+        const mockNewslettersWithGroups: NewsletterWithRelations[] = [
+          {
+            id: '1',
+            title: 'Newsletter 1',
+            summary: 'Newsletter summary 1',
+            image_url: 'https://example.com/image1.jpg',
+            user_id: 'user-1',
+            is_read: false,
+            is_archived: false,
+            is_liked: false,
+            content: '',
+            newsletter_source_id: 'group1-source', // Group 1
+            source: {
+              id: 'group1-source',
+              name: 'Group 1 Source',
+              from: 'sender1@example.com',
+              user_id: 'user-1',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_archived: false,
+            },
+            received_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            word_count: 100,
+            estimated_read_time: 1,
+            tags: [],
+          },
+          {
+            id: '2',
+            title: 'Newsletter 2',
+            summary: 'Newsletter summary 2',
+            image_url: 'https://example.com/image2.jpg',
+            user_id: 'user-1',
+            is_read: false,
+            is_archived: false,
+            is_liked: false,
+            content: '',
+            newsletter_source_id: 'group1-source', // Same group
+            source: {
+              id: 'group1-source',
+              name: 'Group 1 Source',
+              from: 'sender1@example.com',
+              user_id: 'user-1',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_archived: false,
+            },
+            received_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            word_count: 200,
+            estimated_read_time: 2,
+            tags: [],
+          },
+          {
+            id: '3',
+            title: 'Newsletter 3',
+            summary: 'Newsletter summary 3',
+            image_url: 'https://example.com/image3.jpg',
+            user_id: 'user-1',
+            is_read: false,
+            is_archived: false,
+            is_liked: false,
+            content: '',
+            newsletter_source_id: 'group2-source', // Different group
+            source: {
+              id: 'group2-source',
+              name: 'Group 2 Source',
+              from: 'sender2@example.com',
+              user_id: 'user-1',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_archived: false,
+            },
+            received_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            word_count: 300,
+            estimated_read_time: 3,
+            tags: [],
+          },
+        ];
+
+        // Mock useNewsletters to filter by group
+        vi.mocked(useNewsletters).mockImplementation((filter) => {
+          let filteredNewsletters = mockNewslettersWithGroups;
+
+          // Apply group filtering if specified
+          if (filter?.groupIds && filter.groupIds.length > 0) {
+            // Map group IDs to source IDs (simplified for test)
+            const groupToSourceMap: Record<string, string[]> = {
+              'group1': ['group1-source'],
+              'group2': ['group2-source'],
+            };
+
+            const allowedSourceIds = filter.groupIds.flatMap(groupId =>
+              groupToSourceMap[groupId] || []
+            );
+
+            filteredNewsletters = filteredNewsletters.filter(n =>
+              allowedSourceIds.includes(n.newsletter_source_id)
+            );
+          }
+
+          return {
+            newsletters: filteredNewsletters,
+            isLoadingNewsletters: false,
+            isLoadingMore: false,
+            error: null,
+            hasNextPage: false,
+            fetchNextPage: vi.fn(),
+            refetch: vi.fn(),
+            totalCount: filteredNewsletters.length,
+            markAsRead: vi.fn(),
+            markAsUnread: vi.fn(),
+            toggleLike: vi.fn(),
+            toggleArchive: vi.fn(),
+            deleteNewsletter: vi.fn(),
+            bulkMarkAsRead: vi.fn(),
+            bulkMarkAsUnread: vi.fn(),
+            bulkArchive: vi.fn(),
+            bulkUnarchive: vi.fn(),
+            bulkLike: vi.fn(),
+            bulkUnlike: vi.fn(),
+            bulkDeleteNewsletters: vi.fn(),
+            updateNewsletterTags: vi.fn(),
+          } as any;
+        });
+
+        // Test navigation with group filter
+        const groupFilter = { groupIds: ['group1'] };
+
+        const { result } = renderHook(() =>
+          useSimpleNewsletterNavigation('1', {
+            isReadingQueue: false,
+            filter: groupFilter,
+          })
+        );
+
+        // Should only navigate within group 1 newsletters (IDs 1 and 2)
+        expect(result.current.hasPrevious).toBe(false); // First item in group
+        expect(result.current.hasNext).toBe(true); // Can go to newsletter 2
+
+        // Navigate to next
+        act(() => {
+          result.current.navigateToNext();
+        });
+
+        expect(mockNavigate).toHaveBeenCalledWith('/newsletters/2', {
+          replace: false,
+          state: {
+            from: '/newsletters/2',
+            fromNavigation: true,
+            fromReadingQueue: false,
+            sourceId: undefined,
+            currentFilter: groupFilter,
+          },
+        });
+      });
+
+      it('should handle empty navigation when current newsletter is not in filtered group', () => {
+        const mockNewslettersWithGroups: NewsletterWithRelations[] = [
+          {
+            id: '1',
+            title: 'Newsletter 1',
+            summary: 'Newsletter summary 1',
+            image_url: 'https://example.com/image1.jpg',
+            user_id: 'user-1',
+            is_read: false,
+            is_archived: false,
+            is_liked: false,
+            content: '',
+            newsletter_source_id: 'group1-source',
+            source: {
+              id: 'group1-source',
+              name: 'Group 1 Source',
+              from: 'sender1@example.com',
+              user_id: 'user-1',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_archived: false,
+            },
+            received_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            word_count: 100,
+            estimated_read_time: 1,
+            tags: [],
+          },
+          {
+            id: '2',
+            title: 'Newsletter 2',
+            summary: 'Newsletter summary 2',
+            image_url: 'https://example.com/image2.jpg',
+            user_id: 'user-1',
+            is_read: false,
+            is_archived: false,
+            is_liked: false,
+            content: '',
+            newsletter_source_id: 'group2-source', // Different group
+            source: {
+              id: 'group2-source',
+              name: 'Group 2 Source',
+              from: 'sender2@example.com',
+              user_id: 'user-1',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_archived: false,
+            },
+            received_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            word_count: 200,
+            estimated_read_time: 2,
+            tags: [],
+          },
+        ];
+
+        // Mock useNewsletters to filter by group
+        vi.mocked(useNewsletters).mockImplementation((filter) => {
+          let filteredNewsletters = mockNewslettersWithGroups;
+
+          // Apply group filtering if specified
+          if (filter?.groupIds && filter.groupIds.length > 0) {
+            const groupToSourceMap: Record<string, string[]> = {
+              'group1': ['group1-source'],
+              'group2': ['group2-source'],
+            };
+
+            const allowedSourceIds = filter.groupIds.flatMap(groupId =>
+              groupToSourceMap[groupId] || []
+            );
+
+            filteredNewsletters = filteredNewsletters.filter(n =>
+              allowedSourceIds.includes(n.newsletter_source_id)
+            );
+          }
+
+          return {
+            newsletters: filteredNewsletters,
+            isLoadingNewsletters: false,
+            isLoadingMore: false,
+            error: null,
+            hasNextPage: false,
+            fetchNextPage: vi.fn(),
+            refetch: vi.fn(),
+            totalCount: filteredNewsletters.length,
+            markAsRead: vi.fn(),
+            markAsUnread: vi.fn(),
+            toggleLike: vi.fn(),
+            toggleArchive: vi.fn(),
+            deleteNewsletter: vi.fn(),
+            bulkMarkAsRead: vi.fn(),
+            bulkMarkAsUnread: vi.fn(),
+            bulkArchive: vi.fn(),
+            bulkUnarchive: vi.fn(),
+            bulkLike: vi.fn(),
+            bulkUnlike: vi.fn(),
+            bulkDeleteNewsletters: vi.fn(),
+            updateNewsletterTags: vi.fn(),
+          } as any;
+        });
+
+        // Current newsletter '2' is in group2, but filter is for group1
+        const groupFilter = { groupIds: ['group1'] };
+
+        const { result } = renderHook(() =>
+          useSimpleNewsletterNavigation('2', {
+            isReadingQueue: false,
+            filter: groupFilter,
+          })
+        );
+
+        // Newsletter 2 is not in filtered group (group1), but can navigate to filtered group items
+        expect(result.current.hasPrevious).toBe(true); // Can go to last item in group
+        expect(result.current.hasNext).toBe(true); // Can go to first item in group
+
+        // Should navigate to last item in filtered group
+        act(() => {
+          result.current.navigateToPrevious();
+        });
+
+        expect(mockNavigate).toHaveBeenCalledWith('/newsletters/1', {
+          replace: false,
+          state: {
+            from: '/newsletters/2',
+            fromNavigation: true,
+            fromReadingQueue: false,
+            sourceId: undefined,
+            currentFilter: groupFilter,
+          },
+        });
+      });
+    });
+
     describe('Time range filtering for archived newsletters', () => {
       it('should navigate within archived newsletters filtered by day', () => {
         const today = new Date();
