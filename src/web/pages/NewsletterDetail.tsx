@@ -11,6 +11,7 @@ import { useLogger } from '@common/utils/logger/useLogger';
 import { useMutation } from '@tanstack/react-query';
 import BackButton from '@web/components/BackButton';
 import TagSelector from '@web/components/TagSelector';
+import { formatReadTime } from '@common/utils/newsletterUtils';
 import { parseFilterUrlParams, urlParamsToNewsletterFilter } from '@web/utils/filterUrlUtils';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -615,9 +616,9 @@ const NewsletterDetail = memo(() => {
                       minute: '2-digit',
                     })}
                   </div>
-                  {newsletter.estimated_read_time > 0 && (
+                  {(newsletter.word_count > 0 || newsletter.estimated_read_time > 0) && (
                     <div className="mt-1 text-gray-400 dark:text-slate-500">
-                      {newsletter.estimated_read_time} min read •{' '}
+                      {formatReadTime(newsletter.estimated_read_time, newsletter.word_count)} read •{' '}
                       {newsletter.word_count.toLocaleString()} words
                     </div>
                   )}

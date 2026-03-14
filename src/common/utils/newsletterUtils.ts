@@ -82,4 +82,14 @@ export function normalizeNewsletterFilter(filter: any): any {
 function isValidUUID(uuid: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(uuid);
+}
+
+/**
+ * Format estimated read time for display. Avoids showing "1 min" when content
+ * is empty or very short (word count 0 or &lt; ~50 words).
+ */
+export function formatReadTime(estimatedReadTime: number, wordCount: number): string {
+  if (wordCount === 0) return '< 1 min';
+  if (estimatedReadTime <= 1 && wordCount < 50) return '< 1 min';
+  return `${estimatedReadTime} min`;
 } 

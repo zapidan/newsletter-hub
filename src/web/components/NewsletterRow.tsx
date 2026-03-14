@@ -1,5 +1,6 @@
 import { NewsletterWithRelations, Tag } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
+import { formatReadTime } from "@common/utils/newsletterUtils";
 import { ExternalLink, Loader2 } from "lucide-react";
 import React, { useCallback } from "react";
 import NewsletterActions from "./NewsletterActions";
@@ -264,7 +265,7 @@ const NewsletterRow: React.FC<NewsletterRowProps> = ({
           {showDate && (
             <span className="text-xs text-gray-400 dark:text-slate-400 ml-2 whitespace-nowrap">
               {new Date(newsletter.received_at).toLocaleDateString()} ·{" "}
-              {newsletter.estimated_read_time} min read
+              {formatReadTime(newsletter.estimated_read_time, newsletter.word_count)} read
             </span>
           )}
         </div>
