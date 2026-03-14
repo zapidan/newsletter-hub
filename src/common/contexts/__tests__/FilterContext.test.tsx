@@ -28,7 +28,7 @@ import { InboxFilterType } from '@common/hooks/useInboxFilters'; // Import the t
 interface MockParams {
   filter?: InboxFilterType;
   source?: string | null;
-  time?: 'all' | 'day' | '2days' | 'week' | 'month';
+  time?: 'all' | 'day' | 'last24h' | '2days' | 'week' | 'month';
   tags?: string | string[];
 }
 
@@ -48,7 +48,7 @@ const mockResetParams = vi.fn(() => {
 interface MockState {
   filter: InboxFilterType;
   sourceFilter: string | null;
-  timeRange: 'all' | 'day' | '2days' | 'week' | 'month';
+  timeRange: 'all' | 'day' | 'last24h' | '2days' | 'week' | 'month';
   tagIds: string[];
   hasActiveFilters: boolean;
 }
@@ -546,6 +546,16 @@ describe('FilterContext', () => {
         // 2 days ago from now (local)
         const expected = new Date(systemTime);
         expected.setDate(expected.getDate() - 2);
+        expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
+          expected.getTime()
+        );
+      });
+
+      it('should derive dateFrom for timeRange "last24h" (rolling 24 hours)', () => {
+        const { result } = renderHook(() => useFilters(), {
+          wrapper: createWrapper({ time: 'last24h' }),
+        });
+        const expected = new Date(systemTime.getTime() - 24 * 60 * 60 * 1000);
         expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
           expected.getTime()
         );

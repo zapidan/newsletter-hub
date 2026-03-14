@@ -277,7 +277,7 @@ export function createStringValidator(options: {
 // Predefined validators for common use cases
 
 export const inboxFilterValidator = createEnumValidator<InboxFilterType>(['unread', 'read', 'liked', 'archived']);
-export const timeRangeValidator = createEnumValidator<TimeRange>(['day', '2days', 'week', 'month', 'all']);
+export const timeRangeValidator = createEnumValidator<TimeRange>(['day', 'last24h', '2days', 'week', 'month', 'all']);
 export const orderDirectionValidator = createEnumValidator(['asc', 'desc']);
 
 // Common sort fields for newsletters

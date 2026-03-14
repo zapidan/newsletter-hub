@@ -127,6 +127,13 @@ describe('InboxFilters', () => {
     expect(mockOnTimeRangeChange).toHaveBeenCalledWith('week');
   });
 
+  test('calls onTimeRangeChange with last24h when Last day is selected', () => {
+    render(<InboxFilters {...defaultProps} />);
+    const selects = screen.getAllByLabelText('Filter by time range');
+    fireEvent.change(selects[0], { target: { value: 'last24h' } });
+    expect(mockOnTimeRangeChange).toHaveBeenCalledWith('last24h');
+  });
+
   test('opens source filter dropdown and calls onSourceFilterChange', () => {
     render(<InboxFilters {...defaultProps} />);
     const sourceButtons = screen.getAllByLabelText('Filter by newsletter source');
