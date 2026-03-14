@@ -459,6 +459,18 @@ describe('filterUrlUtils', () => {
       });
     });
 
+    it('should convert time=last24h with rolling 24 hours', () => {
+      const params: ParsedUrlParams = { hasParams: true, time: 'last24h' };
+      const result = urlParamsToNewsletterFilter(params);
+
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      expect(result).toEqual({
+        dateFrom: oneDayAgo.toISOString(),
+      });
+    });
+
     it('should handle unsupported time values by falling back to week', () => {
       const params: ParsedUrlParams = { hasParams: true, time: 'unsupported' };
       const result = urlParamsToNewsletterFilter(params);

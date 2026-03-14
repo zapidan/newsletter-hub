@@ -240,6 +240,12 @@ export const urlParamsToNewsletterFilter = (params: ParsedUrlParams): Newsletter
         dateFrom = startOfMonth;
         break;
       }
+      case 'last24h': {
+        // Rolling 24 hours
+        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        dateFrom = oneDayAgo;
+        break;
+      }
       case '2days': {
         // Rolling 2 days (48 hours) based on local time
         const twoDaysAgo = new Date(now);

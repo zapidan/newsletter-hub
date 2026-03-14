@@ -5,7 +5,7 @@ import { Archive, ArrowUpDown, Building2, ChevronDown, Clock, Eye, EyeOff, Heart
 import { FC, memo, useMemo, useState } from "react";
 
 export type FilterType = InboxFilterType; // Use the shared type
-export type TimeRange = "all" | "day" | "2days" | "week" | "month";
+export type TimeRange = "all" | "day" | "last24h" | "2days" | "week" | "month";
 
 export interface NewsletterSourceWithCount extends NewsletterSourceType {
   count?: number;
@@ -48,6 +48,7 @@ interface InboxFiltersProps {
 const TIME_RANGE_OPTIONS = [
   { value: "all" as const, label: "All Time" },
   { value: "day" as const, label: "Today" },
+  { value: "last24h" as const, label: "Last day" },
   { value: "2days" as const, label: "2 Days" },
   { value: "week" as const, label: "This Week" },
   { value: "month" as const, label: "This Month" },

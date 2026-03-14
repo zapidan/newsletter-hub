@@ -337,10 +337,11 @@ describe('URL Parameter Validation Utilities', () => {
 
     it('should validate time ranges', () => {
       expect(timeRangeValidator('day')).toEqual({ isValid: true, value: 'day' });
+      expect(timeRangeValidator('last24h')).toEqual({ isValid: true, value: 'last24h' });
       expect(timeRangeValidator('invalid')).toEqual({
         isValid: false,
         value: undefined,
-        error: 'Invalid value "invalid". Must be one of: day, 2days, week, month, all',
+        error: 'Invalid value "invalid". Must be one of: day, last24h, 2days, week, month, all',
       });
     });
 
