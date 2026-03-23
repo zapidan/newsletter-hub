@@ -171,7 +171,7 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                 {/* Tag visibility toggle - only show on desktop */}
                 <button
                   type="button"
-                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg hover:bg-gray-200 transition-colors ${isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""} hidden sm:inline-flex`}
+                  className={`btn btn-ghost btn-xs p-1.5 rounded-lg text-gray-700 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-neutral-700/80 transition-colors ${isUpdatingTags ? "opacity-50 cursor-not-allowed" : ""} hidden sm:inline-flex`}
                   onClick={handleToggleTagVisibility}
                   disabled={isUpdatingTags}
                   title={
@@ -192,7 +192,7 @@ const NewsletterRowPresentation: React.FC<NewsletterRowPresentationProps> = ({
                       size={14}
                       className={`${visibleTags.has(newsletter.id)
                         ? "text-primary-600"
-                        : "text-gray-500"
+                        : "text-gray-500 dark:text-slate-200"
                         } hover:text-primary-600`}
                     />
                   )}

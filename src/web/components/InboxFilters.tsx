@@ -76,7 +76,7 @@ const TimeFilterDropdown: FC<{
   return (
     <div className="relative flex items-center">
       <div className="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
-        <Clock className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400`} />
+        <Clock className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 dark:text-slate-300`} />
       </div>
       <select
         value={selectedRange}
@@ -85,7 +85,7 @@ const TimeFilterDropdown: FC<{
         className={`
           appearance-none bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
           ${compact ? "pl-6 pr-2 py-1 text-xs" : "pl-8 pr-3 py-1.5 text-sm"}
-          text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
+          text-gray-700 dark:text-slate-100 font-medium hover:border-gray-300 dark:hover:border-neutral-500 focus:outline-none focus:ring-2
           focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
           disabled:opacity-50 disabled:cursor-not-allowed
           ${disabled ? "bg-gray-50 dark:bg-neutral-900" : "hover:bg-gray-50 dark:hover:bg-neutral-800/60"}
@@ -149,7 +149,7 @@ const SortDropdown: FC<{
         aria-label="Sort newsletters"
         aria-expanded={isOpen}
       >
-        <ArrowUpDown className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400`} />
+        <ArrowUpDown className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 dark:text-slate-300`} />
         <span className="truncate">{getSortLabel()}</span>
         <button
           type="button"
@@ -167,7 +167,7 @@ const SortDropdown: FC<{
           {sortOrder === 'desc' ? '↓' : '↑'}
         </button>
         <ChevronDown
-          className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""}`}
+          className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 dark:text-slate-300 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""}`}
         />
       </button>
 
@@ -310,7 +310,7 @@ const SourceFilterDropdown: FC<{
           className={`
             flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
             ${compact ? "px-2 py-1 text-xs min-w-[120px]" : "px-3 py-1.5 text-sm min-w-[140px]"}
-            text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
+            text-gray-700 dark:text-slate-100 font-medium hover:border-gray-300 dark:hover:border-neutral-500 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
             ${disabled || isLoading ? "bg-gray-50 dark:bg-neutral-900" : "hover:bg-gray-50 dark:hover:bg-neutral-800/60"}
@@ -325,7 +325,7 @@ const SourceFilterDropdown: FC<{
               />
             ) : (
               <Building2
-                className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 flex-shrink-0`}
+                className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 dark:text-slate-300 flex-shrink-0`}
               />
             )}
             <span className="truncate">
@@ -335,13 +335,13 @@ const SourceFilterDropdown: FC<{
               showCounts &&
               selectedSource.count !== undefined &&
               selectedSource.count > 0 && (
-                <span className="bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                <span className="bg-gray-200 text-gray-700 dark:bg-neutral-700 dark:text-slate-200 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
                   {selectedSource.count}
                 </span>
               )}
           </div>
           <ChevronDown
-            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""
+            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 dark:text-slate-300 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""
               }`}
           />
         </button>
@@ -358,7 +358,7 @@ const SourceFilterDropdown: FC<{
               {/* Search input */}
               <div className="p-3 border-b border-gray-200 dark:border-neutral-800">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-slate-300" />
                   <input
                     type="text"
                     value={searchQuery}
@@ -429,7 +429,7 @@ const SourceFilterDropdown: FC<{
                       {showCounts &&
                         source.count !== undefined &&
                         source.count > 0 && (
-                          <span className="bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
+                          <span className="bg-gray-200 text-gray-700 dark:bg-neutral-700 dark:text-slate-200 text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">
                             {source.count}
                           </span>
                         )}
@@ -538,7 +538,7 @@ const MultiGroupFilterDropdown: FC<{
           className={`
             flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
             ${compact ? 'px-2 py-1 text-xs min-w-[120px]' : 'px-3 py-1.5 text-sm min-w-[140px]'}
-            text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
+            text-gray-700 dark:text-slate-100 font-medium hover:border-gray-300 dark:hover:border-neutral-500 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
             ${disabled || isLoading ? 'bg-gray-50 dark:bg-neutral-900' : 'hover:bg-gray-50 dark:hover:bg-neutral-800/60'}
@@ -555,7 +555,7 @@ const MultiGroupFilterDropdown: FC<{
             )}
           </div>
           <ChevronDown
-            className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'transform rotate-180' : ''}`}
+            className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} text-gray-400 dark:text-slate-300 transition-transform flex-shrink-0 ${isOpen ? 'transform rotate-180' : ''}`}
           />
         </button>
 
@@ -566,7 +566,7 @@ const MultiGroupFilterDropdown: FC<{
               {/* Search input */}
               <div className="p-3 border-b border-gray-200 dark:border-neutral-800">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-slate-300" />
                   <input
                     type="text"
                     value={searchQuery}
@@ -673,7 +673,7 @@ const GroupFilterDropdown: FC<{
           className={`
             flex items-center justify-between gap-2 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg
             ${compact ? "px-2 py-1 text-xs min-w-[120px]" : "px-3 py-1.5 text-sm min-w-[140px]"}
-            text-gray-700 dark:text-slate-200 hover:border-gray-300 dark:hover:border-neutral-600 focus:outline-none focus:ring-2
+            text-gray-700 dark:text-slate-100 font-medium hover:border-gray-300 dark:hover:border-neutral-500 focus:outline-none focus:ring-2
             focus:ring-primary-500 focus:border-primary-500 transition-all duration-200
             disabled:opacity-50 disabled:cursor-not-allowed
             ${disabled || isLoading ? "bg-gray-50 dark:bg-neutral-900" : "hover:bg-gray-50 dark:hover:bg-neutral-800/60"}
@@ -695,7 +695,7 @@ const GroupFilterDropdown: FC<{
               )}
           </div>
           <ChevronDown
-            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""}`}
+            className={`${compact ? "h-3 w-3" : "h-4 w-4"} text-gray-400 dark:text-slate-300 transition-transform flex-shrink-0 ${isOpen ? "transform rotate-180" : ""}`}
           />
         </button>
         {isOpen && (
@@ -771,7 +771,7 @@ const FilterButton: FC<{
         flex items-center gap-1.5 min-w-0 relative
         ${isActive
             ? "bg-primary-600 text-white shadow-sm hover:bg-primary-700 focus:bg-primary-700"
-            : "text-gray-600 hover:bg-gray-100 hover:text-gray-800 focus:bg-gray-100"
+            : "text-gray-600 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/80 hover:text-gray-800 dark:hover:text-slate-100 focus:bg-gray-100 dark:focus:bg-neutral-800/80"
           }
         focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-1
         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent
@@ -790,7 +790,7 @@ const FilterButton: FC<{
             className={`
             ${compact ? "text-xs px-1" : "text-xs px-1.5"}
             py-0.5 rounded-full font-normal
-            ${isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}
+            ${isActive ? "bg-white/20 text-white" : "bg-gray-200 dark:bg-neutral-700 text-gray-600 dark:text-slate-200"}
           `}
             aria-label={`${count} newsletters`}
           >
@@ -916,7 +916,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
             )}
             <button
               type="button"
-              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/80 rounded-full transition-colors"
               onClick={onSelectClick}
             >
               Select
@@ -999,7 +999,7 @@ export const InboxFilters: FC<InboxFiltersProps> = memo(
             )}
             <button
               type="button"
-              className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800/80 rounded-full transition-colors"
               onClick={onSelectClick}
             >
               Select
