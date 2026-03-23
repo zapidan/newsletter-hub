@@ -551,13 +551,20 @@ describe('FilterContext', () => {
         );
       });
 
-      it('should derive dateFrom for timeRange "last24h" (rolling 24 hours)', () => {
+      it('should derive yesterday window for timeRange "last24h"', () => {
         const { result } = renderHook(() => useFilters(), {
           wrapper: createWrapper({ time: 'last24h' }),
         });
-        const expected = new Date(systemTime.getTime() - 24 * 60 * 60 * 1000);
+        const expectedDateFrom = new Date(systemTime);
+        expectedDateFrom.setHours(0, 0, 0, 0);
+        expectedDateFrom.setDate(expectedDateFrom.getDate() - 1);
+        const expectedDateTo = new Date(systemTime);
+        expectedDateTo.setHours(0, 0, 0, 0);
         expect(new Date(result.current.newsletterFilter.dateFrom!).getTime()).toBe(
-          expected.getTime()
+          expectedDateFrom.getTime()
+        );
+        expect(new Date(result.current.newsletterFilter.dateTo!).getTime()).toBe(
+          expectedDateTo.getTime()
         );
       });
 
