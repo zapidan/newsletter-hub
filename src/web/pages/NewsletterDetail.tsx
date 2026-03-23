@@ -36,7 +36,18 @@ function ShadowHtml({ html }: { html: string }) {
       /* Force-override common inline white backgrounds from email HTML */
       .nh-content, .nh-content * { background-color: transparent !important; }
       .nh-content h1, .nh-content h2, .nh-content h3, .nh-content h4, .nh-content h5, .nh-content h6 { color: #ffffff !important; font-weight: 600 !important; }
-      .nh-content p, .nh-content li, .nh-content span, .nh-content div { color: #f1f5f9; }
+      /* Many newsletters ship inline color:#000000; force readable text in dark mode. */
+      .nh-content p,
+      .nh-content li,
+      .nh-content span,
+      .nh-content div,
+      .nh-content td,
+      .nh-content th,
+      .nh-content tr,
+      .nh-content ul,
+      .nh-content ol {
+        color: #f1f5f9 !important;
+      }
       .nh-content a { color: #3b82f6 !important; text-decoration: underline !important; font-weight: 500 !important; }
       .nh-content a:hover { color: #60a5fa !important; }
       .nh-content strong { color: #ffffff !important; font-weight: 700 !important; }
