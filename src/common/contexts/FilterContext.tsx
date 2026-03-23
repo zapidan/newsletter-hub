@@ -114,6 +114,7 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       // Use local time for date calculations so 'Today' reflects the user's local day
       const now = new Date();
       let dateFrom: Date;
+      let dateTo: Date | undefined;
 
       switch (filterState.timeRange) {
         case 'day': {
@@ -141,9 +142,13 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
           break;
         }
         case 'last24h': {
-          // Rolling 24 hours
-          const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-          dateFrom = oneDayAgo;
+          // Previous calendar day (local): [yesterday 00:00, today 00:00)
+          const startOfToday = new Date(now);
+          startOfToday.setHours(0, 0, 0, 0);
+          const startOfYesterday = new Date(startOfToday);
+          startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+          dateFrom = startOfYesterday;
+          dateTo = startOfToday;
           break;
         }
         case '2days': {
@@ -165,6 +170,9 @@ export const FilterProvider: React.FC<FilterProviderProps> = ({
       }
 
       filters.dateFrom = dateFrom.toISOString();
+      if (dateTo) {
+        filters.dateTo = dateTo.toISOString();
+      }
     }
 
     // Handle sort parameters
