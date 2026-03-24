@@ -46,13 +46,17 @@ export const useNewsletterSources = (params: NewsletterSourceQueryParams = {}) =
 
   // Default parameters for getting active sources with counts
   const queryParams = useMemo(
-    () => ({
-      excludeArchived: true,
-      includeCount: true,
-      orderBy: 'created_at',
-      ascending: false,
-      ...params,
-    }),
+    () => {
+      const merged: NewsletterSourceQueryParams = {
+        excludeArchived: true,
+        includeCount: true,
+        orderBy: 'created_at',
+        orderDirection: 'desc',
+        ...params,
+      };
+
+      return merged;
+    },
     [params]
   );
 
@@ -109,11 +113,11 @@ export const useNewsletterSources = (params: NewsletterSourceQueryParams = {}) =
     SourceContext
   >({
     mutationFn: async ({ id, name }) => {
-      const result = await newsletterSourceService.updateSource(id, { name });
+      const result = await newsletterSourceService.updateSource(id, { id, name });
       if (!result.success) {
         throw new Error(result.error || 'Failed to update source');
       }
-      return result.source;
+      return result.source!; // Use non-null assertion since we check success above
     },
     onMutate: async () => {
       // Use cache manager for optimistic update

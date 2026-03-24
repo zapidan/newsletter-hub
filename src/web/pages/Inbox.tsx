@@ -307,17 +307,17 @@ const Inbox: React.FC = () => {
         filteredCount: filtered.length,
         sampleRawNewsletter: rawNewsletters[0]
           ? {
-              id: rawNewsletters[0].id,
-              title: rawNewsletters[0].title?.substring(0, 50),
-              tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
-            }
+            id: rawNewsletters[0].id,
+            title: rawNewsletters[0].title?.substring(0, 50),
+            tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+          }
           : null,
         sampleFiltered: filtered[0]
           ? {
-              id: filtered[0].id,
-              title: filtered[0].title?.substring(0, 50),
-              tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
-            }
+            id: filtered[0].id,
+            title: filtered[0].title?.substring(0, 50),
+            tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+          }
           : null,
       });
     }
@@ -945,12 +945,12 @@ const Inbox: React.FC = () => {
   // Validate that this useEffect has empty dependencies to prevent infinite loops
   dependencyValidator.validate('groupFilterInitialization', []);
 
-  // Create sources with unread counts for the filter dropdown
-  const sourcesWithUnreadCounts = useMemo(() => {
+  // Create sources with counts for the filter dropdown
+  const sourcesWithCounts = useMemo(() => {
     return newsletterSources.map(
       (source: NewsletterSource): NewsletterSourceWithCount => ({
         ...source,
-        count: source.unread_count || 0,
+        count: source.newsletter_count || 0,
       })
     );
   }, [newsletterSources]);
@@ -984,7 +984,7 @@ const Inbox: React.FC = () => {
               timeRange={timeRange}
               sortBy={sortBy}
               sortOrder={sortOrder}
-              newsletterSources={sourcesWithUnreadCounts}
+              newsletterSources={sourcesWithCounts}
               newsletterGroups={groupsForDropdown}
               onFilterChange={handleFilterChange}
               onSourceFilterChange={handleSourceFilterChange}

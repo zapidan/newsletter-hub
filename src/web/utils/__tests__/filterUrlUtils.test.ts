@@ -454,9 +454,11 @@ describe('filterUrlUtils', () => {
       const twoDaysAgo = new Date(now);
       twoDaysAgo.setDate(now.getDate() - 2);
 
-      expect(result).toEqual({
-        dateFrom: twoDaysAgo.toISOString(),
-      });
+      // Allow small time drift between Date() calls inside the function and the test
+      expect(result.dateFrom).toBeDefined();
+      const resultDateFrom = new Date(result.dateFrom).getTime();
+      const expectedDateFrom = twoDaysAgo.getTime();
+      expect(Math.abs(resultDateFrom - expectedDateFrom)).toBeLessThan(2000);
     });
 
     it('should convert time=last24h to yesterday window', () => {
