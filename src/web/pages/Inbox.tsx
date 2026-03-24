@@ -971,7 +971,7 @@ const Inbox: React.FC = () => {
       <div className="flex flex-col space-y-4 mb-6">
         <div className="flex flex-col w-full">
           <div className="flex justify-between items-center w-full">
-            <h1 className="text-3xl font-bold text-neutral-800">Inbox</h1>
+            <h1 className="text-3xl font-bold text-neutral-800 dark:text-slate-100">Inbox</h1>
           </div>
           {/* Filters below title */}
           <div className="mt-2 w-full">

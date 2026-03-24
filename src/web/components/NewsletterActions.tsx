@@ -56,9 +56,9 @@ const ActionButton: React.FC<{
   `;
 
   const variantClasses = {
-    primary: 'text-gray-700 hover:bg-gray-200 focus:ring-gray-500',
-    secondary: 'text-gray-700 hover:bg-gray-200 focus:ring-gray-500',
-    danger: 'text-gray-700 hover:bg-gray-200 focus:ring-gray-500',
+    primary: 'text-gray-700 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-neutral-700/80 focus:ring-gray-500',
+    secondary: 'text-gray-700 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-neutral-700/80 focus:ring-gray-500',
+    danger: 'text-gray-700 dark:text-red-300 hover:bg-gray-200 dark:hover:bg-red-900/30 focus:ring-gray-500',
   };
 
   const finalClasses = className || variantClasses[variant];
@@ -167,7 +167,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             icon: (
               <BookmarkIcon
                 size={14}
-                className={isInReadingQueue ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}
+                className={isInReadingQueue ? 'fill-blue-500 text-blue-500' : 'text-gray-700 dark:text-slate-200'}
               />
             ),
             label: isInReadingQueue ? 'Remove from queue' : 'Add to queue',
@@ -184,12 +184,12 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       label: isArchived ? 'Unarchive' : 'Archive',
       variant: 'secondary' as const,
       isLoading: loadingStates[newsletter.id] === 'archive',
-      className: isArchived ? 'text-green-600 hover:bg-green-100' : undefined,
+      className: isArchived ? 'text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30' : undefined,
     },
     {
       key: 'like',
       action: handleToggleLike,
-      icon: <Heart size={14} className={isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700'} />,
+      icon: <Heart size={14} className={isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700 dark:text-slate-200'} />,
       label: isLiked ? 'Unlike' : 'Like',
       variant: 'secondary' as const,
       _isActive: isLiked,
@@ -204,7 +204,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
       action: () => {
         handleToggleRead();
       },
-      icon: isRead ? <EyeOff size={14} /> : <Eye size={14} className="text-gray-700" />,
+      icon: isRead ? <EyeOff size={14} className="text-gray-700 dark:text-slate-200" /> : <Eye size={14} className="text-gray-700 dark:text-slate-200" />,
       label: isRead ? 'Mark as unread' : 'Mark as read',
       variant: 'primary' as const,
       isLoading: loadingStates[newsletter.id] === 'read',
@@ -221,7 +221,7 @@ const NewsletterActions: React.FC<NewsletterActionsProps> = ({
             label: 'Delete',
             variant: 'danger' as const,
             isLoading: loadingStates[newsletter.id] === 'trash',
-            className: 'text-red-600 hover:bg-red-100',
+            className: 'text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30',
           },
         ]
       : []),
