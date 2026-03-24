@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNewsletters } from '../useNewsletters';
+import { useNewsletterSourceGroups } from '../useNewsletterSourceGroups';
 import { useReadingQueue } from '../useReadingQueue';
 import { useSimpleNewsletterNavigation } from '../useSimpleNewsletterNavigation';
 
@@ -14,6 +15,10 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('../useNewsletters', () => ({
   useNewsletters: vi.fn(),
+}));
+
+vi.mock('../useNewsletterSourceGroups', () => ({
+  useNewsletterSourceGroups: vi.fn(),
 }));
 
 vi.mock('../useReadingQueue', () => ({
@@ -137,6 +142,20 @@ describe('useSimpleNewsletterNavigation', () => {
       bulkUnlike: vi.fn(),
       bulkDeleteNewsletters: vi.fn(),
       updateNewsletterTags: vi.fn(),
+    } as any);
+    vi.mocked(useNewsletterSourceGroups).mockReturnValue({
+      groups: [
+        {
+          id: 'group1',
+          name: 'Group 1',
+          sources: [{ id: 'group1-source' }],
+        },
+        {
+          id: 'group2',
+          name: 'Group 2',
+          sources: [{ id: 'group2-source' }],
+        },
+      ],
     } as any);
     vi.mocked(useReadingQueue).mockReturnValue({
       readingQueue: mockNewsletters.slice(0, 2).map((newsletter, index) => ({
@@ -779,6 +798,25 @@ describe('useSimpleNewsletterNavigation', () => {
     });
 
     describe('Group filtering', () => {
+      it('should resolve groupIds to sourceIds for newsletter queries', () => {
+        const groupFilter = { groupIds: ['group1'] };
+
+        renderHook(() =>
+          useSimpleNewsletterNavigation('1', {
+            isReadingQueue: false,
+            filter: groupFilter,
+          })
+        );
+
+        expect(useNewsletters).toHaveBeenCalledWith(
+          expect.objectContaining({
+            groupIds: ['group1'],
+            sourceIds: ['group1-source'],
+          }),
+          expect.objectContaining({ enabled: true })
+        );
+      });
+
       it('should navigate within newsletters filtered by group', () => {
         // Create newsletters with different sources (representing different groups)
         const mockNewslettersWithGroups: NewsletterWithRelations[] = [
@@ -867,17 +905,16 @@ describe('useSimpleNewsletterNavigation', () => {
           let filteredNewsletters = mockNewslettersWithGroups;
 
           // Apply group filtering if specified
-          if (filter?.groupIds && filter.groupIds.length > 0) {
-            // Map group IDs to source IDs (simplified for test)
-            const groupToSourceMap: Record<string, string[]> = {
-              'group1': ['group1-source'],
-              'group2': ['group2-source'],
-            };
+          const allowedSourceIds =
+            (Array.isArray(filter?.sourceIds) && filter.sourceIds.length > 0)
+              ? filter.sourceIds
+              : (Array.isArray(filter?.groupIds) && filter.groupIds.length > 0)
+                ? filter.groupIds.flatMap((groupId: string) =>
+                  ({ group1: ['group1-source'], group2: ['group2-source'] }[groupId] || [])
+                )
+                : [];
 
-            const allowedSourceIds = filter.groupIds.flatMap(groupId =>
-              groupToSourceMap[groupId] || []
-            );
-
+          if (allowedSourceIds.length > 0) {
             filteredNewsletters = filteredNewsletters.filter(n =>
               allowedSourceIds.includes(n.newsletter_source_id)
             );
@@ -1000,16 +1037,16 @@ describe('useSimpleNewsletterNavigation', () => {
           let filteredNewsletters = mockNewslettersWithGroups;
 
           // Apply group filtering if specified
-          if (filter?.groupIds && filter.groupIds.length > 0) {
-            const groupToSourceMap: Record<string, string[]> = {
-              'group1': ['group1-source'],
-              'group2': ['group2-source'],
-            };
+          const allowedSourceIds =
+            (Array.isArray(filter?.sourceIds) && filter.sourceIds.length > 0)
+              ? filter.sourceIds
+              : (Array.isArray(filter?.groupIds) && filter.groupIds.length > 0)
+                ? filter.groupIds.flatMap((groupId: string) =>
+                  ({ group1: ['group1-source'], group2: ['group2-source'] }[groupId] || [])
+                )
+                : [];
 
-            const allowedSourceIds = filter.groupIds.flatMap(groupId =>
-              groupToSourceMap[groupId] || []
-            );
-
+          if (allowedSourceIds.length > 0) {
             filteredNewsletters = filteredNewsletters.filter(n =>
               allowedSourceIds.includes(n.newsletter_source_id)
             );

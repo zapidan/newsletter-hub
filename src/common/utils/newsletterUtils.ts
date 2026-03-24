@@ -1,20 +1,8 @@
 // Utility to normalize newsletter filter keys from snake_case to camelCase
-let lastInput: any = null;
-let lastOutput: any = null;
+// NOTE: No module-level memoization – callers (hooks) already wrap this in useMemo,
+// so a shared cache would be silently stale when multiple hook instances are active.
 
 export function normalizeNewsletterFilter(filter: any): any {
-  // Memoization: shallow compare with last input
-  if (lastInput && filter && Object.keys(filter).length === Object.keys(lastInput).length) {
-    let same = true;
-    for (const key in filter) {
-      if (filter[key] !== lastInput[key]) {
-        same = false;
-        break;
-      }
-    }
-    if (same) return lastOutput;
-  }
-
   if (!filter) return filter;
 
   const mapping: Record<string, string> = {
@@ -50,7 +38,7 @@ export function normalizeNewsletterFilter(filter: any): any {
           }
         } else if (Array.isArray(value)) {
           // Filter out invalid UUIDs from arrays
-          result[newKey] = value.filter(id => isValidUUID(id));
+          result[newKey] = value.filter((id) => isValidUUID(id));
         } else {
           // Skip non-string, non-array values
           continue;
@@ -59,7 +47,7 @@ export function normalizeNewsletterFilter(filter: any): any {
         // Handle tag IDs array
         if (Array.isArray(value)) {
           // Filter out invalid UUIDs from arrays
-          result[newKey] = value.filter(id => isValidUUID(id));
+          result[newKey] = value.filter((id) => isValidUUID(id));
         } else {
           // Skip non-array values
           continue;
@@ -73,8 +61,6 @@ export function normalizeNewsletterFilter(filter: any): any {
     }
   }
 
-  lastInput = filter;
-  lastOutput = result;
   return result;
 }
 
@@ -92,4 +78,4 @@ export function formatReadTime(estimatedReadTime: number, wordCount: number): st
   if (wordCount === 0) return '< 1 min';
   if (estimatedReadTime <= 1 && wordCount < 50) return '< 1 min';
   return `${estimatedReadTime} min`;
-} 
+}
