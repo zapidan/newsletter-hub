@@ -96,13 +96,12 @@ const Inbox: React.FC = () => {
   const log = useLogger();
 
   // Create dependency validator for this component
-  const dependencyValidator = useMemo(() =>
-    new DependencyValidator({
-      errorPrefix: 'Inbox component dependency validation failed',
-      rules: [
-        ValidationRules.noDependencies('groupFilterInitialization')
-      ]
-    }),
+  const dependencyValidator = useMemo(
+    () =>
+      new DependencyValidator({
+        errorPrefix: 'Inbox component dependency validation failed',
+        rules: [ValidationRules.noDependencies('groupFilterInitialization')],
+      }),
     []
   );
 
@@ -149,18 +148,10 @@ const Inbox: React.FC = () => {
   // Group filters state (multi-select)
   const { groups: newsletterGroups = [], isLoading: isLoadingGroups } = useNewsletterSourceGroups();
 
-
   // Helper function to preserve URL parameters after actions
   const preserveFilterParams = useCallback(() => {
     const currentParams = parseFilterUrlParams(new URLSearchParams(window.location.search));
-    syncFilterUrl(
-      currentParams,
-      filter,
-      sourceFilter,
-      groupFilters,
-      debouncedTagIds,
-      timeRange
-    );
+    syncFilterUrl(currentParams, filter, sourceFilter, groupFilters, debouncedTagIds, timeRange);
   }, [filter, sourceFilter, groupFilters, timeRange, debouncedTagIds]);
 
   // When group(s) are selected, clear source filter; when source is selected, clear group filters
@@ -216,6 +207,10 @@ const Inbox: React.FC = () => {
     [filter, sourceFilter, groupFilters, debouncedTagIds, setTimeRange]
   );
 
+  // True while we have an active group filter but groups haven't finished loading yet.
+  // During this window we must NOT fire the newsletter query – it would run without
+  // any sourceIds restriction and then get stuck showing the unfiltered result.
+  const isWaitingForGroups = groupFilters.length > 0 && isLoadingGroups;
 
   // Compute source IDs for the selected groups (union)
   const selectedGroupSourceIds = useMemo(() => {
@@ -259,11 +254,7 @@ const Inbox: React.FC = () => {
     }
 
     return filterObj;
-  }, [
-    contextNewsletterFilter,
-    groupFilters,
-    selectedGroupSourceIds,
-  ]);
+  }, [contextNewsletterFilter, groupFilters, selectedGroupSourceIds]);
 
   // Newsletter data with infinite scroll
   const {
@@ -276,6 +267,11 @@ const Inbox: React.FC = () => {
     refetch: refetchNewsletters,
     totalCount,
   } = useInfiniteNewsletters(stableNewsletterFilter, {
+    // Do not start fetching newsletters while we are still waiting for the group
+    // data that determines which sourceIds to filter by.  Without this guard the
+    // hook would fire an unfiltered query, cache the wrong result, and then never
+    // automatically re-fetch once the correct group-scoped filter is ready.
+    enabled: !isWaitingForGroups,
     _refetchOnWindowFocus: false,
     _refetchOnMount: useLocalTagFiltering && debouncedTagIds.length > 0, // Force refetch when tags are selected
     _staleTime: 0,
@@ -311,17 +307,17 @@ const Inbox: React.FC = () => {
         filteredCount: filtered.length,
         sampleRawNewsletter: rawNewsletters[0]
           ? {
-            id: rawNewsletters[0].id,
-            title: rawNewsletters[0].title?.substring(0, 50),
-            tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
-          }
+              id: rawNewsletters[0].id,
+              title: rawNewsletters[0].title?.substring(0, 50),
+              tags: rawNewsletters[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+            }
           : null,
         sampleFiltered: filtered[0]
           ? {
-            id: filtered[0].id,
-            title: filtered[0].title?.substring(0, 50),
-            tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
-          }
+              id: filtered[0].id,
+              title: filtered[0].title?.substring(0, 50),
+              tags: filtered[0].tags?.map((t) => ({ id: t.id, name: t.name })),
+            }
           : null,
       });
     }
@@ -715,7 +711,7 @@ const Inbox: React.FC = () => {
       sourceFilter,
       groupFilters,
       timeRange,
-      debouncedTagIds
+      debouncedTagIds,
     ]
   );
 
@@ -742,19 +738,22 @@ const Inbox: React.FC = () => {
   );
 
   // Tag visibility toggle handler
-  const toggleTagVisibility = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setVisibleTags((prev: Set<string>) => {
-      const newVisibleTags = new Set(prev);
-      if (newVisibleTags.has(id)) {
-        newVisibleTags.delete(id);
-      } else {
-        newVisibleTags.clear();
-        newVisibleTags.add(id);
-      }
-      return newVisibleTags;
-    });
-  }, [setVisibleTags]);
+  const toggleTagVisibility = useCallback(
+    async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setVisibleTags((prev: Set<string>) => {
+        const newVisibleTags = new Set(prev);
+        if (newVisibleTags.has(id)) {
+          newVisibleTags.delete(id);
+        } else {
+          newVisibleTags.clear();
+          newVisibleTags.add(id);
+        }
+        return newVisibleTags;
+      });
+    },
+    [setVisibleTags]
+  );
 
   // Tag error handling
   const handleDismissTagError = useCallback(() => {
@@ -932,7 +931,10 @@ const Inbox: React.FC = () => {
     const params = new URLSearchParams((window as typeof globalThis).location.search);
     const groupsParam = params.get('groups');
     if (groupsParam) {
-      const ids = groupsParam.split(',').map((s) => s.trim()).filter(Boolean);
+      const ids = groupsParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (ids.length > 0) {
         setGroupFilters(ids);
         setSourceFilter(null);
@@ -1107,7 +1109,7 @@ const Inbox: React.FC = () => {
             showTags={true}
             showCheckbox={isSelecting}
             activeGroupIds={groupFilters}
-            allGroups={newsletterGroups.map(g => ({ ...g, color: g.color || '#3B82F6' }))}
+            allGroups={newsletterGroups.map((g) => ({ ...g, color: g.color || '#3B82F6' }))}
           />
         )}
       </div>

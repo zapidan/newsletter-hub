@@ -57,9 +57,6 @@ export const useInfiniteNewsletters = (
   // Track if component is mounted to prevent queries after unmount
   const isMounted = useRef(true);
 
-  // Track if currently fetching to prevent multiple simultaneous requests
-  const isFetchingRef = useRef(false);
-
   // Throttle debug logging to prevent excessive logs during rapid updates
   const lastDebugLogRef = useRef<Record<string, number>>({});
   const DEBUG_THROTTLE_MS = 100; // Only log debug messages every 100ms
@@ -101,11 +98,7 @@ export const useInfiniteNewsletters = (
       queryKey: JSON.stringify(key),
     });
     return key;
-  }, [
-    filters,
-    normalizedFilters,
-    throttledDebug,
-  ]);
+  }, [filters, normalizedFilters, throttledDebug]);
 
   // Build API query parameters from normalized filters - memoize to prevent unnecessary re-renders
   const baseQueryParams = useMemo(() => {
@@ -132,11 +125,7 @@ export const useInfiniteNewsletters = (
     });
 
     return params;
-  }, [
-    normalizedFilters,
-    pageSize,
-    throttledDebug,
-  ]);
+  }, [normalizedFilters, pageSize, throttledDebug]);
 
   // Debug: Log enabled condition
   useEffect(() => {
@@ -154,12 +143,6 @@ export const useInfiniteNewsletters = (
     useInfiniteQuery({
       queryKey,
       queryFn: async ({ pageParam = 0 }) => {
-        if (isFetchingRef.current) {
-          return { data: [], count: 0, hasMore: false };
-        }
-
-        isFetchingRef.current = true;
-
         throttledDebug('fetch_page', 'Fetching newsletters page', {
           page: pageParam / pageSize + 1,
           offset: pageParam,
@@ -191,8 +174,6 @@ export const useInfiniteNewsletters = (
             filters: JSON.stringify(normalizedFilters),
           });
           throw err;
-        } finally {
-          isFetchingRef.current = false;
         }
       },
 
@@ -351,7 +332,7 @@ export const useInfiniteNewsletters = (
 
   // Enhanced fetch next page with error handling
   const handleFetchNextPage = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage && !isFetchingRef.current) {
+    if (hasNextPage && !isFetchingNextPage) {
       if (debug) {
         log.debug('Loading next page', {
           action: 'load_next_page',
@@ -369,7 +350,6 @@ export const useInfiniteNewsletters = (
         metadata: {
           hasNextPage,
           isFetchingNextPage,
-          isFetching: isFetchingRef.current,
         },
       });
     }
@@ -389,13 +369,7 @@ export const useInfiniteNewsletters = (
 
     setCurrentPage(1);
     return refetch();
-  }, [
-    refetch,
-    debug,
-    normalizedFilters,
-    newsletters.length,
-    log,
-  ]);
+  }, [refetch, debug, normalizedFilters, newsletters.length, log]);
 
   return {
     newsletters,
