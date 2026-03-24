@@ -137,11 +137,6 @@ const getNewsletterCountsForSources = async (
 
   if (aggregatedError) handleSupabaseError(aggregatedError);
 
-  // Debug: Show what filters were applied for count calculation
-  console.log('=== Count Calculation Debug ===');
-  console.log('Filters for counts:', filters);
-  console.log('Newsletters found for counts:', aggregatedData?.length || 0);
-
   const totalCounts: Record<string, number> = {};
   const unreadCounts: Record<string, number> = {};
 
