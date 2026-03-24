@@ -3,6 +3,7 @@ import type { NewsletterFilter } from '@common/types/cache';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useNewsletterSourceGroups } from './useNewsletterSourceGroups';
 import { useNewsletters } from './useNewsletters';
 import { useReadingQueue } from './useReadingQueue';
 
@@ -42,13 +43,33 @@ export function useSimpleNewsletterNavigation(
 
   // Get newsletters based on context
   const readingQueueQuery = useReadingQueue();
+  const { groups } = useNewsletterSourceGroups();
 
   // For navigation, we need newsletters that match the current filter context
   // This ensures navigation works correctly whether user is viewing archived, unarchived, or filtered newsletters
   // Navigation should work for ANY filter context - no default exclusions
   // Use originalFilter if provided to maintain frozen navigation context, otherwise use current filter
   const navigationFilter = originalFilter || filter;
-  const allNewslettersQuery = useNewsletters(navigationFilter || {}, {
+
+  // Group filters are URL-facing, but newsletter queries are source-based.
+  // Resolve selected groups into sourceIds so next/previous navigation honors group constraints.
+  const resolvedNavigationFilter = useMemo(() => {
+    if (!navigationFilter) return {};
+    if (!navigationFilter.groupIds?.length) return navigationFilter;
+
+    const sourceIds = new Set<string>();
+    navigationFilter.groupIds.forEach((groupId) => {
+      const group = groups.find((g) => g.id === groupId);
+      group?.sources?.forEach((source) => sourceIds.add(source.id));
+    });
+
+    return {
+      ...navigationFilter,
+      sourceIds: Array.from(sourceIds),
+    };
+  }, [navigationFilter, groups]);
+
+  const allNewslettersQuery = useNewsletters(resolvedNavigationFilter, {
     enabled: !isReadingQueue,
   });
 
