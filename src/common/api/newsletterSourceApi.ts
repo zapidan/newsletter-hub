@@ -270,7 +270,7 @@ export const newsletterSourceApi = {
       if (!data) return null;
 
       if (includeCount) {
-        const { totalCounts, unreadCounts } = await getNewsletterCountsForSources([id], user.id);
+        const { totalCounts, unreadCounts } = await getNewsletterCountsForSources([id], user.id, {});
         return transformNewsletterSourceResponse(data, totalCounts[id] || 0, unreadCounts[id] || 0);
       }
 
