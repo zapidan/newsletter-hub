@@ -68,6 +68,15 @@ export interface NewsletterSourceQueryParams extends BaseQueryParams, Pagination
   excludeArchived?: boolean;
   search?: string;
   orderDirection?: 'asc' | 'desc';
+  timeFilter?: {
+    dateFrom?: string;
+    dateTo?: string;
+  };
+  isArchived?: boolean;
+  isRead?: boolean;
+  isLiked?: boolean;
+  tagIds?: string[];
+  sourceIds?: string[];
 }
 
 export interface TagQueryParams extends BaseQueryParams, PaginationParams {

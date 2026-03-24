@@ -64,7 +64,7 @@ export interface UseInboxFiltersReturn extends InboxFiltersState, InboxFiltersAc
 
 export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxFiltersReturn => {
   const {
-    _debounceMs = 300,
+    // debounceMs = 300, // Commented out unused parameter
     autoLoadTags = true,
     // preserveUrlOnActions = true, // Commented out unused parameter
   } = options;
@@ -88,8 +88,7 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
     setTagIds,
     setGroupFilters,
     setSortBy,
-    setSortOrder,
-    _resetFilters
+    setSortOrder
   } = useFilters();
 
   // Get getTags function for validation (must be declared before useCallbackWithValidation)
@@ -164,10 +163,21 @@ export const useInboxFilters = (options: UseInboxFiltersOptions = {}): UseInboxF
 
   const { newsletterSources = [], isLoadingSources } = useNewsletterSources({
     includeCount: true,
-    excludeArchived: false,
+    excludeArchived: filter === 'archived' ? false : true, // Include archived sources when filtering by archived
     limit: 1000, // Load all sources for dropdown with counts
     orderBy: 'name',
     orderDirection: 'asc',
+    // Pass current filter context to make counts dynamic
+    timeFilter: {
+      dateFrom: timeRange !== 'all' ? newsletterFilter.dateFrom : undefined,
+      dateTo: timeRange !== 'all' ? newsletterFilter.dateTo : undefined,
+    },
+    isArchived: filter === 'archived' ? true : filter === 'unread' ? false : undefined, // Only apply archive filter for 'archived' and 'unread'
+    isRead: filter === 'read' ? true : filter === 'unread' ? false : undefined,
+    isLiked: filter === 'liked' ? true : undefined,
+    tagIds: _debouncedTagIds.length > 0 ? _debouncedTagIds : undefined,
+    // Add source filter for count calculation
+    sourceIds: newsletterFilter.sourceIds,
   });
 
   // Enhanced filter actions that work with debounced tags

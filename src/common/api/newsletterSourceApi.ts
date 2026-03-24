@@ -36,7 +36,7 @@ const buildNewsletterSourceQuery = (params: NewsletterSourceQueryParams = {}) =>
 
   // Ordering
   const orderColumn = params.orderBy || 'created_at';
-  const ascending = params.ascending ?? false;
+  const ascending = params.orderDirection !== 'desc';
   query = query.order(orderColumn, { ascending });
 
   // Pagination
@@ -54,7 +54,16 @@ const buildNewsletterSourceQuery = (params: NewsletterSourceQueryParams = {}) =>
 // Get newsletter counts for sources
 const getNewsletterCountsForSources = async (
   sourceIds: string[],
-  userId: string
+  userId: string,
+  filters: {
+    dateFrom?: string;
+    dateTo?: string;
+    isArchived?: boolean;
+    isRead?: boolean;
+    isLiked?: boolean;
+    tagIds?: string[];
+    sourceIds?: string[];
+  }
 ): Promise<{
   totalCounts: Record<string, number>;
   unreadCounts: Record<string, number>;
@@ -63,26 +72,84 @@ const getNewsletterCountsForSources = async (
     return { totalCounts: {}, unreadCounts: {} };
   }
 
-  // Optimized: Single query with aggregation instead of multiple round trips
-  const { data: aggregatedData, error: aggregatedError } = await supabase
+  let query = supabase
     .from('newsletters')
-    .select('newsletter_source_id, is_read, is_archived')
-    .eq('user_id', userId)
-    .in('newsletter_source_id', sourceIds);
+    .select('newsletter_source_id, is_read, is_archived, is_liked')
+    .eq('user_id', userId);
+
+  // Apply date filter
+  if (filters.dateFrom) {
+    query = query.gte('received_at', filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    query = query.lte('received_at', filters.dateTo);
+  }
+
+  // Apply newsletter-level filters
+  if (filters.isArchived !== undefined) {
+    query = query.eq('is_archived', filters.isArchived);
+  }
+  if (filters.isRead !== undefined) {
+    query = query.eq('is_read', filters.isRead);
+  }
+  if (filters.isLiked !== undefined) {
+    query = query.eq('is_liked', filters.isLiked);
+  }
+
+  // Apply source filter if provided (for individual source selection)
+  if (filters.sourceIds && filters.sourceIds.length > 0) {
+    query = query.in('newsletter_source_id', filters.sourceIds);
+  }
+
+  // Apply tag filter if provided
+  if (filters.tagIds && filters.tagIds.length > 0) {
+    // Get newsletters that have all specified tags
+    const { data: newslettersWithTags, error: tagError } = await supabase
+      .from('newsletter_tags')
+      .select('newsletter_id')
+      .in('tag_id', filters.tagIds);
+
+    if (tagError) handleSupabaseError(tagError);
+
+    if (newslettersWithTags && newslettersWithTags.length > 0) {
+      // Count occurrences of each newsletter_id
+      const tagCounts: Record<string, number> = {};
+      newslettersWithTags.forEach(({ newsletter_id }) => {
+        tagCounts[newsletter_id] = (tagCounts[newsletter_id] || 0) + 1;
+      });
+
+      // Get newsletters that have ALL specified tags
+      const newsletterIdsWithAllTags = Object.entries(tagCounts)
+        .filter(([_, count]) => count === filters.tagIds!.length)
+        .map(([newsletter_id, _]) => newsletter_id);
+
+      if (newsletterIdsWithAllTags.length === 0) {
+        return { totalCounts: {}, unreadCounts: {} };
+      }
+
+      query = query.in('id', newsletterIdsWithAllTags);
+    } else {
+      return { totalCounts: {}, unreadCounts: {} };
+    }
+  }
+
+  const { data: aggregatedData, error: aggregatedError } = await query;
 
   if (aggregatedError) handleSupabaseError(aggregatedError);
 
-  // Process counts in application code (single pass)
+  // Debug: Show what filters were applied for count calculation
+  console.log('=== Count Calculation Debug ===');
+  console.log('Filters for counts:', filters);
+  console.log('Newsletters found for counts:', aggregatedData?.length || 0);
+
   const totalCounts: Record<string, number> = {};
   const unreadCounts: Record<string, number> = {};
 
-  aggregatedData?.forEach((newsletter: { newsletter_source_id: string | null; is_read: boolean; is_archived: boolean }) => {
+  aggregatedData?.forEach((newsletter: { newsletter_source_id: string | null; is_read: boolean; is_archived: boolean; is_liked: boolean }) => {
     if (newsletter.newsletter_source_id) {
-      // Total count (all newsletters)
       totalCounts[newsletter.newsletter_source_id] =
         (totalCounts[newsletter.newsletter_source_id] || 0) + 1;
 
-      // Unread count (only unarchived and unread)
       if (!newsletter.is_archived && !newsletter.is_read) {
         unreadCounts[newsletter.newsletter_source_id] =
           (unreadCounts[newsletter.newsletter_source_id] || 0) + 1;
@@ -95,10 +162,14 @@ const getNewsletterCountsForSources = async (
 
 // Transform raw Supabase response to our NewsletterSource type
 const transformNewsletterSourceResponse = (
-  data: any,
+  data: NewsletterSource | null,
   totalCount = 0,
   unreadCount = 0
 ): NewsletterSource => {
+  if (!data) {
+    throw new Error('Newsletter source data is null');
+  }
+
   return {
     ...data,
     newsletter_count: totalCount,
@@ -125,20 +196,33 @@ export const newsletterSourceApi = {
       let transformedData: NewsletterSource[];
 
       if (params.includeCount && data && data.length > 0) {
-        // Get counts for all sources
-        const sourceIds = data.map((source: any) => source.id);
+        // Get counts for all sources (don't filter sources, just calculate counts)
+        const sourceIds = data.map((source: NewsletterSource) => source.id);
+
         const { totalCounts, unreadCounts } = await getNewsletterCountsForSources(
           sourceIds,
-          user.id
+          user.id,
+          {
+            dateFrom: params.timeFilter?.dateFrom,
+            dateTo: params.timeFilter?.dateTo,
+            isArchived: params.isArchived,
+            isRead: params.isRead,
+            isLiked: params.isLiked,
+            tagIds: params.tagIds,
+            sourceIds: params.sourceIds, // Pass sourceIds filter
+          }
         );
 
-        transformedData = data.map((source: NewsletterSource) =>
-          transformNewsletterSourceResponse(
-            source,
-            totalCounts[source.id] || 0,
-            unreadCounts[source.id] || 0
-          )
-        );
+        transformedData = data.map((source: NewsletterSource) => {
+          const totalCount = totalCounts[source.id] || 0;
+          const unreadCount = unreadCounts[source.id] || 0;
+
+          return transformNewsletterSourceResponse(
+            source as NewsletterSource,
+            totalCount,
+            unreadCount
+          );
+        });
       } else {
         transformedData = (data || []).map((source: NewsletterSource) =>
           transformNewsletterSourceResponse(source)
