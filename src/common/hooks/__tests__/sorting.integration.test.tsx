@@ -22,8 +22,8 @@ vi.mock('../useInboxFilters', () => ({
   }),
 }));
 
-vi.mock('@common/services/newsletter/NewsletterService', () => ({
-  newsletterService: {
+vi.mock('@common/services/optimizedNewsletterService', () => ({
+  optimizedNewsletterService: {
     getAll: vi.fn(),
   },
 }));
@@ -79,12 +79,12 @@ describe('Sorting Integration Tests', () => {
         },
       },
     });
-    
+
     // Simple mock setup
     mockGetAll = vi.fn();
-    const mockModule = vi.mocked(await import('@common/services/newsletter/NewsletterService'));
-    mockModule.newsletterService.getAll = mockGetAll;
-    
+    const mockModule = vi.mocked(await import('@common/services/optimizedNewsletterService'));
+    mockModule.optimizedNewsletterService.getAll = mockGetAll;
+
     vi.clearAllMocks();
   });
 
@@ -162,9 +162,9 @@ describe('Sorting Integration Tests', () => {
       const { result: filtersResult } = renderHook(() => useInboxFilters(), { wrapper });
       const { result: newslettersResult, rerender } = renderHook(
         (filters) => useInfiniteNewsletters(filters),
-        { 
+        {
           wrapper,
-          initialProps: filtersResult.current.newsletterFilter
+          initialProps: filtersResult.current.newsletterFilter,
         }
       );
 
@@ -244,10 +244,11 @@ describe('Sorting Integration Tests', () => {
       mockGetAll.mockRejectedValue(mockError);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'title',
-          orderDirection: 'asc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'title',
+            orderDirection: 'asc',
+          }),
         { wrapper }
       );
 

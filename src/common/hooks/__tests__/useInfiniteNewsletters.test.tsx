@@ -1,10 +1,9 @@
 import { vi } from 'vitest';
 
 // CRITICAL: Mock MUST be at the very top, before any other imports
-vi.mock('../../services', () => ({
-  newsletterService: {
+vi.mock('../../services/optimizedNewsletterService', () => ({
+  optimizedNewsletterService: {
     getAll: vi.fn(),
-    getNewslettersByTags: vi.fn(),
   },
 }));
 
@@ -14,16 +13,14 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { PropsWithChildren } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AuthContext } from '../../contexts/AuthContext';
-import { newsletterService } from '../../services';
+import { optimizedNewsletterService } from '../../services/optimizedNewsletterService';
 import type { NewsletterWithRelations } from '../../types/newsletter';
 import { useInfiniteNewsletters } from '../infiniteScroll/useInfiniteNewsletters';
 
 // Get the mocked service
-const mockNewsletterService = newsletterService as {
+const mockOptimizedService = optimizedNewsletterService as {
   getAll: ReturnType<typeof vi.fn>;
-  getNewslettersByTags: ReturnType<typeof vi.fn>;
 };
-
 
 // Define AuthContextType
 type AuthContextType = {
@@ -90,8 +87,7 @@ describe('useInfiniteNewsletters', () => {
       },
     });
     vi.clearAllMocks();
-    mockNewsletterService.getAll.mockClear();
-    mockNewsletterService.getNewslettersByTags.mockClear();
+    mockOptimizedService.getAll.mockClear();
   });
 
   const createWrapper = (authContextValue: AuthContextType = mockAuthContextValue) => {
@@ -103,7 +99,7 @@ describe('useInfiniteNewsletters', () => {
   };
 
   it('should initialize with default values when not enabled', () => {
-    mockNewsletterService.getAll.mockResolvedValue({
+    mockOptimizedService.getAll.mockResolvedValue({
       data: [],
       count: 0,
       hasMore: false,
@@ -132,7 +128,7 @@ describe('useInfiniteNewsletters', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(mockNewsletterService.getAll).not.toHaveBeenCalled();
+    expect(mockOptimizedService.getAll).not.toHaveBeenCalled();
   });
 
   it('should fetch initial newsletters successfully', async () => {
@@ -142,7 +138,7 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}), {
       wrapper: createWrapper(),
@@ -150,7 +146,7 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(
       () => {
-        expect(mockNewsletterService.getAll).toHaveBeenCalled();
+        expect(mockOptimizedService.getAll).toHaveBeenCalled();
         expect(result.current.isLoading).toBe(false);
       },
       { timeout: 3000 }
@@ -163,7 +159,7 @@ describe('useInfiniteNewsletters', () => {
 
   it('should handle error during initial fetch', async () => {
     const mockError = new Error('Failed to fetch');
-    mockNewsletterService.getAll.mockRejectedValue(mockError);
+    mockOptimizedService.getAll.mockRejectedValue(mockError);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { debug: true }), {
       wrapper: createWrapper(),
@@ -171,7 +167,7 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(
       () => {
-        expect(mockNewsletterService.getAll).toHaveBeenCalled();
+        expect(mockOptimizedService.getAll).toHaveBeenCalled();
       },
       { timeout: 5000 }
     );
@@ -201,16 +197,14 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll
-      .mockResolvedValueOnce(page1Data)
-      .mockResolvedValueOnce(page2Data);
+    mockOptimizedService.getAll.mockResolvedValueOnce(page1Data).mockResolvedValueOnce(page2Data);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { pageSize: 10 }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
       expect(result.current.newsletters.length).toBe(10);
       expect(result.current.hasNextPage).toBe(true);
@@ -225,7 +219,7 @@ describe('useInfiniteNewsletters', () => {
       expect(result.current.newsletters.length).toBe(20);
     });
 
-    expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(2);
+    expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(2);
   });
 
   it('should not fetch next page if there is no next page', async () => {
@@ -235,14 +229,14 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -251,19 +245,19 @@ describe('useInfiniteNewsletters', () => {
     });
 
     expect(result.current.isFetchingNextPage).toBe(false);
-    expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(1);
+    expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(1);
   });
 
   it('should refetch newsletters when refetch is called', async () => {
     const mockData = { data: [createMockNewsletter('1')], count: 1, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
     expect(result.current.newsletters[0].id).toBe('1');
@@ -274,12 +268,12 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(2);
+    expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(2);
   });
 
   it('should use filters when fetching newsletters', async () => {
     const mockData = { data: [createMockNewsletter('1')], count: 1, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const filters = { search: 'test', isRead: false };
 
@@ -288,7 +282,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() =>
-      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           search: 'test',
           isRead: false,
@@ -299,7 +293,7 @@ describe('useInfiniteNewsletters', () => {
 
   it('should use custom pageSize from options', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const pageSize = 10;
 
@@ -308,7 +302,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() =>
-      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           limit: pageSize,
         })
@@ -323,14 +317,14 @@ describe('useInfiniteNewsletters', () => {
       hasMore: true,
     };
 
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { pageSize: 10 }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -357,7 +351,7 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll
+    mockOptimizedService.getAll
       .mockResolvedValueOnce(page1Data)
       .mockResolvedValueOnce(page2Data)
       .mockResolvedValueOnce(page3Data);
@@ -367,7 +361,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
     expect(result.current.currentPage).toBe(1);
@@ -398,7 +392,7 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll
+    mockOptimizedService.getAll
       .mockResolvedValueOnce(page1Data)
       .mockResolvedValueOnce(page2Data)
       .mockResolvedValueOnce(page1Data);
@@ -408,7 +402,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
     expect(result.current.currentPage).toBe(1);
@@ -431,7 +425,7 @@ describe('useInfiniteNewsletters', () => {
 
   it('should handle all filter types correctly', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const filters = {
       search: 'test search',
@@ -448,7 +442,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() =>
-      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           search: 'test search',
           isRead: true,
@@ -464,14 +458,14 @@ describe('useInfiniteNewsletters', () => {
 
   it('should handle empty data response correctly', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -487,14 +481,14 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { pageSize: 10 }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -505,7 +499,7 @@ describe('useInfiniteNewsletters', () => {
 
   it('should handle debug mode correctly', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     renderHook(() => useInfiniteNewsletters({}, { debug: true }), {
       wrapper: createWrapper(),
@@ -513,7 +507,7 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(
       () =>
-        expect(mockNewsletterService.getAll).toHaveBeenCalledWith(
+        expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
           expect.objectContaining({
             offset: 0,
             limit: 20,
@@ -525,29 +519,29 @@ describe('useInfiniteNewsletters', () => {
 
   it('should handle staleTime option correctly', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { _staleTime: 5000 }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(1);
+    expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(1);
   });
 
   it('should handle refetchOnWindowFocus option correctly', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     renderHook(() => useInfiniteNewsletters({}, { _refetchOnWindowFocus: false }), {
       wrapper: createWrapper(),
     });
 
-    await waitFor(() => expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(1));
   });
 
   it('should handle multiple consecutive fetchNextPage calls correctly', async () => {
@@ -569,7 +563,7 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll
+    mockOptimizedService.getAll
       .mockResolvedValueOnce(page1Data)
       .mockResolvedValueOnce(page2Data)
       .mockResolvedValueOnce(page3Data);
@@ -579,7 +573,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -594,7 +588,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() => expect(result.current.isFetchingNextPage).toBe(false));
-    expect(mockNewsletterService.getAll).toHaveBeenCalled();
+    expect(mockOptimizedService.getAll).toHaveBeenCalled();
   });
 
   it('should handle error during fetchNextPage', async () => {
@@ -606,7 +600,7 @@ describe('useInfiniteNewsletters', () => {
 
     const mockError = new Error('Failed to fetch next page');
 
-    mockNewsletterService.getAll
+    mockOptimizedService.getAll
       .mockResolvedValueOnce(initialMockData)
       .mockRejectedValueOnce(mockError);
 
@@ -615,7 +609,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -642,7 +636,7 @@ describe('useInfiniteNewsletters', () => {
     };
     const mockError = new Error('Refetch failed');
 
-    mockNewsletterService.getAll
+    mockOptimizedService.getAll
       .mockResolvedValueOnce(initialMockData)
       .mockRejectedValueOnce(mockError);
 
@@ -651,7 +645,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -680,20 +674,15 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll
-      .mockResolvedValueOnce(mockData1)
-      .mockResolvedValueOnce(mockData2);
+    mockOptimizedService.getAll.mockResolvedValueOnce(mockData1).mockResolvedValueOnce(mockData2);
 
-    const { result, rerender } = renderHook(
-      ({ filters }) => useInfiniteNewsletters(filters),
-      {
-        wrapper: createWrapper(),
-        initialProps: { filters: {} },
-      }
-    );
+    const { result, rerender } = renderHook(({ filters }) => useInfiniteNewsletters(filters), {
+      wrapper: createWrapper(),
+      initialProps: { filters: {} },
+    });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
     expect(result.current.newsletters[0].id).toBe('1');
@@ -702,14 +691,14 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(2);
+    expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(2);
   });
 
   it('should handle edge case with zero pageSize', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
 
     // Mock getAll to apply the same default parameter logic as the service
-    mockNewsletterService.getAll.mockImplementation((params) => {
+    mockOptimizedService.getAll.mockImplementation((params) => {
       // Apply the same default parameter logic as the service
       const processedParams = { ...params };
       if (!processedParams.limit || processedParams.limit === 0) {
@@ -726,21 +715,19 @@ describe('useInfiniteNewsletters', () => {
       wrapper: createWrapper(),
     });
 
-    await waitFor(() =>
-      expect(mockNewsletterService.getAll).toHaveBeenCalled()
-    );
+    await waitFor(() => expect(mockOptimizedService.getAll).toHaveBeenCalled());
   });
 
   it('should handle edge case with very large pageSize', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     renderHook(() => useInfiniteNewsletters({}, { pageSize: 1000 }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() =>
-      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           limit: 1000,
         })
@@ -761,16 +748,14 @@ describe('useInfiniteNewsletters', () => {
       hasMore: true,
     };
 
-    mockNewsletterService.getAll
-      .mockResolvedValueOnce(page1Data)
-      .mockResolvedValueOnce(page2Data);
+    mockOptimizedService.getAll.mockResolvedValueOnce(page1Data).mockResolvedValueOnce(page2Data);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { pageSize: 10 }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -781,20 +766,20 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(() => expect(result.current.isFetchingNextPage).toBe(false));
 
-    expect(mockNewsletterService.getAll).toHaveBeenCalled();
-    expect(mockNewsletterService.getAll.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(mockOptimizedService.getAll).toHaveBeenCalled();
+    expect(mockOptimizedService.getAll.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('should handle undefined filters gracefully', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     renderHook(() => useInfiniteNewsletters(undefined as any), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() =>
-      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           search: undefined,
           isRead: undefined,
@@ -805,14 +790,14 @@ describe('useInfiniteNewsletters', () => {
 
   it('should handle undefined options gracefully', async () => {
     const mockData = { data: [], count: 0, hasMore: false };
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     renderHook(() => useInfiniteNewsletters({}, undefined as any), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() =>
-      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           limit: 20,
         })
@@ -829,14 +814,14 @@ describe('useInfiniteNewsletters', () => {
       hasMore: true,
     };
 
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { pageSize: mockPageSize }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -852,14 +837,14 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { pageSize: 10 }), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
@@ -879,20 +864,15 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll
-      .mockResolvedValueOnce(mockData1)
-      .mockResolvedValueOnce(mockData2);
+    mockOptimizedService.getAll.mockResolvedValueOnce(mockData1).mockResolvedValueOnce(mockData2);
 
-    const { result, rerender } = renderHook(
-      ({ filters }) => useInfiniteNewsletters(filters),
-      {
-        wrapper: createWrapper(),
-        initialProps: { filters: { search: 'old' } },
-      }
-    );
+    const { result, rerender } = renderHook(({ filters }) => useInfiniteNewsletters(filters), {
+      wrapper: createWrapper(),
+      initialProps: { filters: { search: 'old' } },
+    });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
     expect(result.current.newsletters[0].id).toBe('1');
@@ -901,12 +881,12 @@ describe('useInfiniteNewsletters', () => {
     rerender({ filters: { search: 'new' } });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(2);
+    expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(2);
   });
 
   it('should handle API error during fetch', async () => {
     const mockError = new Error('API fetch failed');
-    mockNewsletterService.getAll.mockRejectedValue(mockError);
+    mockOptimizedService.getAll.mockRejectedValue(mockError);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}, { debug: true }), {
       wrapper: createWrapper(),
@@ -914,7 +894,7 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(
       () => {
-        expect(mockNewsletterService.getAll).toHaveBeenCalled();
+        expect(mockOptimizedService.getAll).toHaveBeenCalled();
       },
       { timeout: 5000 }
     );
@@ -932,7 +912,7 @@ describe('useInfiniteNewsletters', () => {
   });
 
   it('should not fetch if enabled is false', () => {
-    mockNewsletterService.getAll.mockResolvedValue({
+    mockOptimizedService.getAll.mockResolvedValue({
       data: [],
       count: 0,
       hasMore: false,
@@ -943,7 +923,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     expect(result.current.isLoading).toBe(false);
-    expect(mockNewsletterService.getAll).not.toHaveBeenCalled();
+    expect(mockOptimizedService.getAll).not.toHaveBeenCalled();
   });
 
   it('refetch function should reset to page 1 and fetch data', async () => {
@@ -953,18 +933,18 @@ describe('useInfiniteNewsletters', () => {
       hasMore: false,
     };
 
-    mockNewsletterService.getAll.mockResolvedValue(mockData);
+    mockOptimizedService.getAll.mockResolvedValue(mockData);
 
     const { result } = renderHook(() => useInfiniteNewsletters({}), {
       wrapper: createWrapper(),
     });
 
     await waitFor(() => {
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
+      expect(mockOptimizedService.getAll).toHaveBeenCalled();
       expect(result.current.isLoading).toBe(false);
     });
 
-    const initialCallCount = mockNewsletterService.getAll.mock.calls.length;
+    const initialCallCount = mockOptimizedService.getAll.mock.calls.length;
 
     act(() => {
       result.current.refetch();
@@ -972,7 +952,7 @@ describe('useInfiniteNewsletters', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mockNewsletterService.getAll.mock.calls.length).toBeGreaterThan(initialCallCount);
+    expect(mockOptimizedService.getAll.mock.calls.length).toBeGreaterThan(initialCallCount);
   });
 
   describe('useInfiniteNewsletters with tags', () => {
@@ -981,22 +961,9 @@ describe('useInfiniteNewsletters', () => {
       vi.clearAllMocks();
     });
 
-    it('should call getNewslettersByTags when tagIds are provided', async () => {
+    it('should call getAll with tagIds when tagIds are provided', async () => {
       const mockNewsletter1 = createMockNewsletter('1');
-
-      // Mock getAll to route to getNewslettersByTags when tagIds are present
-      mockNewsletterService.getAll.mockImplementation((params) => {
-        if (params.tagIds && params.tagIds.length > 0) {
-          return mockNewsletterService.getNewslettersByTags(params.tagIds, params);
-        }
-        return Promise.resolve({
-          data: [mockNewsletter1],
-          count: 1,
-          hasMore: false,
-        });
-      });
-
-      mockNewsletterService.getNewslettersByTags.mockResolvedValue({
+      mockOptimizedService.getAll.mockResolvedValue({
         data: [mockNewsletter1],
         count: 1,
         hasMore: false,
@@ -1010,27 +977,14 @@ describe('useInfiniteNewsletters', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockNewsletterService.getAll).toHaveBeenCalled();
-      expect(mockNewsletterService.getNewslettersByTags).toHaveBeenCalledWith(
-        ['tag-1'],
-        expect.objectContaining({})
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ tagIds: ['tag-1'] })
       );
+      expect(result.current.newsletters).toHaveLength(1);
     });
 
     it('should handle multiple tags with AND logic', async () => {
-      // Mock getAll to route to getNewslettersByTags when tagIds are present
-      mockNewsletterService.getAll.mockImplementation((params) => {
-        if (params.tagIds && params.tagIds.length > 0) {
-          return mockNewsletterService.getNewslettersByTags(params.tagIds, params);
-        }
-        return Promise.resolve({
-          data: [],
-          count: 0,
-          hasMore: false,
-        });
-      });
-
-      mockNewsletterService.getNewslettersByTags.mockResolvedValue({
+      mockOptimizedService.getAll.mockResolvedValue({
         data: [],
         count: 0,
         hasMore: false,
@@ -1041,48 +995,28 @@ describe('useInfiniteNewsletters', () => {
       });
 
       await waitFor(() =>
-        expect(mockNewsletterService.getNewslettersByTags).toHaveBeenCalledWith(
-          ['tag-1', 'tag-2'],
-          expect.objectContaining({})
+        expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
+          expect.objectContaining({ tagIds: ['tag-1', 'tag-2'] })
         )
       );
     });
 
     it('should handle tag filtering with other filters', async () => {
-      // Mock getAll to route to getNewslettersByTags when tagIds are present
-      mockNewsletterService.getAll.mockImplementation((params) => {
-        if (params.tagIds && params.tagIds.length > 0) {
-          return mockNewsletterService.getNewslettersByTags(params.tagIds, params);
-        }
-        return Promise.resolve({
-          data: [],
-          count: 0,
-          hasMore: false,
-        });
-      });
-
-      mockNewsletterService.getNewslettersByTags.mockResolvedValue({
+      mockOptimizedService.getAll.mockResolvedValue({
         data: [],
         count: 0,
         hasMore: false,
       });
 
       renderHook(
-        () =>
-          useInfiniteNewsletters({
-            tagIds: ['tag-1'],
-            search: 'test',
-            isRead: false,
-          }),
-        {
-          wrapper: createWrapper(),
-        }
+        () => useInfiniteNewsletters({ tagIds: ['tag-1'], search: 'test', isRead: false }),
+        { wrapper: createWrapper() }
       );
 
       await waitFor(() =>
-        expect(mockNewsletterService.getNewslettersByTags).toHaveBeenCalledWith(
-          ['tag-1'],
+        expect(mockOptimizedService.getAll).toHaveBeenCalledWith(
           expect.objectContaining({
+            tagIds: ['tag-1'],
             search: 'test',
             isRead: false,
           })
@@ -1091,7 +1025,7 @@ describe('useInfiniteNewsletters', () => {
     });
 
     it('should handle empty tagIds array by using getAll', async () => {
-      mockNewsletterService.getAll.mockResolvedValue({
+      mockOptimizedService.getAll.mockResolvedValue({
         data: [],
         count: 0,
         hasMore: false,
@@ -1101,39 +1035,25 @@ describe('useInfiniteNewsletters', () => {
         wrapper: createWrapper(),
       });
 
-      await waitFor(() => expect(mockNewsletterService.getAll).toHaveBeenCalled());
-      expect(mockNewsletterService.getNewslettersByTags).not.toHaveBeenCalled();
+      await waitFor(() => expect(mockOptimizedService.getAll).toHaveBeenCalled());
     });
 
     it('should handle errors during tag filtering', async () => {
       const mockError = new Error('Tag filtering failed');
+      mockOptimizedService.getAll.mockRejectedValue(mockError);
 
-      // Mock getAll to route to getNewslettersByTags when tagIds are present
-      mockNewsletterService.getAll.mockImplementation((params) => {
-        if (params.tagIds && params.tagIds.length > 0) {
-          return mockNewsletterService.getNewslettersByTags(params.tagIds, params);
-        }
-        return Promise.resolve({
-          data: [],
-          count: 0,
-          hasMore: false,
-        });
-      });
-
-      mockNewsletterService.getNewslettersByTags.mockRejectedValue(mockError);
-
-      const { result } = renderHook(() => useInfiniteNewsletters({ tagIds: ['tag-1'] }, { debug: true }), {
-        wrapper: createWrapper(),
-      });
+      const { result } = renderHook(
+        () => useInfiniteNewsletters({ tagIds: ['tag-1'] }, { debug: true }),
+        { wrapper: createWrapper() }
+      );
 
       await waitFor(
         () => {
-          expect(mockNewsletterService.getNewslettersByTags).toHaveBeenCalled();
+          expect(mockOptimizedService.getAll).toHaveBeenCalled();
         },
         { timeout: 5000 }
       );
 
-      // Wait for React Query to finish retrying and settle
       await waitFor(
         () => {
           expect(result.current.isLoading).toBe(false);
@@ -1142,7 +1062,6 @@ describe('useInfiniteNewsletters', () => {
       );
 
       expect(result.current.newsletters).toEqual([]);
-      // Note: React Query retries failed requests, so we wait for it to settle
     });
   });
 });

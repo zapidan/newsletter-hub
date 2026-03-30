@@ -1,4 +1,5 @@
 import { newsletterService } from '@common/services';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import type { NewsletterWithRelations } from '@common/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -34,6 +35,12 @@ vi.mock('@common/services', () => ({
   userService: {},
 }));
 
+vi.mock('@common/services/optimizedNewsletterService', () => ({
+  optimizedNewsletterService: {
+    getAll: vi.fn(),
+  },
+}));
+
 const mockQueryClientInstance = new QueryClient();
 
 const mockCacheManagerInstance = {
@@ -47,7 +54,7 @@ const mockCacheManagerInstance = {
   warmCache: vi.fn(),
   queryClient: mockQueryClientInstance,
   updateUnreadCountOptimistically: vi.fn(),
-}
+};
 
 // Global variable to hold the current queryClient for the cache utils mock
 let globalQueryClient: QueryClient | null = null;
@@ -67,7 +74,7 @@ vi.mock('@common/utils/cacheUtils', () => {
     cancelQueries: vi.fn().mockResolvedValue(undefined),
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
   };
-})
+});
 
 vi.mock('@common/utils/queryKeyFactory', () => ({
   queryKeyFactory: {
@@ -78,17 +85,15 @@ vi.mock('@common/utils/queryKeyFactory', () => ({
     },
     queue: { list: (uid: string) => ['readingQueue', 'list', uid] },
   },
-}))
-
+}));
 
 vi.mock('@common/utils/optimizedCacheInvalidation', () => ({
   invalidateForOperation: vi.fn().mockResolvedValue(undefined),
-}))
-
+}));
 
 vi.mock('@common/utils/tagUtils', () => ({
   updateNewsletterTags: vi.fn().mockResolvedValue(undefined),
-}))
+}));
 
 vi.mock('@common/contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
@@ -106,6 +111,7 @@ vi.mock('@common/contexts/AuthContext', () => ({
 }));
 
 const mockNewsletterService = vi.mocked(newsletterService);
+const mockOptimizedService = optimizedNewsletterService as { getAll: ReturnType<typeof vi.fn> };
 
 // Mock data
 const mockNewsletter: NewsletterWithRelations = {
@@ -132,7 +138,7 @@ const mockNewsletter: NewsletterWithRelations = {
   word_count: 100,
   estimated_read_time: 1,
   image_url: '',
-}
+};
 
 const paginated = (items: NewsletterWithRelations[]) => ({
   data: items,
@@ -176,6 +182,8 @@ describe('useNewsletters', () => {
 
     // Default mock for newsletterService.getAll
     mockNewsletterService.getAll.mockResolvedValue(mockPaginatedResponse());
+    // Default mock for optimizedNewsletterService.getAll (used for the main query)
+    mockOptimizedService.getAll.mockResolvedValue(mockPaginatedResponse());
 
     // Default mock for cache manager interactions
     mockCacheManagerInstance.updateNewsletterInCache.mockImplementation(({ id, updates }) => {
@@ -187,7 +195,7 @@ describe('useNewsletters', () => {
           ...currentData,
           data: currentData.data.map((item: any) =>
             item.id === id ? { ...item, ...updates } : item
-          )
+          ),
         };
         queryClient.setQueryData(listKey, updatedData);
       }
@@ -202,21 +210,23 @@ describe('useNewsletters', () => {
           data: currentData.data.map((item: any) => {
             const update = updatesArray.find((u: any) => u.id === item.id);
             return update ? { ...item, ...update.updates } : item;
-          })
+          }),
         };
         queryClient.setQueryData(listKey, updatedData);
       }
     });
-    mockCacheManagerInstance.optimisticUpdateWithRollback.mockImplementation(async (key, updater) => {
-      const currentData = queryClient.getQueryData(key);
-      const newData = updater(currentData);
-      queryClient.setQueryData(key, newData);
-      return {
-        rollback: vi.fn().mockImplementation(() => {
-          queryClient.setQueryData(key, currentData);
-        }),
-      };
-    });
+    mockCacheManagerInstance.optimisticUpdateWithRollback.mockImplementation(
+      async (key, updater) => {
+        const currentData = queryClient.getQueryData(key);
+        const newData = updater(currentData);
+        queryClient.setQueryData(key, newData);
+        return {
+          rollback: vi.fn().mockImplementation(() => {
+            queryClient.setQueryData(key, currentData);
+          }),
+        };
+      }
+    );
 
     // Define the wrapper for each test, using the fresh QueryClient
     wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -227,15 +237,17 @@ describe('useNewsletters', () => {
   // Helper function to initialize hook and wait for initial data load
   const setupHook = async (filters = {}, options = {}) => {
     const hookResult = renderHook(() => useNewsletters(filters, options), { wrapper });
-    await waitFor(() => expect(hookResult.result.current.isLoadingNewsletters).toBe(false), { timeout: 2000 });
+    await waitFor(() => expect(hookResult.result.current.isLoadingNewsletters).toBe(false), {
+      timeout: 2000,
+    });
     return hookResult;
   };
 
   describe('Initial Data Fetching', () => {
     it('should fetch newsletters on mount if enabled and user is authenticated', async () => {
       await setupHook();
-      expect(mockNewsletterService.getAll).toHaveBeenCalledTimes(1);
-      const { result } = await setupHook(); // re-render to check newsletters
+      expect(mockOptimizedService.getAll).toHaveBeenCalledTimes(1);
+      const { result } = await setupHook();
       expect(result.current.newsletters).toEqual([mockNewsletter]);
     });
 
@@ -270,7 +282,7 @@ describe('useNewsletters', () => {
     it('should use filters when fetching newsletters', async () => {
       const filters = { search: 'test', isRead: true };
       await setupHook(filters);
-      expect(mockNewsletterService.getAll).toHaveBeenCalledWith(expect.objectContaining(filters));
+      expect(mockOptimizedService.getAll).toHaveBeenCalledWith(expect.objectContaining(filters));
     });
 
     it('should handle error during initial fetch', async () => {
@@ -290,17 +302,21 @@ describe('useNewsletters', () => {
 
       // Clear any existing mocks and set up the error
       vi.clearAllMocks();
-      mockNewsletterService.getAll.mockRejectedValueOnce(mockError);
+      mockOptimizedService.getAll.mockRejectedValueOnce(mockError);
 
-      const { result } = renderHook(() => useNewsletters({}, { staleTime: 0 }), { wrapper: errorWrapper });
-      await waitFor(() => expect(result.current.isLoadingNewsletters).toBe(false), { timeout: 3000 });
+      const { result } = renderHook(() => useNewsletters({}, { staleTime: 0 }), {
+        wrapper: errorWrapper,
+      });
+      await waitFor(() => expect(result.current.isLoadingNewsletters).toBe(false), {
+        timeout: 3000,
+      });
 
       // Debug: log the actual state
       console.log('Error state:', {
         isLoading: result.current.isLoadingNewsletters,
         isError: result.current.isErrorNewsletters,
         error: result.current.errorNewsletters,
-        newsletters: result.current.newsletters
+        newsletters: result.current.newsletters,
       });
 
       // Since the error isn't working as expected, let's just verify the basic behavior
@@ -312,128 +328,158 @@ describe('useNewsletters', () => {
 
   describe('getNewsletter', () => {
     it('delegates to service', async () => {
-      mockNewsletterService.getById.mockResolvedValueOnce({ ...mockNewsletter, id: 'x' })
-      const { result } = await setupHook()
-      await result.current.getNewsletter('x')
-      expect(mockNewsletterService.getById).toHaveBeenCalledWith('x')
-    })
+      mockNewsletterService.getById.mockResolvedValueOnce({ ...mockNewsletter, id: 'x' });
+      const { result } = await setupHook();
+      await result.current.getNewsletter('x');
+      expect(mockNewsletterService.getById).toHaveBeenCalledWith('x');
+    });
 
     it('returns null for empty id', async () => {
-      const { result } = await setupHook()
-      expect(await result.current.getNewsletter('')).toBeNull()
-    })
-  })
+      const { result } = await setupHook();
+      expect(await result.current.getNewsletter('')).toBeNull();
+    });
+  });
 
   describe('markAsRead / markAsUnread', () => {
-    const listKey = ['newsletters', 'list', {}]
+    const listKey = ['newsletters', 'list', {}];
 
     it('optimistically sets is_read = true', async () => {
-      queryClient.setQueryData(listKey, paginated([{ ...mockNewsletter, id: 'nl-1', is_read: false }]))
-      mockNewsletterService.markAsRead.mockResolvedValueOnce(true)
-      const { result } = await setupHook()
-      await act(async () => { await result.current.markAsRead('nl-1') })
-      const cached = (queryClient.getQueryData(listKey) as any)?.data?.find((x: any) => x.id === 'nl-1')
-      expect(cached?.is_read).toBe(true)
-    })
+      queryClient.setQueryData(
+        listKey,
+        paginated([{ ...mockNewsletter, id: 'nl-1', is_read: false }])
+      );
+      mockNewsletterService.markAsRead.mockResolvedValueOnce(true);
+      const { result } = await setupHook();
+      await act(async () => {
+        await result.current.markAsRead('nl-1');
+      });
+      const cached = (queryClient.getQueryData(listKey) as any)?.data?.find(
+        (x: any) => x.id === 'nl-1'
+      );
+      expect(cached?.is_read).toBe(true);
+    });
 
     it('markAsUnread reverts flag', async () => {
-      queryClient.setQueryData(listKey, paginated([{ ...mockNewsletter, id: 'nl-1', is_read: true }]))
-      mockNewsletterService.markAsUnread.mockResolvedValueOnce(true)
-      const { result } = await setupHook()
-      await act(async () => { await result.current.markAsUnread('nl-1') })
-      const cached = (queryClient.getQueryData(listKey) as any)?.data?.find((x: any) => x.id === 'nl-1')
-      expect(cached?.is_read).toBe(false)
-    })
-  })
+      queryClient.setQueryData(
+        listKey,
+        paginated([{ ...mockNewsletter, id: 'nl-1', is_read: true }])
+      );
+      mockNewsletterService.markAsUnread.mockResolvedValueOnce(true);
+      const { result } = await setupHook();
+      await act(async () => {
+        await result.current.markAsUnread('nl-1');
+      });
+      const cached = (queryClient.getQueryData(listKey) as any)?.data?.find(
+        (x: any) => x.id === 'nl-1'
+      );
+      expect(cached?.is_read).toBe(false);
+    });
+  });
 
   describe('toggleLike', () => {
-    const listKey = ['newsletters', 'list', {}]
+    const listKey = ['newsletters', 'list', {}];
     it('flips is_liked', async () => {
-      queryClient.setQueryData(listKey, paginated([{ ...mockNewsletter, id: 'nl-1', is_liked: false }]))
-      mockNewsletterService.toggleLike.mockResolvedValueOnce(true)
-      const { result } = await setupHook()
-      await act(async () => { await result.current.toggleLike('nl-1') })
-      const cached = (queryClient.getQueryData(listKey) as any)?.data?.find((x: any) => x.id === 'nl-1')
-      expect(cached?.is_liked).toBe(true)
-    })
-  })
+      queryClient.setQueryData(
+        listKey,
+        paginated([{ ...mockNewsletter, id: 'nl-1', is_liked: false }])
+      );
+      mockNewsletterService.toggleLike.mockResolvedValueOnce(true);
+      const { result } = await setupHook();
+      await act(async () => {
+        await result.current.toggleLike('nl-1');
+      });
+      const cached = (queryClient.getQueryData(listKey) as any)?.data?.find(
+        (x: any) => x.id === 'nl-1'
+      );
+      expect(cached?.is_liked).toBe(true);
+    });
+  });
 
   describe('toggleArchive', () => {
     it('removes item from non-archived view when archiving', async () => {
-      const filters = { isArchived: false }
-      const listKey = ['newsletters', 'list', filters]
-      queryClient.setQueryData(listKey, paginated([{ ...mockNewsletter, id: 'nl-1' }]))
-      mockNewsletterService.toggleArchive.mockResolvedValueOnce(true)
-      const { result } = await setupHook(filters)
-      await act(async () => { await result.current.toggleArchive('nl-1') })
-      const cached = (queryClient.getQueryData(listKey) as any)?.data
-      expect(cached?.find((x: any) => x.id === 'nl-1')).toBeUndefined()
-    })
-  })
+      const filters = { isArchived: false };
+      const listKey = ['newsletters', 'list', filters];
+      queryClient.setQueryData(listKey, paginated([{ ...mockNewsletter, id: 'nl-1' }]));
+      mockNewsletterService.toggleArchive.mockResolvedValueOnce(true);
+      const { result } = await setupHook(filters);
+      await act(async () => {
+        await result.current.toggleArchive('nl-1');
+      });
+      const cached = (queryClient.getQueryData(listKey) as any)?.data;
+      expect(cached?.find((x: any) => x.id === 'nl-1')).toBeUndefined();
+    });
+  });
 
   describe('toggleInQueue', () => {
-    const queueKey = ['readingQueue', 'list', 'u-1']
+    const queueKey = ['readingQueue', 'list', 'u-1'];
 
     it('removes the item from the cached queue when present', async () => {
       // Seed cache with one queue-item
-      const seeded = [{ id: 'q1', newsletter_id: 'nl-1' }] as ReadingQueueItem[]
-      queryClient.setQueryData(queueKey, seeded)
+      const seeded = [{ id: 'q1', newsletter_id: 'nl-1' }] as ReadingQueueItem[];
+      queryClient.setQueryData(queueKey, seeded);
 
       // `isInQueue` resolves truthy so the hook performs a "remove" branch
       const { readingQueueService } = await import('@common/services');
-      vi.mocked(readingQueueService.isInQueue).mockResolvedValueOnce(true)
-      vi.mocked(readingQueueService.remove).mockResolvedValueOnce(true)
+      vi.mocked(readingQueueService.isInQueue).mockResolvedValueOnce(true);
+      vi.mocked(readingQueueService.remove).mockResolvedValueOnce(true);
 
-      const { result } = await setupHook()
+      const { result } = await setupHook();
       await act(async () => {
-        await result.current.toggleInQueue('nl-1')
-      })
+        await result.current.toggleInQueue('nl-1');
+      });
 
       // Mock the queue removal by directly updating the cache
-      queryClient.setQueryData(queueKey, [])
+      queryClient.setQueryData(queueKey, []);
 
       // Wait a bit for the mutation to complete and cache to update
-      await waitFor(() => {
-        const after = (queryClient.getQueryData(queueKey) as ReadingQueueItem[]) ?? []
-        expect(after.find((i) => i.newsletter_id === 'nl-1')).toBeUndefined()
-      }, { timeout: 2000 })
-    })
-  })
+      await waitFor(
+        () => {
+          const after = (queryClient.getQueryData(queueKey) as ReadingQueueItem[]) ?? [];
+          expect(after.find((i) => i.newsletter_id === 'nl-1')).toBeUndefined();
+        },
+        { timeout: 2000 }
+      );
+    });
+  });
 
   describe('delete operations', () => {
     it('deleteNewsletter invalidates queries', async () => {
-      mockNewsletterService.delete.mockResolvedValueOnce({ success: true })
+      mockNewsletterService.delete.mockResolvedValueOnce({ success: true });
       const { invalidateForOperation } = await import('@common/utils/optimizedCacheInvalidation');
-      const { result } = await setupHook()
-      await act(async () => { await result.current.deleteNewsletter('nl-1') })
-      expect(mockNewsletterService.delete).toHaveBeenCalledWith('nl-1')
-      expect(invalidateForOperation).toHaveBeenCalledWith(queryClient, 'delete', ['nl-1'])
-    })
+      const { result } = await setupHook();
+      await act(async () => {
+        await result.current.deleteNewsletter('nl-1');
+      });
+      expect(mockNewsletterService.delete).toHaveBeenCalledWith('nl-1');
+      expect(invalidateForOperation).toHaveBeenCalledWith(queryClient, 'delete', ['nl-1']);
+    });
 
     it('exposes error on delete failure', async () => {
-      mockNewsletterService.delete.mockRejectedValueOnce(new Error('boom'))
-      const { result } = await setupHook()
-      await expect(result.current.deleteNewsletter('nl-1')).rejects.toThrow('boom')
-    })
+      mockNewsletterService.delete.mockRejectedValueOnce(new Error('boom'));
+      const { result } = await setupHook();
+      await expect(result.current.deleteNewsletter('nl-1')).rejects.toThrow('boom');
+    });
 
     it('bulk delete deletes each id then invalidates', async () => {
-      const ids = ['nl-1', 'nl-2', 'nl-3']
-      mockNewsletterService.delete.mockResolvedValue({ success: true })
+      const ids = ['nl-1', 'nl-2', 'nl-3'];
+      mockNewsletterService.delete.mockResolvedValue({ success: true });
       const { invalidateForOperation } = await import('@common/utils/optimizedCacheInvalidation');
-      const { result } = await setupHook()
-      await act(async () => { await result.current.bulkDeleteNewsletters(ids) })
-      expect(mockNewsletterService.delete).toHaveBeenCalledTimes(ids.length)
-      ids.forEach((id) => expect(mockNewsletterService.delete).toHaveBeenCalledWith(id))
-      expect(invalidateForOperation).toHaveBeenCalledWith(queryClient, 'bulk-delete', ids)
-    })
+      const { result } = await setupHook();
+      await act(async () => {
+        await result.current.bulkDeleteNewsletters(ids);
+      });
+      expect(mockNewsletterService.delete).toHaveBeenCalledTimes(ids.length);
+      ids.forEach((id) => expect(mockNewsletterService.delete).toHaveBeenCalledWith(id));
+      expect(invalidateForOperation).toHaveBeenCalledWith(queryClient, 'bulk-delete', ids);
+    });
 
     it('bulk delete surfaces first error', async () => {
       mockNewsletterService.delete.mockImplementation(async (id: string) => {
-        if (id === 'nl-1') throw new Error('fail')
-        return { success: true }
-      })
-      const { result } = await setupHook()
-      await expect(result.current.bulkDeleteNewsletters(['nl-1', 'nl-2'])).rejects.toThrow('fail')
-    })
-  })
-})
+        if (id === 'nl-1') throw new Error('fail');
+        return { success: true };
+      });
+      const { result } = await setupHook();
+      await expect(result.current.bulkDeleteNewsletters(['nl-1', 'nl-2'])).rejects.toThrow('fail');
+    });
+  });
+});
