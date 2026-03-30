@@ -112,28 +112,34 @@ describe('OptimizedNewsletterApi', () => {
         offset: 0,
       });
 
-      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters_with_sources_tags', {
+      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters_by_tags', {
         p_user_id: mockUserId,
-        p_source_id: null,
+        p_tag_ids: null,
         p_is_read: null,
         p_is_archived: null,
-        p_received_from: null,
-        p_received_to: null,
+        p_is_liked: null,
         p_source_ids: null,
+        p_date_from: null,
+        p_date_to: null,
         p_limit: 10,
         p_offset: 0,
         p_order_by: 'received_at',
         p_order_direction: 'desc',
       });
 
-      expect(supabase.rpc).toHaveBeenCalledWith('count_newsletters_with_sources_tags', {
+      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters_by_tags', {
         p_user_id: mockUserId,
-        p_source_id: null,
+        p_tag_ids: null,
         p_is_read: null,
         p_is_archived: null,
-        p_received_from: null,
-        p_received_to: null,
+        p_is_liked: null,
         p_source_ids: null,
+        p_date_from: null,
+        p_date_to: null,
+        p_limit: 1,
+        p_offset: 0,
+        p_order_by: 'received_at',
+        p_order_direction: 'desc',
       });
 
       expect(result.data).toHaveLength(1);
@@ -161,11 +167,16 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_with_sources_tags',
+        'get_newsletters_by_tags',
         expect.objectContaining({
           p_user_id: mockUserId,
-          p_source_id: 'source-1',
-          p_source_ids: null,
+          p_tag_ids: null,
+          p_is_read: null,
+          p_is_archived: null,
+          p_is_liked: null,
+          p_source_ids: ['source-1'],
+          p_date_from: null,
+          p_date_to: null,
           p_limit: 20,
           p_offset: 0,
           p_order_by: 'received_at',
@@ -192,11 +203,16 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_with_sources_tags',
+        'get_newsletters_by_tags',
         expect.objectContaining({
           p_user_id: mockUserId,
-          p_source_id: null,
+          p_tag_ids: null,
+          p_is_read: null,
+          p_is_archived: null,
+          p_is_liked: null,
           p_source_ids: ['source-1', 'source-2'],
+          p_date_from: null,
+          p_date_to: null,
           p_limit: 20,
           p_offset: 0,
           p_order_by: 'received_at',
@@ -224,11 +240,16 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_with_sources_tags',
+        'get_newsletters_by_tags',
         expect.objectContaining({
           p_user_id: mockUserId,
+          p_tag_ids: null,
           p_is_read: false,
           p_is_archived: false,
+          p_is_liked: null,
+          p_source_ids: null,
+          p_date_from: null,
+          p_date_to: null,
           p_limit: 10,
           p_offset: 0,
           p_order_by: 'received_at',
@@ -256,11 +277,16 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_with_sources_tags',
+        'get_newsletters_by_tags',
         expect.objectContaining({
           p_user_id: mockUserId,
-          p_received_from: '2024-01-01',
-          p_received_to: '2024-01-31',
+          p_tag_ids: null,
+          p_is_read: null,
+          p_is_archived: null,
+          p_is_liked: null,
+          p_source_ids: null,
+          p_date_from: '2024-01-01',
+          p_date_to: '2024-01-31',
           p_limit: 10,
           p_offset: 0,
           p_order_by: 'received_at',
@@ -269,12 +295,20 @@ describe('OptimizedNewsletterApi', () => {
       );
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'count_newsletters_with_sources_tags',
+        'get_newsletters_by_tags',
         expect.objectContaining({
           p_user_id: mockUserId,
-          p_received_from: '2024-01-01',
-          p_received_to: '2024-01-31',
+          p_tag_ids: null,
+          p_is_read: null,
+          p_is_archived: null,
+          p_is_liked: null,
           p_source_ids: null,
+          p_date_from: '2024-01-01',
+          p_date_to: '2024-01-31',
+          p_limit: 1,
+          p_offset: 0,
+          p_order_by: 'received_at',
+          p_order_direction: 'desc',
         })
       );
     });
@@ -298,13 +332,20 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_with_sources_tags',
+        'get_newsletters_by_tags',
         expect.objectContaining({
           p_user_id: mockUserId,
-          p_order_by: 'title',
-          p_order_direction: 'asc',
+          p_tag_ids: null,
+          p_is_read: null,
+          p_is_archived: null,
+          p_is_liked: null,
+          p_source_ids: null,
+          p_date_from: null,
+          p_date_to: null,
           p_limit: 10,
           p_offset: 0,
+          p_order_by: 'title',
+          p_order_direction: 'asc',
         })
       );
     });
@@ -476,18 +517,20 @@ describe('OptimizedNewsletterApi', () => {
         limit: 10,
       });
 
-      expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_with_sources_tags',
-        expect.objectContaining({
-          p_user_id: mockUserId,
-          p_source_id: 'source-1',
-          p_source_ids: null,
-          p_limit: 10,
-          p_offset: 0,
-          p_order_by: 'received_at',
-          p_order_direction: 'desc',
-        })
-      );
+      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters_by_tags', {
+        p_user_id: mockUserId,
+        p_tag_ids: null,
+        p_is_read: null,
+        p_is_archived: null,
+        p_is_liked: null,
+        p_source_ids: ['source-1'],
+        p_date_from: null,
+        p_date_to: null,
+        p_limit: 10,
+        p_offset: 0,
+        p_order_by: 'received_at',
+        p_order_direction: 'desc',
+      });
 
       expect(result.data).toHaveLength(1);
     });
