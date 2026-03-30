@@ -13,6 +13,7 @@ const { createQueryBuilder, mockUser } = vi.hoisted(() => {
     builder.insert = vi.fn().mockReturnValue(builder);
     builder.update = vi.fn().mockReturnValue(builder);
     builder.delete = vi.fn().mockReturnValue(builder);
+    builder.upsert = vi.fn().mockReturnValue(builder);
     builder.eq = vi.fn().mockReturnValue(builder);
     builder.in = vi.fn().mockReturnValue(builder);
     builder.ilike = vi.fn().mockReturnValue(builder);
@@ -27,14 +28,8 @@ const { createQueryBuilder, mockUser } = vi.hoisted(() => {
 
     // For chains that are directly awaited (e.g. await query.order(...))
     // The builder itself needs to be thenable.
-    // Specific methods like .order(), .range() etc. when they are terminal in a chain
-    // will have their promise resolution mocked directly on them in tests.
-    // e.g. currentQueryBuilder.order.mockResolvedValueOnce({ data: ..., error: null });
-    // This default 'then' is a fallback if a chain is awaited without a specific terminal mock.
     builder.then = vi.fn((_onFulfilled, _onRejected) => {
       // Default then: can be configured in tests if needed for generic await cases
-      // For instance, if a test expects `await currentQueryBuilder.eq(...).eq(...)` to resolve.
-      // Most often, the method that makes the query resolve (like .order, .single) will be mocked.
     });
 
     return builder;
@@ -45,14 +40,17 @@ const { createQueryBuilder, mockUser } = vi.hoisted(() => {
 vi.mock('../supabaseClient', () => {
   const queryBuilder = createQueryBuilder();
   const fromSpy = vi.fn().mockReturnValue(queryBuilder);
+  const rpcSpy = vi.fn().mockResolvedValue({ data: null, error: null });
   return {
-    supabase: { from: fromSpy }, // supabase.from() will return our mock builder
+    supabase: {
+      from: fromSpy,
+      rpc: rpcSpy,
+    },
     handleSupabaseError: vi.fn((error) => {
       throw error;
-    }), // Re-throw for .rejects.toThrow
+    }),
     requireAuth: vi.fn().mockResolvedValue(mockUser),
     withPerformanceLogging: vi.fn((_name, fn) => fn()),
-    // No need to export fromSpy from here if tests always use currentQueryBuilder via supabase.from()
   };
 });
 
@@ -66,6 +64,9 @@ describe('tagApi', () => {
     vi.clearAllMocks();
     currentQueryBuilder = createQueryBuilder();
     vi.mocked(supabaseClientModule.supabase.from).mockClear().mockReturnValue(currentQueryBuilder);
+    vi.mocked(supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>)
+      .mockClear()
+      .mockResolvedValue({ data: null, error: null });
     vi.mocked(supabaseClientModule.requireAuth).mockClear().mockResolvedValue(mockUser);
     vi.mocked(supabaseClientModule.handleSupabaseError)
       .mockClear()
@@ -90,7 +91,9 @@ describe('tagApi', () => {
       const result = await tagApi.getAll();
 
       expect(supabaseClientModule.supabase.from).toHaveBeenCalledWith('tags');
-      expect(currentQueryBuilder.select).toHaveBeenCalledWith('id, name, color, created_at, updated_at, user_id');
+      expect(currentQueryBuilder.select).toHaveBeenCalledWith(
+        'id, name, color, created_at, updated_at, user_id'
+      );
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
       expect(currentQueryBuilder.order).toHaveBeenCalledWith('name');
       expect(result).toEqual(mockTags);
@@ -123,7 +126,9 @@ describe('tagApi', () => {
 
       const result = await tagApi.getById('1');
       expect(supabaseClientModule.supabase.from).toHaveBeenCalledWith('tags');
-      expect(currentQueryBuilder.select).toHaveBeenCalledWith('id, name, color, created_at, updated_at, user_id');
+      expect(currentQueryBuilder.select).toHaveBeenCalledWith(
+        'id, name, color, created_at, updated_at, user_id'
+      );
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('id', '1');
       expect(currentQueryBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
       expect(currentQueryBuilder.single).toHaveBeenCalledTimes(1);
@@ -289,84 +294,93 @@ describe('tagApi', () => {
   describe('updateNewsletterTags', () => {
     const newsletterId = 'nl-test-update';
 
-    it('should add and remove tags correctly', async () => {
-      const currentDbTags = [{ tag_id: 'tag1-old' }, { tag_id: 'tag2-kept' }];
-      const newTagsToSet: Tag[] = [
-        { id: 'tag2-kept', name: 'Kept', color: '', user_id: mockUser.id, created_at: '' },
-        { id: 'tag3-new', name: 'New', color: '', user_id: mockUser.id, created_at: '' }, // Corrected: was t3-new
+    it('should call set_newsletter_tags RPC with the correct tag IDs', async () => {
+      const tagsToSet: Tag[] = [
+        { id: 'tag-a', name: 'Alpha', color: '#aaa', user_id: mockUser.id, created_at: '' },
+        { id: 'tag-b', name: 'Beta', color: '#bbb', user_id: mockUser.id, created_at: '' },
       ];
 
-      const fromMock = vi.mocked(supabaseClientModule.supabase.from);
+      vi.mocked(
+        supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({ data: null, error: null });
 
-      // 1. Mock for fetching current tags
-      const getCurrentTagsBuilder = createQueryBuilder();
-      vi.mocked(getCurrentTagsBuilder.then).mockImplementationOnce((onFulfilled) =>
-        onFulfilled({ data: currentDbTags, error: null })
-      );
+      const result = await tagApi.updateNewsletterTags(newsletterId, tagsToSet);
 
-      // 2. Mock for inserting tags (tagsToAdd will be ['t3-new'])
-      const insertBuilder = createQueryBuilder();
-      vi.mocked(insertBuilder.then).mockImplementationOnce((onFulfilled) =>
-        onFulfilled({ error: null })
-      );
-
-      // 3. Mock for deleting tags (tagsToRemove will be ['t1-old'])
-      const deleteBuilder = createQueryBuilder();
-      vi.mocked(deleteBuilder.then).mockImplementationOnce((onFulfilled) =>
-        onFulfilled({ error: null })
-      );
-
-      fromMock
-        .mockImplementationOnce((tableName) => {
-          // Call 1: Get current
-          expect(tableName).toBe('newsletter_tags');
-          return getCurrentTagsBuilder;
-        })
-        .mockImplementationOnce((tableName) => {
-          // Call 2: Insert new (since tagsToAdd is not empty)
-          expect(tableName).toBe('newsletter_tags');
-          return insertBuilder;
-        })
-        .mockImplementationOnce((tableName) => {
-          // Call 3: Delete old (since tagsToRemove is not empty)
-          expect(tableName).toBe('newsletter_tags');
-          return deleteBuilder;
-        });
-
-      const result = await tagApi.updateNewsletterTags(newsletterId, newTagsToSet);
       expect(result).toBe(true);
+      expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('set_newsletter_tags', {
+        p_newsletter_id: newsletterId,
+        p_user_id: mockUser.id,
+        p_tag_ids: ['tag-a', 'tag-b'],
+      });
+      // No supabase.from() call — the whole operation is one RPC round trip
+      expect(supabaseClientModule.supabase.from).not.toHaveBeenCalled();
+    });
 
-      // Verify fetch current call
-      expect(getCurrentTagsBuilder.select).toHaveBeenCalledWith('tag_id');
-      expect(getCurrentTagsBuilder.eq).toHaveBeenCalledWith('newsletter_id', newsletterId);
-      expect(getCurrentTagsBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
+    it('should handle an empty tag list (removes all tags)', async () => {
+      vi.mocked(
+        supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({ data: null, error: null });
 
-      // Verify insert call
-      expect(insertBuilder.insert).toHaveBeenCalledWith([
-        { newsletter_id: newsletterId, tag_id: 'tag3-new', user_id: mockUser.id },
-      ]);
+      const result = await tagApi.updateNewsletterTags(newsletterId, []);
 
-      // Verify delete call
-      expect(deleteBuilder.delete).toHaveBeenCalled();
-      expect(deleteBuilder.eq).toHaveBeenCalledWith('newsletter_id', newsletterId);
-      expect(deleteBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
-      expect(deleteBuilder.in).toHaveBeenCalledWith('tag_id', ['tag1-old']);
+      expect(result).toBe(true);
+      expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('set_newsletter_tags', {
+        p_newsletter_id: newsletterId,
+        p_user_id: mockUser.id,
+        p_tag_ids: [],
+      });
+    });
+
+    it('should throw and propagate RPC errors', async () => {
+      const mockError = { message: 'RPC failure', code: '42501' };
+      vi.mocked(
+        supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({ data: null, error: mockError });
+
+      await expect(tagApi.updateNewsletterTags(newsletterId, [])).rejects.toMatchObject({
+        message: 'RPC failure',
+      });
+      expect(supabaseClientModule.handleSupabaseError).toHaveBeenCalledWith(mockError);
     });
   });
 
   describe('addToNewsletter', () => {
-    it('should add a tag if not present', async () => {
-      vi.mocked(currentQueryBuilder.maybeSingle).mockResolvedValueOnce({ data: null, error: null }); // Not existing
+    it('should add a tag using a single upsert with no read-before-write', async () => {
       vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled) =>
-        onFulfilled({ error: null })
-      ); // For insert
+        onFulfilled({ data: null, error: null })
+      );
 
-      await tagApi.addToNewsletter('nl-1', 't1');
-      expect(currentQueryBuilder.insert).toHaveBeenCalledWith({
-        newsletter_id: 'nl-1',
-        tag_id: 't1',
-        user_id: mockUser.id,
+      const result = await tagApi.addToNewsletter('nl-1', 't1');
+
+      expect(result).toBe(true);
+      expect(currentQueryBuilder.upsert).toHaveBeenCalledWith(
+        { newsletter_id: 'nl-1', tag_id: 't1', user_id: mockUser.id },
+        { onConflict: 'newsletter_id,tag_id', ignoreDuplicates: true }
+      );
+      // No read query: maybeSingle must never be called
+      expect(currentQueryBuilder.maybeSingle).not.toHaveBeenCalled();
+      expect(currentQueryBuilder.select).not.toHaveBeenCalled();
+    });
+
+    it('should return true even when the tag already exists (conflict is silently ignored)', async () => {
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled) =>
+        onFulfilled({ data: null, error: null })
+      );
+
+      const result = await tagApi.addToNewsletter('nl-1', 't1');
+      expect(result).toBe(true);
+    });
+
+    it('should throw and propagate upsert errors', async () => {
+      const mockError = { message: 'constraint violation', code: '23503' };
+      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled) =>
+        onFulfilled({ data: null, error: mockError })
+      );
+
+      await expect(tagApi.addToNewsletter('nl-1', 't1')).rejects.toMatchObject({
+        message: 'constraint violation',
       });
+      expect(supabaseClientModule.handleSupabaseError).toHaveBeenCalledWith(mockError);
     });
   });
 
@@ -413,27 +427,73 @@ describe('tagApi', () => {
   });
 
   describe('getTagUsageStats', () => {
-    it('should fetch tag usage stats', async () => {
-      const mockResult = [
-        {
-          id: 't1',
-          name: 'Tag1',
-          color: '#ff0000',
-          user_id: 'test-user-id',
-          created_at: '2023-01-01',
-          newsletter_count: 2,
-        },
-      ];
+    const mockTagsWithCounts = [
+      {
+        id: 't1',
+        name: 'Alpha',
+        color: '#ff0000',
+        user_id: mockUser.id,
+        created_at: '2023-01-01T00:00:00Z',
+        updated_at: '2023-01-01T00:00:00Z',
+        newsletter_count: 3,
+      },
+      {
+        id: 't2',
+        name: 'Beta',
+        color: '#00ff00',
+        user_id: mockUser.id,
+        created_at: '2023-01-02T00:00:00Z',
+        updated_at: '2023-01-02T00:00:00Z',
+        newsletter_count: 0,
+      },
+    ];
 
-      // Mock the complex function by temporarily replacing it
-      const originalGetTagUsageStats = tagApi.getTagUsageStats;
-      tagApi.getTagUsageStats = vi.fn().mockResolvedValue(mockResult);
+    it('should call get_tags_with_counts RPC with the current user ID', async () => {
+      vi.mocked(
+        supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({ data: mockTagsWithCounts, error: null });
 
       const result = await tagApi.getTagUsageStats();
-      expect(result[0].newsletter_count).toBe(2);
 
-      // Restore original function
-      tagApi.getTagUsageStats = originalGetTagUsageStats;
+      expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('get_tags_with_counts', {
+        p_user_id: mockUser.id,
+      });
+      // No supabase.from() — single RPC replaces the N+1 pattern
+      expect(supabaseClientModule.supabase.from).not.toHaveBeenCalled();
+      expect(result).toEqual(mockTagsWithCounts);
+    });
+
+    it('should return counts for every tag, including tags with 0 newsletters', async () => {
+      vi.mocked(
+        supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({ data: mockTagsWithCounts, error: null });
+
+      const result = await tagApi.getTagUsageStats();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].newsletter_count).toBe(3);
+      expect(result[1].newsletter_count).toBe(0); // tag with no newsletters still appears
+    });
+
+    it('should return an empty array when the user has no tags', async () => {
+      vi.mocked(
+        supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({ data: null, error: null });
+
+      const result = await tagApi.getTagUsageStats();
+      expect(result).toEqual([]);
+    });
+
+    it('should throw and propagate RPC errors', async () => {
+      const mockError = { message: 'permission denied', code: '42501' };
+      vi.mocked(
+        supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce({ data: null, error: mockError });
+
+      await expect(tagApi.getTagUsageStats()).rejects.toMatchObject({
+        message: 'permission denied',
+      });
+      expect(supabaseClientModule.handleSupabaseError).toHaveBeenCalledWith(mockError);
     });
   });
 

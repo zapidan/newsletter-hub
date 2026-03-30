@@ -1,4 +1,4 @@
-import { newsletterService } from '@common/services/newsletter/NewsletterService';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { ReactNode } from 'react';
@@ -6,8 +6,8 @@ import { vi } from 'vitest';
 import { useInfiniteNewsletters } from '../useInfiniteNewsletters';
 
 // Mock the newsletter service
-vi.mock('@common/services/newsletter/NewsletterService', () => ({
-  newsletterService: {
+vi.mock('@common/services/optimizedNewsletterService', () => ({
+  optimizedNewsletterService: {
     getAll: vi.fn(),
   },
 }));
@@ -42,7 +42,7 @@ vi.mock('@common/utils/newsletterUtils', () => ({
 
 describe('useInfiniteNewsletters - Sorting', () => {
   let queryClient: QueryClient;
-  let mockGetAll: vi.MockedFunction<typeof newsletterService.getAll>;
+  let mockGetAll: vi.MockedFunction<typeof optimizedNewsletterService.getAll>;
 
   beforeEach(() => {
     queryClient = new QueryClient({
@@ -52,7 +52,9 @@ describe('useInfiniteNewsletters - Sorting', () => {
         },
       },
     });
-    mockGetAll = newsletterService.getAll as vi.MockedFunction<typeof newsletterService.getAll>;
+    mockGetAll = optimizedNewsletterService.getAll as vi.MockedFunction<
+      typeof optimizedNewsletterService.getAll
+    >;
 
     // Reset all mocks
     vi.clearAllMocks();
@@ -67,7 +69,8 @@ describe('useInfiniteNewsletters - Sorting', () => {
       {
         id: '1',
         title: orderBy === 'title' && orderDirection === 'asc' ? 'A Newsletter' : 'Z Newsletter',
-        received_at: orderBy === 'received_at' && orderDirection === 'asc' ? '2024-01-01' : '2024-12-31',
+        received_at:
+          orderBy === 'received_at' && orderDirection === 'asc' ? '2024-01-01' : '2024-12-31',
         estimated_read_time: orderBy === 'estimated_read_time' && orderDirection === 'asc' ? 2 : 15,
         is_read: false,
         is_archived: false,
@@ -78,7 +81,8 @@ describe('useInfiniteNewsletters - Sorting', () => {
       {
         id: '2',
         title: orderBy === 'title' && orderDirection === 'asc' ? 'B Newsletter' : 'Y Newsletter',
-        received_at: orderBy === 'received_at' && orderDirection === 'asc' ? '2024-01-02' : '2024-12-30',
+        received_at:
+          orderBy === 'received_at' && orderDirection === 'asc' ? '2024-01-02' : '2024-12-30',
         estimated_read_time: orderBy === 'estimated_read_time' && orderDirection === 'asc' ? 5 : 10,
         is_read: false,
         is_archived: false,
@@ -99,10 +103,11 @@ describe('useInfiniteNewsletters - Sorting', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'received_at',
-          orderDirection: 'desc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'received_at',
+            orderDirection: 'desc',
+          }),
         { wrapper }
       );
 
@@ -129,10 +134,11 @@ describe('useInfiniteNewsletters - Sorting', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'received_at',
-          orderDirection: 'asc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'received_at',
+            orderDirection: 'asc',
+          }),
         { wrapper }
       );
 
@@ -161,10 +167,11 @@ describe('useInfiniteNewsletters - Sorting', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'title',
-          orderDirection: 'asc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'title',
+            orderDirection: 'asc',
+          }),
         { wrapper }
       );
 
@@ -191,10 +198,11 @@ describe('useInfiniteNewsletters - Sorting', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'title',
-          orderDirection: 'desc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'title',
+            orderDirection: 'desc',
+          }),
         { wrapper }
       );
 
@@ -223,10 +231,11 @@ describe('useInfiniteNewsletters - Sorting', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'estimated_read_time',
-          orderDirection: 'asc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'estimated_read_time',
+            orderDirection: 'asc',
+          }),
         { wrapper }
       );
 
@@ -253,10 +262,11 @@ describe('useInfiniteNewsletters - Sorting', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'estimated_read_time',
-          orderDirection: 'desc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'estimated_read_time',
+            orderDirection: 'desc',
+          }),
         { wrapper }
       );
 
@@ -290,7 +300,7 @@ describe('useInfiniteNewsletters - Sorting', () => {
         ({ orderBy, orderDirection }) => useInfiniteNewsletters({ orderBy, orderDirection }),
         {
           wrapper,
-          initialProps: { orderBy: 'received_at', orderDirection: 'desc' }
+          initialProps: { orderBy: 'received_at', orderDirection: 'desc' },
         }
       );
 
@@ -335,7 +345,7 @@ describe('useInfiniteNewsletters - Sorting', () => {
         ({ orderBy, orderDirection }) => useInfiniteNewsletters({ orderBy, orderDirection }),
         {
           wrapper,
-          initialProps: { orderBy: 'received_at', orderDirection: 'desc' }
+          initialProps: { orderBy: 'received_at', orderDirection: 'desc' },
         }
       );
 
@@ -378,7 +388,7 @@ describe('useInfiniteNewsletters - Sorting', () => {
         ({ orderBy, orderDirection }) => useInfiniteNewsletters({ orderBy, orderDirection }),
         {
           wrapper,
-          initialProps: { orderBy: 'received_at', orderDirection: 'desc' }
+          initialProps: { orderBy: 'received_at', orderDirection: 'desc' },
         }
       );
 

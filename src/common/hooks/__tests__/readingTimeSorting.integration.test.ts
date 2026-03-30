@@ -1,13 +1,13 @@
 import { useInfiniteNewsletters } from '@common/hooks/infiniteScroll/useInfiniteNewsletters';
-import { newsletterService } from '@common/services/newsletter/NewsletterService';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import React, { ReactNode } from 'react';
 import { vi } from 'vitest';
 
 // Mock the newsletter service
-vi.mock('@common/services/newsletter/NewsletterService', () => ({
-  newsletterService: {
+vi.mock('@common/services/optimizedNewsletterService', () => ({
+  optimizedNewsletterService: {
     getAll: vi.fn(),
   },
 }));
@@ -42,7 +42,7 @@ vi.mock('@common/utils/newsletterUtils', () => ({
 
 describe('Reading Time Sorting Integration Tests', () => {
   let queryClient: QueryClient;
-  let mockGetAll: vi.MockedFunction<typeof newsletterService.getAll>;
+  let mockGetAll: vi.MockedFunction<typeof optimizedNewsletterService.getAll>;
 
   beforeEach(() => {
     queryClient = new QueryClient({
@@ -52,15 +52,16 @@ describe('Reading Time Sorting Integration Tests', () => {
         },
       },
     });
-    mockGetAll = newsletterService.getAll as vi.MockedFunction<typeof newsletterService.getAll>;
+    mockGetAll = optimizedNewsletterService.getAll as vi.MockedFunction<
+      typeof optimizedNewsletterService.getAll
+    >;
 
     // Reset all mocks
     vi.clearAllMocks();
   });
 
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    React.createElement(QueryClientProvider, { client: queryClient }, children)
-  );
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    React.createElement(QueryClientProvider, { client: queryClient }, children);
 
   const createReadingTimeMockResponse = (orderDirection: 'asc' | 'desc') => ({
     data: [
@@ -131,10 +132,11 @@ describe('Reading Time Sorting Integration Tests', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'estimated_read_time',
-          orderDirection: 'asc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'estimated_read_time',
+            orderDirection: 'asc',
+          }),
         { wrapper }
       );
 
@@ -169,10 +171,11 @@ describe('Reading Time Sorting Integration Tests', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'estimated_read_time',
-          orderDirection: 'desc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'estimated_read_time',
+            orderDirection: 'desc',
+          }),
         { wrapper }
       );
 
@@ -207,12 +210,13 @@ describe('Reading Time Sorting Integration Tests', () => {
       mockGetAll.mockResolvedValue(mockResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'estimated_read_time',
-          orderDirection: 'asc',
-          isRead: false,
-          search: 'analysis',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'estimated_read_time',
+            orderDirection: 'asc',
+            isRead: false,
+            search: 'analysis',
+          }),
         { wrapper }
       );
 
@@ -250,7 +254,7 @@ describe('Reading Time Sorting Integration Tests', () => {
         ({ orderBy, orderDirection }) => useInfiniteNewsletters({ orderBy, orderDirection }),
         {
           wrapper,
-          initialProps: { orderBy: 'estimated_read_time', orderDirection: 'asc' as const }
+          initialProps: { orderBy: 'estimated_read_time', orderDirection: 'asc' as const },
         }
       );
 
@@ -300,15 +304,14 @@ describe('Reading Time Sorting Integration Tests', () => {
         limit: 2,
       };
 
-      mockGetAll
-        .mockResolvedValueOnce(firstPageResponse)
-        .mockResolvedValueOnce(secondPageResponse);
+      mockGetAll.mockResolvedValueOnce(firstPageResponse).mockResolvedValueOnce(secondPageResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'estimated_read_time',
-          orderDirection: 'asc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'estimated_read_time',
+            orderDirection: 'asc',
+          }),
         { wrapper }
       );
 
@@ -348,7 +351,7 @@ describe('Reading Time Sorting Integration Tests', () => {
       expect(result.current.newsletters).toHaveLength(3);
 
       // Verify all items are still sorted by reading time
-      const readTimes = result.current.newsletters.map(n => n.estimated_read_time);
+      const readTimes = result.current.newsletters.map((n) => n.estimated_read_time);
       expect(readTimes).toEqual([1, 5, 15]);
     });
 
@@ -364,10 +367,11 @@ describe('Reading Time Sorting Integration Tests', () => {
       mockGetAll.mockResolvedValue(emptyResponse);
 
       const { result } = renderHook(
-        () => useInfiniteNewsletters({
-          orderBy: 'estimated_read_time',
-          orderDirection: 'desc',
-        }),
+        () =>
+          useInfiniteNewsletters({
+            orderBy: 'estimated_read_time',
+            orderDirection: 'desc',
+          }),
         { wrapper }
       );
 

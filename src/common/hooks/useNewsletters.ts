@@ -13,6 +13,7 @@ import { useLogger } from '@common/utils/logger/useLogger';
 import { normalizeNewsletterFilter } from '@common/utils/newsletterUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { newsletterService, readingQueueService } from '../services';
+import { optimizedNewsletterService } from '../services/optimizedNewsletterService';
 import { NewsletterWithRelations, ReadingQueueItem } from '../types';
 import { PaginatedResponse } from '../types/api';
 import type { NewsletterFilter } from '../types/cache';
@@ -53,7 +54,7 @@ const CACHE_CONFIG = {
 };
 
 // Utility function for safe predicate checks
-const createSafePredicate = (ids: string[] | undefined) => (query: any) => {
+const createSafePredicate = (ids: string[] | undefined) => (query: { queryKey: unknown[] }) => {
   if (!ids || !Array.isArray(ids)) {
     return (
       queryKeyFactory.matchers.isNewsletterListKey(query.queryKey as unknown[]) ||
@@ -290,7 +291,7 @@ export const useNewsletters = (
           },
         });
 
-        const result = await newsletterService.getAll(queryParams);
+        const result = await optimizedNewsletterService.getAll(queryParams);
 
         // Type guard to ensure result.data exists
         if (!result?.data) {
