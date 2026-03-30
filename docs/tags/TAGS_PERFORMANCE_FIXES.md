@@ -1,8 +1,25 @@
 # Tags Performance Fixes
 
+> **Scope note — read this first**
+>
+> This document describes **Phase 1** optimizations: targeted fixes to the *existing* N:M tag
+> model (`tags` / `newsletter_tags` tables) using better indexes, a corrected LEFT JOIN for usage
+> stats, and a server-side tag-filtering SQL function. These changes can be shipped independently
+> and do not require a schema migration.
+>
+> **Phase 2** — replacing the N:M model entirely with a `tags_json JSONB` column — is a separate,
+> larger effort documented in [`TAGS_OPTIMIZATION_MIGRATION_GUIDE.md`](./TAGS_OPTIMIZATION_MIGRATION_GUIDE.md).
+> Phase 2 has critical bugs that must be fixed before it is safe to deploy; Phase 1 is safe to
+> ship today and will deliver 90%+ of the user-visible performance improvement on its own.
+>
+> The two approaches are **mutually exclusive for tag filtering** — run Phase 1 now, and treat
+> Phase 2 as a future refactor once its bugs are resolved.
+
 ## Overview
 
-This document outlines the performance fixes implemented to resolve slow queries and timeout issues on the tags page, specifically addressing database efficiency and tag filtering problems.
+This document outlines the performance fixes implemented to resolve slow queries and timeout
+issues on the tags page, specifically addressing database efficiency and tag filtering problems
+within the **existing N:M relational model**.
 
 ## Issues Identified
 
