@@ -1,6 +1,6 @@
 # Tag Performance Strategy
 
-> **Document status:** Draft — fresh analysis from codebase review + slow query data  
+> **Document status:** Phase 1 implemented — Phases 2 & 3 pending  
 > **Author:** Engineering  
 > **Scope:** Tag querying, tag-filtered newsletter fetching, tags page load  
 > **Does NOT cover:** source groups, reading queue, search
@@ -12,11 +12,11 @@
 The tag system has three independent performance bottlenecks, each with a clear root cause in
 the application code. They are ranked here by observed user impact:
 
-| # | Bottleneck | Location | Symptom |
-|---|-----------|----------|---------|
-| 1 | **N+1 × 2 in tag usage stats** | `tagApi.getTagUsageStats()` | Tags page times out with ≥10 tags |
-| 2 | **Client-side tag intersection** | `newsletterApi.getByTags()` | Tag filtering returns slowly or incorrectly paginates |
-| 3 | **PostgREST LATERAL join per row** | `buildNewsletterQuery` + `includeTags` | Every inbox load pays 75–165 ms for tag embedding |
+| # | Bottleneck | Location | Symptom | Status |
+|---|-----------|----------|---------|--------|
+| 1 | **N+1 × 2 in tag usage stats** | `tagApi.getTagUsageStats()` | Tags page times out with ≥10 tags | ✅ **Fixed in Phase 1** |
+| 2 | **Client-side tag intersection** | `newsletterApi.getByTags()` | Tag filtering returns slowly or incorrectly paginates | ✅ **Fixed in Phase 1** |
+| 3 | **PostgREST LATERAL join per row** | `buildNewsletterQuery` + `includeTags` | Every inbox load pays 75–165 ms for tag embedding | ⏳ Phase 2 |
 
 **The fix does not require a schema change.** The N:M relational model (`tags` / `newsletter_tags`)
 is correct and already has appropriate base indexes. Every bottleneck is a query pattern
@@ -24,6 +24,51 @@ problem — not a data model problem.
 
 **Estimated total effort:** 6–9 working days across three phases.  
 **Expected outcome:** Tags page < 300 ms, tag-filtered inbox < 200 ms, newsletter list < 20 ms.
+
+---
+
+## Implementation Status
+
+### ✅ Phase 1 — Complete
+
+**Merged to branch:** `refactor-tags`  
+**Commit:** `c7673df`
+
+#### Database (migrations)
+
+| File | Contents |
+|------|----------|
+| `supabase/migrations/20260201_tag_performance_indexes.sql` | `idx_newsletter_tags_tag_user_newsletter (tag_id, user_id, newsletter_id)` — covering index for `get_tags_with_counts`; `idx_newsletter_tags_newsletter_tag (newsletter_id, tag_id)` — for the correlated ALL-tags COUNT |
+| `supabase/migrations/20260201_tag_query_functions.sql` | `get_tags_with_counts`, `get_newsletters_by_tags`, `set_newsletter_tags` |
+
+#### Application changes
+
+| File | Change |
+|------|--------|
+| `src/common/api/tagApi.ts` | `getTagUsageStats` → single `get_tags_with_counts` RPC (was 2×N queries) |
+| `src/common/api/tagApi.ts` | `addToNewsletter` → single upsert with `ignoreDuplicates: true` (was read-then-insert) |
+| `src/common/api/tagApi.ts` | `updateNewsletterTags` → single `set_newsletter_tags` RPC (was read + insert + delete) |
+| `src/common/api/newsletterApi.ts` | `getByTags` → single `get_newsletters_by_tags` RPC (was N queries + JS intersection + IN) |
+| `src/common/api/newsletterApi.ts` | `transformNewsletterResponse` extended to handle flat RPC tag format alongside PostgREST nested format |
+
+#### Tests
+
+| File | New / Updated |
+|------|---------------|
+| `src/common/api/__tests__/tagApi.test.ts` | Rewrote `getTagUsageStats` (4 cases), `updateNewsletterTags` (3 cases), `addToNewsletter` (3 cases); added `rpc` spy and `upsert` to mock builder |
+| `src/common/api/__tests__/newsletterApi.test.ts` | Added 18-test `getByTags` suite: RPC params, null defaults, ordering, pagination, transform (flat tags + flat source), edge cases (empty, null), error propagation, boolean casting, numeric casting |
+
+All 156 tests across `tagApi`, `newsletterApi`, `TagService`, and `NewsletterService` pass.
+
+### ⏳ Phase 2 — Pending
+
+Eliminate PostgREST LATERAL join on every inbox load. See [§3.3](#33-phase-2--eliminate-the-postgrest-lateral-join-3-4-days) below.
+
+### ⏳ Phase 3 — Pending
+
+Keyset pagination + materialized unread counts. See [§3.4](#34-phase-3--keyset-pagination-and-count-optimization-2-3-days-optional) below.
+
+---
 
 ---
 
@@ -760,30 +805,37 @@ Fix the query first; cache the already-fast query second.
 
 ## 5. Implementation Plan
 
-### Phase 1 — Fix Tags Page and Filtering
+### Phase 1 — Fix Tags Page and Filtering ✅ Complete
 
-**Duration:** 2–3 days  
+**Duration:** 2–3 days (actual)  
 **Risk:** Low — all changes are additive (new SQL functions + updated API calls)  
 **Rollback:** Delete the new functions; revert the two API method bodies
 
-| Step | Task | Owner | Time |
-|------|------|-------|------|
-| 1.1 | Add `idx_newsletter_tags_tag_user_newsletter` index (CONCURRENTLY) | DB | 0.5 d |
-| 1.2 | Create `get_tags_with_counts(p_user_id)` function | DB | 0.5 d |
-| 1.3 | Create `get_newsletters_by_tags(…)` function | DB | 1 d |
-| 1.4 | Create `set_newsletter_tags(…)` function | DB | 0.5 d |
-| 1.5 | Update `tagApi.getTagUsageStats()` to call new RPC | App | 0.5 d |
-| 1.6 | Update `newsletterApi.getByTags()` to call new RPC | App | 0.5 d |
-| 1.7 | Update `tagApi.addToNewsletter()` to use upsert | App | 0.25 d |
-| 1.8 | Update `tagApi.updateNewsletterTags()` to call `set_newsletter_tags` | App | 0.25 d |
-| 1.9 | Update unit tests for changed API methods | App | 0.5 d |
-| 1.10 | Deploy to staging + smoke test tags page and tag filter | QA | 0.5 d |
+| Step | Task | Owner | Status |
+|------|------|-------|--------|
+| 1.1 | Add `idx_newsletter_tags_tag_user_newsletter` index (CONCURRENTLY) | DB | ✅ Done |
+| 1.2 | Add `idx_newsletter_tags_newsletter_tag` index (CONCURRENTLY) | DB | ✅ Done |
+| 1.3 | Create `get_tags_with_counts(p_user_id)` function | DB | ✅ Done |
+| 1.4 | Create `get_newsletters_by_tags(…)` function | DB | ✅ Done |
+| 1.5 | Create `set_newsletter_tags(…)` function | DB | ✅ Done |
+| 1.6 | Update `tagApi.getTagUsageStats()` to call new RPC | App | ✅ Done |
+| 1.7 | Update `newsletterApi.getByTags()` to call new RPC | App | ✅ Done |
+| 1.8 | Update `tagApi.addToNewsletter()` to use upsert | App | ✅ Done |
+| 1.9 | Update `tagApi.updateNewsletterTags()` to call `set_newsletter_tags` | App | ✅ Done |
+| 1.10 | Update unit tests for changed API methods | App | ✅ Done (18 new getByTags tests; rewrote 10 tagApi tests) |
+| 1.11 | Deploy to staging + smoke test tags page and tag filter | QA | ⏳ Pending deploy |
 
 **Phase 1 deliverable:** Tags page loads in < 300 ms. Tag-filtered inbox returns in < 200 ms.
 
+**Remaining before closing Phase 1:**
+- Run `supabase db push` on staging to apply the two new migrations
+- Smoke-test the tags page with ≥10 tags and verify no timeout
+- Smoke-test inbox with 2+ tag filters active and verify results + pagination
+- Run `EXPLAIN ANALYZE` on `get_tags_with_counts` and `get_newsletters_by_tags` to confirm index usage
+
 ---
 
-### Phase 2 — Eliminate PostgREST LATERAL
+### Phase 2 — Eliminate PostgREST LATERAL ⏳ Pending
 
 **Duration:** 3–4 days  
 **Risk:** Medium — replaces the central newsletter query path; thorough testing required  
@@ -806,7 +858,7 @@ Tag-filtered and non-tag-filtered lists use the same code path.
 
 ---
 
-### Phase 3 — Keyset Pagination + Count Optimization (optional)
+### Phase 3 — Keyset Pagination + Count Optimization ⏳ Pending (optional)
 
 **Duration:** 2–3 days  
 **Risk:** Low for counts (additive trigger), medium for keyset (changes pagination contract)  
@@ -826,15 +878,17 @@ Tag-filtered and non-tag-filtered lists use the same code path.
 
 Measure these before Phase 1 deploys and after each phase, using `pg_stat_statements`.
 
-| Metric | Current (observed) | Target after Ph1 | Target after Ph2 |
-|--------|--------------------|------------------|------------------|
-| Tags page query time (p95) | timeout / >500 ms | < 50 ms | < 50 ms |
-| Tag-filtered inbox time (p95) | 300–800 ms | < 150 ms | < 100 ms |
-| Newsletter list time (p95) | 75–165 ms | 75–165 ms | < 25 ms |
-| `getTagUsageStats` query count | 2N + 1 per page load | 1 | 1 |
-| `getByTags` query count per filter toggle | N + 1 | 1 | 1 (via get_newsletters) |
-| Tags page load (wall time, P75) | timeout | < 300 ms | < 300 ms |
-| Inbox load with 2 tag filters (P75) | >1 s | < 400 ms | < 200 ms |
+| Metric | Before Ph1 | Target after Ph1 | Actual after Ph1 | Target after Ph2 |
+|--------|-----------|------------------|------------------|------------------|
+| Tags page query time (p95) | timeout / >500 ms | < 50 ms | ⏳ measure on staging | < 50 ms |
+| Tag-filtered inbox time (p95) | 300–800 ms | < 150 ms | ⏳ measure on staging | < 100 ms |
+| Newsletter list time (p95) | 75–165 ms | 75–165 ms (unchanged) | ⏳ measure on staging | < 25 ms |
+| `getTagUsageStats` query count | 2N + 1 per page load | **1** | ✅ 1 (RPC) | 1 |
+| `getByTags` query count per filter toggle | N + 1 | **1** | ✅ 1 (RPC) | 1 (via get_newsletters) |
+| `addToNewsletter` query count | 2 (read + write) | **1** | ✅ 1 (upsert) | 1 |
+| `updateNewsletterTags` query count | 3 (read + insert + delete) | **1** | ✅ 1 (RPC) | 1 |
+| Tags page load (wall time, P75) | timeout | < 300 ms | ⏳ measure on staging | < 300 ms |
+| Inbox load with 2 tag filters (P75) | >1 s | < 400 ms | ⏳ measure on staging | < 200 ms |
 
 Monitoring query to run weekly:
 
@@ -855,12 +909,12 @@ LIMIT 20;
 
 ## 7. Migration File Inventory
 
-| File to create | Phase | Purpose |
-|----------------|-------|---------|
-| `YYYYMMDD_tag_performance_indexes.sql` | 1 | Add `idx_newsletter_tags_tag_user_newsletter` |
-| `YYYYMMDD_tag_query_functions.sql` | 1 | `get_tags_with_counts`, `get_newsletters_by_tags`, `set_newsletter_tags` |
-| `YYYYMMDD_get_newsletters_function.sql` | 2 | `get_newsletters` unified function with source + tags + tag filter |
-| `YYYYMMDD_newsletter_counts_table.sql` | 3 | `newsletter_counts` table + maintenance trigger |
+| File | Phase | Purpose | Status |
+|------|-------|---------|--------|
+| `supabase/migrations/20260201_tag_performance_indexes.sql` | 1 | `idx_newsletter_tags_tag_user_newsletter`, `idx_newsletter_tags_newsletter_tag` | ✅ Created |
+| `supabase/migrations/20260201_tag_query_functions.sql` | 1 | `get_tags_with_counts`, `get_newsletters_by_tags`, `set_newsletter_tags` | ✅ Created |
+| `supabase/migrations/YYYYMMDD_get_newsletters_function.sql` | 2 | `get_newsletters` unified function with source + tags + tag filter | ⏳ Pending |
+| `supabase/migrations/YYYYMMDD_newsletter_counts_table.sql` | 3 | `newsletter_counts` table + maintenance trigger | ⏳ Pending |
 
 Each migration should be idempotent (`CREATE OR REPLACE`, `IF NOT EXISTS`, `CONCURRENTLY`
 for indexes) so it is safe to re-run in CI.
@@ -869,18 +923,18 @@ for indexes) so it is safe to re-run in CI.
 
 ## 8. Files Changed by Phase
 
-### Phase 1 changes
+### Phase 1 changes ✅
 
 ```
-supabase/migrations/YYYYMMDD_tag_performance_indexes.sql    [new]
-supabase/migrations/YYYYMMDD_tag_query_functions.sql        [new]
-src/common/api/tagApi.ts                                    [edit: getTagUsageStats, addToNewsletter, updateNewsletterTags]
-src/common/api/newsletterApi.ts                             [edit: getByTags]
-src/common/api/__tests__/tagApi.test.ts                     [edit: update mocks/expectations]
-src/common/api/__tests__/newsletterApi.test.ts              [edit: update getByTags test]
+supabase/migrations/20260201_tag_performance_indexes.sql    [new] ✅
+supabase/migrations/20260201_tag_query_functions.sql        [new] ✅
+src/common/api/tagApi.ts                                    [edit: getTagUsageStats, addToNewsletter, updateNewsletterTags] ✅
+src/common/api/newsletterApi.ts                             [edit: getByTags, transformNewsletterResponse flat-tag support] ✅
+src/common/api/__tests__/tagApi.test.ts                     [edit: rewrote 10 tests; added rpc spy + upsert to mock] ✅
+src/common/api/__tests__/newsletterApi.test.ts              [edit: added 18-test getByTags suite; added rpc spy to mock] ✅
 ```
 
-### Phase 2 changes
+### Phase 2 changes ⏳
 
 ```
 supabase/migrations/YYYYMMDD_get_newsletters_function.sql   [new]
