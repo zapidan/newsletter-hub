@@ -161,11 +161,14 @@ AS $$
 
         -- ALL-tags requirement: every tag in p_tag_ids must be present
         AND (
-            SELECT COUNT(DISTINCT nt.tag_id)
-            FROM public.newsletter_tags nt
-            WHERE nt.newsletter_id = n.id
-              AND nt.tag_id        = ANY(p_tag_ids)
-        ) = cardinality(p_tag_ids)
+            p_tag_ids IS NULL
+            OR (
+                SELECT COUNT(DISTINCT nt.tag_id)
+                FROM public.newsletter_tags nt
+                WHERE nt.newsletter_id = n.id
+                  AND nt.tag_id        = ANY(p_tag_ids)
+            ) = cardinality(p_tag_ids)
+        )
 
         -- optional boolean filters (NULL means "don't filter")
         AND (p_is_read     IS NULL OR n.is_read     = p_is_read)
