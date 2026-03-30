@@ -130,47 +130,15 @@ export const tagApi = {
   async updateNewsletterTags(newsletterId: string, tags: Tag[]): Promise<boolean> {
     return withPerformanceLogging('tags.updateNewsletterTags', async () => {
       const user = await requireAuth();
+      const tagIds = tags.map((t) => t.id);
 
-      // Get current tags
-      const { data: currentTags, error: currentTagsError } = await supabase
-        .from('newsletter_tags')
-        .select('tag_id')
-        .eq('newsletter_id', newsletterId)
-        .eq('user_id', user.id);
+      const { error } = await supabase.rpc('set_newsletter_tags', {
+        p_newsletter_id: newsletterId,
+        p_user_id: user.id,
+        p_tag_ids: tagIds,
+      });
 
-      if (currentTagsError) handleSupabaseError(currentTagsError);
-
-      // Compute tags to add and remove
-      const currentTagIds = (currentTags || []).map((t: { tag_id: string }) => t.tag_id);
-      const newTagIds = tags.map((tag) => tag.id);
-      const tagsToAdd = newTagIds.filter((id: string) => !currentTagIds.includes(id));
-      const tagsToRemove = currentTagIds.filter((id: string) => !newTagIds.includes(id));
-
-      // Add new tags
-      if (tagsToAdd.length > 0) {
-        const { error: addError } = await supabase.from('newsletter_tags').insert(
-          tagsToAdd.map((tagId) => ({
-            newsletter_id: newsletterId,
-            tag_id: tagId,
-            user_id: user.id,
-          }))
-        );
-
-        if (addError) handleSupabaseError(addError);
-      }
-
-      // Remove tags
-      if (tagsToRemove.length > 0) {
-        const { error: removeError } = await supabase
-          .from('newsletter_tags')
-          .delete()
-          .eq('newsletter_id', newsletterId)
-          .eq('user_id', user.id)
-          .in('tag_id', tagsToRemove);
-
-        if (removeError) handleSupabaseError(removeError);
-      }
-
+      if (error) handleSupabaseError(error);
       return true;
     });
   },
@@ -180,24 +148,12 @@ export const tagApi = {
     return withPerformanceLogging('tags.addToNewsletter', async () => {
       const user = await requireAuth();
 
-      // Check if the relationship already exists
-      const { data: existing } = await supabase
+      const { error } = await supabase
         .from('newsletter_tags')
-        .select('id')
-        .eq('newsletter_id', newsletterId)
-        .eq('tag_id', tagId)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (existing) {
-        return true; // Already exists
-      }
-
-      const { error } = await supabase.from('newsletter_tags').insert({
-        newsletter_id: newsletterId,
-        tag_id: tagId,
-        user_id: user.id,
-      });
+        .upsert(
+          { newsletter_id: newsletterId, tag_id: tagId, user_id: user.id },
+          { onConflict: 'newsletter_id,tag_id', ignoreDuplicates: true }
+        );
 
       if (error) handleSupabaseError(error);
       return true;
@@ -242,9 +198,9 @@ export const tagApi = {
       const tagColor =
         color ||
         '#' +
-        Math.floor(Math.random() * 16777215)
-          .toString(16)
-          .padStart(6, '0');
+          Math.floor(Math.random() * 16777215)
+            .toString(16)
+            .padStart(6, '0');
 
       return this.create({
         name: name.trim(),
@@ -273,75 +229,12 @@ export const tagApi = {
     return withPerformanceLogging('tags.getTagUsageStats', async () => {
       const user = await requireAuth();
 
-      // First get all tags
-      const { data: tags, error: tagsError } = await supabase
-        .from('tags')
-        .select('id, name, color, created_at, updated_at, user_id')
-        .eq('user_id', user.id)
-        .order('name');
-
-      if (tagsError) handleSupabaseError(tagsError);
-
-      if (!tags || tags.length === 0) {
-        return [];
-      }
-
-      // For each tag, use the EXACT same query logic as the filtering in newsletterApi.ts
-      // This ensures the counts match what users will see when they actually filter
-      const tagCountPromises = tags.map(async (tag) => {
-        // Use the same pre-filtering logic as in newsletterApi.getAll()
-        const { data: tagNewsletters, error: tagError } = await supabase
-          .from('newsletter_tags')
-          .select('newsletter_id')
-          .eq('tag_id', tag.id)
-          .eq('user_id', user.id);
-
-        if (tagError) {
-          handleSupabaseError(tagError);
-          return { tagId: tag.id, count: 0 };
-        }
-
-        // Get unique newsletter IDs that have this tag
-        const newsletterIds = Array.from(
-          new Set(tagNewsletters?.map((row) => row.newsletter_id) || [])
-        );
-
-        if (newsletterIds.length === 0) {
-          return { tagId: tag.id, count: 0 };
-        }
-
-        // Now count how many of these newsletters actually exist and are not filtered out
-        // This matches the same logic used in buildNewsletterQuery
-        const { count, error: countError } = await supabase
-          .from('newsletters')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .in('id', newsletterIds);
-
-        if (countError) {
-          handleSupabaseError(countError);
-          return { tagId: tag.id, count: 0 };
-        }
-
-        return { tagId: tag.id, count: count || 0 };
+      const { data, error } = await supabase.rpc('get_tags_with_counts', {
+        p_user_id: user.id,
       });
 
-      const tagCounts = await Promise.all(tagCountPromises);
-
-      // Create a count map
-      const countMap = tagCounts.reduce(
-        (acc, item) => {
-          acc[item.tagId] = item.count;
-          return acc;
-        },
-        {} as Record<string, number>
-      );
-
-      // Combine tags with their counts
-      return tags.map((tag) => ({
-        ...tag,
-        newsletter_count: countMap[tag.id] || 0,
-      }));
+      if (error) handleSupabaseError(error);
+      return data ?? [];
     });
   },
 
@@ -380,7 +273,10 @@ export const tagApi = {
       const user = await requireAuth();
       const { limit = 50, offset = 0, search, orderBy = 'name', ascending = true } = options;
 
-      let query = supabase.from('tags').select('id, name, color, created_at, updated_at, user_id', { count: 'exact' }).eq('user_id', user.id);
+      let query = supabase
+        .from('tags')
+        .select('id, name, color, created_at, updated_at, user_id', { count: 'exact' })
+        .eq('user_id', user.id);
 
       if (search) {
         query = query.ilike('name', `%${search}%`);

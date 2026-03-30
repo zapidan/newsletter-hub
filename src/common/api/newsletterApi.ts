@@ -68,20 +68,32 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Transform tags if they exist
   const transformedTags: Tag[] = Array.isArray(data.tags)
     ? data.tags
-      .map((t: { tag: any }) => {
-        if (t.tag && typeof t.tag === 'object') {
-          return {
-            id: t.tag.id as string,
-            name: t.tag.name as string,
-            color: t.tag.color as string,
-            user_id: t.tag.user_id as string,
-            created_at: t.tag.created_at as string,
-            newsletter_count: t.tag.newsletter_count as number | undefined,
-          } as Tag;
-        }
-        return null;
-      })
-      .filter((tag: Tag | null): tag is Tag => tag !== null)
+        .map((t: any) => {
+          // PostgREST nested format: { tag: { id, name, color, ... } }
+          if (t.tag && typeof t.tag === 'object') {
+            return {
+              id: t.tag.id as string,
+              name: t.tag.name as string,
+              color: t.tag.color as string,
+              user_id: t.tag.user_id as string,
+              created_at: t.tag.created_at as string,
+              newsletter_count: t.tag.newsletter_count as number | undefined,
+            } as Tag;
+          }
+          // Flat RPC format: { id, name, color, user_id, created_at }
+          if (t.id && typeof t.id === 'string') {
+            return {
+              id: t.id as string,
+              name: t.name as string,
+              color: t.color as string,
+              user_id: t.user_id as string,
+              created_at: t.created_at as string,
+              newsletter_count: t.newsletter_count as number | undefined,
+            } as Tag;
+          }
+          return null;
+        })
+        .filter((tag: Tag | null): tag is Tag => tag !== null)
     : [];
 
   const { _newsletter_sources, source: _rawSource, tags: _rawTags, ...restOfData } = data;
@@ -237,7 +249,7 @@ const buildNewsletterQuery = (params: NewsletterQueryParams = {}, newsletterIds?
       isRead: params.isRead,
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
-    }
+    },
   });
 
   // Debug logging
@@ -368,7 +380,9 @@ export const newsletterApi = {
           user_id: user.id,
           received_at: new Date().toISOString(),
         })
-        .select('id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id')
+        .select(
+          'id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id'
+        )
         .single();
 
       if (newsletterError) handleSupabaseError(newsletterError);
@@ -427,7 +441,9 @@ export const newsletterApi = {
         })
         .eq('id', id)
         .eq('user_id', user.id)
-        .select('id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id')
+        .select(
+          'id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id'
+        )
         .single();
 
       if (updateError) handleSupabaseError(updateError);
@@ -587,10 +603,10 @@ export const newsletterApi = {
           error:
             error instanceof Error
               ? {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-              }
+                  name: error.name,
+                  message: error.message,
+                  stack: error.stack,
+                }
               : error,
         });
         return false;
@@ -632,7 +648,9 @@ export const newsletterApi = {
       })
       .in('id', ids)
       .eq('user_id', user.id)
-      .select('id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id');
+      .select(
+        'id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id'
+      );
 
     if (error) {
       // If bulk update fails, record error for all items
@@ -691,9 +709,8 @@ export const newsletterApi = {
 
         // Add delay between batches (except for the last one)
         if (i < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+          await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
         }
-
       } catch (error) {
         // If entire batch fails, mark all items as failed
         batch.forEach(() => {
@@ -757,75 +774,62 @@ export const newsletterApi = {
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
     return withPerformanceLogging('newsletters.getByTags', async () => {
       const user = await requireAuth();
-      console.log('=== DEBUG: getByTags ===', { tagIds, params });
 
-      // Get all newsletter IDs that have ALL the specified tags
-      const tagPromises = tagIds.map(tagId =>
-        supabase
-          .from('newsletter_tags')
-          .select('newsletter_id')
-          .eq('tag_id', tagId)
-          .eq('user_id', user.id)
-      );
+      log.debug('Fetching newsletters by tags via RPC', {
+        component: 'NewsletterApi',
+        action: 'get_by_tags_rpc',
+        metadata: { tagCount: tagIds.length, tagIds, params },
+      });
 
-      const tagResults = await Promise.all(tagPromises);
-
-      // Check for errors
-      const tagError = tagResults.find(r => r.error)?.error;
-      if (tagError || tagResults.some(r => !r.data?.length)) {
-        console.log('No tag relationships found for all tags', { tagError });
-        return {
-          data: [],
-          count: 0,
-          page: 1,
-          limit: params.limit || 50,
-          hasMore: false,
-          nextPage: null,
-          prevPage: null,
-        };
-      }
-
-      // Find intersection of newsletter IDs across all tags
-      const newsletterIdSets = tagResults.map(result =>
-        new Set(result.data!.map(row => row.newsletter_id))
-      );
-
-      // Start with the first set and intersect with others
-      const intersectedIds = [...newsletterIdSets[0]].filter(id =>
-        newsletterIdSets.every(set => set.has(id))
-      );
-
-      console.log('Intersected newsletter IDs:', intersectedIds);
-
-      // Build query with the intersected newsletter IDs
-      const query = buildNewsletterQuery(
-        {
-          ...params,
-          user_id: user.id,
-          includeTags: true,
-        },
-        intersectedIds
-      );
-
-      const { data, error, count } = await query;
-      console.log('Query results:', { dataCount: data?.length, count, error });
+      const { data, error } = await supabase.rpc('get_newsletters_by_tags', {
+        p_user_id: user.id,
+        p_tag_ids: tagIds,
+        p_is_read: params.isRead ?? null,
+        p_is_archived: params.isArchived ?? null,
+        p_is_liked: params.isLiked ?? null,
+        p_source_ids: params.sourceIds ?? null,
+        p_date_from: params.dateFrom ?? null,
+        p_date_to: params.dateTo ?? null,
+        p_limit: params.limit ?? 50,
+        p_offset: params.offset ?? 0,
+        p_order_by: params.orderBy ?? 'received_at',
+        p_order_direction: params.ascending ? 'ASC' : 'DESC',
+      });
 
       if (error) {
-        console.error('Query error:', error);
+        log.error('get_newsletters_by_tags RPC failed', {
+          component: 'NewsletterApi',
+          action: 'get_by_tags_rpc_error',
+          metadata: { tagIds, error },
+        });
+        handleSupabaseError(error);
         throw error;
       }
 
-      // Transform the data
-      const transformedData = data ? data.map(transformNewsletterResponse) : [];
+      const rows = (data as any[]) ?? [];
+      const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
 
-      const limit = params.limit || 50;
-      const offset = params.offset || 0;
+      // Strip the window-function column before transformation so it does not
+      // leak into the NewsletterWithRelations shape.
+      const transformedData = rows.map((row: any) => {
+        const { total_count: _tc, ...newsletterData } = row;
+        return transformNewsletterResponse(newsletterData);
+      });
+
+      const limit = params.limit ?? 50;
+      const offset = params.offset ?? 0;
       const page = Math.floor(offset / limit) + 1;
-      const hasMore = count ? offset + limit < count : false;
+      const hasMore = offset + limit < totalCount;
+
+      log.debug('get_newsletters_by_tags RPC completed', {
+        component: 'NewsletterApi',
+        action: 'get_by_tags_rpc_success',
+        metadata: { dataCount: transformedData.length, totalCount, page, hasMore },
+      });
 
       return {
         data: transformedData,
-        count: count || 0,
+        count: totalCount,
         page,
         limit,
         hasMore,
