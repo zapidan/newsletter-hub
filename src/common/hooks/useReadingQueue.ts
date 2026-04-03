@@ -1,5 +1,6 @@
 import { AuthContext } from '@common/contexts/AuthContext';
-import { newsletterService, readingQueueService } from '@common/services';
+import { readingQueueService } from '@common/services';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import type { ReadingQueueItem } from '@common/types';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { updateNewsletterTags } from '@common/utils/tagUtils';
@@ -331,7 +332,7 @@ export const useReadingQueue = () => {
   // Mark newsletter as read
   const markAsRead = useMutation({
     mutationFn: async (newsletterId: string) => {
-      return newsletterService.markAsRead(newsletterId);
+      return optimizedNewsletterService.markAsRead(newsletterId);
     },
     onSuccess: () => {
       safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-mark-read'));
@@ -341,7 +342,7 @@ export const useReadingQueue = () => {
   // Mark newsletter as unread
   const markAsUnread = useMutation({
     mutationFn: async (newsletterId: string) => {
-      return newsletterService.markAsUnread(newsletterId);
+      return optimizedNewsletterService.markAsUnread(newsletterId);
     },
     onSuccess: () => {
       safeCacheCall((manager) => manager.invalidateRelatedQueries([], 'queue-mark-unread'));

@@ -1,4 +1,4 @@
-import { newsletterService } from '@common/services';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import { useEffect, useMemo, useState } from 'react';
 
 // Minimal shape we need from the caller
@@ -18,34 +18,8 @@ type BaseFilter = {
 export function useGroupCounts(groups: GroupLike[] = [], baseFilter: BaseFilter = {}) {
   const [counts, setCounts] = useState<Record<string, number>>({});
 
-  // Create stable dependencies to prevent infinite re-renders
-  const groupsKey = useMemo(() => {
-    return JSON.stringify(groups.map(g => ({ id: g.id, sourceCount: g.sources?.length || 0 })));
-  }, [groups.length, groups.map(g => g.id).join(',')]);
-
-  const filterKey = useMemo(() => {
-    const sortedTagIds = baseFilter.tagIds ? [...baseFilter.tagIds].sort() : [];
-    return JSON.stringify({
-      search: baseFilter.search,
-      isRead: baseFilter.isRead,
-      isArchived: baseFilter.isArchived,
-      isLiked: baseFilter.isLiked,
-      tagIds: sortedTagIds,
-      dateFrom: baseFilter.dateFrom,
-      dateTo: baseFilter.dateTo
-    });
-  }, [
-    baseFilter.search,
-    baseFilter.isRead,
-    baseFilter.isArchived,
-    baseFilter.isLiked,
-    baseFilter.tagIds ? [...baseFilter.tagIds].sort().join(',') : '',
-    baseFilter.dateFrom,
-    baseFilter.dateTo
-  ]);
-
   // Stable snapshot of inputs
-  const input = useMemo(() => ({ groups, baseFilter }), [groupsKey, filterKey]);
+  const input = useMemo(() => ({ groups, baseFilter }), [groups, baseFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +47,7 @@ export function useGroupCounts(groups: GroupLike[] = [], baseFilter: BaseFilter 
           const sourceIds = g.sources?.map((s) => s.id) || [];
           if (sourceIds.length === 0) return [g.id, 0] as const;
           try {
-            const res = await newsletterService.getAll({ ...baseParams, sourceIds });
+            const res = await optimizedNewsletterService.getAll({ ...baseParams, sourceIds });
             return [g.id, res.count || 0] as const;
           } catch {
             return [g.id, 0] as const;

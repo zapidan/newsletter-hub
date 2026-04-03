@@ -2,9 +2,8 @@ import {
   getAllNewsletterSources as apiGetAllNewsletterSources,
   updateNewsletter as apiUpdateNewsletter,
 } from "@common/api";
-import type { NewsletterService } from "@common/services";
-import { newsletterService as commonNewsletterService } from "@common/services";
 import { newsletterGroupService } from "@common/services/newsletterGroup/NewsletterGroupService";
+import { optimizedNewsletterService } from "@common/services/optimizedNewsletterService";
 import { Newsletter, NewsletterGroup, NewsletterSource } from "@common/types";
 import { logger as appLogger } from "@common/utils/logger";
 import {
@@ -15,9 +14,15 @@ import {
 export interface SearchServiceDependencies {
   getAllNewsletterSources: typeof apiGetAllNewsletterSources;
   updateNewsletter: typeof apiUpdateNewsletter;
-  newsletterService: NewsletterService;
-  newsletterGroupService: any; // Using any to avoid complex type issues
-  logger: any; // Using any for now to avoid ILogger import issues
+  newsletterService: typeof optimizedNewsletterService;
+  newsletterGroupService: {
+    getGroups: () => Promise<NewsletterGroup[]>;
+  };
+  logger: {
+    error: (message: string, context?: Record<string, unknown>, error?: Error) => void;
+    info: (message: string, context?: Record<string, unknown>) => void;
+    debug: (message: string, context?: Record<string, unknown>) => void;
+  };
   window: Pick<Window, "location" | "history" | "localStorage">;
   buildSearchParams: typeof utilBuildSearchParams;
   validateSearchFilters: typeof utilValidateSearchFilters;
@@ -502,7 +507,7 @@ export const searchService = (): SearchService => {
     const deps: SearchServiceDependencies = {
       getAllNewsletterSources: apiGetAllNewsletterSources,
       updateNewsletter: apiUpdateNewsletter,
-      newsletterService: commonNewsletterService,
+      newsletterService: optimizedNewsletterService,
       newsletterGroupService: newsletterGroupService,
       logger: appLogger,
       window: window,
