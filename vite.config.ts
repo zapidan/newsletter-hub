@@ -99,6 +99,17 @@ export default defineConfig(({ mode }) => {
       port: 5174, // Use a different port for test to avoid conflicts
       strictPort: true,
       open: !isTest, // Don't open browser in test mode
+      watch: {
+        // Prevent page reloads when test files are modified
+        ignored: [
+          '**/*.test.{ts,tsx,js,jsx}',
+          '**/__tests__/**',
+          '**/coverage/**',
+          '**/test-results/**',
+          'html/lcov-report/**',
+          'html/supabase/functions/**',
+        ],
+      },
     },
 
     // Build configuration
