@@ -121,10 +121,11 @@ Created `20260404_get_newsletters_function.sql`:
 - **Application**: Updated `tagApi.ts`, `newsletterApi.ts` to use optimized RPC functions
 - **Testing**: 156 tests passing across tag and newsletter APIs
 
-### ✅ Phase 2: Unified Newsletter Function (Completed)  
+### ✅ Phase 2: Unified Newsletter Function (Completed)
 - **Migration**: `20260404_get_newsletters_function.sql`
 - **Function**: `get_newsletters()` replaces all PostgREST LATERAL join queries
 - **Application**: `newsletterApi.getAll()` now uses single RPC call
+- **Cleanup**: Removed unused `buildNewsletterQuery` function and `includeTags` flag usage
 - **Performance**: 85–90% improvement in newsletter list query times
 
 ## Migration Steps

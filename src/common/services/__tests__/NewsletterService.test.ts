@@ -215,13 +215,14 @@ describe("NewsletterService", () => {
       mockNewsletterApi.getByTags.mockResolvedValue(mockResponse);
 
       await service.getNewslettersByTags(["tag-1"], {
-        includeTags: false, // This should be overridden
+        limit: 10, // Test with different params
       });
 
       expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
         ["tag-1"],
         expect.objectContaining({
-          // Tags are always included now
+          limit: 10,
+          // Tags are always included via RPC
         })
       );
     });
@@ -554,10 +555,12 @@ describe("NewsletterService", () => {
         dateFrom: undefined,
         dateTo: undefined,
         limit: 50,
-        expect(mockNewsletterApi.getAll).toHaveBeenCalledWith({
-          orderBy: "received_at",
-          orderDirection: "desc",
-        });
+      });
+
+      expect(mockNewsletterApi.getAll).toHaveBeenCalledWith({
+        orderBy: "received_at",
+        orderDirection: "desc",
+      });
     });
 
     it("should validate search query", async () => {

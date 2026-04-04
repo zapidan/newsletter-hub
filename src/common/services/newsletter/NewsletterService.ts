@@ -105,10 +105,7 @@ export class NewsletterService extends BaseService {
     return this.executeWithLogging(
       async () => {
         // Apply business logic for default parameters
-        const processedParams = this.processNewsletterParams({
-          ...params,
-          includeTags: true, // Always include tags when filtering by tags
-        });
+        const processedParams = this.processNewsletterParams(params);
 
         // Use the API's getByTags method which handles the complex tag intersection logic
         return await this.withRetry(

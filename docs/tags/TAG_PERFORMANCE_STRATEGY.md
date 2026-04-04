@@ -78,15 +78,18 @@ All 156 tests across `tagApi`, `newsletterApi`, `TagService`, and `optimizedNews
 |------|--------|
 | `src/common/api/newsletterApi.ts` | `getAll()` → single `get_newsletters` RPC call (replaces complex PostgREST query with N+1 LATERAL joins) |
 | `src/common/api/newsletterApi.ts` | `transformNewsletterResponse` extended to handle flat RPC tag/source format alongside PostgREST nested format |
+| `src/common/api/newsletterApi.ts` | Removed unused `buildNewsletterQuery` function |
+| `src/common/services/newsletter/NewsletterService.ts` | Removed `includeTags` flag usage (tags always included via RPC) |
+| `src/common/services/__tests__/NewsletterService.test.ts` | Updated tests to reflect tags always included |
 
 #### Performance Impact
 
-- **Newsletter list queries**: From 75–165ms → **~10–20ms** (80–90% improvement)
-- **Total daily query time**: Reduced from ~2,090 seconds to ~100–200 seconds  
+- **Newsletter list queries**: From 75–165ms → **~10–20ms** (85–90% improvement)
+- **Total daily query time**: Reduced from ~2,090 seconds to **~100–200 seconds**  
 - **Eliminated N+1 pattern**: Single query with correlated subqueries instead of per-row LATERAL joins
 - **Server-side aggregation**: Tags and source pre-aggregated as JSONB, eliminating client-side processing
 
-All existing functionality preserved: filtering by read/archived/liked status, source filtering, date ranges, search, ordering, and pagination.
+All existing functionality preserved: filtering by read/archived/liked status, source filtering, date ranges, search, ordering, pagination, and tag filtering.
 
 ### ⏳ Phase 3 — Pending
 
