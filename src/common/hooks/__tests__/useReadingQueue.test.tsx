@@ -1,5 +1,5 @@
 import { AuthContext } from '@common/contexts/AuthContext';
-import { newsletterService } from '@common/services/newsletter/NewsletterService';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import { readingQueueService } from '@common/services/readingQueue/ReadingQueueService';
 import type { ReadingQueueItem } from '@common/types';
 import * as cacheUtils from '@common/utils/cacheUtils';
@@ -24,8 +24,8 @@ vi.mock('@common/services/readingQueue/ReadingQueueService', () => ({
   },
 }));
 
-vi.mock('@common/services/newsletter/NewsletterService', () => ({
-  newsletterService: {
+vi.mock('@common/services/optimizedNewsletterService', () => ({
+  optimizedNewsletterService: {
     markAsRead: vi.fn(),
     markAsUnread: vi.fn(),
   },
@@ -265,7 +265,7 @@ describe('useReadingQueue', () => {
   });
 
   it('marks as read', async () => {
-    vi.mocked(newsletterService.markAsRead).mockResolvedValue({ success: true });
+    vi.mocked(optimizedNewsletterService.markAsRead).mockResolvedValue({ id: 'n1' } as any);
     vi.mocked(readingQueueService.getAll).mockResolvedValue(mockQueue);
 
     const { result } = renderHook(() => useReadingQueue(), {
@@ -276,11 +276,11 @@ describe('useReadingQueue', () => {
       await result.current.markAsRead('n1');
     });
 
-    expect(newsletterService.markAsRead).toHaveBeenCalledWith('n1');
+    expect(optimizedNewsletterService.markAsRead).toHaveBeenCalledWith('n1');
   });
 
   it('marks as unread', async () => {
-    vi.mocked(newsletterService.markAsUnread).mockResolvedValue({ success: true });
+    vi.mocked(optimizedNewsletterService.markAsUnread).mockResolvedValue({ id: 'n1' } as any);
     vi.mocked(readingQueueService.getAll).mockResolvedValue(mockQueue);
 
     const { result } = renderHook(() => useReadingQueue(), {
@@ -291,7 +291,7 @@ describe('useReadingQueue', () => {
       await result.current.markAsUnread('n1');
     });
 
-    expect(newsletterService.markAsUnread).toHaveBeenCalledWith('n1');
+    expect(optimizedNewsletterService.markAsUnread).toHaveBeenCalledWith('n1');
   });
 
   it('updates tags', async () => {

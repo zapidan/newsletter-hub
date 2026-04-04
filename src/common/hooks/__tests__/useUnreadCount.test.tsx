@@ -1,5 +1,5 @@
 import { AuthContext } from '@common/contexts/AuthContext';
-import { newsletterService } from '@common/services';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import type { User } from '@supabase/supabase-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePrefetchUnreadCounts, useUnreadCount } from '../useUnreadCount';
 
 // Mock the service
-vi.mock('@common/services', () => ({
-  newsletterService: {
+vi.mock('@common/services/optimizedNewsletterService', () => ({
+  optimizedNewsletterService: {
     getUnreadCount: vi.fn(),
     getUnreadCountBySource: vi.fn(),
   },
@@ -77,8 +77,8 @@ describe('useUnreadCount', () => {
   });
 
   it('should fetch all unread counts in a single query', async () => {
-    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
       'source-3': 2,
@@ -98,13 +98,13 @@ describe('useUnreadCount', () => {
     expect(result.current.isError).toBe(false);
 
     // Should have called both service methods in parallel
-    expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
-    expect(newsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
+    expect(optimizedNewsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
+    expect(optimizedNewsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
   });
 
   it('should return source-specific count when sourceId is provided', async () => {
-    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
       'source-3': 2,
@@ -125,8 +125,8 @@ describe('useUnreadCount', () => {
   });
 
   it('should return 0 for unknown source', async () => {
-    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
     });
@@ -141,8 +141,8 @@ describe('useUnreadCount', () => {
   });
 
   it('should share data between hooks with different sourceIds', async () => {
-    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 3,
       'source-2': 5,
     });
@@ -162,15 +162,15 @@ describe('useUnreadCount', () => {
     expect(result3.current.unreadCount).toBe(5); // source-2
 
     // Should only fetch data once for all hooks
-    expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
-    expect(newsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
+    expect(optimizedNewsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
+    expect(optimizedNewsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
   });
 
   it('should debounce invalidations when newsletter events occur', async () => {
     vi.useFakeTimers();
 
-    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({});
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockResolvedValue({});
 
     const { result } = renderHook(() => useUnreadCount(), { wrapper });
 
@@ -193,7 +193,7 @@ describe('useUnreadCount', () => {
     });
 
     // No immediate refetch
-    expect(newsletterService.getUnreadCount).not.toHaveBeenCalled();
+    expect(optimizedNewsletterService.getUnreadCount).not.toHaveBeenCalled();
 
     // Advance timer past debounce delay (500ms)
     act(() => {
@@ -204,14 +204,14 @@ describe('useUnreadCount', () => {
 
     // Should only refetch once after debounce
     await waitFor(() => {
-      expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
+      expect(optimizedNewsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
     });
   });
 
   it('should handle errors gracefully', async () => {
     const error = new Error('Network error');
-    vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(error);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockRejectedValue(error);
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockRejectedValue(error);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockRejectedValue(error);
 
     const { result } = renderHook(() => useUnreadCount(), { wrapper });
 
@@ -239,8 +239,8 @@ describe('usePrefetchUnreadCounts', () => {
   });
 
   it('should prefetch unread counts', async () => {
-    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(5);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockResolvedValue(5);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 2,
       'source-2': 3,
     });
@@ -253,8 +253,8 @@ describe('usePrefetchUnreadCounts', () => {
     });
 
     // Should have called both service methods
-    expect(newsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
-    expect(newsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
+    expect(optimizedNewsletterService.getUnreadCount).toHaveBeenCalledTimes(1);
+    expect(optimizedNewsletterService.getUnreadCountBySource).toHaveBeenCalledTimes(1);
   });
 
   it('should not prefetch when user is not authenticated', async () => {
@@ -300,13 +300,13 @@ describe('usePrefetchUnreadCounts', () => {
     });
 
     // Should not have called service methods
-    expect(newsletterService.getUnreadCount).not.toHaveBeenCalled();
-    expect(newsletterService.getUnreadCountBySource).not.toHaveBeenCalled();
+    expect(optimizedNewsletterService.getUnreadCount).not.toHaveBeenCalled();
+    expect(optimizedNewsletterService.getUnreadCountBySource).not.toHaveBeenCalled();
   });
 
   it('should handle prefetch errors gracefully', async () => {
     const error = new Error('Prefetch failed');
-    vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(error);
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockRejectedValue(error);
 
     const { result } = renderHook(() => usePrefetchUnreadCounts(), { wrapper });
 
@@ -331,8 +331,8 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
     });
 
     // Mock service responses
-    vi.mocked(newsletterService.getUnreadCount).mockResolvedValue(10);
-    vi.mocked(newsletterService.getUnreadCountBySource).mockResolvedValue({
+    vi.mocked(optimizedNewsletterService.getUnreadCount).mockResolvedValue(10);
+    vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockResolvedValue({
       'source-1': 5,
       'source-2': 3,
       'source-3': 2,
@@ -485,7 +485,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
         expect(result.current.unreadCount).toBe(10);
       });
 
-      const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+      const initialCallCount = vi.mocked(optimizedNewsletterService.getUnreadCount).mock.calls.length;
 
       // Simulate optimistic update
       act(() => {
@@ -503,7 +503,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       vi.useRealTimers();
 
       // Should not have made additional API calls
-      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
+      expect(vi.mocked(optimizedNewsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
     });
 
     it('should handle manual invalidation correctly', async () => {
@@ -538,14 +538,14 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
         expect(result.current.unreadCount).toBe(10);
       });
 
-      expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(2); // Initial load + invalidation
+      expect(vi.mocked(optimizedNewsletterService.getUnreadCount).mock.calls.length).toBe(2); // Initial load + invalidation
     });
   });
 
   describe('Error handling', () => {
     it('should handle API errors gracefully', async () => {
-      vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(new Error('API Error'));
-      vi.mocked(newsletterService.getUnreadCountBySource).mockRejectedValue(new Error('API Error'));
+      vi.mocked(optimizedNewsletterService.getUnreadCount).mockRejectedValue(new Error('API Error'));
+      vi.mocked(optimizedNewsletterService.getUnreadCountBySource).mockRejectedValue(new Error('API Error'));
 
       const { result } = renderUseUnreadCount();
 
@@ -579,7 +579,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
       });
 
       // Now simulate an error
-      vi.mocked(newsletterService.getUnreadCount).mockRejectedValue(new Error('API Error'));
+      vi.mocked(optimizedNewsletterService.getUnreadCount).mockRejectedValue(new Error('API Error'));
 
       // Manually invalidate to trigger error
       act(() => {
@@ -609,7 +609,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
           expect(result.current.unreadCount).toBe(10);
         });
 
-        const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+        const initialCallCount = vi.mocked(optimizedNewsletterService.getUnreadCount).mock.calls.length;
 
         // Trigger a re-render
         act(() => {
@@ -621,7 +621,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
         });
 
         // Should not have made additional API calls due to stale time
-        expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
+        expect(vi.mocked(optimizedNewsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount);
       });
 
       it('should debounce invalidations', async () => {
@@ -635,7 +635,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
           expect(result.current.unreadCount).toBe(10);
         });
 
-        const initialCallCount = vi.mocked(newsletterService.getUnreadCount).mock.calls.length;
+        const initialCallCount = vi.mocked(optimizedNewsletterService.getUnreadCount).mock.calls.length;
 
         // Switch back to fake timers for controlled invalidation
         vi.useFakeTimers();
@@ -653,7 +653,7 @@ describe('useUnreadCount - Optimistic Updates Integration', () => {
         });
 
         // Should only have made one additional call due to debouncing
-        expect(vi.mocked(newsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount + 1);
+        expect(vi.mocked(optimizedNewsletterService.getUnreadCount).mock.calls.length).toBe(initialCallCount + 1);
       });
     });
   });

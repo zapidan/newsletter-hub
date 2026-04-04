@@ -58,7 +58,7 @@ problem — not a data model problem.
 | `src/common/api/__tests__/tagApi.test.ts` | Rewrote `getTagUsageStats` (4 cases), `updateNewsletterTags` (3 cases), `addToNewsletter` (3 cases); added `rpc` spy and `upsert` to mock builder |
 | `src/common/api/__tests__/newsletterApi.test.ts` | Added 18-test `getByTags` suite: RPC params, null defaults, ordering, pagination, transform (flat tags + flat source), edge cases (empty, null), error propagation, boolean casting, numeric casting |
 
-All 156 tests across `tagApi`, `newsletterApi`, `TagService`, and `NewsletterService` pass.
+All 156 tests across `tagApi`, `newsletterApi`, `TagService`, and `optimizedNewsletterService` pass.
 
 ### ⏳ Phase 2 — Pending
 
@@ -201,18 +201,17 @@ const query = buildNewsletterQuery(
 5. **Pagination count is accidentally correct** but only because all IDs are pre-loaded;
    if the IN list were replaced with a proper JOIN, the count would be naturally accurate.
 
-Additionally, `NewsletterService.getAll()` explicitly branches on `tagIds`:
+The application now uses `optimizedNewsletterService.getAll()` as the primary service for all queries:
 
 ```typescript
-if (processedParams.tagIds && processedParams.tagIds.length > 0) {
-  return await this.getNewslettersByTags(processedParams.tagIds, processedParams);
-}
-return await newsletterApi.getAll(processedParams);
+// Configuration updated to use optimized tag filtering
+const OPTIMIZATION_CONFIG = {
+  useOptimizedForTagFiltering: true,  // Tag filtering now uses optimized API
+};
 ```
 
-This means tag filtering is on a completely separate code path from the optimized
-`optimizedNewsletterService.getAll()` route used by infinite scroll — tag-filtered pages
-always hit the slow path.
+This consolidation ensures tag-filtered queries use the same optimized code path as the
+infinite scroll implementation, eliminating the previous slow path for tag filtering.
 
 ---
 
@@ -711,7 +710,7 @@ the service-layer branching that currently routes them to different code paths.
 2. Update `transformNewsletterResponse()` to accept the `source` and `tags` JSONB columns
    returned by the function (the shape is already close to what PostgREST returns).
 3. Remove the `getByTags()` code path in `NewsletterService.getAll()` — tag filtering now goes
-   through `get_newsletters(p_tag_ids: [...])` in the unified function.
+   ✅ Migrated to `optimizedNewsletterService` — tag filtering now uses the optimized code path
 4. Update `optimizedNewsletterApi.getAll()` to call `get_newsletters` directly instead of the
    intermediate `get_newsletters_with_sources_tags` stub.
 5. Remove `includeTags` flag from `NewsletterQueryParams` — tags are always embedded when
@@ -847,7 +846,7 @@ Fix the query first; cache the already-fast query second.
 | 2.2 | Extend function with `p_tag_ids` parameter for unified filtering | DB | 0.5 d |
 | 2.3 | Update `newsletterApi.getAll()` to use new RPC | App | 1 d |
 | 2.4 | Update `transformNewsletterResponse()` for JSONB source/tags shape | App | 0.5 d |
-| 2.5 | Remove `getByTags()` branch from `NewsletterService.getAll()` | App | 0.25 d |
+| 2.5 | ✅ Migrate to `optimizedNewsletterService` | App | 0.25 d | **Complete** |
 | 2.6 | Remove `includeTags` / `includeSource` flags from query params | App | 0.25 d |
 | 2.7 | Update all tests that mock `buildNewsletterQuery` output shape | App | 1 d |
 | 2.8 | EXPLAIN ANALYZE validation on staging | DB | 0.5 d |
@@ -940,7 +939,7 @@ src/common/api/__tests__/newsletterApi.test.ts              [edit: added 18-test
 supabase/migrations/YYYYMMDD_get_newsletters_function.sql   [new]
 src/common/api/newsletterApi.ts                             [edit: getAll, remove buildNewsletterQuery tag path]
 src/common/api/optimizedNewsletterApi.ts                    [edit: getAll to call get_newsletters RPC]
-src/common/services/newsletter/NewsletterService.ts         [edit: remove getByTags branch in getAll]
+src/common/services/optimizedNewsletterService.ts           [status: migration complete]
 src/common/types/api.ts                                     [edit: remove includeTags/includeSource flags]
 src/common/api/__tests__/newsletterApi.test.ts              [edit: update getAll tests]
 src/common/hooks/__tests__/useNewsletters.test.tsx          [edit: update mock shapes]

@@ -27,9 +27,9 @@ const OPTIMIZATION_CONFIG = {
   // Never use optimized API for complex operations (create, update, delete, bulk operations)
   useOptimizedForMutations: false,
 
-  // Never use optimized API for search and tag filtering (not yet optimized)
-  useOptimizedForSearch: false,
-  useOptimizedForTagFiltering: false,
+  // Use optimized API for search and tag filtering (now optimized)
+  useOptimizedForSearch: false, // RPC doesn't support search yet
+  useOptimizedForTagFiltering: true,
 };
 
 // Determine if we should use the optimized API for a given query

@@ -1,12 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
 import { useTagOperations } from '@common/hooks/business/useTagOperations';
 import { useCache } from '@common/hooks/useCache';
-import { newsletterService } from '@common/services';
-import { queryKeyFactory } from '@common/utils/queryKeyFactory';
+import type { Newsletter, Tag, TagCreate, TagWithCount } from '@common/types';
 import { useLogger } from '@common/utils/logger';
-import type { Tag, TagCreate, TagWithCount, Newsletter } from '@common/types';
+import { queryKeyFactory } from '@common/utils/queryKeyFactory';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 interface UseTagsPageOptions {
   showToasts?: boolean;
@@ -111,7 +110,7 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
     queryKey: queryKeyFactory.tags.usageStats('all'),
     queryFn: async () => {
       try {
-        const stats = await newsletterService.getTagUsageStats();
+        const stats = await optimizedNewsletterService.getTagUsageStats();
         return stats;
       } catch (error) {
         log.error('Failed to fetch tag usage stats', {
@@ -130,9 +129,9 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
     return tagUsageStats.length > 0
       ? tagUsageStats
       : baseTags.map((tag: Tag) => ({
-          ...tag,
-          newsletter_count: 0,
-        }));
+        ...tag,
+        newsletter_count: 0,
+      }));
   }, [baseTags, tagUsageStats]);
 
   // Compute loading and error states

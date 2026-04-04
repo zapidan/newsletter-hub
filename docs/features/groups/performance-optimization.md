@@ -54,7 +54,7 @@ if (params.tagIds?.length) {
 
 ```javascript
 // OLD: Inefficient approach
-const newslettersResponse = await newsletterService.getAll({
+const newslettersResponse = await optimizedNewsletterService.getAll({
   includeSource: true,
   includeTags: true,
   limit: 1000, // Fetching 1000+ newsletters just for tag counts!
@@ -144,7 +144,7 @@ async getAll(params) {
 **Before:**
 ```javascript
 // OLD: Fetched all newsletters
-const newsletters = await newsletterService.getAll({
+const newsletters = await optimizedNewsletterService.getAll({
   includeTags: true,
   limit: 1000, // Expensive!
 });
@@ -153,7 +153,7 @@ const newsletters = await newsletterService.getAll({
 **After:**
 ```javascript
 // NEW: Only fetch tag usage stats efficiently
-const tagUsageStats = await newsletterService.getTagUsageStats();
+const tagUsageStats = await optimizedNewsletterService.getTagUsageStats();
 // No newsletter fetching needed for tag counts!
 ```
 

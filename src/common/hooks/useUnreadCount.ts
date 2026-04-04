@@ -1,5 +1,5 @@
 import { AuthContext } from '@common/contexts/AuthContext';
-import { newsletterService } from '@common/services';
+import { optimizedNewsletterService } from '@common/services/optimizedNewsletterService';
 import { useLogger } from '@common/utils/logger/useLogger';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useContext, useEffect, useMemo, useRef } from 'react';
@@ -75,8 +75,8 @@ export const useUnreadCount = (sourceId?: string | null) => {
       try {
         // Fetch both total and per-source counts in parallel
         const [totalResult, bySourceResult] = await Promise.all([
-          newsletterService.getUnreadCount(),
-          newsletterService.getUnreadCountBySource(),
+          optimizedNewsletterService.getUnreadCount(),
+          optimizedNewsletterService.getUnreadCountBySource(),
         ]);
 
         const total = totalResult || 0;
@@ -240,8 +240,8 @@ export const usePrefetchUnreadCounts = () => {
       queryKey,
       queryFn: async () => {
         const [total, bySource] = await Promise.all([
-          newsletterService.getUnreadCount(),
-          newsletterService.getUnreadCountBySource(),
+          optimizedNewsletterService.getUnreadCount(),
+          optimizedNewsletterService.getUnreadCountBySource(),
         ]);
 
         return { total, bySource };

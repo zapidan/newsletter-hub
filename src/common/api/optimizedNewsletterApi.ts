@@ -289,7 +289,8 @@ export const optimizedNewsletterApi = {
     query: string,
     params: Omit<NewsletterQueryParams, 'search'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    // Delegate to original API for search (this could be optimized later)
+    // For search, we need to fall back to the original API since the RPC function
+    // doesn't support text search yet
     const { newsletterApi } = await import('./newsletterApi');
     return newsletterApi.search(query, params);
   },
