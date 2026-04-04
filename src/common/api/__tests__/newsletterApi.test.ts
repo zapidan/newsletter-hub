@@ -1,8 +1,8 @@
 import { NewsletterWithRelations } from '@common/types';
 import { vi } from 'vitest';
 
-// Hoisted mock for createQueryBuilder
-const { createMockNewsletter, createQueryBuilder, mockUser } = vi.hoisted(() => {
+// Hoisted mock for RPC calls
+const { createMockNewsletter, mockUser } = vi.hoisted(() => {
   const mockUser = {
     id: 'user-1',
     email: 'user@example.com',
@@ -30,16 +30,21 @@ const { createMockNewsletter, createQueryBuilder, mockUser } = vi.hoisted(() => 
       id: 'source-1',
       name: 'Test Source',
       from: 'test@example.com',
-      user_id: mockUser.id, // Use mockUser.id
+      user_id: mockUser.id,
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-01T00:00:00Z',
     },
     tags: [],
     newsletter_source_id: 'source-1',
-    user_id: mockUser.id, // Use mockUser.id
+    user_id: mockUser.id,
     ...overrides,
   });
 
+  return { createMockNewsletter, mockUser };
+});
+
+// Hoisted mock for createQueryBuilder (needed for other tests)
+const { createQueryBuilder } = vi.hoisted(() => {
   const createQueryBuilder = () => {
     const builder: any = {};
     builder.select = vi.fn().mockReturnValue(builder);
@@ -60,7 +65,7 @@ const { createMockNewsletter, createQueryBuilder, mockUser } = vi.hoisted(() => 
     builder.then = vi.fn();
     return builder;
   };
-  return { createMockNewsletter, createQueryBuilder, mockUser };
+  return { createQueryBuilder };
 });
 
 vi.mock('../supabaseClient', () => {
@@ -76,6 +81,8 @@ vi.mock('../supabaseClient', () => {
     withPerformanceLogging: vi.fn((_name, fn) => fn()),
   };
 });
+
+const { rpc: rpcSpy } = supabaseClientModule.supabase;
 
 import { newsletterApi } from '../newsletterApi';
 import * as supabaseClientModule from '../supabaseClient';
@@ -221,126 +228,100 @@ describe('newsletterApi', () => {
     });
   });
 
-  describe('buildNewsletterQuery (via getAll)', () => {
-    beforeEach(() => {
-      // Mock the final resolution of the query chain for getAll
-      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled: any) =>
-        onFulfilled({ data: [], count: 0, error: null })
-      );
-    });
-    it('should apply limit and offset for pagination', async () => {
-      await newsletterApi.getAll({ limit: 10, offset: 20 });
-      expect(currentQueryBuilder.limit).toHaveBeenCalledWith(10);
-      expect(currentQueryBuilder.range).toHaveBeenCalledWith(20, 29);
-    });
-    it('should correctly calculate range end without limit', async () => {
-      await newsletterApi.getAll({ offset: 10 });
-      expect(currentQueryBuilder.range).toHaveBeenCalledWith(10, 10 + 50 - 1);
-    });
-    it('should combine multiple filters correctly', async () => {
-      const params = {
-        search: 'c',
-        isRead: false,
-        sourceIds: ['s1'],
-        dateFrom: 'd1',
-        orderBy: 'title',
-        ascending: true,
-        limit: 5,
-        offset: 0,
-        includeSource: true,
-        includeTags: true,
-      };
-      await newsletterApi.getAll(params);
-      expect(currentQueryBuilder.or).toHaveBeenCalled();
-      expect(currentQueryBuilder.eq).toHaveBeenCalledWith('is_read', false);
-      expect(currentQueryBuilder.limit).toHaveBeenCalledWith(5);
-    });
-  });
-
   describe('getAll', () => {
-    beforeEach(() => {
-      // Mock the final resolution of the query chain for getAll
-      vi.mocked(currentQueryBuilder.then).mockImplementation((onFulfilled: any) =>
-        onFulfilled({ data: [createMockNewsletter()], count: 1, error: null })
-      );
-    });
-    it('should fetch all newsletters with default params', async () => {
+    it('should call RPC with correct parameters for basic query', async () => {
       const mockData = [createMockNewsletter()];
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) =>
-        onFulfilled({ data: mockData, count: mockData.length, error: null })
-      );
-      const result = await newsletterApi.getAll();
-      expect(result.data).toEqual(mockData);
-    });
-    it('should correctly calculate pagination fields for various scenarios', async () => {
-      const nls = (c: number) =>
-        Array(c)
-          .fill(null)
-          .map((_, i) => createMockNewsletter({ id: `nl${i}` }));
-
-      // Scenario 1: No items
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) =>
-        onFulfilled({ data: [], count: 0, error: null })
-      );
-      let res = await newsletterApi.getAll({ limit: 10, offset: 0 });
-      expect(res).toMatchObject({
-        data: [],
-        count: 0,
-        page: 1,
-        limit: 10,
-        hasMore: false,
-        nextPage: null,
-        prevPage: null,
+      vi.mocked(supabaseClientModule.supabase.rpc).mockResolvedValueOnce({
+        data: mockData.map((n) => ({ ...n, total_count: 1 })),
+        error: null,
       });
 
-      // Scenario 2: Fewer items than limit
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) =>
-        onFulfilled({ data: nls(5), count: 5, error: null })
-      );
-      res = await newsletterApi.getAll({ limit: 10, offset: 0 });
-      expect(res.data.length).toBe(5);
-      expect(res.hasMore).toBe(false);
+      await newsletterApi.getAll();
 
-      // Scenario 3: Exactly limit number of items (more exist in total)
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) =>
-        onFulfilled({ data: nls(10), count: 25, error: null })
-      );
-      res = await newsletterApi.getAll({ limit: 10, offset: 0 }); // offset 0, limit 10
-      expect(res.data.length).toBe(10);
-      expect(res.hasMore).toBe(true);
-      expect(res.nextPage).toBe(2);
+      expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('get_newsletters', {
+        p_user_id: mockUser.id,
+        p_tag_ids: null,
+        p_is_read: null,
+        p_is_archived: null,
+        p_is_liked: null,
+        p_source_ids: null,
+        p_date_from: null,
+        p_date_to: null,
+        p_search: null,
+        p_limit: 50,
+        p_offset: 0,
+        p_order_by: 'received_at',
+        p_order_direction: 'DESC',
+      });
+    });
 
-      // Scenario 4: On second page, more items exist
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) =>
-        onFulfilled({ data: nls(10), count: 25, error: null })
-      );
-      res = await newsletterApi.getAll({ limit: 10, offset: 10 }); // offset 10, limit 10
-      expect(res.data.length).toBe(10);
-      expect(res.hasMore).toBe(true);
-      expect(res.nextPage).toBe(3);
-      expect(res.prevPage).toBe(1);
+    it('should call RPC with correct parameters for complex query', async () => {
+      const mockData = [createMockNewsletter()];
+      vi.mocked(supabaseClientModule.supabase.rpc).mockResolvedValueOnce({
+        data: mockData.map((n) => ({ ...n, total_count: 1 })),
+        error: null,
+      });
 
-      // Scenario 5: On last page (fewer items than limit)
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) =>
-        onFulfilled({ data: nls(5), count: 25, error: null })
-      );
-      res = await newsletterApi.getAll({ limit: 10, offset: 20 }); // offset 20, limit 10
-      expect(res.data.length).toBe(5);
-      expect(res.hasMore).toBe(false);
-      expect(res.prevPage).toBe(2);
+      const params = {
+        search: 'test',
+        isRead: false,
+        tagIds: ['tag1', 'tag2'],
+        sourceIds: ['source1'],
+        dateFrom: '2024-01-01',
+        orderBy: 'title',
+        ascending: true,
+        limit: 10,
+        offset: 20,
+      };
 
-      // Scenario 6: Count is a multiple of limit, on the last page
-      vi.mocked(currentQueryBuilder.then).mockImplementationOnce((onFulfilled: any) =>
-        onFulfilled({ data: nls(10), count: 20, error: null })
-      );
-      res = await newsletterApi.getAll({ limit: 10, offset: 10 }); // offset 10, limit 10 (items 11-20 of 20)
-      expect(res.data.length).toBe(10);
-      // Updated hasMore logic: (offset + limit) < totalCount. Here (10 + 10) < 20 is false.
-      expect(res.hasMore).toBe(false);
-      expect(res.page).toBe(2);
-      // Updated nextPage logic: hasMore ? page + 1 : null. Since hasMore is false, nextPage should be null.
-      expect(res.nextPage).toBe(null);
-      expect(res.prevPage).toBe(1);
+      await newsletterApi.getAll(params);
+
+      expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('get_newsletters', {
+        p_user_id: mockUser.id,
+        p_tag_ids: ['tag1', 'tag2'],
+        p_is_read: false,
+        p_is_archived: null,
+        p_is_liked: null,
+        p_source_ids: ['source1'],
+        p_date_from: '2024-01-01',
+        p_date_to: null,
+        p_search: 'test',
+        p_limit: 10,
+        p_offset: 20,
+        p_order_by: 'title',
+        p_order_direction: 'ASC',
+      });
+    });
+
+    it('should return transformed newsletters with correct pagination', async () => {
+      const mockData = [
+        { ...createMockNewsletter({ id: 'nl1' }), total_count: 25 },
+        { ...createMockNewsletter({ id: 'nl2' }), total_count: 25 },
+      ];
+      vi.mocked(supabaseClientModule.supabase.rpc).mockResolvedValueOnce({
+        data: mockData,
+        error: null,
+      });
+
+      const result = await newsletterApi.getAll({ limit: 10, offset: 0 });
+
+      expect(result.data).toHaveLength(2);
+      expect(result.count).toBe(25);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(10);
+      expect(result.hasMore).toBe(true);
+      expect(result.nextPage).toBe(2);
+      expect(result.prevPage).toBe(null);
+    });
+
+    it('should handle RPC errors', async () => {
+      const error = new Error('RPC failed');
+      vi.mocked(supabaseClientModule.supabase.rpc).mockResolvedValueOnce({
+        data: null,
+        error: { message: 'RPC failed', details: null },
+      });
+
+      await expect(newsletterApi.getAll()).rejects.toThrow('RPC failed');
     });
   });
 
@@ -764,7 +745,7 @@ describe('newsletterApi', () => {
 
     const rpcSpy = () => vi.mocked(supabaseClientModule.supabase.rpc as ReturnType<typeof vi.fn>);
 
-    it('should call get_newsletters_by_tags RPC with all expected parameters', async () => {
+    it('should call get_newsletters RPC with all expected parameters', async () => {
       rpcSpy().mockResolvedValueOnce({ data: [baseRpcRow], error: null });
 
       await newsletterApi.getByTags(['tag-1', 'tag-2'], {
@@ -780,7 +761,7 @@ describe('newsletterApi', () => {
         ascending: false,
       });
 
-      expect(rpcSpy()).toHaveBeenCalledWith('get_newsletters_by_tags', {
+      expect(rpcSpy()).toHaveBeenCalledWith('get_newsletters', {
         p_user_id: mockUser.id,
         p_tag_ids: ['tag-1', 'tag-2'],
         p_is_read: false,
@@ -789,6 +770,7 @@ describe('newsletterApi', () => {
         p_source_ids: ['src-1'],
         p_date_from: '2024-01-01T00:00:00Z',
         p_date_to: '2024-12-31T23:59:59Z',
+        p_search: null,
         p_limit: 10,
         p_offset: 0,
         p_order_by: 'received_at',
@@ -802,7 +784,7 @@ describe('newsletterApi', () => {
       await newsletterApi.getByTags(['tag-1']);
 
       expect(rpcSpy()).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({
           p_is_read: null,
           p_is_archived: null,
@@ -820,7 +802,7 @@ describe('newsletterApi', () => {
       await newsletterApi.getByTags(['tag-1'], { ascending: true });
 
       expect(rpcSpy()).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({ p_order_direction: 'ASC' })
       );
     });
@@ -831,7 +813,7 @@ describe('newsletterApi', () => {
       await newsletterApi.getByTags(['tag-1']);
 
       expect(rpcSpy()).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({ p_limit: 50, p_offset: 0 })
       );
     });

@@ -186,7 +186,7 @@ export const useNewsletters = (
   );
 
   // Define proper type for query parameters
-  interface NewsletterQueryParams {
+  interface QueryParams {
     search?: string;
     isRead?: boolean;
     isArchived?: boolean;
@@ -199,14 +199,11 @@ export const useNewsletters = (
     offset?: number;
     orderBy?: string;
     ascending?: boolean;
-    includeRelations?: boolean;
-    includeTags?: boolean;
-    includeSource?: boolean;
   }
 
   // Build API query parameters from normalized filters with proper typing
-  const queryParams = useMemo<NewsletterQueryParams>(() => {
-    const params: NewsletterQueryParams = {
+  const queryParams = useMemo<QueryParams>(() => {
+    const params: QueryParams = {
       search: normalizedFilters.search,
       isRead: normalizedFilters.isRead,
       isArchived: normalizedFilters.isArchived,
@@ -219,9 +216,6 @@ export const useNewsletters = (
       offset: normalizedFilters.offset || 0,
       orderBy: normalizedFilters.orderBy || 'received_at',
       ascending: normalizedFilters.ascending ?? false,
-      includeRelations: true,
-      includeTags: true,
-      includeSource: true,
     };
 
     // Validate source IDs in development

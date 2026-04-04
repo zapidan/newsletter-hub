@@ -28,18 +28,51 @@ const OPTIMIZATION_CONFIG = {
   useOptimizedForMutations: false,
 
   // Use optimized API for search and tag filtering (now optimized)
-  useOptimizedForSearch: false, // RPC doesn't support search yet
+  useOptimizedForSearch: true,
   useOptimizedForTagFiltering: true,
 };
 
 // Determine if we should use the optimized API for a given query
 const shouldUseOptimizedApi = (
-  operation: 'getAll' | 'getById' | 'create' | 'update' | 'delete' | 'bulkUpdate' | 'markAsRead' | 'markAsUnread' | 'toggleArchive' | 'bulkArchive' | 'bulkUnarchive' | 'toggleLike' | 'getByTags' | 'getBySource' | 'search' | 'getStats' | 'countBySource' | 'getTotalCountBySource' | 'getUnreadCountBySource' | 'getUnreadCount',
+  operation:
+    | 'getAll'
+    | 'getById'
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'bulkUpdate'
+    | 'markAsRead'
+    | 'markAsUnread'
+    | 'toggleArchive'
+    | 'bulkArchive'
+    | 'bulkUnarchive'
+    | 'toggleLike'
+    | 'getByTags'
+    | 'getBySource'
+    | 'search'
+    | 'getStats'
+    | 'countBySource'
+    | 'getTotalCountBySource'
+    | 'getUnreadCountBySource'
+    | 'getUnreadCount',
   _params: NewsletterQueryParams = {}
 ): boolean => {
   // Never use optimized API for mutations
   if (OPTIMIZATION_CONFIG.useOptimizedForMutations === false) {
-    if (['create', 'update', 'delete', 'bulkUpdate', 'markAsRead', 'markAsUnread', 'toggleArchive', 'bulkArchive', 'bulkUnarchive', 'toggleLike'].includes(operation)) {
+    if (
+      [
+        'create',
+        'update',
+        'delete',
+        'bulkUpdate',
+        'markAsRead',
+        'markAsUnread',
+        'toggleArchive',
+        'bulkArchive',
+        'bulkUnarchive',
+        'toggleLike',
+      ].includes(operation)
+    ) {
       return false;
     }
   }

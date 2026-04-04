@@ -180,9 +180,6 @@ describe('UseNewsletters with Optimization', () => {
         offset: 0,
         orderBy: 'received_at',
         ascending: false,
-        includeRelations: true,
-        includeTags: true,
-        includeSource: true,
       });
     });
 
@@ -273,9 +270,6 @@ describe('UseNewsletters with Optimization', () => {
             limit: 5,
             orderBy: 'title',
             ascending: true,
-            includeRelations: true,
-            includeTags: true,
-            includeSource: true,
           })
         );
       });
@@ -517,17 +511,11 @@ describe('UseNewsletters with Optimization', () => {
       expect(mockOptimizedNewsletterService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           isRead: false,
-          includeRelations: true,
-          includeTags: true,
-          includeSource: true,
         })
       );
       expect(mockOptimizedNewsletterService.getAll).toHaveBeenCalledWith(
         expect.objectContaining({
           isRead: true,
-          includeRelations: true,
-          includeTags: true,
-          includeSource: true,
         })
       );
     });

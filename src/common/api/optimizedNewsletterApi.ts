@@ -92,21 +92,22 @@ export const optimizedNewsletterApi = {
       // Map the parameters to the optimized function parameters
       const rpcParams = {
         p_user_id: user.id,
-        p_tag_ids: null, // Required parameter, null when not filtering by tags
+        p_tag_ids: params.tagIds && params.tagIds.length > 0 ? params.tagIds : null,
         p_is_read: params.isRead ?? null,
         p_is_archived: params.isArchived ?? null,
-        p_is_liked: null, // Required parameter, null when not filtering by liked status
+        p_is_liked: params.isLiked ?? null,
         p_source_ids: params.sourceIds && params.sourceIds.length > 0 ? params.sourceIds : null,
         p_date_from: params.dateFrom || null,
         p_date_to: params.dateTo || null,
+        p_search: params.search || null,
         p_limit: params.limit || 50,
         p_offset: params.offset || 0,
         p_order_by: params.orderBy || 'received_at',
-        p_order_direction: params.ascending ? 'asc' : 'desc',
+        p_order_direction: params.ascending ? 'ASC' : 'DESC',
       };
 
       // Call the optimized function
-      const { data, error } = await supabase.rpc('get_newsletters_by_tags', rpcParams);
+      const { data, error } = await supabase.rpc('get_newsletters', rpcParams);
 
       if (error) {
         log.error('Optimized newsletter query failed', {
@@ -121,28 +122,8 @@ export const optimizedNewsletterApi = {
       // Transform the data
       const transformedData = data ? data.map(transformOptimizedResponse) : [];
 
-      // Get the total count using the optimized count function
-      const { data: countData, error: countError } = await supabase.rpc('get_newsletters_by_tags', {
-        p_user_id: user.id,
-        p_tag_ids: null,
-        p_is_read: params.isRead ?? null,
-        p_is_archived: params.isArchived ?? null,
-        p_is_liked: null,
-        p_source_ids: params.sourceIds && params.sourceIds.length > 0 ? params.sourceIds : null,
-        p_date_from: params.dateFrom || null,
-        p_date_to: params.dateTo || null,
-        p_limit: 1, // Only need count, so limit to 1
-        p_offset: 0,
-        p_order_by: params.orderBy || 'received_at',
-        p_order_direction: params.ascending ? 'asc' : 'desc',
-      });
-
-      if (countError) {
-        log.warn('Failed to get count, using data length', { countError });
-      }
-
-      // Extract count from result if available, otherwise use data length
-      const totalCount = countData && countData.length > 0 ? countData[0].total_count : transformedData.length;
+      // Extract count from result if available (it's in every row), otherwise use data length
+      const totalCount = data && data.length > 0 ? Number(data[0].total_count) : 0;
       const limit = params.limit || 50;
       const offset = params.offset || 0;
       const page = Math.floor(offset / limit) + 1;
@@ -272,9 +253,8 @@ export const optimizedNewsletterApi = {
     tagIds: string[],
     params: Omit<NewsletterQueryParams, 'tagIds'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    // Delegate to original API for tag filtering (this could be optimized later)
-    const { newsletterApi } = await import('./newsletterApi');
-    return newsletterApi.getByTags(tagIds, params);
+    // Use optimized API for tag filtering
+    return this.getAll({ ...params, tagIds });
   },
 
   async getBySource(
@@ -289,10 +269,8 @@ export const optimizedNewsletterApi = {
     query: string,
     params: Omit<NewsletterQueryParams, 'search'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    // For search, we need to fall back to the original API since the RPC function
-    // doesn't support text search yet
-    const { newsletterApi } = await import('./newsletterApi');
-    return newsletterApi.search(query, params);
+    // Use optimized API for search
+    return this.getAll({ ...params, search: query });
   },
 
   async getStats(): Promise<{

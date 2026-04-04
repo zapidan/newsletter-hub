@@ -108,8 +108,6 @@ describe("NewsletterService", () => {
         limit: 10,
         orderBy: "received_at",
         orderDirection: "desc",
-        includeSource: true,
-        includeTags: true,
       });
     });
 
@@ -127,8 +125,6 @@ describe("NewsletterService", () => {
         limit: 50,
         orderBy: "received_at",
         orderDirection: "desc",
-        includeSource: true,
-        includeTags: true,
       });
     });
 
@@ -150,8 +146,6 @@ describe("NewsletterService", () => {
         ["tag-1", "tag-2"],
         expect.objectContaining({
           limit: 10,
-          includeSource: true,
-          includeTags: true,
           orderBy: "received_at",
           orderDirection: "desc",
         })
@@ -180,8 +174,6 @@ describe("NewsletterService", () => {
         expect.objectContaining({
           limit: 10,
           isRead: false,
-          includeSource: true,
-          includeTags: true,
           orderBy: "received_at",
           orderDirection: "desc",
         })
@@ -210,7 +202,6 @@ describe("NewsletterService", () => {
         ["tag-1"],
         expect.objectContaining({
           limit: 10,
-          includeTags: true,
         })
       );
     });
@@ -224,13 +215,14 @@ describe("NewsletterService", () => {
       mockNewsletterApi.getByTags.mockResolvedValue(mockResponse);
 
       await service.getNewslettersByTags(["tag-1"], {
-        includeTags: false, // This should be overridden
+        limit: 10, // Test with different params
       });
 
       expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
         ["tag-1"],
         expect.objectContaining({
-          includeTags: true, // Should be forced to true
+          limit: 10,
+          // Tags are always included via RPC
         })
       );
     });
@@ -565,8 +557,6 @@ describe("NewsletterService", () => {
         limit: 50,
         orderBy: "received_at",
         orderDirection: "desc",
-        includeSource: true,
-        includeTags: true,
       });
     });
 

@@ -560,8 +560,6 @@ export class TagService extends BaseService {
     try {
       const response = await newsletterApi.getAll({
         tagIds: [tagId],
-        includeSource: true,
-        includeTags: true,
         limit: 1000,
       });
       return response.data;
