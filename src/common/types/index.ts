@@ -171,8 +171,6 @@ export interface NewsletterQueryParams {
   tagIds?: string[];
   dateFrom?: string;
   dateTo?: string;
-  includeSource?: boolean;
-  includeTags?: boolean;
   orderBy?: string;
   orderDirection?: 'asc' | 'desc';
   sortBy?: string;

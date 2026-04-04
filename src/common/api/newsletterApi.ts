@@ -284,44 +284,60 @@ export const newsletterApi = {
     return withPerformanceLogging('newsletters.getAll', async () => {
       const user = await requireAuth();
 
-      log.debug('Building newsletter query', {
+      log.debug('Fetching newsletters via RPC', {
         component: 'NewsletterApi',
-        action: 'get_all_build_query',
+        action: 'get_all_rpc',
         metadata: {
           ...params,
-          sourceIds: params.sourceIds || null,
+          userId: user.id,
         },
       });
 
-      // Build the query without tag filtering
-      const query = buildNewsletterQuery({
-        ...params,
-        user_id: user.id,
-      });
+      const rpcParams = {
+        p_user_id: user.id,
+        p_tag_ids: params.tagIds && params.tagIds.length > 0 ? params.tagIds : null,
+        p_is_read: params.isRead ?? null,
+        p_is_archived: params.isArchived ?? null,
+        p_is_liked: params.isLiked ?? null,
+        p_source_ids: params.sourceIds && params.sourceIds.length > 0 ? params.sourceIds : null,
+        p_date_from: params.dateFrom || null,
+        p_date_to: params.dateTo || null,
+        p_search: params.search || null,
+        p_limit: params.limit || 50,
+        p_offset: params.offset || 0,
+        p_order_by: params.orderBy || 'received_at',
+        p_order_direction: params.ascending ? 'ASC' : 'DESC',
+      };
 
-      const { data, error, count } = await query;
+      const { data, error } = await supabase.rpc('get_newsletters', rpcParams);
 
       if (error) {
-        log.error('Newsletter query failed', {
+        log.error('Newsletter RPC query failed', {
           component: 'NewsletterApi',
-          action: 'get_all_query_error',
-          metadata: { userId: user.id, params },
+          action: 'get_all_rpc_error',
+          metadata: { userId: user.id, params: rpcParams, error },
         });
         handleSupabaseError(error);
         throw error;
       }
 
-      // Transform the data (this will include tags if includeTags is true)
-      const transformedData = data ? data.map(transformNewsletterResponse) : [];
+      const rows = (data as any[]) ?? [];
+      const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
+
+      // Transform the data
+      const transformedData = rows.map((row: any) => {
+        const { total_count: _tc, ...newsletterData } = row;
+        return transformNewsletterResponse(newsletterData);
+      });
 
       const limit = params.limit || 50;
       const offset = params.offset || 0;
       const page = Math.floor(offset / limit) + 1;
-      const hasMore = count ? offset + limit < count : false;
+      const hasMore = offset + limit < totalCount;
 
       const result = {
         data: transformedData,
-        count: count || 0,
+        count: totalCount,
         page,
         limit,
         hasMore,
@@ -772,71 +788,8 @@ export const newsletterApi = {
     tagIds: string[],
     params: Omit<NewsletterQueryParams, 'tagIds'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    return withPerformanceLogging('newsletters.getByTags', async () => {
-      const user = await requireAuth();
-
-      log.debug('Fetching newsletters by tags via RPC', {
-        component: 'NewsletterApi',
-        action: 'get_by_tags_rpc',
-        metadata: { tagCount: tagIds.length, tagIds, params },
-      });
-
-      const { data, error } = await supabase.rpc('get_newsletters_by_tags', {
-        p_user_id: user.id,
-        p_tag_ids: tagIds,
-        p_is_read: params.isRead ?? null,
-        p_is_archived: params.isArchived ?? null,
-        p_is_liked: params.isLiked ?? null,
-        p_source_ids: params.sourceIds ?? null,
-        p_date_from: params.dateFrom ?? null,
-        p_date_to: params.dateTo ?? null,
-        p_limit: params.limit ?? 50,
-        p_offset: params.offset ?? 0,
-        p_order_by: params.orderBy ?? 'received_at',
-        p_order_direction: params.ascending ? 'ASC' : 'DESC',
-      });
-
-      if (error) {
-        log.error('get_newsletters_by_tags RPC failed', {
-          component: 'NewsletterApi',
-          action: 'get_by_tags_rpc_error',
-          metadata: { tagIds, error },
-        });
-        handleSupabaseError(error);
-        throw error;
-      }
-
-      const rows = (data as any[]) ?? [];
-      const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
-
-      // Strip the window-function column before transformation so it does not
-      // leak into the NewsletterWithRelations shape.
-      const transformedData = rows.map((row: any) => {
-        const { total_count: _tc, ...newsletterData } = row;
-        return transformNewsletterResponse(newsletterData);
-      });
-
-      const limit = params.limit ?? 50;
-      const offset = params.offset ?? 0;
-      const page = Math.floor(offset / limit) + 1;
-      const hasMore = offset + limit < totalCount;
-
-      log.debug('get_newsletters_by_tags RPC completed', {
-        component: 'NewsletterApi',
-        action: 'get_by_tags_rpc_success',
-        metadata: { dataCount: transformedData.length, totalCount, page, hasMore },
-      });
-
-      return {
-        data: transformedData,
-        count: totalCount,
-        page,
-        limit,
-        hasMore,
-        nextPage: hasMore ? page + 1 : null,
-        prevPage: page > 1 ? page - 1 : null,
-      };
-    });
+    // Unified with getAll which now uses the optimized get_newsletters RPC
+    return this.getAll({ ...params, tagIds });
   },
 
   // Get newsletters by source

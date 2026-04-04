@@ -57,8 +57,6 @@ export interface FilterParams {
 
 export interface NewsletterQueryParams extends BaseQueryParams, FilterParams, PaginationParams {
   includeRelations?: boolean;
-  includeTags?: boolean;
-  includeSource?: boolean;
   orderDirection?: 'asc' | 'desc';
   groupIds?: string[];
 }

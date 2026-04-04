@@ -205,18 +205,20 @@ export class NewsletterService extends BaseService {
             // Use true bulk database operation instead of N individual calls
             const bulkResult = await newsletterApi.bulkUpdate({
               ids: batch,
-              updates: { is_read: true }
+              updates: { is_read: true },
             });
 
             if (bulkResult.errorCount > 0) {
               throw new Error(`Bulk update failed: ${bulkResult.errorCount} errors occurred`);
             }
 
-            return bulkResult.results?.map((result: NewsletterWithRelations | null, index: number) => ({
-              id: batch[index],
-              success: result !== null,
-              error: result === null ? 'Update failed' : undefined,
-            })) || [];
+            return (
+              bulkResult.results?.map((result: NewsletterWithRelations | null, index: number) => ({
+                id: batch[index],
+                success: result !== null,
+                error: result === null ? 'Update failed' : undefined,
+              })) || []
+            );
           }
         );
 
@@ -257,18 +259,20 @@ export class NewsletterService extends BaseService {
             // Use true bulk database operation instead of N individual calls
             const bulkResult = await newsletterApi.bulkUpdate({
               ids: batch,
-              updates: { is_read: false }
+              updates: { is_read: false },
             });
 
             if (bulkResult.errorCount > 0) {
               throw new Error(`Bulk update failed: ${bulkResult.errorCount} errors occurred`);
             }
 
-            return bulkResult.results?.map((result: NewsletterWithRelations | null, index: number) => ({
-              id: batch[index],
-              success: result !== null,
-              error: result === null ? 'Update failed' : undefined,
-            })) || [];
+            return (
+              bulkResult.results?.map((result: NewsletterWithRelations | null, index: number) => ({
+                id: batch[index],
+                success: result !== null,
+                error: result === null ? 'Update failed' : undefined,
+              })) || []
+            );
           }
         );
 
@@ -712,10 +716,6 @@ export class NewsletterService extends BaseService {
     if (!processed.limit || processed.limit === 0) {
       processed.limit = 50;
     }
-
-    // Ensure we include necessary relations
-    processed.includeSource = true;
-    processed.includeTags = true;
 
     return processed;
   }

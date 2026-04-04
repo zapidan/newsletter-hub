@@ -108,8 +108,6 @@ describe("NewsletterService", () => {
         limit: 10,
         orderBy: "received_at",
         orderDirection: "desc",
-        includeSource: true,
-        includeTags: true,
       });
     });
 
@@ -127,8 +125,6 @@ describe("NewsletterService", () => {
         limit: 50,
         orderBy: "received_at",
         orderDirection: "desc",
-        includeSource: true,
-        includeTags: true,
       });
     });
 
@@ -150,8 +146,6 @@ describe("NewsletterService", () => {
         ["tag-1", "tag-2"],
         expect.objectContaining({
           limit: 10,
-          includeSource: true,
-          includeTags: true,
           orderBy: "received_at",
           orderDirection: "desc",
         })
@@ -180,8 +174,6 @@ describe("NewsletterService", () => {
         expect.objectContaining({
           limit: 10,
           isRead: false,
-          includeSource: true,
-          includeTags: true,
           orderBy: "received_at",
           orderDirection: "desc",
         })
@@ -210,7 +202,6 @@ describe("NewsletterService", () => {
         ["tag-1"],
         expect.objectContaining({
           limit: 10,
-          includeTags: true,
         })
       );
     });
@@ -230,7 +221,7 @@ describe("NewsletterService", () => {
       expect(mockNewsletterApi.getByTags).toHaveBeenCalledWith(
         ["tag-1"],
         expect.objectContaining({
-          includeTags: true, // Should be forced to true
+          // Tags are always included now
         })
       );
     });
@@ -563,11 +554,10 @@ describe("NewsletterService", () => {
         dateFrom: undefined,
         dateTo: undefined,
         limit: 50,
-        orderBy: "received_at",
-        orderDirection: "desc",
-        includeSource: true,
-        includeTags: true,
-      });
+        expect(mockNewsletterApi.getAll).toHaveBeenCalledWith({
+          orderBy: "received_at",
+          orderDirection: "desc",
+        });
     });
 
     it("should validate search query", async () => {

@@ -114,9 +114,6 @@ export const useInfiniteNewsletters = (
       limit: pageSize,
       orderBy: normalizedFilters.orderBy || 'received_at',
       orderDirection: normalizedFilters.orderDirection || 'desc',
-      includeRelations: true,
-      includeTags: true,
-      includeSource: true,
     };
 
     throttledDebug('base_query_params_built', 'Base query params built', {
