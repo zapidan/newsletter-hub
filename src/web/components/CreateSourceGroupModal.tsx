@@ -1,8 +1,9 @@
+import { useSourceSearch } from "@common/hooks";
 import { useNewsletterSourceGroups } from "@common/hooks/useNewsletterSourceGroups";
 import { NewsletterSource } from "@common/types";
 import { useLogger } from "@common/utils/logger/useLogger";
 import { Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface CreateSourceGroupModalProps {
   isOpen: boolean;
@@ -36,6 +37,15 @@ export const CreateSourceGroupModal = ({
     isPending: isSaving,
   } = useNewsletterSourceGroups();
 
+  // Global search hook - same as inbox source dropdown
+  const {
+    searchResults,
+    isSearching: _isSearching,
+    setSearchQuery: setGlobalSearchQuery,
+    clearSearch: clearGlobalSearch,
+    searchError: _searchError,
+  } = useSourceSearch({ debounceMs: 300, minQueryLength: 2 });
+
   // Initialize form when opening modal or when groupToEdit changes
   useEffect(() => {
     if (isOpen) {
@@ -47,8 +57,10 @@ export const CreateSourceGroupModal = ({
         setSelectedSourceIds(new Set());
       }
       setSearchTerm("");
+      setGlobalSearchQuery("");
+      clearGlobalSearch();
     }
-  }, [isOpen, groupToEdit]);
+  }, [isOpen, groupToEdit, setGlobalSearchQuery, clearGlobalSearch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,10 +107,31 @@ export const CreateSourceGroupModal = ({
     setSelectedSourceIds(newSelected);
   };
 
-  const filteredSources = sources.filter(
-    (source) =>
-      source.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      source.from.toLowerCase().includes(searchTerm.toLowerCase()),
+  // Combine loaded sources and search results - same as inbox
+  const allSources = useMemo(() => {
+    const sourceMap = new Map(sources.map(s => [s.id, s]));
+
+    // Add search results (avoid duplicates)
+    searchResults.forEach((result) => {
+      if (!sourceMap.has(result.id)) {
+        sourceMap.set(result.id, result);
+      }
+    });
+
+    return Array.from(sourceMap.values());
+  }, [sources, searchResults]);
+
+  // Filter and sort sources based on search term - same as inbox
+  const filteredSources = useMemo(
+    () => {
+      const filtered = searchTerm.trim()
+        ? allSources.filter(source =>
+          source.name.toLowerCase().includes(searchTerm.toLowerCase().trim())
+        )
+        : allSources;
+      return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    },
+    [allSources, searchTerm]
   );
 
   // Form is valid if name is not empty and at least one source is selected
@@ -183,14 +216,22 @@ export const CreateSourceGroupModal = ({
                   <input
                     type="text"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      const query = e.target.value;
+                      setSearchTerm(query);
+                      setGlobalSearchQuery(query);
+                    }}
                     className="text-sm p-2 pl-3 pr-8 border border-gray-200 dark:border-neutral-700 rounded-lg w-56 bg-gray-50 dark:bg-neutral-800 text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-neutral-800 focus:border-blue-300 focus:ring-1 focus:ring-blue-300 transition-colors"
                     placeholder="Search sources..."
                   />
                   {searchTerm ? (
                     <button
                       type="button"
-                      onClick={() => setSearchTerm("")}
+                      onClick={() => {
+                        setSearchTerm("");
+                        setGlobalSearchQuery("");
+                        clearGlobalSearch();
+                      }}
                       className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-300 dark:hover:text-slate-100 transition-colors"
                     >
                       <X size={16} />
