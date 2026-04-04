@@ -60,24 +60,24 @@ The core word count function uses a sophisticated multi-stage cleaning process t
    -- Text-based ad detection
    clean_text := regexp_replace(clean_text, $re$(advertisement|sponsored|promoted|ad\s*content|paid\s*promotion)$re$, ' ', 'gi');
 
-   -- HTML-based ad detection
-   clean_text := regexp_replace(clean_text, $re$<div[^>]*class="[^"]*ad[^"]*"[^>]*>.*?</div>$re$, ' ', 'nig');
-   clean_text := regexp_replace(clean_text, $re$<div[^>]*id="[^"]*ad[^"]*"[^>]*>.*?</div>$re$, ' ', 'nig');
+   -- HTML-based ad detection across common container tags and both quote styles
+   clean_text := regexp_replace(clean_text, $re$<(?:div|span|p|section|aside|footer|header)[^>]*\b(?:class|id)=['"][^'"]*(?:ad|advertisement|sponsored|promoted|promo)[^'"]*['"][^>]*>.*?</(?:div|span|p|section|aside|footer|header)>$re$, ' ', 'nig');
 
    -- Promotional text patterns
-   clean_text := regexp_replace(clean_text, $re$(click\s*here|buy\s*now|shop\s*now|limited\s*time|special\s*offer|act\s*now|don't\s*miss)$re$, ' ', 'gi');
+   clean_text := regexp_replace(clean_text, $re$\b(click\s*here|buy\s*now|shop\s*now|limited\s*time|special\s*offer|act\s*now|don't\s*miss)\b$re$, ' ', 'gi');
    ```
 
 5. **Content Cleaning**
    - Strips remaining HTML tags
    - Replaces HTML entities
-   - Removes URLs and email addresses
+   - Removes URLs and email addresses anywhere in content
 
    ```sql
    clean_text := regexp_replace(clean_text, $re$<[^>]*>$re$, ' ', 'ng');
    clean_text := regexp_replace(clean_text, $re$&[#a-zA-Z0-9]+;$re$, ' ', 'g');
    clean_text := regexp_replace(clean_text, $re$https?://\S+$re$, ' ', 'gi');
-   clean_text := regexp_replace(clean_text, $re$\S+@\S+\.\S+$re$, ' ', 'gi');
+   clean_text := regexp_replace(clean_text, $re$mailto:\S+\b$re$, ' ', 'gi');
+   clean_text := regexp_replace(clean_text, $re$\b\S+@\S+\.\S+\b$re$, ' ', 'gi');
    ```
 
 6. **Tracking Code Removal**
@@ -677,7 +677,10 @@ ORDER BY missing_percentage DESC;
 
 ### Common Issues
 
-1. **High Word Counts**: Check for HTML entities not being decoded
+1. **High Word Counts / Large Read Estimates**: Check for stale `word_count` values or gaps in ad/URL/email cleanup.
+   - Estimated read time is derived from `CEIL(word_count / 200.0)`.
+   - If stored `word_count` is larger than the actual count, read time will overshoot.
+   - Recent updates now remove `https://`, `mailto:`, and email address patterns anywhere in the content, and detect ad containers with broader `class`/`id` matching.
 2. **Low Word Counts**: Verify ad detection isn't too aggressive
 3. **Performance Issues**: Ensure indexes are created and being used
 4. **Memory Issues**: Process large newsletters in batches
