@@ -95,16 +95,16 @@ describe('OptimizedNewsletterApi', () => {
 
   describe('getAll', () => {
     it('should use optimized function for list queries', async () => {
-      // Mock the RPC calls
-      (supabase.rpc as any)
-        .mockResolvedValueOnce({
-          data: mockNewsletterData,
-          error: null,
-        })
-        .mockResolvedValueOnce({
-          data: 1,
-          error: null,
-        });
+      // Mock the RPC call - the optimized function returns data with total_count
+      const mockDataWithCount = mockNewsletterData.map(item => ({
+        ...item,
+        total_count: 1,
+      }));
+
+      (supabase.rpc as any).mockResolvedValueOnce({
+        data: mockDataWithCount,
+        error: null,
+      });
 
       const result = await optimizedNewsletterApi.getAll({
         user_id: mockUserId,
@@ -112,7 +112,7 @@ describe('OptimizedNewsletterApi', () => {
         offset: 0,
       });
 
-      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters_by_tags', {
+      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters', {
         p_user_id: mockUserId,
         p_tag_ids: null,
         p_is_read: null,
@@ -121,26 +121,14 @@ describe('OptimizedNewsletterApi', () => {
         p_source_ids: null,
         p_date_from: null,
         p_date_to: null,
+        p_search: null,
         p_limit: 10,
         p_offset: 0,
         p_order_by: 'received_at',
-        p_order_direction: 'desc',
+        p_order_direction: 'DESC',
       });
 
-      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters_by_tags', {
-        p_user_id: mockUserId,
-        p_tag_ids: null,
-        p_is_read: null,
-        p_is_archived: null,
-        p_is_liked: null,
-        p_source_ids: null,
-        p_date_from: null,
-        p_date_to: null,
-        p_limit: 1,
-        p_offset: 0,
-        p_order_by: 'received_at',
-        p_order_direction: 'desc',
-      });
+      expect(supabase.rpc).toHaveBeenCalledTimes(1);
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0].title).toBe('Test Newsletter 1');
@@ -167,7 +155,7 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({
           p_user_id: mockUserId,
           p_tag_ids: null,
@@ -177,10 +165,11 @@ describe('OptimizedNewsletterApi', () => {
           p_source_ids: ['source-1'],
           p_date_from: null,
           p_date_to: null,
+          p_search: null,
           p_limit: 20,
           p_offset: 0,
           p_order_by: 'received_at',
-          p_order_direction: 'desc',
+          p_order_direction: 'DESC',
         })
       );
     });
@@ -203,7 +192,7 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({
           p_user_id: mockUserId,
           p_tag_ids: null,
@@ -213,24 +202,25 @@ describe('OptimizedNewsletterApi', () => {
           p_source_ids: ['source-1', 'source-2'],
           p_date_from: null,
           p_date_to: null,
+          p_search: null,
           p_limit: 20,
           p_offset: 0,
           p_order_by: 'received_at',
-          p_order_direction: 'desc',
+          p_order_direction: 'DESC',
         })
       );
     });
 
     it('should handle read/archived filtering', async () => {
-      (supabase.rpc as any)
-        .mockResolvedValueOnce({
-          data: mockNewsletterData,
-          error: null,
-        })
-        .mockResolvedValueOnce({
-          data: 1,
-          error: null,
-        });
+      const mockDataWithCount = mockNewsletterData.map(item => ({
+        ...item,
+        total_count: 1,
+      }));
+
+      (supabase.rpc as any).mockResolvedValueOnce({
+        data: mockDataWithCount,
+        error: null,
+      });
 
       await optimizedNewsletterApi.getAll({
         user_id: mockUserId,
@@ -240,7 +230,7 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({
           p_user_id: mockUserId,
           p_tag_ids: null,
@@ -250,24 +240,25 @@ describe('OptimizedNewsletterApi', () => {
           p_source_ids: null,
           p_date_from: null,
           p_date_to: null,
+          p_search: null,
           p_limit: 10,
           p_offset: 0,
           p_order_by: 'received_at',
-          p_order_direction: 'desc',
+          p_order_direction: 'DESC',
         })
       );
     });
 
     it('should handle date range filtering', async () => {
-      (supabase.rpc as any)
-        .mockResolvedValueOnce({
-          data: mockNewsletterData,
-          error: null,
-        })
-        .mockResolvedValueOnce({
-          data: 1,
-          error: null,
-        });
+      const mockDataWithCount = mockNewsletterData.map(item => ({
+        ...item,
+        total_count: 1,
+      }));
+
+      (supabase.rpc as any).mockResolvedValueOnce({
+        data: mockDataWithCount,
+        error: null,
+      });
 
       await optimizedNewsletterApi.getAll({
         user_id: mockUserId,
@@ -277,7 +268,7 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({
           p_user_id: mockUserId,
           p_tag_ids: null,
@@ -287,28 +278,11 @@ describe('OptimizedNewsletterApi', () => {
           p_source_ids: null,
           p_date_from: '2024-01-01',
           p_date_to: '2024-01-31',
+          p_search: null,
           p_limit: 10,
           p_offset: 0,
           p_order_by: 'received_at',
-          p_order_direction: 'desc',
-        })
-      );
-
-      expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
-        expect.objectContaining({
-          p_user_id: mockUserId,
-          p_tag_ids: null,
-          p_is_read: null,
-          p_is_archived: null,
-          p_is_liked: null,
-          p_source_ids: null,
-          p_date_from: '2024-01-01',
-          p_date_to: '2024-01-31',
-          p_limit: 1,
-          p_offset: 0,
-          p_order_by: 'received_at',
-          p_order_direction: 'desc',
+          p_order_direction: 'DESC',
         })
       );
     });
@@ -332,7 +306,7 @@ describe('OptimizedNewsletterApi', () => {
       });
 
       expect(supabase.rpc).toHaveBeenCalledWith(
-        'get_newsletters_by_tags',
+        'get_newsletters',
         expect.objectContaining({
           p_user_id: mockUserId,
           p_tag_ids: null,
@@ -342,10 +316,11 @@ describe('OptimizedNewsletterApi', () => {
           p_source_ids: null,
           p_date_from: null,
           p_date_to: null,
+          p_search: null,
           p_limit: 10,
           p_offset: 0,
           p_order_by: 'title',
-          p_order_direction: 'asc',
+          p_order_direction: 'ASC',
         })
       );
     });
@@ -503,21 +478,21 @@ describe('OptimizedNewsletterApi', () => {
 
   describe('getBySource', () => {
     it('should use optimized API for source filtering', async () => {
-      (supabase.rpc as any)
-        .mockResolvedValueOnce({
-          data: mockNewsletterData,
-          error: null,
-        })
-        .mockResolvedValueOnce({
-          data: 1,
-          error: null,
-        });
+      const mockDataWithCount = mockNewsletterData.map(item => ({
+        ...item,
+        total_count: 1,
+      }));
+
+      (supabase.rpc as any).mockResolvedValueOnce({
+        data: mockDataWithCount,
+        error: null,
+      });
 
       const result = await optimizedNewsletterApi.getBySource('source-1', {
         limit: 10,
       });
 
-      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters_by_tags', {
+      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters', {
         p_user_id: mockUserId,
         p_tag_ids: null,
         p_is_read: null,
@@ -526,10 +501,11 @@ describe('OptimizedNewsletterApi', () => {
         p_source_ids: ['source-1'],
         p_date_from: null,
         p_date_to: null,
+        p_search: null,
         p_limit: 10,
         p_offset: 0,
         p_order_by: 'received_at',
-        p_order_direction: 'desc',
+        p_order_direction: 'DESC',
       });
 
       expect(result.data).toHaveLength(1);
@@ -537,52 +513,72 @@ describe('OptimizedNewsletterApi', () => {
   });
 
   describe('search and tag filtering delegation', () => {
-    it('should delegate search to original API', async () => {
-      const { newsletterApi } = await import('../newsletterApi');
-      const searchResults = {
-        data: mockNewsletterData,
-        count: 1,
-        page: 1,
-        limit: 20,
-        hasMore: false,
-        nextPage: null,
-        prevPage: null,
-      };
+    it('should use optimized API for search', async () => {
+      const mockDataWithCount = mockNewsletterData.map(item => ({
+        ...item,
+        total_count: 1,
+      }));
 
-      (newsletterApi.search as any).mockResolvedValueOnce(searchResults);
+      (supabase.rpc as any).mockResolvedValueOnce({
+        data: mockDataWithCount,
+        error: null,
+      });
 
       const result = await optimizedNewsletterApi.search('test query', {
         limit: 10,
       });
 
-      expect(newsletterApi.search).toHaveBeenCalledWith('test query', {
-        limit: 10,
+      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters', {
+        p_user_id: mockUserId,
+        p_tag_ids: null,
+        p_is_read: null,
+        p_is_archived: null,
+        p_is_liked: null,
+        p_source_ids: null,
+        p_date_from: null,
+        p_date_to: null,
+        p_search: 'test query',
+        p_limit: 10,
+        p_offset: 0,
+        p_order_by: 'received_at',
+        p_order_direction: 'DESC',
       });
-      expect(result).toEqual(searchResults);
+
+      expect(result.data).toHaveLength(1);
     });
 
-    it('should delegate getByTags to original API', async () => {
-      const { newsletterApi } = await import('../newsletterApi');
-      const tagResults = {
-        data: mockNewsletterData,
-        count: 1,
-        page: 1,
-        limit: 20,
-        hasMore: false,
-        nextPage: null,
-        prevPage: null,
-      };
+    it('should use optimized API for tag filtering', async () => {
+      const mockDataWithCount = mockNewsletterData.map(item => ({
+        ...item,
+        total_count: 1,
+      }));
 
-      (newsletterApi.getByTags as any).mockResolvedValueOnce(tagResults);
+      (supabase.rpc as any).mockResolvedValueOnce({
+        data: mockDataWithCount,
+        error: null,
+      });
 
       const result = await optimizedNewsletterApi.getByTags(['tag-1'], {
         limit: 10,
       });
 
-      expect(newsletterApi.getByTags).toHaveBeenCalledWith(['tag-1'], {
-        limit: 10,
+      expect(supabase.rpc).toHaveBeenCalledWith('get_newsletters', {
+        p_user_id: mockUserId,
+        p_tag_ids: ['tag-1'],
+        p_is_read: null,
+        p_is_archived: null,
+        p_is_liked: null,
+        p_source_ids: null,
+        p_date_from: null,
+        p_date_to: null,
+        p_search: null,
+        p_limit: 10,
+        p_offset: 0,
+        p_order_by: 'received_at',
+        p_order_direction: 'DESC',
       });
-      expect(result).toEqual(tagResults);
+
+      expect(result.data).toHaveLength(1);
     });
   });
 });

@@ -555,9 +555,6 @@ describe("NewsletterService", () => {
         dateFrom: undefined,
         dateTo: undefined,
         limit: 50,
-      });
-
-      expect(mockNewsletterApi.getAll).toHaveBeenCalledWith({
         orderBy: "received_at",
         orderDirection: "desc",
       });
