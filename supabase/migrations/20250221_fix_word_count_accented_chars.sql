@@ -29,26 +29,22 @@ BEGIN
 
   -- Remove advertisement and sponsored content
   clean_text := regexp_replace(clean_text, $re$(advertisement|sponsored|promoted|ad\s*content|paid\s*promotion)$re$, ' ', 'gi');
-  clean_text := regexp_replace(clean_text, $re$<div[^>]*class="[^"]*ad[^"]*"[^>]*>.*?</div>$re$, ' ', 'nig');
-  clean_text := regexp_replace(clean_text, $re$<div[^>]*id="[^"]*ad[^"]*"[^>]*>.*?</div>$re$, ' ', 'nig');
-  clean_text := regexp_replace(clean_text, $re$<span[^>]*class="[^"]*ad[^"]*"[^>]*>.*?</span>$re$, ' ', 'nig');
-  clean_text := regexp_replace(clean_text, $re$<p[^>]*class="[^"]*ad[^"]*"[^>]*>.*?</p>$re$, ' ', 'nig');
-
+  clean_text := regexp_replace(clean_text, $re$<(?:div|span|p|section|aside|footer|header)[^>]*\b(?:class|id)=['"][^'"]*(?:ad|advertisement|sponsored|promoted|promo)[^'"]*['"][^>]*>.*?</(?:div|span|p|section|aside|footer|header)>$re$, ' ', 'nig');
+  
   -- Remove common ad patterns
-  clean_text := regexp_replace(clean_text, $re$(click\s*here|buy\s*now|shop\s*now|limited\s*time|special\s*offer|act\s*now|don't\s*miss)$re$, ' ', 'gi');
-  clean_text := regexp_replace(clean_text, $re$(unsubscribe|opt\s*out|preferences|privacy\s*policy|terms\s*of\s*service)$re$, ' ', 'gi');
-
+  clean_text := regexp_replace(clean_text, $re$\b(click\s*here|buy\s*now|shop\s*now|limited\s*time|special\s*offer|act\s*now|don't\s*miss)\b$re$, ' ', 'gi');
+  clean_text := regexp_replace(clean_text, $re$\b(unsubscribe|opt\s*out|preferences|privacy\s*policy|terms\s*of\s*service)\b$re$, ' ', 'gi');
+  
   -- Strip all remaining HTML tags
   clean_text := regexp_replace(clean_text, $re$<[^>]*>$re$, ' ', 'ng');
-
+  
   -- Replace HTML entities
   clean_text := regexp_replace(clean_text, $re$&[#a-zA-Z0-9]+;$re$, ' ', 'g');
-
+  
   -- Remove URLs and email addresses
   clean_text := regexp_replace(clean_text, $re$https?://\S+$re$, ' ', 'gi');
-  clean_text := regexp_replace(clean_text, $re$\S+@\S+\.\S+$re$, ' ', 'gi');
-
-  -- Remove very long words (likely tracking codes or IDs)
+  clean_text := regexp_replace(clean_text, $re$mailto:\S+\b$re$, ' ', 'gi');
+  clean_text := regexp_replace(clean_text, $re$\b\S+@\S+\.\S+\b$re$, ' ', 'gi');
   clean_text := regexp_replace(clean_text, $re$\b\w{25,}\b$re$, ' ', 'g');
 
   -- Improved numeric handling: keep years (1900-2099) and common numbers, remove others
@@ -89,28 +85,42 @@ COMMENT ON FUNCTION public.calculate_word_count(TEXT) IS
 5. Removes tracking codes and very long words
 6. Counts sequences of word characters (letters, digits, underscores) to match client-side validation';
 
--- Test the fix with accented characters
-DO $$
-DECLARE
-  test_content TEXT;
-  expected_count INTEGER;
-  actual_count INTEGER;
-BEGIN
-  -- Test with accented characters
-  test_content := 'This is a café with naïve résumé.';
-  expected_count := 7; -- "This is a café with naïve résumé"
-  actual_count := public.calculate_word_count(test_content);
-  IF actual_count != expected_count THEN
-    RAISE EXCEPTION 'Accented character test failed: expected %, got %', expected_count, actual_count;
-  END IF;
+-- Test the fix with accented characters and common ad/URL patterns
+  DO $$
+  DECLARE
+    test_content TEXT;
+    expected_count INTEGER;
+    actual_count INTEGER;
+  BEGIN
+    -- Test with accented characters
+    test_content := 'This is a café with naïve résumé.';
+    expected_count := 7; -- "This is a café with naïve résumé"
+    actual_count := public.calculate_word_count(test_content);
+    IF actual_count != expected_count THEN
+      RAISE EXCEPTION 'Accented character test failed: expected %, got %', expected_count, actual_count;
+    END IF;
 
-  -- Test mixed content
-  test_content := 'Test with 2023 café and naïve résumé.';
-  expected_count := 7; -- "Test with 2023 café and naïve résumé"
-  actual_count := public.calculate_word_count(test_content);
-  IF actual_count != expected_count THEN
-    RAISE EXCEPTION 'Mixed content test failed: expected %, got %', expected_count, actual_count;
-  END IF;
+    -- Test mixed content
+    test_content := 'Test with 2023 café and naïve résumé.';
+    expected_count := 7; -- "Test with 2023 café and naïve résumé"
+    actual_count := public.calculate_word_count(test_content);
+    IF actual_count != expected_count THEN
+      RAISE EXCEPTION 'Mixed content test failed: expected %, got %', expected_count, actual_count;
+    END IF;
 
-  RAISE NOTICE 'Word count accented character fix tests passed successfully!';
+    -- Test ad containers, URLs, and email addresses anywhere in content
+    test_content := '
+      <p>This is real content.</p>
+      <div class="ad-section">Buy now! Special offer!</div>
+      <span id=\'sponsored\'>Sponsored message</span>
+      <p>Visit https://example.com/page for details.</p>
+      <p>Contact me@example.com</p>
+    ';
+    expected_count := 8; -- "This is real content Visit for details Contact"
+    actual_count := public.calculate_word_count(test_content);
+    IF actual_count != expected_count THEN
+      RAISE EXCEPTION 'Ad/URL/email removal test failed: expected %, got %', expected_count, actual_count;
+    END IF;
+
+    RAISE NOTICE 'Word count fix tests passed successfully!';
 END $$;
