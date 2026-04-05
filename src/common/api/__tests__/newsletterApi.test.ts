@@ -193,6 +193,7 @@ describe('newsletterApi', () => {
         p_search: null,
         p_limit: 50,
         p_offset: 0,
+        p_cursor: null, // Phase 3 is inactive by default
         p_order_by: 'received_at',
         p_order_direction: 'DESC',
       });
@@ -234,6 +235,7 @@ describe('newsletterApi', () => {
         p_search: 'test',
         p_limit: 10,
         p_offset: 20,
+        p_cursor: null, // Phase 3 is inactive by default
         p_order_by: 'title',
         p_order_direction: 'ASC',
       });
@@ -934,6 +936,7 @@ describe('newsletterApi', () => {
         p_search: null,
         p_limit: 10,
         p_offset: 0,
+        p_cursor: null, // Phase 3 is inactive by default
         p_order_by: 'received_at',
         p_order_direction: 'DESC',
       });
@@ -1177,5 +1180,101 @@ describe('newsletterApi', () => {
       expect(result.data.map((n) => n.id)).toEqual(['nl-a', 'nl-b', 'nl-c']);
       expect(result.count).toBe(3);
     });
+  });
+
+  // Phase 3 gating tests
+  describe('Phase 3 gating harness (dev/prod flag flip) - PR ready', () => {
+    // Base mock newsletter row for RPC response
+    const now = new Date().toISOString();
+    const mockUser = {
+      id: 'user-1',
+      email: 'user@example.com',
+      user_metadata: {},
+      app_metadata: {},
+      aud: 'authenticated',
+      created_at: now,
+    };
+
+    const mockRowBase = {
+      id: 'nl-1',
+      title: 'T',
+      content: 'C',
+      summary: 'S',
+      image_url: '',
+      received_at: now,
+      updated_at: now,
+      is_read: false,
+      is_liked: false,
+      is_archived: false,
+      newsletter_source_id: 'src-1',
+      user_id: mockUser.id,
+      word_count: 10,
+      estimated_read_time: 1,
+    };
+
+    // States to exercise
+    // dev flag on/off, prod flag on/off, environment, and expected p_cursor behavior
+    const states = [
+      { name: 'dev-on', devEnabled: true, prodEnabled: false, env: 'development', expectCursor: true },
+      { name: 'prod-on', devEnabled: false, prodEnabled: true, env: 'production', expectCursor: true },
+      { name: 'both-off-dev', devEnabled: false, prodEnabled: false, env: 'development', expectCursor: false },
+      { name: 'prod-off-rollback', devEnabled: false, prodEnabled: false, env: 'production', expectCursor: false },
+    ];
+
+    for (const s of states) {
+      test(`${s.name}: gating should ${s.expectCursor ? 'forward' : 'not forward'} p_cursor`, async () => {
+        // 1) Set environment flags for this state
+        (process as any).env.VITE_PHASE3_DEV_ENABLED = String(s.devEnabled);
+        (process as any).env.VITE_PHASE3_PROD_ENABLED = String(s.prodEnabled);
+        process.env.NODE_ENV = s.env;
+
+        // 2) Reset modules so mocks take effect
+        vi.resetModules();
+
+        // 3) Mock Supabase client with a focused RPC mock
+        let rpcSpy: vi.Mock | null = null;
+        vi.doMock('../supabaseClient', () => {
+          // The harness inspects this spy to verify the RPC call arguments
+          rpcSpy = vi.fn().mockResolvedValue({
+            data: [
+              {
+                ...mockRowBase,
+                total_count: 2,
+                next_cursor: 'CUR2',
+              },
+            ],
+            error: null,
+          });
+          return {
+            supabase: { from: vi.fn(), rpc: rpcSpy },
+            requireAuth: vi.fn().mockResolvedValue(mockUser),
+            withPerformanceLogging: vi.fn((_name: string, fn: any) => fn()),
+            handleSupabaseError: vi.fn((err) => { throw err; }),
+          };
+        });
+
+        // 4) Import API module fresh and call getAll
+        const mod = await import('../newsletterApi');
+        const api = mod.newsletterApi ?? mod.default;
+
+        const testCursor = 'CUR-TEST';
+        const res = await api.getAll({ limit: 2, offset: 0, cursor: testCursor });
+
+        // 5) Assertions on the RPC call
+        expect(rpcSpy).toBeDefined();
+        expect(rpcSpy).toHaveBeenCalled();
+        const rpcParams = (rpcSpy as any).mock.calls[0][1];
+        if (s.expectCursor) {
+          expect(rpcParams.p_cursor).toBe(testCursor);
+        } else {
+          expect(rpcParams.p_cursor).toBeNull();
+        }
+
+        // Optional: check that a response shape exists when gating is active
+        if (s.expectCursor) {
+          expect(res).toHaveProperty('nextCursor');
+        }
+      });
+    }
   });
 });
