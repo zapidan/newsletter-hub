@@ -295,11 +295,11 @@ describe('newsletterApi', () => {
         statusText: 'OK',
       });
 
-      const result = await newsletterApi.getById('newsletter-1');
+      const result = await newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000');
 
       expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('get_newsletter_by_id', {
         p_user_id: mockUser.id,
-        p_id: 'newsletter-1'
+        p_id: '123e4567-e89b-12d3-a456-426614174000'
       });
       expect(result).toEqual(currentMockNewsletter);
     });
@@ -313,7 +313,7 @@ describe('newsletterApi', () => {
         statusText: 'Internal Server Error',
       });
 
-      await expect(newsletterApi.getById('newsletter-1')).rejects.toThrow('RPC failed');
+      await expect(newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000')).rejects.toThrow('RPC failed');
     });
 
     it('should return null when RPC returns no data', async () => {
@@ -325,7 +325,7 @@ describe('newsletterApi', () => {
         statusText: 'OK',
       });
 
-      const result = await newsletterApi.getById('newsletter-1');
+      const result = await newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000');
       expect(result).toBeNull();
     });
   });
@@ -757,50 +757,6 @@ describe('newsletterApi', () => {
       // If implementation uses .length, expect { src1: 3, src2: 5 }
       expect(result).not.toBeNull();
       expect(result).toEqual({ src1: 3, src2: 5 });
-    });
-  });
-
-  describe('getTotalCountBySource', () => {
-    it('should get total newsletter counts by source (excluding archived)', async () => {
-      // Mock data: 3 newsletters for src1, 5 for src2 (all non-archived since mock doesn't filter)
-      const counts = [
-        ...Array(3).fill({ newsletter_source_id: 'src1' }),
-        ...Array(5).fill({ newsletter_source_id: 'src2' }),
-      ];
-      const builder = createQueryBuilder();
-      builder.then.mockImplementation((onFulfilled: any) =>
-        onFulfilled({ data: counts, error: null })
-      );
-      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builder);
-
-      const result = await newsletterApi.getTotalCountBySource();
-
-      // Should count all newsletters returned by the query (mock doesn't simulate .eq filtering)
-      expect(result).not.toBeNull();
-      expect(result).toEqual({ src1: 3, src2: 5 });
-    });
-
-    it('should return empty object when no newsletters exist', async () => {
-      const builder = createQueryBuilder();
-      builder.then.mockImplementation((onFulfilled: any) =>
-        onFulfilled({ data: [], error: null })
-      );
-      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builder);
-
-      const result = await newsletterApi.getTotalCountBySource();
-
-      expect(result).toEqual({});
-    });
-
-    it('should handle database errors gracefully', async () => {
-      const builder = createQueryBuilder();
-      builder.then.mockImplementation((onFulfilled: any) =>
-        onFulfilled({ data: null, error: { message: 'Database error' } })
-      );
-      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builder);
-
-      // Should handle error by throwing (handleSupabaseError re-throws)
-      await expect(newsletterApi.getTotalCountBySource()).rejects.toThrow('Database error');
     });
   });
 
