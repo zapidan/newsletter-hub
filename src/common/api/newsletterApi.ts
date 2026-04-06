@@ -68,32 +68,32 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Transform tags if they exist
   const transformedTags: Tag[] = Array.isArray(data.tags)
     ? data.tags
-      .map((t: any) => {
-        // PostgREST nested format: { tag: { id, name, color, ... } }
-        if (t.tag && typeof t.tag === 'object') {
-          return {
-            id: t.tag.id as string,
-            name: t.tag.name as string,
-            color: t.tag.color as string,
-            user_id: t.tag.user_id as string,
-            created_at: t.tag.created_at as string,
-            newsletter_count: t.tag.newsletter_count as number | undefined,
-          } as Tag;
-        }
-        // Flat RPC format: { id, name, color, user_id, created_at }
-        if (t.id && typeof t.id === 'string') {
-          return {
-            id: t.id as string,
-            name: t.name as string,
-            color: t.color as string,
-            user_id: t.user_id as string,
-            created_at: t.created_at as string,
-            newsletter_count: t.newsletter_count as number | undefined,
-          } as Tag;
-        }
-        return null;
-      })
-      .filter((tag: Tag | null): tag is Tag => tag !== null)
+        .map((t: any) => {
+          // PostgREST nested format: { tag: { id, name, color, ... } }
+          if (t.tag && typeof t.tag === 'object') {
+            return {
+              id: t.tag.id as string,
+              name: t.tag.name as string,
+              color: t.tag.color as string,
+              user_id: t.tag.user_id as string,
+              created_at: t.tag.created_at as string,
+              newsletter_count: t.tag.newsletter_count as number | undefined,
+            } as Tag;
+          }
+          // Flat RPC format: { id, name, color, user_id, created_at }
+          if (t.id && typeof t.id === 'string') {
+            return {
+              id: t.id as string,
+              name: t.name as string,
+              color: t.color as string,
+              user_id: t.user_id as string,
+              created_at: t.created_at as string,
+              newsletter_count: t.newsletter_count as number | undefined,
+            } as Tag;
+          }
+          return null;
+        })
+        .filter((tag: Tag | null): tag is Tag => tag !== null)
     : [];
 
   const { _newsletter_sources, source: _rawSource, tags: _rawTags, ...restOfData } = data;
@@ -217,25 +217,38 @@ export const newsletterApi = {
     return withPerformanceLogging('newsletters.getById', async () => {
       const user = await requireAuth();
 
-      let selectClause = '*';
       if (includeRelations) {
-        selectClause = `
-          *,
-          source:newsletter_sources(*),
-          tags:newsletter_tags(tag:tags(*))
-        `;
+        // Use RPC to avoid embedded lateral joins
+        const { data, error } = await supabase.rpc('get_newsletter_by_id', {
+          p_user_id: user.id,
+          p_id: id,
+        });
+
+        if (error) {
+          if (error.code === 'PGRST116') {
+            return null;
+          }
+          handleSupabaseError(error);
+        }
+
+        const rows = (data as any[]) ?? [];
+        if (rows.length === 0) return null;
+        return transformNewsletterResponse(rows[0]);
       }
 
+      // Fallback to explicit column fetch if relations are not requested
       const { data, error } = await supabase
         .from('newsletters')
-        .select(selectClause)
+        .select(
+          'id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id'
+        )
         .eq('id', id)
         .eq('user_id', user.id)
         .single();
 
       if (error) {
         if (error.code === 'PGRST116') {
-          return null; // Not found
+          return null;
         }
         handleSupabaseError(error);
       }
@@ -482,10 +495,10 @@ export const newsletterApi = {
           error:
             error instanceof Error
               ? {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-              }
+                  name: error.name,
+                  message: error.message,
+                  stack: error.stack,
+                }
               : error,
         });
         return false;
