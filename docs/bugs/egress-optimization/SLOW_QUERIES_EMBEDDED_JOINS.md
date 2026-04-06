@@ -16,32 +16,32 @@ All figures are from `pg_stat_statements`. Queries are grouped by category.
 
 These are all PostgREST-generated CTEs. They differ only in their `WHERE` clause filter combination. Together they account for **~46% of total measured database time**.
 
-| # | Filter Combination | Calls | Mean (ms) | Total (s) | % of DB Time |
-|---|---|---|---|---|---|
-| 1 | `newsletter_source_id = $x` | 9,095 | 145.6 | 1,325 | 22.2% |
-| 4 | `user_id` only | 2,788 | 163.1 | 455 | 7.6% |
-| 6 | `is_read + is_archived` | 5,238 | 76.4 | 400 | 6.7% |
-| 12 | `is_read + is_archived + received_at >=` | 3,412 | 46.7 | 159 | 2.7% |
-| 13 | `user_id` only, ASC | 820 | 181.8 | 149 | 2.5% |
-| 18 | `is_read + is_archived + source_ids` | 8,367 | 9.4 | 78 | 1.3% |
-| 20 | `is_read + source_ids`, ASC | 345 | 221.8 | 77 | 1.3% |
+| #   | Filter Combination                       | Calls | Mean (ms) | Total (s) | % of DB Time |
+| --- | ---------------------------------------- | ----- | --------- | --------- | ------------ |
+| 1   | `newsletter_source_id = $x`              | 9,095 | 145.6     | 1,325     | 22.2%        |
+| 4   | `user_id` only                           | 2,788 | 163.1     | 455       | 7.6%         |
+| 6   | `is_read + is_archived`                  | 5,238 | 76.4      | 400       | 6.7%         |
+| 12  | `is_read + is_archived + received_at >=` | 3,412 | 46.7      | 159       | 2.7%         |
+| 13  | `user_id` only, ASC                      | 820   | 181.8     | 149       | 2.5%         |
+| 18  | `is_read + is_archived + source_ids`     | 8,367 | 9.4       | 78        | 1.3%         |
+| 20  | `is_read + source_ids`, ASC              | 345   | 221.8     | 77        | 1.3%         |
 
 **Total: ~2,643 seconds** across newsletter lateral join queries.
 
 ### Category B: Reading Queue Lateral Join (Secondary Problem)
 
-| # | Description | Calls | Mean (ms) | Total (s) | % of DB Time |
-|---|---|---|---|---|---|
-| 2 | `reading_queue` → `newsletters` → `newsletter_sources` (3-level) | 3,709 | 164.7 | 611 | 10.3% |
+| #   | Description                                                      | Calls | Mean (ms) | Total (s) | % of DB Time |
+| --- | ---------------------------------------------------------------- | ----- | --------- | --------- | ------------ |
+| 2   | `reading_queue` → `newsletters` → `newsletter_sources` (3-level) | 3,709 | 164.7     | 611       | 10.3%        |
 
 ### Category C: High-Frequency Count Queries
 
 These queries are fast individually due to 100% buffer cache hit rate, but their call volume is excessive.
 
-| # | Description | Calls | Mean (ms) | Total (s) | % of DB Time |
-|---|---|---|---|---|---|
-| 5 | `SELECT id FROM newsletters WHERE user_id + is_read + is_archived` | 29,804 | 14.7 | 438 | 7.4% |
-| 8 | `SELECT newsletter_source_id WHERE user_id + is_read + is_archived` | 29,798 | 10.6 | 315 | 5.3% |
+| #   | Description                                                         | Calls  | Mean (ms) | Total (s) | % of DB Time |
+| --- | ------------------------------------------------------------------- | ------ | --------- | --------- | ------------ |
+| 5   | `SELECT id FROM newsletters WHERE user_id + is_read + is_archived`  | 29,804 | 14.7      | 438       | 7.4%         |
+| 8   | `SELECT newsletter_source_id WHERE user_id + is_read + is_archived` | 29,798 | 10.6      | 315       | 5.3%         |
 
 ~30,000 calls each strongly indicates these are triggered on every render or navigation rather than being properly cached. Query 8 maps directly to `getUnreadCountBySource()`, which loads all unread `newsletter_source_id` values into JavaScript memory to count them. Query 5 appears to come from `countBySource()` or a similar path calling `select('id', { count: 'exact' })` without `head: true`.
 
@@ -49,20 +49,20 @@ These queries are fast individually due to 100% buffer cache hit rate, but their
 
 These are in the slow query list but are already using the correct architecture. Performance can still be improved (see section on `get_newsletters` optimization), but they are not structural problems.
 
-| # | Description | Calls | Mean (ms) | Total (s) |
-|---|---|---|---|---|
-| 10 | `get_newsletters_by_tags` RPC | 2,311 | 75.9 | 175 |
-| 19 | `get_newsletters` RPC | 549 | 122.4 | 67 |
+| #   | Description                   | Calls | Mean (ms) | Total (s) |
+| --- | ----------------------------- | ----- | --------- | --------- |
+| 10  | `get_newsletters_by_tags` RPC | 2,311 | 75.9      | 175       |
+| 19  | `get_newsletters` RPC         | 549   | 122.4     | 67        |
 
 ### Category E: Out of Scope
 
-| # | Description | Notes |
-|---|---|---|
-| 3, 7 | `handle_incoming_email_transaction` | Email ingestion pipeline — separate concern |
-| 9 | Bulk `word_count` update `DO` block | One-time maintenance script |
-| 11, 16 | `can_receive_newsletter` | Email pipeline gate function |
-| 15 | `find_suspicious_word_counts` | One-off diagnostic query |
-| 17 | `UPDATE newsletters SET is_read` | Write path — acceptable at 28ms |
+| #      | Description                         | Notes                                       |
+| ------ | ----------------------------------- | ------------------------------------------- |
+| 3, 7   | `handle_incoming_email_transaction` | Email ingestion pipeline — separate concern |
+| 9      | Bulk `word_count` update `DO` block | One-time maintenance script                 |
+| 11, 16 | `can_receive_newsletter`            | Email pipeline gate function                |
+| 15     | `find_suspicious_word_counts`       | One-off diagnostic query                    |
+| 17     | `UPDATE newsletters SET is_read`    | Write path — acceptable at 28ms             |
 
 ---
 
@@ -543,11 +543,11 @@ The hooks that call `getUnreadCountBySource()` and `getUnreadCount()` need expli
 useQuery({
   queryKey: ['unreadCount', userId],
   queryFn: () => newsletterApi.getUnreadCount(),
-  staleTime: 5 * 60 * 1000,       // treat as fresh for 5 minutes
-  gcTime:    60 * 60 * 1000,       // keep in cache for 1 hour
+  staleTime: 5 * 60 * 1000, // treat as fresh for 5 minutes
+  gcTime: 60 * 60 * 1000, // keep in cache for 1 hour
   refetchOnWindowFocus: false,
   refetchOnMount: false,
-})
+});
 ```
 
 Unread counts are best updated via **optimistic cache mutations** when the user marks a newsletter as read — not via polling.
@@ -583,12 +583,12 @@ The correct pattern is: **push the join and aggregation into a `SECURITY DEFINER
 
 These are estimates based on query structure analysis, not measured benchmarks. Actual results should be validated after deployment.
 
-| Change | Mechanism | Expected Directional Impact |
-|---|---|---|
-| `getById` → RPC | Eliminates 3-level lateral CTE | Mean time expected to drop significantly; total time reduction proportional to call count |
-| `readingQueueApi` → remove source embed | Collapses 3-level to 2-level join + batch | Eliminates the deepest nesting; per-call latency should decrease |
-| `getUnreadCountBySource` → `GROUP BY` | Eliminates full-table JS aggregation | Row transfer eliminated; server-side aggregate is indexed |
-| React Query `staleTime` | Reduces call frequency | 29k calls/period should drop to O(1) per session |
+| Change                                  | Mechanism                                 | Expected Directional Impact                                                               |
+| --------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `getById` → RPC                         | Eliminates 3-level lateral CTE            | Mean time expected to drop significantly; total time reduction proportional to call count |
+| `readingQueueApi` → remove source embed | Collapses 3-level to 2-level join + batch | Eliminates the deepest nesting; per-call latency should decrease                          |
+| `getUnreadCountBySource` → `GROUP BY`   | Eliminates full-table JS aggregation      | Row transfer eliminated; server-side aggregate is indexed                                 |
+| React Query `staleTime`                 | Reduces call frequency                    | 29k calls/period should drop to O(1) per session                                          |
 
 **Do not publish performance targets as facts before measuring.** The original document's "69% improvement" figures were fabricated. Run `pg_stat_statements` before and after each change, compare, and document actual results.
 
@@ -668,28 +668,28 @@ Before deploying each change, verify:
 
 ### Step 1: SQL Migrations
 
-- [ ] Create `get_newsletter_by_id(p_user_id, p_id)` function
-- [ ] Create `get_unread_count_by_source(p_user_id)` function
-- [ ] Grant `EXECUTE` to `authenticated` on both functions
+- [x] Create `get_newsletter_by_id(p_user_id, p_id)` function
+- [x] Create `get_unread_count_by_source(p_user_id)` function
+- [x] Grant `EXECUTE` to `authenticated` on both functions
 - [ ] Run `EXPLAIN ANALYZE` on both functions against staging data
-- [ ] Verify `SECURITY DEFINER` + `SET search_path = public` are present
+- [x] Verify `SECURITY DEFINER` + `SET search_path = public` are present
 
 ### Step 2: `newsletterApi.ts`
 
-- [ ] Update `getById()` to call `get_newsletter_by_id` RPC
-- [ ] Verify `transformNewsletterResponse` works with RPC row shape (JSONB `source` and `tags`)
-- [ ] Update unit tests to expect RPC call pattern
+- [x] Update `getById()` to call `get_newsletter_by_id` RPC
+- [x] Verify `transformNewsletterResponse` works with RPC row shape (JSONB `source` and `tags`)
+- [x] Update unit tests to expect RPC call pattern
 
 ### Step 3: `readingQueueApi.ts`
 
-- [ ] Remove `newsletter_sources (*)` from `getAll()` select
-- [ ] Add batch source fetch after queue items load
-- [ ] Apply same change to `getById()`
-- [ ] Update unit tests to assert absence of nested source embed
+- [x] Remove `newsletter_sources (*)` from `getAll()` select
+- [x] Add batch source fetch after queue items load
+- [x] Apply same change to `getById()`
+- [x] Update unit tests to assert absence of nested source embed
 
 ### Step 4: Count Query Fixes
 
-- [ ] Replace `getUnreadCountBySource()` with `get_unread_count_by_source` RPC
+- [x] Replace `getUnreadCountBySource()` with `get_unread_count_by_source` RPC
 - [ ] Identify hooks calling `getUnreadCount` and `getUnreadCountBySource`
 - [ ] Add `staleTime` and `refetchOnWindowFocus: false` to those hooks
 - [ ] Add optimistic cache updates when `markAsRead` / `markAsUnread` is called
@@ -718,9 +718,9 @@ Each step is independently deployable and reversible.
 
 ## Root Cause Summary
 
-| Problem | Root Cause | Fix |
-|---|---|---|
-| Slow `getById` (9,095 calls, 145ms) | PostgREST 3-level lateral CTE | `get_newsletter_by_id` SQL RPC |
-| Slow `readingQueue.getAll` (3,709 calls, 164ms) | 3-level nested lateral CTE (queue → newsletter → source) | Remove source embed; batch-fetch sources separately |
-| High-frequency count queries (29k+ calls each) | Missing `staleTime`; JS-side aggregation of full table | SQL `GROUP BY` aggregate + React Query cache config |
-| `get_newsletters` RPC itself at 122ms mean | Acceptable for a list query; investigate index coverage on tag filter subquery if optimization is needed in a future pass | Out of scope for this phase |
+| Problem                                         | Root Cause                                                                                                                | Fix                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Slow `getById` (9,095 calls, 145ms)             | PostgREST 3-level lateral CTE                                                                                             | `get_newsletter_by_id` SQL RPC                      |
+| Slow `readingQueue.getAll` (3,709 calls, 164ms) | 3-level nested lateral CTE (queue → newsletter → source)                                                                  | Remove source embed; batch-fetch sources separately |
+| High-frequency count queries (29k+ calls each)  | Missing `staleTime`; JS-side aggregation of full table                                                                    | SQL `GROUP BY` aggregate + React Query cache config |
+| `get_newsletters` RPC itself at 122ms mean      | Acceptable for a list query; investigate index coverage on tag filter subquery if optimization is needed in a future pass | Out of scope for this phase                         |
