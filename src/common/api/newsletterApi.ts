@@ -731,36 +731,6 @@ export const newsletterApi = {
     });
   },
 
-  // Get total counts grouped by source (excluding archived)
-  async getTotalCountBySource(): Promise<Record<string, number>> {
-    return withPerformanceLogging('newsletters.getTotalCountBySource', async () => {
-      const user = await requireAuth();
-
-      const { data, error } = await supabase
-        .from('newsletters')
-        .select('newsletter_source_id')
-        .eq('user_id', user.id)
-        .eq('is_archived', false);
-
-      if (error) handleSupabaseError(error);
-
-      const totalCounts: Record<string, number> = {};
-
-      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
-        const sourceId = newsletter.newsletter_source_id || 'unknown';
-        totalCounts[sourceId] = (totalCounts[sourceId] || 0) + 1;
-      });
-
-      log.debug('Total newsletter counts by source retrieved', {
-        component: 'NewsletterApi',
-        action: 'total_count_by_source',
-        metadata: { totalCounts },
-      });
-
-      return totalCounts;
-    });
-  },
-
   // Get unread counts grouped by source
   async getUnreadCountBySource(): Promise<Record<string, number>> {
     return withPerformanceLogging('newsletters.getUnreadCountBySource', async () => {
