@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 // Hoisted mock for RPC calls
 const { createMockNewsletter, mockUser } = vi.hoisted(() => {
   const mockUser = {
-    id: 'user-1',
+    id: '789e0123-e89b-12d3-a456-426614174002',
     email: 'user@example.com',
     user_metadata: { name: 'Test User' },
     app_metadata: {},
@@ -14,7 +14,7 @@ const { createMockNewsletter, mockUser } = vi.hoisted(() => {
   const createMockNewsletter = (
     overrides: Partial<NewsletterWithRelations> = {}
   ): NewsletterWithRelations => ({
-    id: 'newsletter-1',
+    id: '123e4567-e89b-12d3-a456-426614174000',
     title: 'Test Newsletter',
     summary: 'Test summary',
     content: 'Test content',
@@ -27,7 +27,7 @@ const { createMockNewsletter, mockUser } = vi.hoisted(() => {
     estimated_read_time: 5,
     word_count: 100,
     source: {
-      id: 'source-1',
+      id: '456e7890-e89b-12d3-a456-426614174001',
       name: 'Test Source',
       from: 'test@example.com',
       user_id: mockUser.id,
@@ -35,7 +35,7 @@ const { createMockNewsletter, mockUser } = vi.hoisted(() => {
       updated_at: '2024-01-01T00:00:00Z',
     },
     tags: [],
-    newsletter_source_id: 'source-1',
+    newsletter_source_id: '456e7890-e89b-12d3-a456-426614174001',
     user_id: mockUser.id,
     ...overrides,
   });
@@ -105,7 +105,7 @@ describe('newsletterApi', () => {
 
   const mockGetByIdWithTransformedResponse = (rawData: any, includeRelations = true) => {
     vi.mocked(currentQueryBuilder.single).mockResolvedValueOnce({ data: rawData, error: null });
-    return newsletterApi.getById('any-id', includeRelations);
+    return newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000', includeRelations);
   };
 
   const mockInitialGetByIdForUpdate = (initialNlData: any, error?: any) => {
@@ -332,10 +332,8 @@ describe('newsletterApi', () => {
 
   describe('create', () => {
     it('should create a new newsletter', async () => {
-      const params = { title: 'New', content: 'C', newsletter_source_id: 's1' };
-      const created = createMockNewsletter({ ...params, id: 'new-id' });
-
-      // Mock the insert operation
+      const params = { title: 'New', content: 'C', newsletter_source_id: '456e7890-e89b-12d3-a456-426614174001' };
+      const created = createMockNewsletter({ ...params, id: '789e0123-e89b-12d3-a456-426614174009' });
       vi.mocked(currentQueryBuilder.single)
         .mockResolvedValueOnce({
           data: { ...created, tags: undefined, source: undefined },
@@ -356,16 +354,16 @@ describe('newsletterApi', () => {
     });
 
     it('should create newsletter with tags', async () => {
-      const params = { title: 'New', content: 'C', newsletter_source_id: 's1', tag_ids: ['tA'] };
+      const params = { title: 'New', content: 'C', newsletter_source_id: '456e7890-e89b-12d3-a456-426614174001', tag_ids: ['789e0123-e89b-12d3-a456-426614174003'] };
       const baseNl = params;
       const createdRaw = {
-        ...createMockNewsletter({ ...baseNl, id: 'new-id' }),
+        ...createMockNewsletter({ ...baseNl, id: '789e0123-e89b-12d3-a456-426614174009' }),
         tags: undefined,
         source: undefined,
       };
       const finalNl = createMockNewsletter({
         ...baseNl,
-        id: 'new-id',
+        id: '789e0123-e89b-12d3-a456-426614174009',
         tags: [
           {
             id: 'tA',
@@ -405,7 +403,7 @@ describe('newsletterApi', () => {
   describe('update', () => {
     it('should update newsletter tags: remove all existing, then add new ones', async () => {
       const initialNl = createMockNewsletter({
-        id: 'nl-update',
+        id: '789e0123-e89b-12d3-a456-426614174004',
         tags: [{ id: 'old', name: 'Old', color: '', user_id: '', created_at: '' }],
       });
       const updates = { tag_ids: ['new1'] };
@@ -621,7 +619,7 @@ describe('newsletterApi', () => {
 
   describe('bulkUpdate', () => {
     it('should bulk update newsletters', async () => {
-      const ids = ['nl1', 'nl2'];
+      const ids = ['789e0123-e89b-12d3-a456-426614174010', '789e0123-e89b-12d3-a456-426614174011'];
       const updates = { is_read: true };
       const newsletters = ids.map((id) => createMockNewsletter({ id, is_read: true }));
       function builderWithBulkResults() {
@@ -762,9 +760,53 @@ describe('newsletterApi', () => {
     });
   });
 
+  describe('getTotalCountBySource', () => {
+    it('should get total newsletter counts by source (excluding archived)', async () => {
+      // Mock data: 3 newsletters for src1, 5 for src2 (all non-archived since mock doesn't filter)
+      const counts = [
+        ...Array(3).fill({ newsletter_source_id: 'src1' }),
+        ...Array(5).fill({ newsletter_source_id: 'src2' }),
+      ];
+      const builder = createQueryBuilder();
+      builder.then.mockImplementation((onFulfilled: any) =>
+        onFulfilled({ data: counts, error: null })
+      );
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builder);
+
+      const result = await newsletterApi.getTotalCountBySource();
+
+      // Should count all newsletters returned by the query (mock doesn't simulate .eq filtering)
+      expect(result).not.toBeNull();
+      expect(result).toEqual({ src1: 3, src2: 5 });
+    });
+
+    it('should return empty object when no newsletters exist', async () => {
+      const builder = createQueryBuilder();
+      builder.then.mockImplementation((onFulfilled: any) =>
+        onFulfilled({ data: [], error: null })
+      );
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builder);
+
+      const result = await newsletterApi.getTotalCountBySource();
+
+      expect(result).toEqual({});
+    });
+
+    it('should handle database errors gracefully', async () => {
+      const builder = createQueryBuilder();
+      builder.then.mockImplementation((onFulfilled: any) =>
+        onFulfilled({ data: null, error: { message: 'Database error' } })
+      );
+      vi.mocked(supabaseClientModule.supabase.from).mockImplementation(() => builder);
+
+      // Should handle error by throwing (handleSupabaseError re-throws)
+      await expect(newsletterApi.getTotalCountBySource()).rejects.toThrow('Database error');
+    });
+  });
+
   describe('getUnreadCount', () => {
     it('should get unread count for all sources', async () => {
-      const unreadCount = 7;
+      const unreadCount = 4;
       function builderWithUnreadCount() {
         const builder: any = {};
         const response = { count: unreadCount, error: null };
@@ -1165,9 +1207,9 @@ describe('newsletterApi', () => {
 
     it('should handle multiple rows correctly, returning all of them', async () => {
       const rows = [
-        { ...baseRpcRow, id: 'nl-a', title: 'First', total_count: 3 },
-        { ...baseRpcRow, id: 'nl-b', title: 'Second', total_count: 3 },
-        { ...baseRpcRow, id: 'nl-c', title: 'Third', total_count: 3 },
+        { ...baseRpcRow, id: '789e0123-e89b-12d3-a456-426614174006', title: 'First', total_count: 3 },
+        { ...baseRpcRow, id: '789e0123-e89b-12d3-a456-426614174007', title: 'Second', total_count: 3 },
+        { ...baseRpcRow, id: '789e0123-e89b-12d3-a456-426614174008', title: 'Third', total_count: 3 },
       ];
 
       // Clear any previous mocks and set up fresh mock
@@ -1177,7 +1219,7 @@ describe('newsletterApi', () => {
       const result = await newsletterApi.getByTags(['tag-1', 'tag-2']);
 
       expect(result.data).toHaveLength(3);
-      expect(result.data.map((n) => n.id)).toEqual(['nl-a', 'nl-b', 'nl-c']);
+      expect(result.data.map((n) => n.id)).toEqual(['789e0123-e89b-12d3-a456-426614174006', '789e0123-e89b-12d3-a456-426614174007', '789e0123-e89b-12d3-a456-426614174008']);
       expect(result.count).toBe(3);
     });
   });

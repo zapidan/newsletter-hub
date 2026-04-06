@@ -19,6 +19,19 @@ import {
 // Initialize logger
 const log = logger;
 
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Validate UUID format
+const validateUUID = (id: string, fieldName: string = 'id'): void => {
+  if (!id || typeof id !== 'string') {
+    throw new Error(`${fieldName} must be a valid UUID string`);
+  }
+  if (!UUID_REGEX.test(id)) {
+    throw new Error(`${fieldName} must be a valid UUID format`);
+  }
+};
+
 // Transform raw Supabase response to our Newsletter type
 const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Log the raw data we receive
@@ -228,6 +241,9 @@ export const newsletterApi = {
   // Get newsletter by ID
   async getById(id: string, includeRelations = true): Promise<NewsletterWithRelations | null> {
     return withPerformanceLogging('newsletters.getById', async () => {
+      // Validate UUID format
+      validateUUID(id, 'newsletter id');
+
       const user = await requireAuth();
 
       if (includeRelations) {
@@ -331,6 +347,9 @@ export const newsletterApi = {
         throw new Error('Newsletter ID is required for updates');
       }
 
+      // Validate newsletter ID format
+      validateUUID(id, 'newsletter id');
+
       // First, verify the newsletter exists and belongs to the user
       const existingNewsletter = await this.getById(id, false);
       if (!existingNewsletter) {
@@ -412,6 +431,9 @@ export const newsletterApi = {
   // Delete newsletter (hard delete)
   async delete(id: string): Promise<boolean> {
     return withPerformanceLogging('newsletters.delete', async () => {
+      // Validate UUID format
+      validateUUID(id, 'newsletter id');
+
       try {
         const user = await requireAuth();
         const logContext = {
@@ -519,6 +541,11 @@ export const newsletterApi = {
   ): Promise<BatchResult<NewsletterWithRelations>> {
     return withPerformanceLogging('newsletters.bulkUpdate', async () => {
       const { ids } = params;
+
+      // Validate all UUID formats
+      ids.forEach((id, index) => {
+        validateUUID(id, `newsletter id at index ${index}`);
+      });
 
       // For small batches, use the original approach
       if (ids.length <= 50) {
@@ -639,6 +666,9 @@ export const newsletterApi = {
 
   // Toggle archive status
   async toggleArchive(id: string): Promise<NewsletterWithRelations> {
+    // Validate UUID format
+    validateUUID(id, 'newsletter id');
+
     const newsletter = await this.getById(id, false);
     if (!newsletter) {
       throw new Error('Newsletter not found');
@@ -659,6 +689,9 @@ export const newsletterApi = {
 
   // Toggle like status
   async toggleLike(id: string): Promise<NewsletterWithRelations> {
+    // Validate UUID format
+    validateUUID(id, 'newsletter id');
+
     const newsletter = await this.getById(id, false);
     if (!newsletter) {
       throw new Error('Newsletter not found');
@@ -783,17 +816,29 @@ export const newsletterApi = {
     return withPerformanceLogging('newsletters.getUnreadCount', async () => {
       const user = await requireAuth();
 
-      let query = supabase
+      // If no source filter, use direct count query for better performance
+      if (!sourceId) {
+        const { count, error } = await supabase
+          .from('newsletters')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+
+        if (error) {
+          handleSupabaseError(error);
+          return 0;
+        }
+
+        return count || 0;
+      }
+
+      // For specific source, query directly
+      const { count, error } = await supabase
         .from('newsletters')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
+        .eq('newsletter_source_id', sourceId)
         .eq('is_read', false);
-
-      if (sourceId) {
-        query = query.eq('newsletter_source_id', sourceId);
-      }
-
-      const { count, error } = await query;
 
       if (error) {
         handleSupabaseError(error);
@@ -861,6 +906,35 @@ export const newsletterApi = {
     });
   },
 
+  // Get total counts by source (excluding archived)
+  async getTotalCountBySource(): Promise<Record<string, number>> {
+    return withPerformanceLogging('newsletters.getTotalCountBySource', async () => {
+      const user = await requireAuth();
+
+      const { data, error } = await supabase
+        .from('newsletters')
+        .select('newsletter_source_id')
+        .eq('user_id', user.id)
+        .eq('is_archived', false);
+
+      if (error) {
+        handleSupabaseError(error);
+        return {};
+      }
+
+      // Count total newsletters by source (excluding archived)
+      const counts: Record<string, number> = {};
+      (data || []).forEach(newsletter => {
+        const sourceId = newsletter.newsletter_source_id;
+        if (sourceId) {
+          counts[sourceId] = (counts[sourceId] || 0) + 1;
+        }
+      });
+
+      return counts;
+    });
+  },
+
   // Get stats
   async getStats(): Promise<{
     total: number;
@@ -869,8 +943,26 @@ export const newsletterApi = {
     archived: number;
     liked: number;
   }> {
-    // Use the underlying API's stats for correctness
-    return newsletterApi.getStats();
+    return withPerformanceLogging('newsletters.getStats', async () => {
+      const user = await requireAuth();
+
+      const { data, error } = await supabase
+        .from('newsletters')
+        .select('is_read, is_archived, is_liked')
+        .eq('user_id', user.id);
+
+      if (error) handleSupabaseError(error);
+
+      const stats = {
+        total: data?.length || 0,
+        read: data?.filter((n) => n.is_read).length || 0,
+        unread: data?.filter((n) => !n.is_read).length || 0,
+        archived: data?.filter((n) => n.is_archived).length || 0,
+        liked: data?.filter((n) => n.is_liked).length || 0,
+      };
+
+      return stats;
+    });
   },
 };
 
@@ -894,7 +986,7 @@ export const {
   getStats: getNewsletterStats,
   countBySource,
   getUnreadCountBySource,
-  getUnreadCount,
+  getTotalCountBySource,
 } = newsletterApi;
 
 // Export default
