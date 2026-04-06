@@ -964,9 +964,136 @@ export const newsletterApi = {
       return stats;
     });
   },
+
+  // Count newsletters by source (excluding archived)
+  async countBySource(): Promise<Record<string, number>> {
+    return withPerformanceLogging('newsletters.countBySource', async () => {
+      const user = await requireAuth();
+
+      const { data, error } = await supabase
+        .from('newsletters')
+        .select('newsletter_source_id')
+        .eq('user_id', user.id)
+        .eq('is_archived', false);
+
+      if (error) handleSupabaseError(error);
+
+      const counts: Record<string, number> = {};
+
+      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+        const sourceId = newsletter.newsletter_source_id || 'unknown';
+        counts[sourceId] = (counts[sourceId] || 0) + 1;
+      });
+
+      log.debug('Newsletter counts by source retrieved', {
+        component: 'NewsletterApi',
+        action: 'count_by_source',
+        metadata: { counts },
+      });
+
+      return counts;
+    });
+  },
+
+  // Get total counts grouped by source (excluding archived)
+  async getTotalCountBySource(): Promise<Record<string, number>> {
+    return withPerformanceLogging('newsletters.getTotalCountBySource', async () => {
+      const user = await requireAuth();
+
+      const { data, error } = await supabase
+        .from('newsletters')
+        .select('newsletter_source_id')
+        .eq('user_id', user.id)
+        .eq('is_archived', false);
+
+      if (error) handleSupabaseError(error);
+
+      const totalCounts: Record<string, number> = {};
+
+      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+        const sourceId = newsletter.newsletter_source_id || 'unknown';
+        totalCounts[sourceId] = (totalCounts[sourceId] || 0) + 1;
+      });
+
+      log.debug('Total newsletter counts by source retrieved', {
+        component: 'NewsletterApi',
+        action: 'total_count_by_source',
+        metadata: { totalCounts },
+      });
+
+      return totalCounts;
+    });
+  },
+
+  // Get unread counts grouped by source
+  async getUnreadCountBySource(): Promise<Record<string, number>> {
+    return withPerformanceLogging('newsletters.getUnreadCountBySource', async () => {
+      const user = await requireAuth();
+
+      const { data, error } = await supabase
+        .from('newsletters')
+        .select('newsletter_source_id')
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .eq('is_archived', false);
+
+      if (error) handleSupabaseError(error);
+
+      const unreadCounts: Record<string, number> = {};
+
+      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
+        const sourceId = newsletter.newsletter_source_id || 'unknown';
+        unreadCounts[sourceId] = (unreadCounts[sourceId] || 0) + 1;
+      });
+
+      return unreadCounts;
+    });
+  },
+
+  // Get unread count for a specific source or all sources
+  async getUnreadCount(sourceId?: string | null): Promise<number> {
+    return withPerformanceLogging('newsletters.getUnreadCount', async () => {
+      const user = await requireAuth();
+
+      let query = supabase
+        .from('newsletters')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .eq('is_archived', false);
+
+      // Apply source filter if provided
+      if (sourceId) {
+        query = query.eq('newsletter_source_id', sourceId);
+      }
+
+      const { count, error } = await query;
+
+      if (error) {
+        log.error(
+          'Failed to get unread count',
+          {
+            component: 'NewsletterApi',
+            action: 'get_unread_count',
+            metadata: { sourceId, userId: user.id },
+          },
+          error
+        );
+        handleSupabaseError(error);
+      }
+
+      log.debug('Unread count retrieved', {
+        component: 'NewsletterApi',
+        action: 'get_unread_count',
+        metadata: { count, sourceId },
+      });
+
+      return count || 0;
+    });
+  },
 };
 
-// Export named and default for PR compatibility
+// Export individual functions for backward compatibility
 export const {
   getAll: getAllNewsletters,
   getById: getNewsletterById,
@@ -986,7 +1113,7 @@ export const {
   getStats: getNewsletterStats,
   countBySource,
   getUnreadCountBySource,
-  getTotalCountBySource,
+  getUnreadCount,
 } = newsletterApi;
 
 // Export default
