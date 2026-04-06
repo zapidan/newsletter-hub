@@ -52,7 +52,6 @@ const shouldUseOptimizedApi = (
     | 'search'
     | 'getStats'
     | 'countBySource'
-    | 'getTotalCountBySource'
     | 'getUnreadCountBySource'
     | 'getUnreadCount',
   _params: NewsletterQueryParams = {}
@@ -344,16 +343,6 @@ export const optimizedNewsletterService = {
     });
 
     return newsletterApi.countBySource();
-  },
-
-  async getTotalCountBySource(): Promise<Record<string, number>> {
-    log.debug('Using original API for getTotalCountBySource', {
-      component: 'OptimizedNewsletterService',
-      action: 'choose_api',
-      metadata: { operation: 'getTotalCountBySource' },
-    });
-
-    return newsletterApi.getTotalCountBySource();
   },
 
   async getUnreadCountBySource(): Promise<Record<string, number>> {

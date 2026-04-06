@@ -291,12 +291,6 @@ export const optimizedNewsletterApi = {
     return newsletterApi.countBySource();
   },
 
-  async getTotalCountBySource(): Promise<Record<string, number>> {
-    // Delegate to original API
-    const { newsletterApi } = await import('./newsletterApi');
-    return newsletterApi.getTotalCountBySource();
-  },
-
   async getUnreadCountBySource(): Promise<Record<string, number>> {
     // Delegate to original API
     const { newsletterApi } = await import('./newsletterApi');

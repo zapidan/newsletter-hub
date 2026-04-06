@@ -38,7 +38,6 @@ vi.mock('../newsletterApi', () => ({
     search: vi.fn(),
     getStats: vi.fn(),
     countBySource: vi.fn(),
-    getTotalCountBySource: vi.fn(),
     getUnreadCountBySource: vi.fn(),
     getUnreadCount: vi.fn(),
     getById: vi.fn(),
