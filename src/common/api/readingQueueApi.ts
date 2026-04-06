@@ -16,7 +16,10 @@ const transformQueueItem = (data: {
   user_id: string;
   newsletter_id: string;
   position: number;
-  added_at: string;
+  priority?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
   newsletters: {
     id: string;
     title: string;
@@ -32,9 +35,8 @@ const transformQueueItem = (data: {
     is_liked: boolean;
     word_count: number;
     estimated_read_time: number;
-    newsletter_sources?: any;
-    tags?: any[];
   };
+  sourcesMap?: Map<string, any>;
 }): ReadingQueueItem => {
   if (!data.newsletters) {
     const errorMsg = `Newsletter with id ${data.newsletter_id} not found in reading queue item ${data.id}. The newsletter may have been deleted.`;
@@ -48,7 +50,7 @@ const transformQueueItem = (data: {
           newsletterId: data.newsletter_id,
           userId: data.user_id,
           position: data.position,
-          addedAt: data.added_at,
+          createdAt: data.created_at,
         },
       },
       new Error(errorMsg)
@@ -56,12 +58,15 @@ const transformQueueItem = (data: {
     throw new Error(errorMsg);
   }
 
+  // Get source from the batch-fetched sources map
+  const source = data.sourcesMap?.get(data.newsletters.newsletter_source_id) || null;
+
   return {
     id: data.id,
     user_id: data.user_id,
     newsletter_id: data.newsletter_id,
     position: data.position,
-    added_at: data.added_at,
+    added_at: data.created_at,
     priority: data.priority,
     notes: data.notes,
     newsletter: {
@@ -79,8 +84,8 @@ const transformQueueItem = (data: {
       is_liked: Boolean(data.newsletters.is_liked),
       word_count: data.newsletters.word_count,
       estimated_read_time: data.newsletters.estimated_read_time,
-      source: data.newsletters.newsletter_sources || null,
-      tags: data.newsletters.tags || [],
+      source,
+      tags: [], // Will be populated later
     },
   };
 };
@@ -92,16 +97,16 @@ export const readingQueueApi = {
     return withPerformanceLogging('readingQueue.getAll', async () => {
       const user = await requireAuth();
 
+      // Step 1: Fetch queue + newsletter data (2-level join, no source nesting)
       let query = supabase
         .from('reading_queue')
         .select(
           `
-          *,
-          newsletters (
-            *,
-            newsletter_sources (
-              *
-            )
+          id, newsletter_id, user_id, priority, position, notes, created_at, updated_at,
+          newsletters!inner (
+            id, title, summary, content, image_url, received_at, updated_at,
+            newsletter_source_id, user_id, is_read, is_archived, is_liked,
+            word_count, estimated_read_time
           )
         `
         )
@@ -117,7 +122,6 @@ export const readingQueueApi = {
       if (queueError) handleSupabaseError(queueError);
       if (!queueItems?.length) return [];
 
-      // Filter out queue items with null newsletters first
       const invalidItems = queueItems.filter((item) => !item.newsletters);
       const validQueueItems = queueItems.filter((item) => item.newsletters);
 
@@ -189,6 +193,24 @@ export const readingQueueApi = {
         return [];
       }
 
+      // Step 2: Batch-fetch sources in a single query (no lateral join)
+      const sourceIds = [
+        ...new Set(
+          validQueueItems
+            .map((item) => (item.newsletters as any)?.newsletter_source_id)
+            .filter(Boolean)
+        ),
+      ] as string[];
+
+      const sourcesMap = new Map<string, any>();
+      if (sourceIds.length > 0) {
+        const { data: sources } = await supabase
+          .from('newsletter_sources')
+          .select('id, name, from, is_archived, created_at, updated_at, user_id')
+          .in('id', sourceIds);
+        sources?.forEach((s) => sourcesMap.set(s.id, s));
+      }
+
       // Fetch tags for all newsletters in the queue
       const newsletterIds = validQueueItems
         .map((item) => item.newsletter_id)
@@ -228,7 +250,10 @@ export const readingQueueApi = {
 
       return validQueueItems.map((item) => {
         try {
-          const transformedItem = transformQueueItem(item);
+          const transformedItem = transformQueueItem({
+            ...item,
+            sourcesMap
+          });
           // Add tags to the newsletter
           transformedItem.newsletter.tags = tagsMap.get(item.newsletter_id) || [];
           return transformedItem;
@@ -290,18 +315,28 @@ export const readingQueueApi = {
         })
         .select(
           `
-          *,
-          newsletters (
-            *,
-            newsletter_sources (
-              *
-            )
+          id, newsletter_id, user_id, priority, position, notes, created_at, updated_at,
+          newsletters!inner (
+            id, title, summary, content, image_url, received_at, updated_at,
+            newsletter_source_id, user_id, is_read, is_archived, is_liked,
+            word_count, estimated_read_time
           )
         `
         )
         .single();
 
       if (error) handleSupabaseError(error);
+
+      // Batch fetch source for the newsletter
+      const sourcesMap = new Map<string, any>();
+      if (insertedData?.newsletters?.newsletter_source_id) {
+        const { data: sources } = await supabase
+          .from('newsletter_sources')
+          .select('id, name, from, is_archived, created_at, updated_at, user_id')
+          .eq('id', insertedData.newsletters.newsletter_source_id);
+
+        sources?.forEach((s) => sourcesMap.set(s.id, s));
+      }
 
       // Fetch tags for the newsletter (only if newsletter ID is valid)
       let newsletterTags: Array<{ tags: any }> = [];
@@ -313,7 +348,10 @@ export const readingQueueApi = {
         newsletterTags = data || [];
       }
 
-      const transformedItem = transformQueueItem(insertedData);
+      const transformedItem = transformQueueItem({
+        ...insertedData,
+        sourcesMap
+      });
       transformedItem.newsletter.tags =
         newsletterTags
           ?.map((nt: { tags: any }) => {
@@ -395,12 +433,11 @@ export const readingQueueApi = {
         .from('reading_queue')
         .select(
           `
-          *,
-          newsletters (
-            *,
-            newsletter_sources (
-              *
-            )
+          id, newsletter_id, user_id, priority, position, notes, created_at, updated_at,
+          newsletters!inner (
+            id, title, summary, content, image_url, received_at, updated_at,
+            newsletter_source_id, user_id, is_read, is_archived, is_liked,
+            word_count, estimated_read_time
           )
         `
         )
@@ -417,6 +454,17 @@ export const readingQueueApi = {
 
       if (!data) return null;
 
+      // Batch fetch source for the newsletter
+      const sourcesMap = new Map<string, any>();
+      if (data.newsletters?.newsletter_source_id) {
+        const { data: sources } = await supabase
+          .from('newsletter_sources')
+          .select('id, name, from, is_archived, created_at, updated_at, user_id')
+          .eq('id', data.newsletters.newsletter_source_id);
+
+        sources?.forEach((s) => sourcesMap.set(s.id, s));
+      }
+
       // Fetch tags for the newsletter (only if newsletter ID is valid)
       let newsletterTags: Array<{ tags: any }> = [];
       if (data.newsletter_id) {
@@ -427,7 +475,10 @@ export const readingQueueApi = {
         newsletterTags = tagsData || [];
       }
 
-      const transformedItem = transformQueueItem(data);
+      const transformedItem = transformQueueItem({
+        ...data,
+        sourcesMap
+      });
       transformedItem.newsletter.tags =
         newsletterTags
           ?.map((nt: { tags: any }) => {

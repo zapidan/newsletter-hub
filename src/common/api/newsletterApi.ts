@@ -68,32 +68,32 @@ const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
   // Transform tags if they exist
   const transformedTags: Tag[] = Array.isArray(data.tags)
     ? data.tags
-        .map((t: any) => {
-          // PostgREST nested format: { tag: { id, name, color, ... } }
-          if (t.tag && typeof t.tag === 'object') {
-            return {
-              id: t.tag.id as string,
-              name: t.tag.name as string,
-              color: t.tag.color as string,
-              user_id: t.tag.user_id as string,
-              created_at: t.tag.created_at as string,
-              newsletter_count: t.tag.newsletter_count as number | undefined,
-            } as Tag;
-          }
-          // Flat RPC format: { id, name, color, user_id, created_at }
-          if (t.id && typeof t.id === 'string') {
-            return {
-              id: t.id as string,
-              name: t.name as string,
-              color: t.color as string,
-              user_id: t.user_id as string,
-              created_at: t.created_at as string,
-              newsletter_count: t.newsletter_count as number | undefined,
-            } as Tag;
-          }
-          return null;
-        })
-        .filter((tag: Tag | null): tag is Tag => tag !== null)
+      .map((t: any) => {
+        // PostgREST nested format: { tag: { id, name, color, ... } }
+        if (t.tag && typeof t.tag === 'object') {
+          return {
+            id: t.tag.id as string,
+            name: t.tag.name as string,
+            color: t.tag.color as string,
+            user_id: t.tag.user_id as string,
+            created_at: t.tag.created_at as string,
+            newsletter_count: t.tag.newsletter_count as number | undefined,
+          } as Tag;
+        }
+        // Flat RPC format: { id, name, color, user_id, created_at }
+        if (t.id && typeof t.id === 'string') {
+          return {
+            id: t.id as string,
+            name: t.name as string,
+            color: t.color as string,
+            user_id: t.user_id as string,
+            created_at: t.created_at as string,
+            newsletter_count: t.newsletter_count as number | undefined,
+          } as Tag;
+        }
+        return null;
+      })
+      .filter((tag: Tag | null): tag is Tag => tag !== null)
     : [];
 
   const { _newsletter_sources, source: _rawSource, tags: _rawTags, ...restOfData } = data;
@@ -495,10 +495,10 @@ export const newsletterApi = {
           error:
             error instanceof Error
               ? {
-                  name: error.name,
-                  message: error.message,
-                  stack: error.stack,
-                }
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
               : error,
         });
         return false;
@@ -744,28 +744,30 @@ export const newsletterApi = {
     });
   },
 
-  // Get unread counts grouped by source
+  // Get unread counts grouped by source using server-side aggregation
   async getUnreadCountBySource(): Promise<Record<string, number>> {
     return withPerformanceLogging('newsletters.getUnreadCountBySource', async () => {
       const user = await requireAuth();
 
-      const { data, error } = await supabase
-        .from('newsletters')
-        .select('newsletter_source_id')
-        .eq('user_id', user.id)
-        .eq('is_read', false)
-        .eq('is_archived', false);
-
-      if (error) handleSupabaseError(error);
-
-      const unreadCounts: Record<string, number> = {};
-
-      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
-        const sourceId = newsletter.newsletter_source_id || 'unknown';
-        unreadCounts[sourceId] = (unreadCounts[sourceId] || 0) + 1;
+      const { data, error } = await supabase.rpc('get_unread_count_by_source', {
+        p_user_id: user.id
       });
 
-      return unreadCounts;
+      if (error) {
+        log.error('get_unread_count_by_source RPC failed', {
+          component: 'NewsletterApi',
+          action: 'get_unread_count_by_source_error',
+          metadata: { userId: user.id, error },
+        });
+        handleSupabaseError(error);
+      }
+
+      const result: Record<string, number> = {};
+      (data || []).forEach((row: { newsletter_source_id: string; count: number }) => {
+        result[row.newsletter_source_id || 'unknown'] = Number(row.count);
+      });
+
+      return result;
     });
   },
 
@@ -826,7 +828,7 @@ export const {
   bulkArchive,
   bulkUnarchive,
   toggleLike,
-  getByTag: getNewslettersByTag,
+  getByTags: getNewslettersByTag,
   getBySource: getNewslettersBySource,
   search: searchNewsletters,
   getStats: getNewsletterStats,
