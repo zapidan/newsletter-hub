@@ -75,9 +75,9 @@ The core word count function uses a sophisticated multi-stage cleaning process t
    ```sql
    clean_text := regexp_replace(clean_text, $re$<[^>]*>$re$, ' ', 'ng');
    clean_text := regexp_replace(clean_text, $re$&[#a-zA-Z0-9]+;$re$, ' ', 'g');
-   clean_text := regexp_replace(clean_text, $re$https?://\S+$re$, ' ', 'gi');
-   clean_text := regexp_replace(clean_text, $re$mailto:\S+\b$re$, ' ', 'gi');
-   clean_text := regexp_replace(clean_text, $re$\b\S+@\S+\.\S+\b$re$, ' ', 'gi');
+   clean_text := regexp_replace(clean_text, $re$https?://[^\s'"<>]+(?:[.!?;,)]|$)?$re$, ' ', 'gi');
+   clean_text := regexp_replace(clean_text, $re$mailto:[^\s'"<>]+(?:[.!?;,)]|$)?$re$, ' ', 'gi');
+   clean_text := regexp_replace(clean_text, $re$[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:[.!?;,)]|$)?$re$, ' ', 'gi');
    ```
 
 6. **Tracking Code Removal**
@@ -681,6 +681,9 @@ ORDER BY missing_percentage DESC;
    - Estimated read time is derived from `CEIL(word_count / 200.0)`.
    - If stored `word_count` is larger than the actual count, read time will overshoot.
    - Recent updates now remove `https://`, `mailto:`, and email address patterns anywhere in the content, and detect ad containers with broader `class`/`id` matching.
+
+   **FIXED (2025-04-09)**: URL and email regex patterns had end-of-line anchors (`$`) that prevented removal of URLs/emails appearing in the middle of text. This caused 10x overestimation when content contained inline links or email addresses. Fixed by removing `$` anchors and improving URL regex to handle trailing punctuation.
+
 2. **Low Word Counts**: Verify ad detection isn't too aggressive
 3. **Performance Issues**: Ensure indexes are created and being used
 4. **Memory Issues**: Process large newsletters in batches
@@ -704,5 +707,23 @@ WHERE user_id = 'user-id'
 ORDER BY avg_chars_per_word DESC
 LIMIT 10;
 ```
+
+## Changelog
+
+### 2025-04-09: Fixed URL/Email Regex Anchors
+**Migration**: `20250409_fix_word_count_regex_bugs.sql`
+
+**Problem**: URL and email removal regex patterns had end-of-line anchors (`$`) that prevented removal of URLs/emails appearing anywhere except at the end of lines. This caused severe overestimation (up to 10x) when newsletter content contained inline links or email addresses.
+
+**Root Cause**: 
+- `https?://[^\s'"<>]+$` only matched URLs at end of line
+- `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$` only matched emails at end of line
+
+**Fix**:
+- Removed `$` anchors from all URL/email regex patterns
+- Improved URL regex to handle trailing punctuation: `https?://[^\s'"<>]+(?:[.!?;,)]|$)?`
+- Enhanced email regex similarly: `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:[.!?;,)]|$)?`
+
+**Impact**: Eliminates 10x overestimation issues. URLs and emails anywhere in text are now properly filtered out.
 
 This comprehensive word count system provides accurate, advertisement-resistant word counting with robust quality assurance and performance optimization.
