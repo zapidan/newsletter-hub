@@ -217,25 +217,38 @@ export const newsletterApi = {
     return withPerformanceLogging('newsletters.getById', async () => {
       const user = await requireAuth();
 
-      let selectClause = '*';
       if (includeRelations) {
-        selectClause = `
-          *,
-          source:newsletter_sources(*),
-          tags:newsletter_tags(tag:tags(*))
-        `;
+        // Use RPC to avoid embedded lateral joins
+        const { data, error } = await supabase.rpc('get_newsletter_by_id', {
+          p_user_id: user.id,
+          p_id: id,
+        });
+
+        if (error) {
+          if (error.code === 'PGRST116') {
+            return null;
+          }
+          handleSupabaseError(error);
+        }
+
+        const rows = (data as any[]) ?? [];
+        if (rows.length === 0) return null;
+        return transformNewsletterResponse(rows[0]);
       }
 
+      // Fallback to explicit column fetch if relations are not requested
       const { data, error } = await supabase
         .from('newsletters')
-        .select(selectClause)
+        .select(
+          'id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id'
+        )
         .eq('id', id)
         .eq('user_id', user.id)
         .single();
 
       if (error) {
         if (error.code === 'PGRST116') {
-          return null; // Not found
+          return null;
         }
         handleSupabaseError(error);
       }
@@ -731,28 +744,30 @@ export const newsletterApi = {
     });
   },
 
-  // Get unread counts grouped by source
+  // Get unread counts grouped by source using server-side aggregation
   async getUnreadCountBySource(): Promise<Record<string, number>> {
     return withPerformanceLogging('newsletters.getUnreadCountBySource', async () => {
       const user = await requireAuth();
 
-      const { data, error } = await supabase
-        .from('newsletters')
-        .select('newsletter_source_id')
-        .eq('user_id', user.id)
-        .eq('is_read', false)
-        .eq('is_archived', false);
-
-      if (error) handleSupabaseError(error);
-
-      const unreadCounts: Record<string, number> = {};
-
-      data?.forEach((newsletter: { newsletter_source_id: string | null }) => {
-        const sourceId = newsletter.newsletter_source_id || 'unknown';
-        unreadCounts[sourceId] = (unreadCounts[sourceId] || 0) + 1;
+      const { data, error } = await supabase.rpc('get_unread_count_by_source', {
+        p_user_id: user.id
       });
 
-      return unreadCounts;
+      if (error) {
+        log.error('get_unread_count_by_source RPC failed', {
+          component: 'NewsletterApi',
+          action: 'get_unread_count_by_source_error',
+          metadata: { userId: user.id, error },
+        });
+        handleSupabaseError(error);
+      }
+
+      const result: Record<string, number> = {};
+      (data || []).forEach((row: { newsletter_source_id: string; count: number }) => {
+        result[row.newsletter_source_id || 'unknown'] = Number(row.count);
+      });
+
+      return result;
     });
   },
 
@@ -813,7 +828,7 @@ export const {
   bulkArchive,
   bulkUnarchive,
   toggleLike,
-  getByTag: getNewslettersByTag,
+  getByTags: getNewslettersByTag,
   getBySource: getNewslettersBySource,
   search: searchNewsletters,
   getStats: getNewsletterStats,

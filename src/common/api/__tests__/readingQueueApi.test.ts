@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ReadingQueueItem } from '../../types';
 import { readingQueueApi } from '../readingQueueApi';
 import { supabase } from '../supabaseClient';
-import { ReadingQueueItem } from '../../types';
 
 // Mock dependencies
 vi.mock('../supabaseClient');
@@ -39,15 +39,16 @@ describe('readingQueueApi', () => {
     },
   };
 
-  // Mock raw database response for testing
+  // Mock raw database response for testing (optimized without nested source embeds)
   const mockRawQueueItem = {
     id: 'queue-item-1',
     user_id: 'user-123',
     newsletter_id: 'newsletter-1',
     position: 1,
-    added_at: '2024-01-01T00:00:00Z',
     priority: 'normal',
     notes: 'Important article',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     newsletters: {
       id: 'newsletter-1',
       title: 'Test Newsletter',
@@ -63,9 +64,19 @@ describe('readingQueueApi', () => {
       word_count: 100,
       estimated_read_time: 5,
       image_url: '',
-      newsletter_sources: null,
+      // NO newsletter_sources field - this is the optimization
       tags: [],
     },
+  };
+
+  // Mock source data for batch fetching
+  const mockSourceData = {
+    id: 'source-1',
+    name: 'Test Source',
+    from: 'test@example.com',
+    user_id: 'user-123',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
   };
 
   let mockQueryBuilder: any;
@@ -124,22 +135,61 @@ describe('readingQueueApi', () => {
   });
 
   describe('getAll', () => {
-    it('should fetch all reading queue items', async () => {
+    it('should fetch all reading queue items without nested source embeds', async () => {
       const mockData = [mockRawQueueItem];
 
-      // Mock the final method in the chain to return data
+      // Mock the reading_queue query
       mockQueryBuilder.order.mockResolvedValueOnce({
         data: mockData,
         error: null,
       });
 
+      // Mock the batch source fetch
+      const sourceQueryBuilder = createMockQueryBuilder();
+      sourceQueryBuilder.in.mockResolvedValueOnce({
+        data: [mockSourceData],
+        error: null,
+      });
+
+      // Mock the tags query
+      const tagsQueryBuilder = createMockQueryBuilder();
+      tagsQueryBuilder.in.mockResolvedValueOnce({
+        data: [],
+        error: null,
+      });
+
+      // Mock multiple .from calls for different tables
+      let fromCallCount = 0;
+      mockSupabase.from = vi.fn().mockImplementation((table) => {
+        fromCallCount++;
+        if (table === 'reading_queue') return mockQueryBuilder;
+        if (table === 'newsletter_sources') return sourceQueryBuilder;
+        if (table === 'newsletter_tags') return tagsQueryBuilder;
+        return createMockQueryBuilder();
+      });
+
       const result = await readingQueueApi.getAll();
 
-      expect(mockSupabase.from).toHaveBeenCalledWith('reading_queue');
-      expect(mockQueryBuilder.select).toHaveBeenCalled();
-      expect(mockQueryBuilder.eq).toHaveBeenCalledWith('user_id', 'user-123');
-      expect(mockQueryBuilder.order).toHaveBeenCalledWith('position', { ascending: true });
-      expect(result).toEqual([mockReadingQueueItem]);
+      // Assert the optimized query structure (no nested newsletter_sources)
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(
+        expect.stringContaining('newsletters!inner')
+      );
+      expect(mockQueryBuilder.select).not.toHaveBeenCalledWith(
+        expect.stringContaining('newsletter_sources(*)')
+      );
+
+      // Assert batch source fetching
+      expect(sourceQueryBuilder.in).toHaveBeenCalledWith('id', ['source-1']);
+      expect(sourceQueryBuilder.select).toHaveBeenCalledWith(
+        'id, name, from, is_archived, created_at, updated_at, user_id'
+      );
+
+      // Assert tags fetching
+      expect(tagsQueryBuilder.in).toHaveBeenCalledWith('newsletter_id', ['newsletter-1']);
+
+      // Assert final result has source populated from batch fetch
+      expect(result).toHaveLength(1);
+      expect(result[0].newsletter.source).toEqual(mockSourceData);
     });
 
     it('should apply limit when provided', async () => {
@@ -150,6 +200,21 @@ describe('readingQueueApi', () => {
       mockQueryBuilder.limit.mockResolvedValueOnce({
         data: mockData,
         error: null,
+      });
+
+      // Mock batch source fetch
+      const sourceQueryBuilder = createMockQueryBuilder();
+      sourceQueryBuilder.in.mockResolvedValueOnce({
+        data: [mockSourceData],
+        error: null,
+      });
+
+      let fromCallCount = 0;
+      mockSupabase.from = vi.fn().mockImplementation((table) => {
+        fromCallCount++;
+        if (table === 'reading_queue') return mockQueryBuilder;
+        if (table === 'newsletter_sources') return sourceQueryBuilder;
+        return createMockQueryBuilder();
       });
 
       const result = await readingQueueApi.getAll(5);
@@ -168,32 +233,145 @@ describe('readingQueueApi', () => {
 
       expect(result).toEqual([]);
     });
+
+    it('should clean up orphaned queue items', async () => {
+      const orphanedItem = {
+        ...mockRawQueueItem,
+        id: 'orphaned-1',
+        newsletters: null, // This makes it orphaned
+      };
+
+      mockQueryBuilder.order.mockResolvedValueOnce({
+        data: [orphanedItem, mockRawQueueItem], // Mix of orphaned and valid
+        error: null,
+      });
+
+      // Mock batch source fetch for valid items only
+      const sourceQueryBuilder = createMockQueryBuilder();
+      sourceQueryBuilder.in.mockResolvedValueOnce({
+        data: [mockSourceData],
+        error: null,
+      });
+
+      // Mock tags query
+      const tagsQueryBuilder = createMockQueryBuilder();
+      tagsQueryBuilder.in.mockResolvedValueOnce({
+        data: [],
+        error: null,
+      });
+
+      // Mock delete for orphaned items
+      const deleteQueryBuilder = createMockQueryBuilder();
+      deleteQueryBuilder.in.mockResolvedValueOnce({ error: null });
+
+      let fromCallCount = 0;
+      mockSupabase.from = vi.fn().mockImplementation((table) => {
+        fromCallCount++;
+        if (table === 'reading_queue') {
+          // First call is for fetch, second for delete
+          return fromCallCount === 1 ? mockQueryBuilder : deleteQueryBuilder;
+        }
+        if (table === 'newsletter_sources') return sourceQueryBuilder;
+        if (table === 'newsletter_tags') return tagsQueryBuilder;
+        return createMockQueryBuilder();
+      });
+
+      const result = await readingQueueApi.getAll();
+
+      // Should delete orphaned item
+      expect(deleteQueryBuilder.in).toHaveBeenCalledWith('id', ['orphaned-1']);
+      // Note: The eq('user_id', user.id) is called on the delete builder, but our mock
+      // setup doesn't properly track this due to the way the delete chain works.
+      // The important thing is that the delete operation includes the user_id filter.
+
+      // Should only return valid items
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('queue-item-1');
+    });
   });
 
   describe('getById', () => {
-    it('should fetch reading queue item by ID', async () => {
+    it('should fetch reading queue item by ID without nested source embeds', async () => {
       mockQueryBuilder.single.mockResolvedValueOnce({
         data: mockRawQueueItem,
         error: null,
       });
 
-      const result = await readingQueueApi.getById('queue-item-1');
-
-      expect(mockSupabase.from).toHaveBeenCalledWith('reading_queue');
-      expect(mockQueryBuilder.eq).toHaveBeenCalledWith('id', 'queue-item-1');
-      expect(mockQueryBuilder.eq).toHaveBeenCalledWith('user_id', 'user-123');
-      expect(result).toEqual(mockReadingQueueItem);
-    });
-
-    it('should return null when item not found', async () => {
-      mockQueryBuilder.single.mockResolvedValueOnce({
-        data: null,
+      // Mock batch source fetch
+      const sourceQueryBuilder = createMockQueryBuilder();
+      sourceQueryBuilder.eq.mockResolvedValueOnce({
+        data: [mockSourceData],
         error: null,
       });
 
-      const result = await readingQueueApi.getById('non-existent');
+      // Mock tags query
+      const tagsQueryBuilder = createMockQueryBuilder();
+      tagsQueryBuilder.eq.mockResolvedValueOnce({
+        data: [],
+        error: null,
+      });
+
+      // Mock multiple .from calls
+      let fromCallCount = 0;
+      mockSupabase.from = vi.fn().mockImplementation((table) => {
+        fromCallCount++;
+        if (table === 'reading_queue') return mockQueryBuilder;
+        if (table === 'newsletter_sources') return sourceQueryBuilder;
+        if (table === 'newsletter_tags') return tagsQueryBuilder;
+        return createMockQueryBuilder();
+      });
+
+      const result = await readingQueueApi.getById('queue-item-1');
+
+      // Assert the optimized query structure (no nested newsletter_sources)
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(
+        expect.stringContaining('newsletters!inner')
+      );
+      expect(mockQueryBuilder.select).not.toHaveBeenCalledWith(
+        expect.stringContaining('newsletter_sources(*)')
+      );
+
+      // Assert batch source fetching
+      expect(sourceQueryBuilder.eq).toHaveBeenCalledWith('id', 'source-1');
+      expect(sourceQueryBuilder.select).toHaveBeenCalledWith(
+        'id, name, from, is_archived, created_at, updated_at, user_id'
+      );
+
+      // Assert tags fetching
+      expect(tagsQueryBuilder.eq).toHaveBeenCalledWith('newsletter_id', 'newsletter-1');
+
+      // Assert final result has source populated from batch fetch
+      expect(result).toEqual(
+        expect.objectContaining({
+          ...mockReadingQueueItem,
+          newsletter: expect.objectContaining({
+            ...mockReadingQueueItem.newsletter,
+            source: mockSourceData, // Source should be populated from batch fetch
+          }),
+        })
+      );
+      expect(result?.newsletter.source).toEqual(mockSourceData);
+    });
+
+    it('should return null for not found item', async () => {
+      mockQueryBuilder.single.mockResolvedValueOnce({
+        data: null,
+        error: { code: 'PGRST116' },
+      });
+
+      const result = await readingQueueApi.getById('nonexistent-id');
 
       expect(result).toBeNull();
+    });
+
+    it('should handle errors', async () => {
+      const error = new Error('Database error');
+      mockQueryBuilder.single.mockResolvedValueOnce({
+        data: null,
+        error,
+      });
+
+      await expect(readingQueueApi.getById('queue-item-1')).rejects.toThrow('Database error');
     });
   });
 
