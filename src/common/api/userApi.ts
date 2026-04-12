@@ -1,5 +1,6 @@
 import { generateEmailAliasFromEmail } from '../utils/emailAlias';
 import { logger } from '../utils/logger';
+import { newsletterApi } from './newsletterApi';
 import {
   handleSupabaseError,
   requireAuth,
@@ -703,9 +704,13 @@ export const userApi = {
           throw new Error('User not found');
         }
 
-        // Get all user data with optimized queries (explicit columns and limits)
+        // Get all user data with optimized queries using RPC functions for newsletters
         const [newsletters, tags, sources, readingQueue] = await Promise.all([
-          supabase.from('newsletters').select('id, title, content, summary, image_url, newsletter_source_id, word_count, estimated_read_time, is_read, is_liked, is_archived, received_at, created_at, updated_at, user_id').eq('user_id', userId).limit(10000),
+          // Use optimized newsletterApi with RPC to avoid expensive LATERAL joins
+          newsletterApi.getAll({
+            limit: 10000,
+            includeRelations: false // Faster for bulk export, no need for nested relations
+          }).then((response) => response.data),
           supabase.from('tags').select('id, name, color, created_at, updated_at, user_id').eq('user_id', userId).limit(1000),
           supabase.from('newsletter_sources').select('id, name, from, is_archived, created_at, updated_at, user_id').eq('user_id', userId).limit(1000),
           supabase.from('reading_queue').select('id, user_id, newsletter_id, position, priority, notes, added_at, updated_at').eq('user_id', userId).limit(1000),
@@ -713,7 +718,7 @@ export const userApi = {
 
         return {
           user,
-          newsletters: newsletters.data || [],
+          newsletters: newsletters || [],
           tags: tags.data || [],
           sources: sources.data || [],
           readingQueue: readingQueue.data || [],

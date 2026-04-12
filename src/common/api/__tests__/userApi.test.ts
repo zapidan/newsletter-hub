@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { User } from '../../types';
 import { CreateUserParams, UpdateUserParams } from '../../types/api';
+import { newsletterApi } from '../newsletterApi';
 import { supabase } from '../supabaseClient';
 import { userApi } from '../userApi';
 
 // Mock dependencies
 vi.mock('../supabaseClient');
+vi.mock('../newsletterApi');
 
 const mockSupabase = vi.mocked(supabase);
+const mockNewsletterApi = vi.mocked(newsletterApi);
 
 describe('userApi', () => {
   const mockUser: User = {
@@ -681,24 +684,59 @@ describe('userApi', () => {
   });
 
   describe('exportUserData', () => {
-    it.skip('should export user data', async () => {
+    it.skip('should export user data using optimized newsletterApi', async () => {
       const exportData = {
         user: mockUser,
-        newsletters: [{ id: 'newsletter-1', title: 'Test Newsletter' }],
+        newsletters: [{
+          id: 'newsletter-1',
+          title: 'Test Newsletter',
+          content: 'Test content',
+          summary: 'Test summary',
+          image_url: null,
+          newsletter_source_id: 'source-1',
+          word_count: 100,
+          estimated_read_time: 1,
+          is_read: false,
+          is_liked: false,
+          is_archived: false,
+          received_at: '2024-01-01T00:00:00Z',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          user_id: 'user-123',
+          source: null,
+          tags: [],
+        }],
         sources: [{ id: 'source-1', name: 'Test Source' }],
         tags: [{ id: 'tag-1', name: 'Test Tag' }],
         reading_queue: [{ id: 'queue-1', newsletter_id: 'newsletter-1' }],
       };
 
-      // Mock multiple data fetches
+      // Mock newsletterApi.getAll for optimized RPC calls
+      mockNewsletterApi.getAll.mockResolvedValue({
+        data: exportData.newsletters,
+        count: exportData.newsletters.length,
+        hasMore: false,
+        page: 1,
+        limit: 10000,
+        nextPage: null,
+        prevPage: null,
+        nextCursor: null,
+      });
+
+      // Mock other direct PostgREST calls
       mockQueryBuilder.single
         .mockResolvedValueOnce({ data: mockUser, error: null }) // user
-        .mockResolvedValueOnce({ data: exportData.newsletters, error: null }) // newsletters
         .mockResolvedValueOnce({ data: exportData.sources, error: null }) // sources
         .mockResolvedValueOnce({ data: exportData.tags, error: null }) // tags
         .mockResolvedValueOnce({ data: exportData.reading_queue, error: null }); // reading queue
 
       const result = await userApi.exportUserData('user-123');
+
+      // Verify newsletterApi.getAll was called with correct parameters
+      expect(mockNewsletterApi.getAll).toHaveBeenCalledWith({
+        limit: 10000,
+        includeRelations: false,
+      });
 
       expect(result).toEqual(exportData);
     });
