@@ -8,16 +8,15 @@ import {
 
 // Tag API Service
 export const tagApi = {
-  // Get all tags for the current user
+  // Get all tags for the current user (optimized with RPC)
   async getAll(): Promise<Tag[]> {
     return withPerformanceLogging('tags.getAll', async () => {
       const user = await requireAuth();
 
-      const { data, error } = await supabase
-        .from('tags')
-        .select('id, name, color, created_at, updated_at, user_id')
-        .eq('user_id', user.id)
-        .order('name');
+      // Use optimized RPC function to get tags with pre-aggregated counts
+      const { data, error } = await supabase.rpc('get_tags_with_counts', {
+        p_user_id: user.id,
+      });
 
       if (error) handleSupabaseError(error);
       return data || [];
@@ -108,7 +107,7 @@ export const tagApi = {
       if (error) handleSupabaseError(error);
       return (
         data
-          ?.map((item: { tag: any }) => {
+          ?.map((item: any) => {
             if (item.tag && typeof item.tag === 'object') {
               return {
                 id: item.tag.id as string,
@@ -198,9 +197,9 @@ export const tagApi = {
       const tagColor =
         color ||
         '#' +
-          Math.floor(Math.random() * 16777215)
-            .toString(16)
-            .padStart(6, '0');
+        Math.floor(Math.random() * 16777215)
+          .toString(16)
+          .padStart(6, '0');
 
       return this.create({
         name: name.trim(),
@@ -255,7 +254,7 @@ export const tagApi = {
     });
   },
 
-  // Get tags with pagination
+  // Get tags with pagination (optimized with RPC)
   async getPaginated(
     options: {
       limit?: number;
@@ -273,25 +272,41 @@ export const tagApi = {
       const user = await requireAuth();
       const { limit = 50, offset = 0, search, orderBy = 'name', ascending = true } = options;
 
-      let query = supabase
-        .from('tags')
-        .select('id, name, color, created_at, updated_at, user_id', { count: 'exact' })
-        .eq('user_id', user.id);
-
-      if (search) {
-        query = query.ilike('name', `%${search}%`);
-      }
-
-      query = query.order(orderBy, { ascending }).range(offset, offset + limit - 1);
-
-      const { data, error, count } = await query;
+      // Use optimized RPC function to get tags with pre-aggregated counts
+      const { data, error } = await supabase.rpc('get_tags_with_counts', {
+        p_user_id: user.id,
+      });
 
       if (error) handleSupabaseError(error);
 
+      let tags = data || [];
+
+      // Apply client-side search if needed (RPC doesn't support search parameter)
+      if (search) {
+        tags = tags.filter((tag: Tag) =>
+          tag.name.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+
+      // Apply client-side ordering if needed (RPC returns ordered by name)
+      if (orderBy === 'created_at') {
+        tags.sort((a: Tag, b: Tag) => {
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          return ascending ? dateA - dateB : dateB - dateA;
+        });
+      } else if (!ascending && orderBy === 'name') {
+        tags.reverse(); // RPC returns name ASC, so reverse for DESC
+      }
+
+      // Apply pagination
+      const totalCount = tags.length;
+      const paginatedTags = tags.slice(offset, offset + limit);
+
       return {
-        data: data || [],
-        count: count || 0,
-        hasMore: (data?.length || 0) === limit,
+        data: paginatedTags,
+        count: totalCount,
+        hasMore: offset + limit < totalCount,
       };
     });
   },

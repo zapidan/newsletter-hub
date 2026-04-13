@@ -76,7 +76,7 @@ describe('tagApi', () => {
   });
 
   describe('getAll', () => {
-    it('should fetch all tags for the current user, ordered by name', async () => {
+    it('should fetch all tags for the current user using optimized RPC', async () => {
       const mockTags: Tag[] = [
         {
           id: '1',
@@ -84,30 +84,28 @@ describe('tagApi', () => {
           color: '#ff0000',
           user_id: mockUser.id,
           created_at: new Date().toISOString(),
+          newsletter_count: 5,
         },
       ];
-      vi.mocked(currentQueryBuilder.order).mockResolvedValueOnce({ data: mockTags, error: null });
+      vi.mocked(supabaseClientModule.supabase.rpc).mockResolvedValueOnce({ data: mockTags, error: null });
 
       const result = await tagApi.getAll();
 
-      expect(supabaseClientModule.supabase.from).toHaveBeenCalledWith('tags');
-      expect(currentQueryBuilder.select).toHaveBeenCalledWith(
-        'id, name, color, created_at, updated_at, user_id'
-      );
-      expect(currentQueryBuilder.eq).toHaveBeenCalledWith('user_id', mockUser.id);
-      expect(currentQueryBuilder.order).toHaveBeenCalledWith('name');
+      expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('get_tags_with_counts', {
+        p_user_id: mockUser.id,
+      });
       expect(result).toEqual(mockTags);
     });
 
     it('should return an empty array if no tags are found', async () => {
-      vi.mocked(currentQueryBuilder.order).mockResolvedValueOnce({ data: null, error: null });
+      vi.mocked(supabaseClientModule.supabase.rpc).mockResolvedValueOnce({ data: null, error: null });
       const result = await tagApi.getAll();
       expect(result).toEqual([]);
     });
 
     it('should call handleSupabaseError and rethrow on error', async () => {
       const mockError = new Error('Fetch error');
-      vi.mocked(currentQueryBuilder.order).mockResolvedValueOnce({ data: null, error: mockError });
+      vi.mocked(supabaseClientModule.supabase.rpc).mockResolvedValueOnce({ data: null, error: mockError });
       await expect(tagApi.getAll()).rejects.toThrow(mockError);
       expect(supabaseClientModule.handleSupabaseError).toHaveBeenCalledWith(mockError);
     });
