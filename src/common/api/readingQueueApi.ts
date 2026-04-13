@@ -16,8 +16,6 @@ const transformQueueItem = (data: {
   user_id: string;
   newsletter_id: string;
   position: number;
-  priority?: string;
-  notes?: string;
   created_at: string;
   updated_at: string;
   newsletters: {
@@ -67,8 +65,6 @@ const transformQueueItem = (data: {
     newsletter_id: data.newsletter_id,
     position: data.position,
     added_at: data.created_at,
-    priority: data.priority,
-    notes: data.notes,
     newsletter: {
       id: data.newsletters.id,
       title: data.newsletters.title,
@@ -102,7 +98,7 @@ export const readingQueueApi = {
         .from('reading_queue')
         .select(
           `
-          id, newsletter_id, user_id, priority, position, notes, created_at, updated_at,
+          id, newsletter_id, user_id, position, created_at, updated_at,
           newsletters!inner (
             id, title, summary, content, image_url, received_at, updated_at,
             newsletter_source_id, user_id, is_read, is_archived, is_liked,
@@ -315,7 +311,7 @@ export const readingQueueApi = {
         })
         .select(
           `
-          id, newsletter_id, user_id, priority, position, notes, created_at, updated_at,
+          id, newsletter_id, user_id, position, created_at, updated_at,
           newsletters!inner (
             id, title, summary, content, image_url, received_at, updated_at,
             newsletter_source_id, user_id, is_read, is_archived, is_liked,
@@ -433,7 +429,7 @@ export const readingQueueApi = {
         .from('reading_queue')
         .select(
           `
-          id, newsletter_id, user_id, priority, position, notes, created_at, updated_at,
+          id, newsletter_id, user_id, position, created_at, updated_at,
           newsletters!inner (
             id, title, summary, content, image_url, received_at, updated_at,
             newsletter_source_id, user_id, is_read, is_archived, is_liked,
@@ -627,7 +623,7 @@ export const readingQueueApi = {
   },
 
   // Create a new reading queue item
-  async create(params: { newsletter_id: string; priority?: string; notes?: string }) {
+  async create(params: { newsletter_id: string }) {
     return withPerformanceLogging('readingQueue.create', async () => {
       const user = await requireAuth();
 
@@ -664,10 +660,9 @@ export const readingQueueApi = {
           user_id: user.id,
           newsletter_id: params.newsletter_id,
           position: newPosition,
-          priority: params.priority || 'normal',
           notes: params.notes,
         })
-        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
+        .select('id, newsletter_id, user_id, position, created_at, updated_at')
         .single();
 
       if (error) handleSupabaseError(error);
@@ -677,20 +672,18 @@ export const readingQueueApi = {
   },
 
   // Update a reading queue item
-  async update(params: { id: string; priority?: string; notes?: string }) {
+  async update(params: { id: string }) {
     return withPerformanceLogging('readingQueue.update', async () => {
       const user = await requireAuth();
 
       const updateData: any = {};
-      if (params.priority !== undefined) updateData.priority = params.priority;
-      if (params.notes !== undefined) updateData.notes = params.notes;
 
       const { data, error } = await supabase
         .from('reading_queue')
         .update(updateData)
         .eq('id', params.id)
         .eq('user_id', user.id)
-        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
+        .select('id, newsletter_id, user_id, position, created_at, updated_at')
         .single();
 
       if (error) handleSupabaseError(error);
@@ -776,7 +769,7 @@ export const readingQueueApi = {
 
       const { data, error } = await supabase
         .from('reading_queue')
-        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
+        .select('id, newsletter_id, user_id, position, created_at, updated_at')
         .eq('user_id', user.id)
         .eq('newsletter_id', newsletterId)
         .single();
@@ -809,7 +802,7 @@ export const readingQueueApi = {
         })
         .eq('id', id)
         .eq('user_id', user.id)
-        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
+        .select('id, newsletter_id, user_id, position, created_at, updated_at')
         .single();
 
       if (error) handleSupabaseError(error);
@@ -819,26 +812,10 @@ export const readingQueueApi = {
   },
 
   // Get items by priority
-  async getByPriority(priority: string, limit?: number): Promise<ReadingQueueItem[]> {
+  async getByPriority(_priority: string, _limit?: number): Promise<ReadingQueueItem[]> {
     return withPerformanceLogging('readingQueue.getByPriority', async () => {
-      const user = await requireAuth();
-
-      let query = supabase
-        .from('reading_queue')
-        .select('id, newsletter_id, user_id, priority, position, notes, created_at, updated_at')
-        .eq('user_id', user.id)
-        .eq('priority', priority)
-        .order('position', { ascending: true });
-
-      if (limit) {
-        query = query.limit(limit);
-      }
-
-      const { data, error } = await query;
-
-      if (error) handleSupabaseError(error);
-
-      return data || [];
+      // Priority column doesn't exist in database, return empty array
+      return [];
     });
   },
 

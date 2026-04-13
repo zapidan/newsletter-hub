@@ -17,8 +17,6 @@ describe('readingQueueApi', () => {
     newsletter_id: 'newsletter-1',
     position: 1,
     added_at: '2024-01-01T00:00:00Z',
-    priority: 'normal',
-    notes: 'Important article',
     newsletter: {
       id: 'newsletter-1',
       title: 'Test Newsletter',
@@ -45,8 +43,6 @@ describe('readingQueueApi', () => {
     user_id: 'user-123',
     newsletter_id: 'newsletter-1',
     position: 1,
-    priority: 'normal',
-    notes: 'Important article',
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
     newsletters: {
