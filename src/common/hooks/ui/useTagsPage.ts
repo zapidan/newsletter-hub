@@ -1,5 +1,6 @@
 import { useTagOperations } from '@common/hooks/business/useTagOperations';
 import { useCache } from '@common/hooks/useCache';
+import { tagService } from '@common/services';
 import type { Newsletter, Tag, TagCreate, TagWithCount } from '@common/types';
 import { useLogger } from '@common/utils/logger';
 import { queryKeyFactory } from '@common/utils/queryKeyFactory';
@@ -110,7 +111,7 @@ export function useTagsPage(options: UseTagsPageOptions = {}): UseTagsPageReturn
     queryKey: queryKeyFactory.tags.usageStats('all'),
     queryFn: async () => {
       try {
-        const stats = await optimizedNewsletterService.getTagUsageStats();
+        const stats = await tagService.getAllTags(true);
         return stats;
       } catch (error) {
         log.error('Failed to fetch tag usage stats', {

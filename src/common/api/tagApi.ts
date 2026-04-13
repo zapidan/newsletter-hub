@@ -107,7 +107,7 @@ export const tagApi = {
       if (error) handleSupabaseError(error);
       return (
         data
-          ?.map((item: { tag: any }) => {
+          ?.map((item: any) => {
             if (item.tag && typeof item.tag === 'object') {
               return {
                 id: item.tag.id as string,

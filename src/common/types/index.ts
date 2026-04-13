@@ -4,6 +4,7 @@ export interface Tag {
   color: string;
   user_id: string;
   created_at: string;
+  updated_at: string;
   newsletter_count?: number;
 }
 

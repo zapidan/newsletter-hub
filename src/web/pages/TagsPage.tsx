@@ -10,7 +10,7 @@ const TagsPage: React.FC = () => {
   const {
     // Data
     tags,
-    tagNewsletters,
+    tagNewsletters: _tagNewsletters,
 
     // Loading states
     isLoading,
@@ -209,10 +209,10 @@ const TagsPage: React.FC = () => {
                           {tag.name}
                         </span>
                         <span className="text-sm text-neutral-500 dark:text-slate-400">
-                          {(() => {
-                            const count = tagNewsletters[tag.id]?.length ?? tag.newsletter_count;
-                            return `Used in ${count} ${count === 1 ? 'newsletter' : 'newsletters'}`;
-                          })()}
+                          Used in {tag.newsletter_count}{' '}
+                          {tag.newsletter_count === 1
+                            ? 'newsletter'
+                            : 'newsletters'}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">

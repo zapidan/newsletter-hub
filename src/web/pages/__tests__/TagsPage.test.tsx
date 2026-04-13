@@ -1,15 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { BrowserRouter, MemoryRouter, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import TagsPage from '../TagsPage';
-import { useTags } from '@common/hooks/useTags';
-import { useEmailAlias } from '@common/hooks/useEmailAlias'; // Added this import
-import { type Tag } from '@common/types';
 import { AuthProvider, useAuth } from '@common/contexts/AuthContext';
 import { SupabaseProvider } from '@common/contexts/SupabaseContext';
-import { CacheInitializer } from '@common/components/CacheInitializer';
+import { useEmailAlias } from '@common/hooks/useEmailAlias'; // Added this import
+import { type Tag } from '@common/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
 import App from '@web/App'; // Import App to render the full structure initially
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock hooks and components
 // Import useTagsPage here to be used with vi.mocked later
@@ -208,9 +205,9 @@ describe('TagsPage', () => {
 
   it('should render the list of tags correctly', async () => {
     const currentMockTagNewsletters = {
-      '1': [{id: 'nl1'} as any], // Technology has 1 newsletter
+      '1': [{ id: 'nl1' } as any], // Technology has 1 newsletter
       '2': [],                   // Science has 0
-      '3': [{id: 'nl2'}, {id: 'nl3'}] as any, // Health has 2 newsletters
+      '3': [{ id: 'nl2' }, { id: 'nl3' }] as any, // Health has 2 newsletters
     };
     vi.mocked(useTagsPage).mockReturnValue({
       ...mockUseTagsPageDefaults,
@@ -226,8 +223,8 @@ describe('TagsPage', () => {
       expect(screen.getByRole('heading', { name: /Tags/i, level: 1 })).toBeInTheDocument();
       mockTags.forEach(tag => {
         expect(screen.getByText(tag.name)).toBeInTheDocument();
-        // The TagsPage displays count from tagNewsletters length
-        const count = (currentMockTagNewsletters[tag.id] || []).length; // Use the specific mock for this test
+        // The TagsPage displays count from tag.newsletter_count
+        const count = tag.newsletter_count; // Use the newsletter_count from the tag directly
         const newsletterText = count === 1 ? 'newsletter' : 'newsletters';
         const listItem = screen.getByText(tag.name).closest('li');
         expect(listItem).toHaveTextContent(`Used in ${count} ${newsletterText}`);
@@ -237,8 +234,8 @@ describe('TagsPage', () => {
 
   it('should display newsletter count for each tag based on tagNewsletters', async () => {
     const specificMockTags = [
-      { id: 'tech-id', name: 'Technology', newsletter_count: 10, user_id: 'user1', created_at: '2023-01-01', updated_at: '2023-01-01', color: '#ff0000' },
-      { id: 'sci-id', name: 'Science', newsletter_count: 5, user_id: 'user1', created_at: '2023-01-01', updated_at: '2023-01-01', color: '#00ff00' },
+      { id: 'tech-id', name: 'Technology', newsletter_count: 2, user_id: 'user1', created_at: '2023-01-01', updated_at: '2023-01-01', color: '#ff0000' },
+      { id: 'sci-id', name: 'Science', newsletter_count: 1, user_id: 'user1', created_at: '2023-01-01', updated_at: '2023-01-01', color: '#00ff00' },
     ];
     vi.mocked(useTagsPage).mockReturnValue({
       ...mockUseTagsPageDefaults,
@@ -247,8 +244,17 @@ describe('TagsPage', () => {
         'tech-id': [{} as any, {} as any], // 2 newsletters
         'sci-id': [{} as any],             // 1 newsletter
       },
+      newsletters: [], // Added missing property
       isLoading: false,
       error: null,
+      isLoadingTags: false, // Added missing property
+      isLoadingNewsletters: false, // Added missing property
+      isLoadingTagUsage: false, // Added missing property
+      isError: false, // Added missing property
+      isCreatingTag: false, // Added missing property
+      isUpdatingTag: false, // Added missing property
+      isDeletingTag: false, // Added missing property
+      refreshData: vi.fn(), // Added missing property
     });
 
     render(<TestWrapper initialEntries={['/tags']} />);
