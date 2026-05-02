@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 // Hoisted mock for RPC calls
 const { createMockNewsletter, mockUser } = vi.hoisted(() => {
   const mockUser = {
-    id: 'user-1',
+    id: '789e0123-e89b-12d3-a456-426614174002',
     email: 'user@example.com',
     user_metadata: { name: 'Test User' },
     app_metadata: {},
@@ -14,7 +14,7 @@ const { createMockNewsletter, mockUser } = vi.hoisted(() => {
   const createMockNewsletter = (
     overrides: Partial<NewsletterWithRelations> = {}
   ): NewsletterWithRelations => ({
-    id: 'newsletter-1',
+    id: '123e4567-e89b-12d3-a456-426614174000',
     title: 'Test Newsletter',
     summary: 'Test summary',
     content: 'Test content',
@@ -27,7 +27,7 @@ const { createMockNewsletter, mockUser } = vi.hoisted(() => {
     estimated_read_time: 5,
     word_count: 100,
     source: {
-      id: 'source-1',
+      id: '456e7890-e89b-12d3-a456-426614174001',
       name: 'Test Source',
       from: 'test@example.com',
       user_id: mockUser.id,
@@ -35,7 +35,7 @@ const { createMockNewsletter, mockUser } = vi.hoisted(() => {
       updated_at: '2024-01-01T00:00:00Z',
     },
     tags: [],
-    newsletter_source_id: 'source-1',
+    newsletter_source_id: '456e7890-e89b-12d3-a456-426614174001',
     user_id: mockUser.id,
     ...overrides,
   });
@@ -105,7 +105,7 @@ describe('newsletterApi', () => {
 
   const mockGetByIdWithTransformedResponse = (rawData: any, includeRelations = true) => {
     vi.mocked(currentQueryBuilder.single).mockResolvedValueOnce({ data: rawData, error: null });
-    return newsletterApi.getById('any-id', includeRelations);
+    return newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000', includeRelations);
   };
 
   const mockInitialGetByIdForUpdate = (initialNlData: any, error?: any) => {
@@ -193,6 +193,7 @@ describe('newsletterApi', () => {
         p_search: null,
         p_limit: 50,
         p_offset: 0,
+        p_cursor: null, // Phase 3 is inactive by default
         p_order_by: 'received_at',
         p_order_direction: 'DESC',
       });
@@ -234,6 +235,7 @@ describe('newsletterApi', () => {
         p_search: 'test',
         p_limit: 10,
         p_offset: 20,
+        p_cursor: null, // Phase 3 is inactive by default
         p_order_by: 'title',
         p_order_direction: 'ASC',
       });
@@ -293,11 +295,11 @@ describe('newsletterApi', () => {
         statusText: 'OK',
       });
 
-      const result = await newsletterApi.getById('newsletter-1');
+      const result = await newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000');
 
       expect(supabaseClientModule.supabase.rpc).toHaveBeenCalledWith('get_newsletter_by_id', {
         p_user_id: mockUser.id,
-        p_id: 'newsletter-1'
+        p_id: '123e4567-e89b-12d3-a456-426614174000'
       });
       expect(result).toEqual(currentMockNewsletter);
     });
@@ -311,7 +313,7 @@ describe('newsletterApi', () => {
         statusText: 'Internal Server Error',
       });
 
-      await expect(newsletterApi.getById('newsletter-1')).rejects.toThrow('RPC failed');
+      await expect(newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000')).rejects.toThrow('RPC failed');
     });
 
     it('should return null when RPC returns no data', async () => {
@@ -323,17 +325,15 @@ describe('newsletterApi', () => {
         statusText: 'OK',
       });
 
-      const result = await newsletterApi.getById('newsletter-1');
+      const result = await newsletterApi.getById('123e4567-e89b-12d3-a456-426614174000');
       expect(result).toBeNull();
     });
   });
 
   describe('create', () => {
     it('should create a new newsletter', async () => {
-      const params = { title: 'New', content: 'C', newsletter_source_id: 's1' };
-      const created = createMockNewsletter({ ...params, id: 'new-id' });
-
-      // Mock the insert operation
+      const params = { title: 'New', content: 'C', newsletter_source_id: '456e7890-e89b-12d3-a456-426614174001' };
+      const created = createMockNewsletter({ ...params, id: '789e0123-e89b-12d3-a456-426614174009' });
       vi.mocked(currentQueryBuilder.single)
         .mockResolvedValueOnce({
           data: { ...created, tags: undefined, source: undefined },
@@ -354,16 +354,16 @@ describe('newsletterApi', () => {
     });
 
     it('should create newsletter with tags', async () => {
-      const params = { title: 'New', content: 'C', newsletter_source_id: 's1', tag_ids: ['tA'] };
+      const params = { title: 'New', content: 'C', newsletter_source_id: '456e7890-e89b-12d3-a456-426614174001', tag_ids: ['789e0123-e89b-12d3-a456-426614174003'] };
       const baseNl = params;
       const createdRaw = {
-        ...createMockNewsletter({ ...baseNl, id: 'new-id' }),
+        ...createMockNewsletter({ ...baseNl, id: '789e0123-e89b-12d3-a456-426614174009' }),
         tags: undefined,
         source: undefined,
       };
       const finalNl = createMockNewsletter({
         ...baseNl,
-        id: 'new-id',
+        id: '789e0123-e89b-12d3-a456-426614174009',
         tags: [
           {
             id: 'tA',
@@ -403,7 +403,7 @@ describe('newsletterApi', () => {
   describe('update', () => {
     it('should update newsletter tags: remove all existing, then add new ones', async () => {
       const initialNl = createMockNewsletter({
-        id: 'nl-update',
+        id: '789e0123-e89b-12d3-a456-426614174004',
         tags: [{ id: 'old', name: 'Old', color: '', user_id: '', created_at: '' }],
       });
       const updates = { tag_ids: ['new1'] };
@@ -619,7 +619,7 @@ describe('newsletterApi', () => {
 
   describe('bulkUpdate', () => {
     it('should bulk update newsletters', async () => {
-      const ids = ['nl1', 'nl2'];
+      const ids = ['789e0123-e89b-12d3-a456-426614174010', '789e0123-e89b-12d3-a456-426614174011'];
       const updates = { is_read: true };
       const newsletters = ids.map((id) => createMockNewsletter({ id, is_read: true }));
       function builderWithBulkResults() {
@@ -762,7 +762,7 @@ describe('newsletterApi', () => {
 
   describe('getUnreadCount', () => {
     it('should get unread count for all sources', async () => {
-      const unreadCount = 7;
+      const unreadCount = 4;
       function builderWithUnreadCount() {
         const builder: any = {};
         const response = { count: unreadCount, error: null };
@@ -934,6 +934,7 @@ describe('newsletterApi', () => {
         p_search: null,
         p_limit: 10,
         p_offset: 0,
+        p_cursor: null, // Phase 3 is inactive by default
         p_order_by: 'received_at',
         p_order_direction: 'DESC',
       });
@@ -1162,9 +1163,9 @@ describe('newsletterApi', () => {
 
     it('should handle multiple rows correctly, returning all of them', async () => {
       const rows = [
-        { ...baseRpcRow, id: 'nl-a', title: 'First', total_count: 3 },
-        { ...baseRpcRow, id: 'nl-b', title: 'Second', total_count: 3 },
-        { ...baseRpcRow, id: 'nl-c', title: 'Third', total_count: 3 },
+        { ...baseRpcRow, id: '789e0123-e89b-12d3-a456-426614174006', title: 'First', total_count: 3 },
+        { ...baseRpcRow, id: '789e0123-e89b-12d3-a456-426614174007', title: 'Second', total_count: 3 },
+        { ...baseRpcRow, id: '789e0123-e89b-12d3-a456-426614174008', title: 'Third', total_count: 3 },
       ];
 
       // Clear any previous mocks and set up fresh mock
@@ -1174,8 +1175,104 @@ describe('newsletterApi', () => {
       const result = await newsletterApi.getByTags(['tag-1', 'tag-2']);
 
       expect(result.data).toHaveLength(3);
-      expect(result.data.map((n) => n.id)).toEqual(['nl-a', 'nl-b', 'nl-c']);
+      expect(result.data.map((n) => n.id)).toEqual(['789e0123-e89b-12d3-a456-426614174006', '789e0123-e89b-12d3-a456-426614174007', '789e0123-e89b-12d3-a456-426614174008']);
       expect(result.count).toBe(3);
     });
+  });
+
+  // Phase 3 gating tests
+  describe('Phase 3 gating harness (dev/prod flag flip) - PR ready', () => {
+    // Base mock newsletter row for RPC response
+    const now = new Date().toISOString();
+    const mockUser = {
+      id: 'user-1',
+      email: 'user@example.com',
+      user_metadata: {},
+      app_metadata: {},
+      aud: 'authenticated',
+      created_at: now,
+    };
+
+    const mockRowBase = {
+      id: 'nl-1',
+      title: 'T',
+      content: 'C',
+      summary: 'S',
+      image_url: '',
+      received_at: now,
+      updated_at: now,
+      is_read: false,
+      is_liked: false,
+      is_archived: false,
+      newsletter_source_id: 'src-1',
+      user_id: mockUser.id,
+      word_count: 10,
+      estimated_read_time: 1,
+    };
+
+    // States to exercise
+    // dev flag on/off, prod flag on/off, environment, and expected p_cursor behavior
+    const states = [
+      { name: 'dev-on', devEnabled: true, prodEnabled: false, env: 'development', expectCursor: true },
+      { name: 'prod-on', devEnabled: false, prodEnabled: true, env: 'production', expectCursor: true },
+      { name: 'both-off-dev', devEnabled: false, prodEnabled: false, env: 'development', expectCursor: false },
+      { name: 'prod-off-rollback', devEnabled: false, prodEnabled: false, env: 'production', expectCursor: false },
+    ];
+
+    for (const s of states) {
+      test(`${s.name}: gating should ${s.expectCursor ? 'forward' : 'not forward'} p_cursor`, async () => {
+        // 1) Set environment flags for this state
+        (process as any).env.VITE_PHASE3_DEV_ENABLED = String(s.devEnabled);
+        (process as any).env.VITE_PHASE3_PROD_ENABLED = String(s.prodEnabled);
+        process.env.NODE_ENV = s.env;
+
+        // 2) Reset modules so mocks take effect
+        vi.resetModules();
+
+        // 3) Mock Supabase client with a focused RPC mock
+        let rpcSpy: vi.Mock | null = null;
+        vi.doMock('../supabaseClient', () => {
+          // The harness inspects this spy to verify the RPC call arguments
+          rpcSpy = vi.fn().mockResolvedValue({
+            data: [
+              {
+                ...mockRowBase,
+                total_count: 2,
+                next_cursor: 'CUR2',
+              },
+            ],
+            error: null,
+          });
+          return {
+            supabase: { from: vi.fn(), rpc: rpcSpy },
+            requireAuth: vi.fn().mockResolvedValue(mockUser),
+            withPerformanceLogging: vi.fn((_name: string, fn: any) => fn()),
+            handleSupabaseError: vi.fn((err) => { throw err; }),
+          };
+        });
+
+        // 4) Import API module fresh and call getAll
+        const mod = await import('../newsletterApi');
+        const api = mod.newsletterApi ?? mod.default;
+
+        const testCursor = 'CUR-TEST';
+        const res = await api.getAll({ limit: 2, offset: 0, cursor: testCursor });
+
+        // 5) Assertions on the RPC call
+        expect(rpcSpy).toBeDefined();
+        expect(rpcSpy).toHaveBeenCalled();
+        const rpcParams = (rpcSpy as any).mock.calls[0][1];
+        if (s.expectCursor) {
+          expect(rpcParams.p_cursor).toBe(testCursor);
+        } else {
+          expect(rpcParams.p_cursor).toBeNull();
+        }
+
+        // Optional: check that a response shape exists when gating is active
+        if (s.expectCursor) {
+          expect(res).toHaveProperty('nextCursor');
+        }
+      });
+    }
   });
 });

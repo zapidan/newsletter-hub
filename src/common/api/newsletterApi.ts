@@ -1,3 +1,4 @@
+import { isPhase3Active } from '../config/featureFlags';
 import { NewsletterWithRelations, Tag } from '../types';
 import {
   BatchResult,
@@ -17,6 +18,19 @@ import {
 
 // Initialize logger
 const log = logger;
+
+// UUID validation regex
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Validate UUID format
+const validateUUID = (id: string, fieldName: string = 'id'): void => {
+  if (!id || typeof id !== 'string') {
+    throw new Error(`${fieldName} must be a valid UUID string`);
+  }
+  if (!UUID_REGEX.test(id)) {
+    throw new Error(`${fieldName} must be a valid UUID format`);
+  }
+};
 
 // Transform raw Supabase response to our Newsletter type
 const transformNewsletterResponse = (data: any): NewsletterWithRelations => {
@@ -156,7 +170,9 @@ export const newsletterApi = {
         },
       });
 
-      const rpcParams = {
+      // Phase 3 gating: determine if we should pass through a cursor
+      const phase3Active = isPhase3Active();
+      const rpcParams: any = {
         p_user_id: user.id,
         p_tag_ids: params.tagIds && params.tagIds.length > 0 ? params.tagIds : null,
         p_is_read: params.isRead ?? null,
@@ -168,6 +184,8 @@ export const newsletterApi = {
         p_search: params.search || null,
         p_limit: params.limit || 50,
         p_offset: params.offset || 0,
+        // Cursor is only passed when Phase 3 is active; otherwise null to preserve Phase 2 behavior
+        p_cursor: phase3Active ? ((params as any).cursor ?? null) : null,
         p_order_by: params.orderBy || 'received_at',
         p_order_direction: params.ascending ? 'ASC' : 'DESC',
       };
@@ -185,20 +203,27 @@ export const newsletterApi = {
       }
 
       const rows = (data as any[]) ?? [];
+
+      // In Phase 3, next_cursor may be provided on the first row. In Phase 2, it will be ignored.
       const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
+      const nextCursor = phase3Active
+        ? rows.length > 0
+          ? (rows[0].next_cursor ?? null)
+          : null
+        : null;
 
       // Transform the data
       const transformedData = rows.map((row: any) => {
-        const { total_count: _tc, ...newsletterData } = row;
+        const { total_count: _tc, next_cursor: _nc, ...newsletterData } = row;
         return transformNewsletterResponse(newsletterData);
       });
 
       const limit = params.limit || 50;
       const offset = params.offset || 0;
       const page = Math.floor(offset / limit) + 1;
-      const hasMore = offset + limit < totalCount;
+      const hasMore = totalCount ? offset + limit < totalCount : false;
 
-      const result = {
+      const result: PaginatedResponse<NewsletterWithRelations> = {
         data: transformedData,
         count: totalCount,
         page,
@@ -206,7 +231,8 @@ export const newsletterApi = {
         hasMore,
         nextPage: hasMore ? page + 1 : null,
         prevPage: page > 1 ? page - 1 : null,
-      };
+        nextCursor: nextCursor ?? null,
+      } as any;
 
       return result;
     });
@@ -215,6 +241,9 @@ export const newsletterApi = {
   // Get newsletter by ID
   async getById(id: string, includeRelations = true): Promise<NewsletterWithRelations | null> {
     return withPerformanceLogging('newsletters.getById', async () => {
+      // Validate UUID format
+      validateUUID(id, 'newsletter id');
+
       const user = await requireAuth();
 
       if (includeRelations) {
@@ -282,7 +311,7 @@ export const newsletterApi = {
       // Add tags if provided
       if (tag_ids && tag_ids.length > 0) {
         const tagAssociations = tag_ids.map((tagId) => ({
-          newsletter_id: newsletter.id,
+          newsletter_id: newsletter!.id,
           tag_id: tagId,
         }));
 
@@ -292,7 +321,7 @@ export const newsletterApi = {
       }
 
       // Fetch the complete newsletter with relations
-      const createdNewsletter = await this.getById(newsletter.id);
+      const createdNewsletter = await this.getById(newsletter!.id);
       if (!createdNewsletter) {
         throw new Error('Failed to retrieve created newsletter');
       }
@@ -317,6 +346,9 @@ export const newsletterApi = {
       if (!id) {
         throw new Error('Newsletter ID is required for updates');
       }
+
+      // Validate newsletter ID format
+      validateUUID(id, 'newsletter id');
 
       // First, verify the newsletter exists and belongs to the user
       const existingNewsletter = await this.getById(id, false);
@@ -371,8 +403,6 @@ export const newsletterApi = {
             }
           }
         } catch (error) {
-          // If tag operations fail, we should still return the updated newsletter
-          // but log the error for debugging
           log.error(
             'Tag update failed for newsletter',
             {
@@ -401,6 +431,9 @@ export const newsletterApi = {
   // Delete newsletter (hard delete)
   async delete(id: string): Promise<boolean> {
     return withPerformanceLogging('newsletters.delete', async () => {
+      // Validate UUID format
+      validateUUID(id, 'newsletter id');
+
       try {
         const user = await requireAuth();
         const logContext = {
@@ -412,11 +445,7 @@ export const newsletterApi = {
         log.debug('🔍 Starting delete operation', logContext);
 
         // Validate the ID format first
-        if (
-          !id ||
-          typeof id !== 'string' ||
-          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-        ) {
+        if (!id || typeof id !== 'string' || id.length < 1) {
           log.error('❌ Invalid newsletter ID format', {
             ...logContext,
             id,
@@ -513,6 +542,11 @@ export const newsletterApi = {
     return withPerformanceLogging('newsletters.bulkUpdate', async () => {
       const { ids } = params;
 
+      // Validate all UUID formats
+      ids.forEach((id, index) => {
+        validateUUID(id, `newsletter id at index ${index}`);
+      });
+
       // For small batches, use the original approach
       if (ids.length <= 50) {
         return this._originalBulkUpdate(params);
@@ -552,7 +586,7 @@ export const newsletterApi = {
       });
     } else {
       // Transform successful results
-      const transformedResults = (data || []).map(transformNewsletterResponse);
+      const transformedResults = (data || []).map((row: any) => transformNewsletterResponse(row));
       ids.forEach((id) => {
         const result = transformedResults.find((r) => r.id === id);
         results.push(result || null);
@@ -625,13 +659,16 @@ export const newsletterApi = {
     return this.update({ id, is_read: true });
   },
 
-  // Mark as unread
+  // Mark newsletter as unread
   async markAsUnread(id: string): Promise<NewsletterWithRelations> {
     return this.update({ id, is_read: false });
   },
 
   // Toggle archive status
   async toggleArchive(id: string): Promise<NewsletterWithRelations> {
+    // Validate UUID format
+    validateUUID(id, 'newsletter id');
+
     const newsletter = await this.getById(id, false);
     if (!newsletter) {
       throw new Error('Newsletter not found');
@@ -652,6 +689,9 @@ export const newsletterApi = {
 
   // Toggle like status
   async toggleLike(id: string): Promise<NewsletterWithRelations> {
+    // Validate UUID format
+    validateUUID(id, 'newsletter id');
+
     const newsletter = await this.getById(id, false);
     if (!newsletter) {
       throw new Error('Newsletter not found');
@@ -664,7 +704,7 @@ export const newsletterApi = {
     tagIds: string[],
     params: Omit<NewsletterQueryParams, 'tagIds'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    // Unified with getAll which now uses the optimized get_newsletters RPC
+    // Phase 3 gating: forward to getAll with tagIds
     return this.getAll({ ...params, tagIds });
   },
 
@@ -681,7 +721,7 @@ export const newsletterApi = {
     query: string,
     params: Omit<NewsletterQueryParams, 'search'> = {}
   ): Promise<PaginatedResponse<NewsletterWithRelations>> {
-    return newsletterApi.getAll({ ...params, search: query });
+    return this.getAll({ ...params, search: query });
   },
 
   // Get reading statistics
@@ -776,43 +816,41 @@ export const newsletterApi = {
     return withPerformanceLogging('newsletters.getUnreadCount', async () => {
       const user = await requireAuth();
 
-      let query = supabase
+      // If no source filter, use direct count query for better performance
+      if (!sourceId) {
+        const { count, error } = await supabase
+          .from('newsletters')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+
+        if (error) {
+          handleSupabaseError(error);
+          return 0;
+        }
+
+        return count || 0;
+      }
+
+      // For specific source, query directly
+      const { count, error } = await supabase
         .from('newsletters')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .eq('is_read', false)
-        .eq('is_archived', false);
-
-      // Apply source filter if provided
-      if (sourceId) {
-        query = query.eq('newsletter_source_id', sourceId);
-      }
-
-      const { count, error } = await query;
+        .eq('newsletter_source_id', sourceId)
+        .eq('is_read', false);
 
       if (error) {
-        log.error(
-          'Failed to get unread count',
-          {
-            component: 'NewsletterApi',
-            action: 'get_unread_count',
-            metadata: { sourceId, userId: user.id },
-          },
-          error
-        );
         handleSupabaseError(error);
+        return 0;
       }
-
-      log.debug('Unread count retrieved', {
-        component: 'NewsletterApi',
-        action: 'get_unread_count',
-        metadata: { count, sourceId },
-      });
 
       return count || 0;
     });
   },
 };
+
+// Get unread counts grouped by source
 
 // Export individual functions for backward compatibility
 export const {
@@ -837,4 +875,5 @@ export const {
   getUnreadCount,
 } = newsletterApi;
 
+// Export default
 export default newsletterApi;

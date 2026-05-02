@@ -31,6 +31,7 @@ export interface PaginatedResponse<T> {
   hasMore?: boolean;
   nextPage?: number | null;
   prevPage?: number | null;
+  nextCursor?: string | null;
 }
 
 // Query Parameter Types
@@ -59,6 +60,9 @@ export interface NewsletterQueryParams extends BaseQueryParams, FilterParams, Pa
   includeRelations?: boolean;
   orderDirection?: 'asc' | 'desc';
   groupIds?: string[];
+
+  // Phase 3: Cursor-based pagination scaffolding
+  cursor?: string;
 }
 
 export interface NewsletterSourceQueryParams extends BaseQueryParams, PaginationParams {
